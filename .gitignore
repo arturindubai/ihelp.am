@@ -1,0 +1,8 @@
+node_modules
+.next
+.env
+data
+backups
+shots
+*.log
+next-env.d.ts

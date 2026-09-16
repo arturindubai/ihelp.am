@@ -1,0 +1,9 @@
+# SITE_ADDRESS=":80" — работа по IP без HTTPS.
+# После покупки домена: SITE_ADDRESS="example.am, www.example.am" — Caddy сам выпустит SSL-сертификат.
+{$SITE_ADDRESS} {
+	encode gzip zstd
+	request_body {
+		max_size 10MB
+	}
+	reverse_proxy app:3000
+}

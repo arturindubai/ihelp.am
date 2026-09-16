@@ -1,0 +1,457 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Мультиязычные поля хранятся как JSON: { "ru": "...", "en": "...", "am": "..." }
+
+enum Role {
+  CLIENT
+  MASTER
+  OPERATOR
+  ADMIN
+  OWNER
+}
+
+enum OtpChannel {
+  SMS
+  WHATSAPP
+  TELEGRAM
+}
+
+model User {
+  id          String    @id @default(cuid())
+  phone       String    @unique
+  name        String?
+  email       String?
+  role        Role      @default(CLIENT)
+  locale      String    @default("ru")
+  blocked     Boolean   @default(false)
+  adminNotes  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastLoginAt DateTime?
+
+  sessions    Session[]
+  addresses   Address[]
+  orders      Order[]
+  reviews     Review[]
+  master      Master?
+  redemptions PromoRedemption[]
+  auditLogs   AuditLog[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  userAgent String?
+}
+
+model OtpCode {
+  id         String     @id @default(cuid())
+  phone      String
+  codeHash   String
+  channel    OtpChannel
+  expiresAt  DateTime
+  attempts   Int        @default(0)
+  consumedAt DateTime?
+  ip         String?
+  createdAt  DateTime   @default(now())
+
+  @@index([phone, createdAt])
+}
+
+model Address {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String?
+  district  String?
+  street    String
+  building  String
+  entrance  String?
+  floor     String?
+  apartment String?
+  intercom  String?
+  comment   String?
+  lat       Float?
+  lng       Float?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  orders    Order[]
+}
+
+model Category {
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  title       Json
+  description Json?
+  image       String?
+  sort        Int        @default(0)
+  active      Boolean    @default(true)
+  comingSoon  Boolean    @default(false)
+  services    Service[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Service {
+  id            String        @id @default(cuid())
+  categoryId    String
+  category      Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  slug          String        @unique
+  title         Json
+  subtitle      Json?
+  description   Json?
+  image         String?
+  bannerImage   String?
+  badge         Json?
+  /// Блоки страницы: howItWorks[], benefits[], faq[], policy, note — всё мультиязычно
+  content       Json?
+  active        Boolean       @default(true)
+  sort          Int           @default(0)
+  rating        Float         @default(0)
+  reviewsCount  Int           @default(0)
+  bookingsCount Int           @default(0)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  groups        OptionGroup[]
+  plans         Plan[]
+  masters       Master[]      @relation("MasterSkills")
+  orders        Order[]
+  reviews       Review[]
+}
+
+enum GroupType {
+  SINGLE
+  MULTI
+}
+
+model OptionGroup {
+  id        String    @id @default(cuid())
+  serviceId String
+  service   Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  title     Json
+  hint      Json?
+  /// Ссылка-пояснение под группой (например «Что входит в материалы?»)
+  infoTitle Json?
+  infoBody  Json?
+  type      GroupType @default(SINGLE)
+  required  Boolean   @default(true)
+  /// Группа определяет длительность визита
+  isDuration Boolean  @default(false)
+  active    Boolean   @default(true)
+  sort      Int       @default(0)
+  options   Option[]
+}
+
+model Option {
+  id           String      @id @default(cuid())
+  groupId      String
+  group        OptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  title        Json
+  subtitle     Json?
+  price        Int         @default(0)
+  durationMin  Int         @default(0)
+  /// Применяются ли к этой части цены скидки тарифа / первого визита
+  discountable Boolean     @default(true)
+  isDefault    Boolean     @default(false)
+  badge        Json?
+  /// Пример расписания: [{ icon, title: {ru,en,am}, minutes }]
+  schedule     Json?
+  active       Boolean     @default(true)
+  sort         Int         @default(0)
+}
+
+enum PlanKind {
+  ONE_TIME
+  SUBSCRIPTION
+  PACKAGE
+}
+
+model Plan {
+  id              String   @id @default(cuid())
+  serviceId       String
+  service         Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  kind            PlanKind
+  title           Json
+  subtitle        Json?
+  badge           Json?
+  discountPercent Float    @default(0)
+  /// SUBSCRIPTION: интервал между визитами в днях (7 = раз в неделю, 14, 28)
+  intervalDays    Int?
+  /// SUBSCRIPTION: визитов в неделю (для 2+ в неделю — клиент выбирает дни недели)
+  visitsPerWeek   Int?
+  /// PACKAGE: число визитов и срок использования
+  packageVisits   Int?
+  validityDays    Int?
+  active          Boolean  @default(true)
+  isDefault       Boolean  @default(false)
+  sort            Int      @default(0)
+  orders          Order[]
+}
+
+model Master {
+  id             String    @id @default(cuid())
+  userId         String?   @unique
+  user           User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  slug           String    @unique
+  name           Json
+  bio            Json?
+  photo          String?
+  phone          String?
+  experienceYears Int      @default(0)
+  languages      String[]  @default([])
+  /// { "1": [["10:00","19:00"]], ... } — 1=понедельник … 7=воскресенье
+  workingHours   Json
+  active         Boolean   @default(true)
+  rating         Float     @default(0)
+  reviewsCount   Int       @default(0)
+  jobsCount      Int       @default(0)
+  sort           Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  skills         Service[] @relation("MasterSkills")
+  timeOff        TimeOff[]
+  visits         Visit[]
+  reviews        Review[]
+  preferredIn    Order[]
+}
+
+model TimeOff {
+  id       String   @id @default(cuid())
+  masterId String
+  master   Master   @relation(fields: [masterId], references: [id], onDelete: Cascade)
+  from     DateTime
+  to       DateTime
+  reason   String?
+}
+
+enum OrderStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  PARTIAL
+  REFUNDED
+}
+
+model Order {
+  id                String        @id @default(cuid())
+  number            Int           @unique @default(autoincrement())
+  userId            String
+  user              User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  serviceId         String
+  service           Service       @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  planId            String?
+  plan              Plan?         @relation(fields: [planId], references: [id], onDelete: SetNull)
+  kind              PlanKind
+  addressId         String?
+  address           Address?      @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  addressSnapshot   Json
+  /// Снимок выбранной конфигурации: service/plan/options c названиями на момент заказа
+  config            Json
+  /// Разбивка цены (результат движка цены)
+  pricing           Json
+  pricePerVisit     Int
+  firstVisitPrice   Int
+  total             Int
+  durationMin       Int
+  /// SUBSCRIPTION: { weekdays: [1,4], time: "11:00", intervalDays: 7 }
+  recurrence        Json?
+  generatedUntil    DateTime?
+  pausedUntil       DateTime?
+  preferredMasterId String?
+  preferredMaster   Master?       @relation(fields: [preferredMasterId], references: [id], onDelete: SetNull)
+  paymentMethod     PaymentMethod @default(CASH)
+  paymentStatus     PaymentStatus @default(PENDING)
+  status            OrderStatus   @default(ACTIVE)
+  promoCodeId       String?
+  promoCode         PromoCode?    @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
+  comment           String?
+  locale            String        @default("ru")
+  source            String        @default("web")
+  cancelReason      String?
+  expiresAt         DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  visits            Visit[]
+  redemptions       PromoRedemption[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+enum VisitStatus {
+  UNSCHEDULED
+  SCHEDULED
+  CONFIRMED
+  ON_WAY
+  IN_PROGRESS
+  DONE
+  CANCELLED
+  SKIPPED
+  NO_SHOW
+}
+
+model Visit {
+  id              String      @id @default(cuid())
+  orderId         String
+  order           Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  index           Int         @default(1)
+  scheduledAt     DateTime?
+  durationMin     Int
+  masterId        String?
+  master          Master?     @relation(fields: [masterId], references: [id], onDelete: SetNull)
+  status          VisitStatus @default(SCHEDULED)
+  price           Int
+  cashCollected   Boolean     @default(false)
+  cashCollectedAt DateTime?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  remindedAt      DateTime?
+  reviewRequestedAt DateTime?
+  masterNote      String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  review          Review?
+
+  @@index([scheduledAt])
+  @@index([masterId, scheduledAt])
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Review {
+  id        String       @id @default(cuid())
+  visitId   String?      @unique
+  visit     Visit?       @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  userId    String?
+  user      User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  masterId  String?
+  master    Master?      @relation(fields: [masterId], references: [id], onDelete: SetNull)
+  serviceId String?
+  service   Service?     @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  authorName String?
+  rating    Int
+  text      String?
+  reply     String?
+  status    ReviewStatus @default(PENDING)
+  createdAt DateTime     @default(now())
+}
+
+enum PromoType {
+  PERCENT
+  FIXED
+}
+
+model PromoCode {
+  id             String    @id @default(cuid())
+  code           String    @unique
+  description    String?
+  type           PromoType
+  value          Int
+  maxDiscount    Int?
+  minOrder       Int?
+  validFrom      DateTime?
+  validTo        DateTime?
+  usageLimit     Int?
+  perUserLimit   Int       @default(1)
+  firstOrderOnly Boolean   @default(false)
+  /// Разрешить суммировать с тарифной скидкой
+  stackable      Boolean   @default(false)
+  serviceIds     String[]  @default([])
+  planKinds      PlanKind[] @default([])
+  active         Boolean   @default(true)
+  usedCount      Int       @default(0)
+  createdAt      DateTime  @default(now())
+  orders         Order[]
+  redemptions    PromoRedemption[]
+}
+
+model PromoRedemption {
+  id        String    @id @default(cuid())
+  promoId   String
+  promo     PromoCode @relation(fields: [promoId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId   String
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  phone     String
+  createdAt DateTime  @default(now())
+}
+
+model Banner {
+  id        String   @id @default(cuid())
+  title     Json
+  subtitle  Json?
+  image     String?
+  link      String?
+  promoCode String?
+  bg        String?
+  active    Boolean  @default(true)
+  sort      Int      @default(0)
+}
+
+model Page {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  title     Json
+  body      Json
+  active    Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+}
+
+/// Переопределение текстов интерфейса из админки
+model UiString {
+  id     String @id @default(cuid())
+  locale String
+  key    String
+  value  String
+
+  @@unique([locale, key])
+}
+
+model Setting {
+  key   String @id
+  value Json
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  data      Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+}

@@ -1,0 +1,1 @@
+{ "name": "HomeCare", "short_name": "HomeCare", "start_url": "/ru", "display": "standalone", "background_color": "#ffffff", "theme_color": "#c2521b", "icons": [{ "src": "/img/icon.svg", "sizes": "any", "type": "image/svg+xml" }] }

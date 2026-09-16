@@ -1,0 +1,8 @@
+node_modules
+.next
+data
+shots
+backups
+.env
+*.log
+e2e
