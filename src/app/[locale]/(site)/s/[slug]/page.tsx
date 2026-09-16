@@ -33,7 +33,7 @@ export default async function ServicePage({ params }: { params: Promise<{ locale
     <div className="container-m">
       <div className="relative -mx-4">
         {s.bannerImage ? <img src={s.bannerImage} alt="" className="aspect-[16/9] w-full object-cover" /> : <div className="h-14" />}
-        <Link href={`/`} className="absolute top-3 left-3 grid size-9 place-items-center rounded-full bg-white shadow" aria-label="back">
+        <Link href={`/`} className="absolute top-3 left-3 grid size-9 place-items-center rounded-full bg-paper shadow" aria-label="back">
           <ArrowLeft size={18} />
         </Link>
       </div>
@@ -73,7 +73,7 @@ export default async function ServicePage({ params }: { params: Promise<{ locale
           <ol className="space-y-4">
             {s.howItWorks.map((h, i) => (
               <li key={i} className="flex gap-3">
-                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-ink text-sm font-bold text-white">{i + 1}</span>
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-ink text-sm font-bold text-inverse">{i + 1}</span>
                 <div>
                   <div className="font-medium">{h.title}</div>
                   {h.body && <div className="text-sm text-muted">{h.body}</div>}

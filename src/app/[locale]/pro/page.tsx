@@ -42,8 +42,8 @@ export default async function ProPage({ params, searchParams }: { params: Promis
         </div>
         {tab === "today" && <div className="text-right"><div className="text-xs text-muted">{t("cashToday")}</div><div className="font-bold">{amd(cashToday)}</div></div>}
       </div>
-      <div className="my-4 flex gap-1 rounded-xl bg-white p-1">
-        {tabs.map(([k, l]) => <Link key={k} href={`/pro?tab=${k}`} className={cn("flex-1 rounded-lg py-2 text-center text-sm font-medium", tab === k ? "bg-ink text-white" : "text-muted")}>{l}</Link>)}
+      <div className="my-4 flex gap-1 rounded-xl bg-paper p-1">
+        {tabs.map(([k, l]) => <Link key={k} href={`/pro?tab=${k}`} className={cn("flex-1 rounded-lg py-2 text-center text-sm font-medium", tab === k ? "bg-ink text-inverse" : "text-muted")}>{l}</Link>)}
       </div>
       {visits.length === 0 && <p className="py-10 text-center text-muted">{t("noVisits")}</p>}
       <ul className="space-y-3">

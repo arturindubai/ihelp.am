@@ -638,6 +638,7 @@
       "telegram": "Telegram",
       "email": "Email",
       "instagram": "Instagram",
+      "envLocked": "Задаётся на сервере в .env ({name})",
       "city": "Город",
       "locales": "Языки сайта",
       "localesHint": "Русский включён всегда. Включайте ENG и ARM, когда тексты переведены.",

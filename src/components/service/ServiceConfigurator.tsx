@@ -82,9 +82,9 @@ export function ServiceConfigurator({ s, rules, isFirstOrder }: { s: ServiceView
                 const on = opts.includes(o.id);
                 return (
                   <button key={o.id} data-on={on} onClick={() => toggle(g.id, o.id)} className="select-card">
-                    {o.badge && <span className="absolute -top-2 right-2 rounded bg-ok px-1.5 py-px text-[10px] font-semibold text-white">{o.badge}</span>}
+                    {o.badge && <span className="absolute -top-2 right-2 rounded bg-ok px-1.5 py-px text-[10px] font-semibold text-inverse">{o.badge}</span>}
                     <span className="flex items-center gap-1 text-[13px] font-medium">
-                      {g.type === "MULTI" && <span className={cn("grid size-4 place-items-center rounded border", on ? "border-ink bg-ink text-white" : "border-line")}>{on && <Check size={12} />}</span>}
+                      {g.type === "MULTI" && <span className={cn("grid size-4 place-items-center rounded border", on ? "border-ink bg-ink text-inverse" : "border-line")}>{on && <Check size={12} />}</span>}
                       {o.title}
                     </span>
                     {o.subtitle && <span className="text-[11px] leading-tight text-muted">{o.subtitle}</span>}
@@ -131,7 +131,7 @@ export function ServiceConfigurator({ s, rules, isFirstOrder }: { s: ServiceView
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-1.5">
                       <span className="text-[15px] font-semibold">{p.title}</span>
-                      {p.badge && <span className="rounded bg-ok px-1.5 py-px text-[10px] font-semibold text-white">{p.badge}</span>}
+                      {p.badge && <span className="rounded bg-ok px-1.5 py-px text-[10px] font-semibold text-inverse">{p.badge}</span>}
                     </span>
                     {p.subtitle && <span className="block text-xs text-muted">{p.subtitle}</span>}
                   </span>

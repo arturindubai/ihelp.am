@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "./db";
 import type { PricingRules } from "@/lib/pricing";
+import { envContacts } from "./contacts";
 
 export interface Settings {
   brand: { name: string; tagline: Record<string, string>; phone: string; whatsapp: string; telegram: string; email: string; instagram: string; city: Record<string, string> };
@@ -85,6 +86,8 @@ export async function getSettings(): Promise<Settings> {
   const rows = await db.setting.findMany();
   let s = DEFAULT_SETTINGS;
   for (const r of rows) s = merge(s, { [r.key]: r.value });
+  // Контакты из .env важнее сохранённых в админке
+  s = { ...s, brand: { ...s.brand, ...envContacts() } };
   cache = { at: Date.now(), value: s };
   return s;
 }

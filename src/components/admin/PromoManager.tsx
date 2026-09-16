@@ -24,7 +24,7 @@ export function PromoManager({ promos, services }: { promos: { id: string; usedC
       <div className="card divide-y divide-line">
         {promos.map((p) => (
           <button key={p.id} className="flex w-full items-center gap-3 p-3 text-left hover:bg-surface/50" onClick={() => { setErr(undefined); setEdit({ id: p.id, data: p.data }); }}>
-            <span className={`rounded-md px-2 py-1 font-mono text-sm font-bold ${p.data.active ? "bg-ink text-white" : "bg-surface text-muted line-through"}`}>{p.data.code}</span>
+            <span className={`rounded-md px-2 py-1 font-mono text-sm font-bold ${p.data.active ? "bg-ink text-inverse" : "bg-surface text-muted line-through"}`}>{p.data.code}</span>
             <span className="min-w-0 flex-1 text-sm">
               <span className="font-semibold">{p.data.type === "PERCENT" ? `−${p.data.value}%` : `−${amd(p.data.value)}`}</span>
               {p.data.description && <span className="text-muted"> · {p.data.description}</span>}

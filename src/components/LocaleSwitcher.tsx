@@ -16,7 +16,7 @@ export function LocaleSwitcher({ enabled }: { enabled: string[] }) {
         <button
           key={l}
           onClick={() => router.replace(`${pathname}${sp.size ? `?${sp}` : ""}`, { locale: l as Locale })}
-          className={`rounded-full px-2.5 py-1.5 ${l === locale ? "bg-white shadow-sm" : "text-muted"}`}
+          className={`rounded-full px-2.5 py-1.5 ${l === locale ? "bg-paper shadow-sm" : "text-muted"}`}
         >
           {localeLabels[l as Locale]}
         </button>

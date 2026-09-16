@@ -17,7 +17,7 @@ export function I18nInput({ label, value, onChange, multiline, required, placeho
         {label && <label className="text-sm font-medium">{label}{required && " *"}</label>}
         <div className="ml-auto flex rounded-md bg-surface p-0.5 text-[11px] font-semibold">
           {LANGS.map(([k, l]) => (
-            <button type="button" key={k} onClick={() => setLang(k)} className={cn("rounded px-1.5 py-0.5", lang === k ? "bg-white shadow-sm" : "text-muted", k !== "ru" && !v[k] && "opacity-60")}>
+            <button type="button" key={k} onClick={() => setLang(k)} className={cn("rounded px-1.5 py-0.5", lang === k ? "bg-paper shadow-sm" : "text-muted", k !== "ru" && !v[k] && "opacity-60")}>
               {l}{k !== "ru" && v[k] ? " ✓" : ""}
             </button>
           ))}
@@ -58,7 +58,7 @@ export function Toggle({ label, checked, onChange, hint }: { label: string; chec
   return (
     <label className="flex cursor-pointer items-start gap-3 py-1">
       <button type="button" role="switch" aria-checked={checked} onClick={() => onChange(!checked)} className={cn("relative mt-0.5 h-6 w-10 shrink-0 rounded-full transition", checked ? "bg-ok" : "bg-line")}>
-        <span className={cn("absolute top-0.5 size-5 rounded-full bg-white shadow transition", checked ? "left-[18px]" : "left-0.5")} />
+        <span className={cn("absolute top-0.5 size-5 rounded-full bg-inverse shadow transition", checked ? "left-[18px]" : "left-0.5")} />
       </button>
       <span className="text-sm">
         {label}
@@ -130,7 +130,7 @@ export function Card({ title, children, actions, className }: { title?: React.Re
 export function SaveBar({ onSave, pending, saved, error, extra }: { onSave: () => void; pending: boolean; saved?: boolean; error?: string; extra?: React.ReactNode }) {
   const t = useTranslations("admin.common");
   return (
-    <div className="pb-safe sticky bottom-0 z-20 -mx-4 mt-4 flex items-center gap-2 border-t border-line bg-white/95 px-4 pt-3 backdrop-blur md:mx-0 md:rounded-xl md:border md:pb-3">
+    <div className="pb-safe sticky bottom-0 z-20 -mx-4 mt-4 flex items-center gap-2 border-t border-line bg-paper/95 px-4 pt-3 backdrop-blur md:mx-0 md:rounded-xl md:border md:pb-3">
       {extra}
       <span className="ml-auto text-sm">{error ? <span className="text-bad">{error}</span> : saved ? <span className="text-ok">{t("saved")}</span> : null}</span>
       <button type="button" className="btn-primary min-w-32" disabled={pending} onClick={onSave}>{pending ? t("saving") : t("save")}</button>

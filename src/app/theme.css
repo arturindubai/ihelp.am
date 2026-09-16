@@ -1,0 +1,35 @@
+/*
+ * ДИЗАЙН-ТОКЕНЫ — единственное место, где задаются цвета, шрифты и скругления.
+ * Компоненты используют только эти имена (bg-brand, text-ink, bg-paper…), без #hex и bg-white/text-black.
+ * Смена палитры = правка значений ниже. Подробнее: DESIGN.md
+ */
+@theme {
+  /* Фирменный цвет: кнопки, акценты, выбранные карточки */
+  --color-brand: #c2521b;
+  --color-brand-600: #a8451a;
+  --color-brand-50: #fdf1ea;
+  --color-brand-100: #fadfcf;
+
+  /* Текст и фоны */
+  --color-ink: #1c1917; /* основной текст, тёмные кнопки и бейджи */
+  --color-ink-strong: #000000; /* hover тёмной кнопки */
+  --color-muted: #6b645e; /* второстепенный текст */
+  --color-line: #ebe6e1; /* границы и разделители */
+  --color-surface: #f7f4f1; /* подложки секций, футер */
+  --color-paper: #ffffff; /* фон страницы, карточек, шапки */
+  --color-inverse: #ffffff; /* текст на тёмном/фирменном фоне */
+  --color-overlay: #000000; /* затемнение под шторками (с прозрачностью /40, /50) */
+  --color-cta: #0f3d2e; /* блок «Напишите нам» на главной */
+
+  /* Статусы */
+  --color-ok: #1f7a4d;
+  --color-ok-50: #e8f5ee;
+  --color-warn: #a15c07;
+  --color-warn-50: #fdf3e2;
+  --color-bad: #b42318;
+  --color-bad-50: #fdeceb;
+
+  /* Типографика и формы */
+  --font-sans: var(--font-noto), var(--font-noto-arm), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --radius-card: 14px;
+}

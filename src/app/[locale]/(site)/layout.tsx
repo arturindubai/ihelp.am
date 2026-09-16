@@ -3,18 +3,20 @@ import { getTranslations } from "next-intl/server";
 import { UserRound } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { getSettings } from "@/server/settings";
+import { contactLinks } from "@/lib/contacts";
 import { getCurrentUser, STAFF_ROLES } from "@/server/auth";
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { BottomNav } from "@/components/BottomNav";
+import { Logo } from "@/components/Logo";
 
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
   const [s, user, t, tf] = await Promise.all([getSettings(), getCurrentUser(), getTranslations("nav"), getTranslations("footer")]);
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="sticky top-0 z-30 border-b border-line/70 bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-line/70 bg-paper/95 backdrop-blur">
         <div className="container-w flex h-14 items-center gap-3">
           <Link href="/" className="flex items-center gap-2 font-bold tracking-tight">
-            <img src="/img/icon.svg" alt="" className="size-8 rounded-lg" />
+            <Logo />
             <span className="text-lg">{s.brand.name}</span>
           </Link>
           <div className="ml-auto flex items-center gap-2">
@@ -44,7 +46,11 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
           <Link href="/p/offer">{tf("offer")}</Link>
           <Link href="/p/privacy">{tf("privacy")}</Link>
           <Link href="/p/cancellation">{tf("cancellation")}</Link>
-          {s.brand.phone && <a href={`tel:${s.brand.phone}`}>{s.brand.phone}</a>}
+          {contactLinks(s.brand).map((c) => (
+            <a key={c.key} href={c.href} target={c.href.startsWith("http") ? "_blank" : undefined} rel="noopener">
+              {c.label}
+            </a>
+          ))}
         </div>
       </footer>
       <BottomNav />

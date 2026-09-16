@@ -18,7 +18,7 @@ export function BottomNav() {
   return (
     <>
       <div className="h-20 md:hidden" />
-      <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 backdrop-blur md:hidden">
+      <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper/95 backdrop-blur md:hidden">
         <div className="mx-auto grid max-w-[560px] grid-cols-4">
           {items.map((i) => (
             <Link key={i.href} href={i.href} className={`flex flex-col items-center gap-0.5 pt-2 text-[11px] font-medium ${i.active ? "text-brand" : "text-muted"}`}>

@@ -21,7 +21,7 @@ export function BannerManager({ banners }: { banners: { id: string; data: Banner
       <button className="btn-dark mb-3" onClick={() => setEdit({ id: null, data: { title: {}, subtitle: {}, image: null, link: "", promoCode: "", bg: "#1c1917", active: true, sort: banners.length } })}><Plus size={18} /> {t("banners.newBanner")}</button>
       <div className="space-y-2">
         {banners.map((b) => (
-          <button key={b.id} onClick={() => setEdit(b)} className={`flex h-24 w-full flex-col justify-end overflow-hidden rounded-2xl p-3 text-left text-white ${b.data.active ? "" : "opacity-50"}`} style={{ background: b.data.bg || "#1c1917" }}>
+          <button key={b.id} onClick={() => setEdit(b)} className={`flex h-24 w-full flex-col justify-end overflow-hidden rounded-2xl p-3 text-left text-inverse ${b.data.active ? "" : "opacity-50"}`} style={{ background: b.data.bg || "#1c1917" }}>
             <span className="text-lg font-bold">{tr(b.data.title, locale)}</span>
             <span className="text-sm opacity-80">{tr(b.data.subtitle, locale)}</span>
           </button>
@@ -35,7 +35,7 @@ export function BannerManager({ banners }: { banners: { id: string; data: Banner
       }>
         {d && (
           <div className="space-y-3">
-            <div className="flex h-28 flex-col justify-end rounded-2xl p-3 text-white" style={{ background: d.bg || "#1c1917" }}><span className="text-lg font-bold">{tr(d.title, locale) || "…"}</span><span className="text-sm opacity-80">{tr(d.subtitle, locale)}</span></div>
+            <div className="flex h-28 flex-col justify-end rounded-2xl p-3 text-inverse" style={{ background: d.bg || "#1c1917" }}><span className="text-lg font-bold">{tr(d.title, locale) || "…"}</span><span className="text-sm opacity-80">{tr(d.subtitle, locale)}</span></div>
             <I18nInput label={t("common.title")} value={d.title} onChange={(v) => up({ title: v })} />
             <I18nInput label={t("common.subtitle")} value={d.subtitle} onChange={(v) => up({ subtitle: v })} />
             <TextInput label={t("banners.link")} placeholder="/s/regular-cleaning" value={d.link} onChange={(v) => up({ link: v })} />

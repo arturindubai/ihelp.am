@@ -82,7 +82,7 @@ export default async function OrdersPage({ params, searchParams }: { params: Pro
       <h1 className="h1 mb-3">{t("orders")}</h1>
       <div className="mb-4 flex gap-1 rounded-xl bg-surface p-1">
         {tabs.map((x) => (
-          <Link key={x.key} href={`/account/orders?tab=${x.key}`} className={cn("flex-1 rounded-lg py-2 text-center text-sm font-medium", tab === x.key ? "bg-white shadow-sm" : "text-muted")}>{x.label}</Link>
+          <Link key={x.key} href={`/account/orders?tab=${x.key}`} className={cn("flex-1 rounded-lg py-2 text-center text-sm font-medium", tab === x.key ? "bg-paper shadow-sm" : "text-muted")}>{x.label}</Link>
         ))}
       </div>
       {body || (

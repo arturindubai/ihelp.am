@@ -5,7 +5,7 @@ export function PriceBar({ price, strike, caption, action }: { price: number; st
   return (
     <>
       <div className="h-24" />
-      <div className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white">
+      <div className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper">
         <div className="container-m flex items-center gap-3 pt-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-2">

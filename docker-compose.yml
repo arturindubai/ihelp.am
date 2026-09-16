@@ -37,6 +37,12 @@ services:
       CRON_SECRET: ${CRON_SECRET:?set CRON_SECRET in .env}
       OTP_DEV_MODE: ${OTP_DEV_MODE:-false}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # Контакты бизнеса (единое место — блок CONTACT_* в .env)
+      CONTACT_PHONE: ${CONTACT_PHONE:-}
+      CONTACT_WHATSAPP: ${CONTACT_WHATSAPP:-}
+      CONTACT_TELEGRAM: ${CONTACT_TELEGRAM:-}
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-}
+      CONTACT_INSTAGRAM: ${CONTACT_INSTAGRAM:-}
     volumes:
       - uploads:/data/uploads
     depends_on:
@@ -76,8 +82,9 @@ services:
     volumes:
       - ./backups:/backups
     entrypoint: ["sh", "-c", "while true; do pg_dump -h db -U app homeservices | gzip > /backups/db-$$(date +%F).sql.gz; find /backups -name 'db-*.sql.gz' -mtime +14 -delete; sleep 86400; done"]
+    # Ждём миграции: иначе первый бэкап снимается с ещё пустой базы
     depends_on:
-      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
 
 volumes:
   pgdata:

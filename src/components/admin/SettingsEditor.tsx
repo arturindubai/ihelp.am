@@ -3,6 +3,7 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { saveSettingsAction, testNotifyAction } from "@/server/actions/admin/misc";
 import type { Settings } from "@/server/settings";
+import type { ContactKey } from "@/lib/contacts";
 import { Card, I18nInput, NumInput, TextInput, Toggle } from "./fields";
 
 function Section<K extends keyof Settings>({ k, title, value, children, hint }: { k: K; title: string; value: Settings[K]; children: React.ReactNode; hint?: string }) {
@@ -17,12 +18,16 @@ function Section<K extends keyof Settings>({ k, title, value, children, hint }: 
   );
 }
 
-export function SettingsEditor({ initial, devMode }: { initial: Settings; devMode: boolean }) {
+export function SettingsEditor({ initial, devMode, lockedContacts = {} }: { initial: Settings; devMode: boolean; lockedContacts?: Partial<Record<ContactKey, string>> }) {
   const t = useTranslations("admin.settings");
   const [s, setS] = useState(initial);
   const [sent, setSent] = useState(false);
   const set = <K extends keyof Settings>(k: K, v: Partial<Settings[K]>) => setS((x) => ({ ...x, [k]: { ...x[k], ...v } }));
   const b = s.brand, bk = s.booking, pr = s.pricing, o = s.otp;
+  const contact = (k: ContactKey, type = "text") => {
+    const env = lockedContacts[k];
+    return <TextInput label={t(k)} type={type} value={b[k]} disabled={!!env} hint={env ? t("envLocked", { name: env }) : undefined} onChange={(v) => set("brand", { [k]: v } as Partial<Settings["brand"]>)} />;
+  };
 
   return (
     <div className="space-y-4">
@@ -31,11 +36,11 @@ export function SettingsEditor({ initial, devMode }: { initial: Settings; devMod
           <TextInput label={t("brandName")} value={b.name} onChange={(v) => set("brand", { name: v })} />
           <I18nInput label={t("city")} value={b.city} onChange={(v) => set("brand", { city: v as Record<string, string> })} />
           <div className="md:col-span-2"><I18nInput label={t("tagline")} value={b.tagline} onChange={(v) => set("brand", { tagline: v as Record<string, string> })} /></div>
-          <TextInput label={t("phone")} type="tel" value={b.phone} onChange={(v) => set("brand", { phone: v })} />
-          <TextInput label={t("whatsapp")} type="tel" value={b.whatsapp} onChange={(v) => set("brand", { whatsapp: v })} />
-          <TextInput label={t("telegram")} value={b.telegram} onChange={(v) => set("brand", { telegram: v })} />
-          <TextInput label={t("email")} value={b.email} onChange={(v) => set("brand", { email: v })} />
-          <TextInput label={t("instagram")} value={b.instagram} onChange={(v) => set("brand", { instagram: v })} />
+          {contact("phone", "tel")}
+          {contact("whatsapp", "tel")}
+          {contact("telegram")}
+          {contact("email", "email")}
+          {contact("instagram")}
         </div>
       </Section>
 

@@ -22,8 +22,8 @@ export default async function AdminReviews({ params, searchParams }: { params: P
   return (
     <div className="max-w-3xl">
       <PageHead title={t("reviews.title")} actions={<ReviewCreate masters={masters.map((m) => ({ id: m.id, name: tr(m.name, locale) }))} services={services.map((s) => ({ id: s.id, name: tr(s.title, locale) }))} />} />
-      <div className="mb-4 flex gap-1 rounded-xl bg-white p-1">
-        {(["PENDING", "APPROVED", "REJECTED"] as const).map((s) => <Link key={s} href={`/admin/reviews?status=${s}`} className={cn("flex-1 rounded-lg py-2 text-center text-sm font-medium", st === s ? "bg-ink text-white" : "text-muted")}>{t(`reviews.tabs.${s}`)} ({counts.find((c) => c.status === s)?._count || 0})</Link>)}
+      <div className="mb-4 flex gap-1 rounded-xl bg-paper p-1">
+        {(["PENDING", "APPROVED", "REJECTED"] as const).map((s) => <Link key={s} href={`/admin/reviews?status=${s}`} className={cn("flex-1 rounded-lg py-2 text-center text-sm font-medium", st === s ? "bg-ink text-inverse" : "text-muted")}>{t(`reviews.tabs.${s}`)} ({counts.find((c) => c.status === s)?._count || 0})</Link>)}
       </div>
       <ul className="space-y-2">
         {reviews.map((r) => (

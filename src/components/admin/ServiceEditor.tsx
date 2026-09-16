@@ -51,8 +51,8 @@ export function ServiceEditor({ id, initial, categories, masters, rules }: { id:
         <h1 className="min-w-0 flex-1 truncate text-2xl font-bold">{tr(s.title, locale) || "—"}</h1>
         <a href={`/${locale}/s/${initial.slug}`} target="_blank" className="btn-outline btn-sm"><ExternalLink size={16} /> <span className="hidden sm:inline">{t("services.openOnSite")}</span></a>
       </div>
-      <div className="no-scrollbar mb-4 flex gap-1 overflow-x-auto rounded-xl bg-white p-1">
-        {tabs.map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={cn("rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap", tab === k ? "bg-ink text-white" : "text-muted")}>{l}</button>)}
+      <div className="no-scrollbar mb-4 flex gap-1 overflow-x-auto rounded-xl bg-paper p-1">
+        {tabs.map(([k, l]) => <button key={k} onClick={() => setTab(k)} className={cn("rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap", tab === k ? "bg-ink text-inverse" : "text-muted")}>{l}</button>)}
       </div>
 
       {tab === "main" && (

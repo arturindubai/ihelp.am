@@ -1,26 +1,10 @@
 @import "tailwindcss";
+@import "./theme.css";
 
-@theme {
-  --color-brand: #c2521b;
-  --color-brand-600: #a8451a;
-  --color-brand-50: #fdf1ea;
-  --color-brand-100: #fadfcf;
-  --color-ink: #1c1917;
-  --color-muted: #6b645e;
-  --color-line: #ebe6e1;
-  --color-surface: #f7f4f1;
-  --color-ok: #1f7a4d;
-  --color-ok-50: #e8f5ee;
-  --color-warn: #a15c07;
-  --color-warn-50: #fdf3e2;
-  --color-bad: #b42318;
-  --color-bad-50: #fdeceb;
-  --font-sans: var(--font-noto), var(--font-noto-arm), system-ui, -apple-system, "Segoe UI", sans-serif;
-  --radius-card: 14px;
-}
+/* Готовые классы интерфейса (кнопки, карточки, поля). Цвета — только токены из theme.css */
 
 html { -webkit-tap-highlight-color: transparent; }
-body { background: #fff; color: var(--color-ink); font-family: var(--font-sans); }
+body { background: var(--color-paper); color: var(--color-ink); font-family: var(--font-sans); }
 
 @utility container-m {
   @apply mx-auto w-full max-w-[560px] px-4;
@@ -41,28 +25,28 @@ body { background: #fff; color: var(--color-ink); font-family: var(--font-sans);
   @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-[15px] font-semibold transition active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-50;
 }
 @utility btn-primary {
-  @apply btn bg-brand text-white hover:bg-brand-600;
+  @apply btn bg-brand text-inverse hover:bg-brand-600;
 }
 @utility btn-dark {
-  @apply btn bg-ink text-white hover:bg-black;
+  @apply btn bg-ink text-inverse hover:bg-ink-strong;
 }
 @utility btn-outline {
-  @apply btn border border-line bg-white text-ink hover:bg-surface;
+  @apply btn border border-line bg-paper text-ink hover:bg-surface;
 }
 @utility btn-ghost {
   @apply btn text-ink hover:bg-surface;
 }
 @utility btn-danger {
-  @apply btn border border-bad/30 bg-white text-bad hover:bg-bad-50;
+  @apply btn border border-bad/30 bg-paper text-bad hover:bg-bad-50;
 }
 @utility btn-sm {
   @apply min-h-9 rounded-lg px-3 text-sm;
 }
 @utility card {
-  @apply rounded-[var(--radius-card)] border border-line bg-white;
+  @apply rounded-[var(--radius-card)] border border-line bg-paper;
 }
 @utility input {
-  @apply min-h-11 w-full rounded-xl border border-line bg-white px-3 text-[16px] outline-none placeholder:text-muted/70 focus:border-ink;
+  @apply min-h-11 w-full rounded-xl border border-line bg-paper px-3 text-[16px] outline-none placeholder:text-muted/70 focus:border-ink disabled:bg-surface disabled:text-muted;
 }
 @utility label {
   @apply mb-1 block text-sm font-medium text-ink;
@@ -74,7 +58,7 @@ body { background: #fff; color: var(--color-ink); font-family: var(--font-sans);
   @apply font-medium text-ink underline underline-offset-2;
 }
 @utility select-card {
-  @apply relative flex min-h-[72px] min-w-[132px] flex-col justify-center rounded-xl border border-line bg-white px-3 py-2.5 text-left transition;
+  @apply relative flex min-h-[72px] min-w-[132px] flex-col justify-center rounded-xl border border-line bg-paper px-3 py-2.5 text-left transition;
   &[data-on="true"] { @apply border-ink bg-brand-50 ring-1 ring-ink; }
 }
 

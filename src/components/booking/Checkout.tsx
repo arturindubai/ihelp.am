@@ -19,7 +19,7 @@ function Section({ n, title, children }: { n: number; title: string; children: R
   return (
     <section className="border-b border-line py-5">
       <h2 className="mb-3 flex items-center gap-2 text-[17px] font-semibold">
-        <span className="grid size-6 place-items-center rounded-full bg-ink text-xs font-bold text-white">{n}</span>
+        <span className="grid size-6 place-items-center rounded-full bg-ink text-xs font-bold text-inverse">{n}</span>
         {title}
       </h2>
       {children}

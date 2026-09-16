@@ -8,6 +8,7 @@ import { audit } from "../../audit";
 import { recalcRatings } from "../../services/catalog";
 import { invalidateUiCache, saveSettingsSection, getSettings, type Settings } from "../../settings";
 import { notifyTeam } from "../../notify";
+import { envContacts } from "../../contacts";
 import { normalizePhone } from "@/lib/phone";
 
 const i18n = z.object({ ru: z.string().max(20000).optional(), en: z.string().max(20000).optional(), am: z.string().max(20000).optional() }).partial();
@@ -170,6 +171,10 @@ export async function saveSettingsAction<K extends keyof Settings>(key: K, value
     for (let i = 0; i < rest.length - 1; i++) { n = n[rest[i]] as Record<string, unknown>; c = c[rest[i]] as Record<string, unknown>; }
     const last = rest[rest.length - 1];
     if (typeof n[last] === "string" && (n[last] as string).includes("••••")) n[last] = c[last];
+  }
+  if (key === "brand") {
+    // Контакты из .env в базу не пишем — иначе после очистки .env всплывут старые значения
+    for (const k of Object.keys(envContacts())) delete next[k];
   }
   if (key === "locales") {
     const l = next as { enabled: string[] };
