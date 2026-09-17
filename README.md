@@ -95,7 +95,7 @@ curl http://localhost/api/health          # на общем сервере: http
 ```
 
 Сайт откроется по `http://<IP>/ru` (на общем сервере — `http://<IP>:8080/ru`).
-Полный чек-лист деплоя и проверок: [docs/DEPLOY_CHECKLIST.md](docs/DEPLOY_CHECKLIST.md), открытые вопросы: [docs/GAPS.md](docs/GAPS.md).
+Полный чек-лист деплоя и проверок: [docs/DEPLOY_CHECKLIST.md](docs/DEPLOY_CHECKLIST.md), задачи до полноценной работы, гапы и риски: [docs/GAPS.md](docs/GAPS.md).
 
 **Первый вход в админку.** Пока каналы отправки кода не подключены, код пишется в лог сервера:
 ```bash
