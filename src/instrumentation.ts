@@ -1,6 +1,8 @@
-/** Хуки Next.js на старте сервера. onRequestError — тех-алерт об ошибках обработки запросов. */
+/** Хуки Next.js. onRequestError — тех-алерт об ошибках обработки запросов. */
 export async function onRequestError(err: unknown, request: { path: string; method: string }, context: { routePath: string; routeType: string }) {
-  if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  const { reportRequestError } = await import("./server/alerts");
-  await reportRequestError(err, request, context);
+  // Импорт только внутри этой проверки: так сборщик не тащит серверный код (база, crypto) в Edge-сборку
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { reportRequestError } = await import("./server/alerts");
+    await reportRequestError(err, request, context);
+  }
 }

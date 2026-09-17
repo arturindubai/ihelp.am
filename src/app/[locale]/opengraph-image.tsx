@@ -1,5 +1,5 @@
-import fs from "node:fs/promises";
-import path from "node:path";
+import fs from "fs/promises";
+import path from "path";
 import { ImageResponse } from "next/og";
 import { getSettings } from "@/server/settings";
 import { tr } from "@/i18n/locales";

@@ -2,7 +2,7 @@
  * Шифрование секретов (ключи интеграций) для хранения в базе: AES-256-GCM.
  * Формат значения: enc:v1:<iv>:<tag>:<данные> (base64). Ключ — 32 байта в hex (64 символа).
  */
-import crypto from "node:crypto";
+import crypto from "crypto";
 
 const PREFIX = "enc:v1:";
 
