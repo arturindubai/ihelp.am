@@ -47,6 +47,14 @@ export function contactLink(c: Partial<Contacts>, key: ContactKey): ContactLink 
   }
 }
 
+const CHANNEL_NAMES: Partial<Record<ContactKey, string>> = { whatsapp: "WhatsApp", telegram: "Telegram", instagram: "Instagram" };
+
+/** Подпись для показа: у мессенджеров и соцсетей — название канала, чтобы телефон и WhatsApp с одним номером не путались */
+export function contactTitle(l: ContactLink) {
+  const name = CHANNEL_NAMES[l.key];
+  return name ? `${name} ${l.label}` : l.label;
+}
+
 export function contactLinks(c: Partial<Contacts>): ContactLink[] {
   return CONTACT_KEYS.map((k) => contactLink(c, k)).filter((x): x is ContactLink => !!x);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contactLink, contactLinks, fillContacts } from "./contacts";
+import { contactLink, contactLinks, contactTitle, fillContacts } from "./contacts";
 
 describe("contacts", () => {
   it("phone and whatsapp", () => {
@@ -11,6 +11,11 @@ describe("contacts", () => {
     expect(contactLink({ telegram: "@homecare" }, "telegram")?.href).toBe("https://t.me/homecare");
     expect(contactLink({ telegram: "https://t.me/homecare" }, "telegram")?.label).toBe("@homecare");
     expect(contactLink({ instagram: "https://www.instagram.com/homecare/" }, "instagram")?.href).toBe("https://instagram.com/homecare");
+  });
+
+  it("titles distinguish channels with the same number", () => {
+    const links = contactLinks({ phone: "+37441014713", whatsapp: "+37441014713", email: "a@b.am" });
+    expect(links.map(contactTitle)).toEqual(["+374 41 014 713", "WhatsApp +374 41 014 713", "a@b.am"]);
   });
 
   it("skips empty values and keeps order", () => {

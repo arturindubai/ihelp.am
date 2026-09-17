@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { UserRound } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { getSettings } from "@/server/settings";
-import { contactLinks } from "@/lib/contacts";
+import { contactLinks, contactTitle } from "@/lib/contacts";
 import { getCurrentUser, STAFF_ROLES } from "@/server/auth";
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { BottomNav } from "@/components/BottomNav";
@@ -48,7 +48,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
           <Link href="/p/cancellation">{tf("cancellation")}</Link>
           {contactLinks(s.brand).map((c) => (
             <a key={c.key} href={c.href} target={c.href.startsWith("http") ? "_blank" : undefined} rel="noopener">
-              {c.label}
+              {contactTitle(c)}
             </a>
           ))}
         </div>
