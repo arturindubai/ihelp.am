@@ -113,9 +113,13 @@ HomeCare изолирован: отдельный каталог, docker-про�
 |---|---|---|
 | Ротация логов | ✅ ➕ | 5 × 10 МБ на сервис |
 | Лимиты памяти | ✅ ➕ | app/db/migrate 1 ГБ, backup 512 МБ, caddy 256 МБ, cron 64 МБ (факт: app ~100 МБ, db ~75 МБ) |
+| Бэкап ночью + проверка восстановления | ✅ ➕ | 03:30 по Еревану; раз в неделю дамп разворачивается во временную базу и сверяется; отметки в базе → тех-алерты. Проверено на живой базе, в том числе на битом дампе |
+| Тех-алерты | ✅ ➕ | ошибки сайта, бэкап старше 26 ч или с ошибкой, проваленная проверка восстановления, диск < 10%, подбор кода, сбой доставки кода. Проверено: алерты об ошибке 500, просроченном бэкапе и подборе кода сработали (в лог — бот не подключён) |
+| Шифрование ключей интеграций | ✅ ➕ | AES-256-GCM, ключ `SETTINGS_ENCRYPTION_KEY` в `.env`; проверено на живой базе: в базе только шифротекст |
+| Обновление, откат, smoke-тест | ✅ ➕ | `deploy/update.sh`, `deploy/rollback.sh`, `deploy/smoke.sh`; первая выкатка через скрипт поймала ошибку сборки до перезапуска — прод не пострадал |
 | Бэкап вне сервера | ⏳ | нет — GAPS → DB-1 |
 | Мониторинг и алерты | ⏳ | нет — GAPS → MON-1, NOTIFY-6 |
-| Документация | ✅ ➕ | README (домен на общем сервере, обновление, восстановление, эксплуатация), DESIGN.md, этот чек-лист, GAPS.md |
+| Документация | ✅ ➕ | README (домен на общем сервере, обновление, восстановление, эксплуатация), DESIGN.md, этот чек-лист, GAPS.md, PERSONAL_DATA.md, TEAM_GUIDE.md |
 
 ## Команды
 
@@ -123,16 +127,21 @@ HomeCare изолирован: отдельный каталог, docker-про�
 # Первый вход в админку: на /ru/login ввести ADMIN_PHONE, выбрать любой канал, затем код (6 цифр):
 docker compose -f /opt/homecare/docker-compose.yml logs app | grep otp
 
+# Проверить, что всё работает (ничего не меняет)
+cd /opt/homecare && deploy/smoke.sh https://liacontentos.com https://aistudiolia.com https://arturoganesian.com
+
+# Обновление (после git commit) и откат
+cd /opt/homecare && deploy/update.sh https://liacontentos.com https://aistudiolia.com https://arturoganesian.com
+cd /opt/homecare && deploy/rollback.sh
+
 # Статус и логи
 cd /opt/homecare && docker compose ps
 docker compose logs --tail 50 app
 docker compose logs backup cron
+docker compose logs app | grep notify:tech        # тех-алерты, пока бот не подключён
 
-# Обновление
-cd /opt/homecare && docker compose up -d --build && docker image prune -f
-
-# Бэкап прямо сейчас (контейнер снимает бэкап при старте)
-cd /opt/homecare && docker compose restart backup
+# Бэкап прямо сейчас
+cd /opt/homecare && docker compose exec -T backup sh /backup.sh once
 
 # Смена контактов: правка CONTACT_* в .env, затем (без пересборки)
 cd /opt/homecare && docker compose up -d
@@ -140,11 +149,9 @@ cd /opt/homecare && docker compose up -d
 
 ## Чек-лист повторного деплоя (обновление)
 
-1. `git -C /opt/homecare status` — нет незафиксированных правок (иначе закоммитить).
-2. Если код пришёл новым архивом: распаковать во временную папку, `rsync -a --exclude .env --exclude backups --exclude .git <папка>/ /opt/homecare/`, затем `git -C /opt/homecare diff` — **не потерять серверные доработки**: порты (`HTTP_BIND`), контакты, скрипты бэкапа и cron, фиксы seed и формы входа.
-3. Обновление — лучше вне пиковых часов (сборка нагружает общий сервер): `docker compose up -d --build && docker image prune -f`.
-4. `docker compose ps`: `migrate` — `Exited (0)`, `app` — `healthy`, остальные `Up`.
-5. `curl -s localhost:8080/api/health` → `{"ok":true}`; `/ru`, `/ru/login` → 200; `/ru/admin` → 307.
-6. `docker compose logs migrate | tail -3` — нет ошибок; seed пишет `skipped`.
-7. Соседи: `https://liacontentos.com`, `https://aistudiolia.com`, `https://arturoganesian.com` → 200.
-8. `git commit` серверных правок, если были.
+1. Если код пришёл новым архивом: распаковать во временную папку, `rsync -a --exclude .env --exclude backups --exclude .git <папка>/ /opt/homecare/`, затем `git -C /opt/homecare diff` — **не потерять серверные доработки**: порты (`HTTP_BIND`), контакты, скрипты `deploy/`, фиксы seed, формы входа, уведомлений.
+2. `git -C /opt/homecare add -A && git -C /opt/homecare commit -m "…"` — `update.sh` не запускается с незафиксированными правками.
+3. Вне пиковых часов (сборка нагружает общий сервер): `deploy/update.sh https://liacontentos.com https://aistudiolia.com https://arturoganesian.com`.
+   Скрипт сам: бэкап → образы для отката → сборка → запуск и миграции → ожидание healthy → smoke-тест (контейнеры, `OTP_DEV_MODE=false`, ключ шифрования, страницы, защита `/api/cron`, превью ссылок, `X-Robots-Tag`, свежесть бэкапа, соседние сайты) → очистка.
+4. Упал на сборке — прод не тронут, смотреть вывод. Упал smoke-тест — `docker compose logs --tail 100 app migrate`, при необходимости `deploy/rollback.sh`.
+5. Если обновление меняло схему базы — `docker compose logs migrate | tail -5`: миграция применена, seed пишет `skipped`.

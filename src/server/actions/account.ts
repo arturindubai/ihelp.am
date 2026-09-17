@@ -6,7 +6,7 @@ import { getCurrentUser } from "../auth";
 import { getSettings } from "../settings";
 import { html, notifyTeam } from "../notify";
 import { BookingError, scheduleVisit, BUSY_STATUSES } from "../services/booking";
-import { ymd } from "@/lib/time";
+import { atYerevan, ymd } from "@/lib/time";
 
 async function me() {
   const u = await getCurrentUser();
@@ -48,6 +48,10 @@ export async function rescheduleVisitAction(visitId: string, date: string, time:
   const s = await getSettings();
   if (!["UNSCHEDULED", "SCHEDULED", "CONFIRMED"].includes(v.status)) return { ok: false, error: "state" };
   if (v.scheduledAt && v.scheduledAt.getTime() - Date.now() < s.booking.freeCancelHours * 3600_000) return { ok: false, error: "late" };
+  // Те же правила, что при оформлении: корректный формат, не раньше чем через leadHours, не дальше горизонта записи
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return { ok: false, error: "invalid" };
+  const start = atYerevan(date, time).getTime();
+  if (Number.isNaN(start) || start < Date.now() + s.booking.leadHours * 3600_000 - 5 * 60_000 || start > Date.now() + (s.booking.horizonDays + 1) * 86400_000) return { ok: false, error: "slot_taken" };
   if (v.order.expiresAt && new Date(`${date}T00:00:00+04:00`) > v.order.expiresAt) return { ok: false, error: "expired" };
   try {
     await scheduleVisit(v.id, date, time, v.order.preferredMasterId);

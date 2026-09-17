@@ -9,6 +9,7 @@
 | Логотип в шапках | `public/img/icon.svg` (путь — `src/components/Logo.tsx`) | пересборка |
 | Иконка вкладки браузера | `src/app/icon.svg` | пересборка |
 | Цвет панели браузера на телефоне, PWA | `themeColor` в `src/app/[locale]/layout.tsx`, `public/manifest.webmanifest` | пересборка |
+| Картинка превью ссылок (WhatsApp, Telegram, соцсети) | `src/app/[locale]/opengraph-image.tsx`: логотип, название, слоган и город берёт из настроек; цвета — копия токенов | пересборка |
 | Название, слоган, город | Админка → Настройки → Компания | сразу |
 | Баннеры на главной (текст, картинка, цвет) | Админка → Баннеры | сразу |
 | Тексты интерфейса | `messages/ru.json` или Админка → Тексты и переводы | пересборка / сразу |
@@ -44,4 +45,4 @@
 ```bash
 grep -rnE '#[0-9a-fA-F]{6}|\b(bg|text)-(white|black)\b|bg-\[#' src --include=*.tsx
 ```
-(Исключения: цвет баннера по умолчанию в `ContentManagers.tsx` — это данные для color-picker, и `themeColor` в layout.)
+(Исключения: цвет баннера по умолчанию в `ContentManagers.tsx` — это данные для color-picker, `themeColor` в layout и картинка превью ссылок `src/app/[locale]/opengraph-image.tsx` — генератор картинок не читает CSS, цвета там продублированы из `theme.css`, при смене палитры поправить.)
