@@ -19,6 +19,7 @@ export function LoginForm({ channels, onDone }: { channels: Channel[]; onDone: (
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [devCode, setDevCode] = useState<string>();
+  const [codeLength, setCodeLength] = useState(4);
   const [error, setError] = useState<string>();
   const [resendIn, setResendIn] = useState(0);
   const [role, setRole] = useState("CLIENT");
@@ -42,6 +43,7 @@ export function LoginForm({ channels, onDone }: { channels: Channel[]; onDone: (
       if (!r.ok) return setError(errText(r.error, "retryIn" in r ? r.retryIn : undefined));
       setNormalized(r.phone!);
       setDevCode(r.devCode);
+      setCodeLength(r.codeLength);
       setResendIn(r.resendIn);
       setStep("code");
       setTimeout(() => codeRef.current?.focus(), 50);
@@ -100,10 +102,10 @@ export function LoginForm({ channels, onDone }: { channels: Channel[]; onDone: (
             onChange={(e) => {
               const v = e.target.value.replace(/\D/g, "");
               setCode(v);
-              if (v.length === (devCode?.length || 4)) verify(v);
+              if (v.length === codeLength) verify(v);
             }}
           />
-          <button className="btn-primary mt-3 w-full" disabled={pending || code.length < 4} onClick={() => verify()}>
+          <button className="btn-primary mt-3 w-full" disabled={pending || code.length < codeLength} onClick={() => verify()}>
             {t("verify")}
           </button>
           <div className="mt-4 flex items-center justify-between text-sm">

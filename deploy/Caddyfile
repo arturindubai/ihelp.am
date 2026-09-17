@@ -1,9 +1,19 @@
 # SITE_ADDRESS=":80" — работа по IP без HTTPS.
-# После покупки домена: SITE_ADDRESS="example.am, www.example.am" — Caddy сам выпустит SSL-сертификат.
+# После покупки домена: SITE_ADDRESS="example.am, www.example.am" — Caddy сам выпустит SSL-сертификат
+# (только если Caddy владеет портами 80/443 хоста; на общем сервере с nginx см. README → «Подключение домена»).
 {$SITE_ADDRESS} {
 	encode gzip zstd
 	request_body {
 		max_size 10MB
+	}
+	header {
+		# ROBOTS_TAG в .env: "noindex, nofollow" до запуска, "all" — разрешить индексацию
+		X-Robots-Tag "{$ROBOTS_TAG}"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options SAMEORIGIN
+		-Server
+		-X-Powered-By
 	}
 	reverse_proxy app:3000
 }

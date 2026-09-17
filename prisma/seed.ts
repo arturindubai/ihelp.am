@@ -27,6 +27,15 @@ async function main() {
   const ownerPhone = process.env.ADMIN_PHONE || "+37400000000";
   await db.user.upsert({ where: { phone: ownerPhone }, create: { phone: ownerPhone, role: "OWNER", name: "Owner" }, update: { role: "OWNER" } });
 
+  // Демо-каталог заливается один раз. Seed выполняется при каждом деплое, и без флага
+  // удалённые в админке демо-мастера, баннер, категории и страницы возвращались бы после обновления.
+  const SEED_FLAG = "_seed";
+  if ((await db.setting.findUnique({ where: { key: SEED_FLAG } })) || (await db.service.count())) {
+    await db.setting.upsert({ where: { key: SEED_FLAG }, create: { key: SEED_FLAG, value: { at: new Date().toISOString() } }, update: {} });
+    console.log("Seed: demo data already applied, skipped. Owner phone:", ownerPhone);
+    return;
+  }
+
   const cleaning = await db.category.upsert({
     where: { slug: "cleaning" },
     create: { slug: "cleaning", title: t("Уборка", "Cleaning", "Մաքրում"), description: t("Регулярная уборка квартир и домов", "Regular home cleaning"), image: "/img/cat-cleaning.svg", sort: 1 },
@@ -181,6 +190,7 @@ async function main() {
   for (const [slug, ru, en] of pages) {
     await db.page.upsert({ where: { slug }, create: { slug, title: t(ru, en), body: t("Текст документа будет добавлен.", "Coming soon.") }, update: {} });
   }
+  await db.setting.create({ data: { key: SEED_FLAG, value: { at: new Date().toISOString() } } });
   console.log("Seed done. Owner phone:", ownerPhone);
 }
 

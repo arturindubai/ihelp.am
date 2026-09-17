@@ -1,13 +1,23 @@
 # Продакшн на одном сервере (Contabo VPS). Запуск: docker compose up -d --build
 # Фиксированное имя проекта: свои контейнеры, сеть и тома homecare_*, не пересекаются с соседями по серверу
 name: homecare
+
+# Логи Docker без ротации растут бесконечно: ограничиваем 5 файлами по 10 МБ на сервис
+x-logging: &logging
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+
 services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    <<: *logging
+    mem_limit: 1g
     environment:
       POSTGRES_DB: homeservices
       POSTGRES_USER: app
+      # Меняется только вместе с ALTER USER в базе: пароль применяется лишь при первом создании тома
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -19,6 +29,8 @@ services:
   # Миграции и стартовые данные — выполняется при каждом деплое и завершается
   migrate:
     build: { context: ., target: builder }
+    <<: *logging
+    mem_limit: 1g
     environment:
       DATABASE_URL: postgresql://app:${POSTGRES_PASSWORD}@db:5432/homeservices
       ADMIN_PHONE: ${ADMIN_PHONE:?set ADMIN_PHONE in .env}
@@ -30,6 +42,8 @@ services:
   app:
     build: { context: ., target: runner }
     restart: unless-stopped
+    <<: *logging
+    mem_limit: 1g
     environment:
       DATABASE_URL: postgresql://app:${POSTGRES_PASSWORD}@db:5432/homeservices
       APP_URL: ${APP_URL}
@@ -55,11 +69,15 @@ services:
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    <<: *logging
+    mem_limit: 256m
     # Порты хоста задаются в .env (HTTP_BIND / HTTPS_BIND). По умолчанию 80 и 443.
     # На общем сервере, где 80/443 заняты nginx: HTTP_BIND=8080, HTTPS_BIND=127.0.0.1:8443
     ports: ["${HTTP_BIND:-80}:80", "${HTTPS_BIND:-443}:443"]
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      # До запуска закрываем сайт от поисковиков; при запуске: ROBOTS_TAG=all
+      ROBOTS_TAG: ${ROBOTS_TAG:-noindex, nofollow}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -69,19 +87,28 @@ services:
   cron:
     image: curlimages/curl:8.10.1
     restart: unless-stopped
+    <<: *logging
+    mem_limit: 64m
     environment:
       CRON_SECRET: ${CRON_SECRET}
-    entrypoint: ["sh", "-c", "while true; do curl -fsS -H \"x-cron-secret: $$CRON_SECRET\" http://app:3000/api/cron; echo; sleep 900; done"]
+    volumes:
+      - ./deploy/cron.sh:/cron.sh:ro
+    entrypoint: ["sh", "/cron.sh"]
     depends_on: [app]
 
   backup:
     image: postgres:16-alpine
     restart: unless-stopped
+    <<: *logging
+    mem_limit: 512m
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
     volumes:
       - ./backups:/backups
-    entrypoint: ["sh", "-c", "while true; do pg_dump -h db -U app homeservices | gzip > /backups/db-$$(date +%F).sql.gz; find /backups -name 'db-*.sql.gz' -mtime +14 -delete; sleep 86400; done"]
+      - ./deploy/backup.sh:/backup.sh:ro
+      - uploads:/uploads:ro
+    entrypoint: ["sh", "/backup.sh"]
     # Ждём миграции: иначе первый бэкап снимается с ещё пустой базы
     depends_on:
       migrate: { condition: service_completed_successfully }

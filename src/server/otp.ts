@@ -5,7 +5,7 @@ import { hash } from "./auth";
 import { getSettings, Settings } from "./settings";
 import type { OtpChannel } from "@prisma/client";
 
-export type OtpResult = { ok: true; devCode?: string; resendIn: number } | { ok: false; error: string; retryIn?: number };
+export type OtpResult = { ok: true; devCode?: string; resendIn: number; codeLength: number } | { ok: false; error: string; retryIn?: number };
 
 export async function availableChannels(s?: Settings): Promise<OtpChannel[]> {
   const st = s || (await getSettings());
@@ -53,7 +53,7 @@ export async function sendOtp(phone: string, channel: OtpChannel, ip?: string): 
   } else {
     console.log(`[otp:dev] ${channel} ${phone} → ${code}`);
   }
-  return { ok: true, devCode: dev ? code : undefined, resendIn: s.otp.resendSec };
+  return { ok: true, devCode: dev ? code : undefined, resendIn: s.otp.resendSec, codeLength: s.otp.codeLength };
 }
 
 export async function verifyOtp(phone: string, code: string): Promise<boolean> {

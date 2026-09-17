@@ -85,7 +85,7 @@ export async function getSettings(): Promise<Settings> {
   if (cache && Date.now() - cache.at < TTL) return cache.value;
   const rows = await db.setting.findMany();
   let s = DEFAULT_SETTINGS;
-  for (const r of rows) s = merge(s, { [r.key]: r.value });
+  for (const r of rows) if (!r.key.startsWith("_")) s = merge(s, { [r.key]: r.value });
   // Контакты из .env важнее сохранённых в админке
   s = { ...s, brand: { ...s.brand, ...envContacts() } };
   cache = { at: Date.now(), value: s };
