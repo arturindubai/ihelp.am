@@ -91,14 +91,15 @@ docker compose up -d --build
 
 # 5. Проверка
 docker compose ps
-curl http://localhost/api/health
+curl http://localhost/api/health          # на общем сервере: http://localhost:8080/api/health
 ```
 
-Сайт откроется по `http://<IP>/ru`.
+Сайт откроется по `http://<IP>/ru` (на общем сервере — `http://<IP>:8080/ru`).
+Полный чек-лист деплоя и проверок: [docs/DEPLOY_CHECKLIST.md](docs/DEPLOY_CHECKLIST.md), открытые вопросы: [docs/GAPS.md](docs/GAPS.md).
 
 **Первый вход в админку.** Пока каналы отправки кода не подключены, код пишется в лог сервера:
 ```bash
-docker compose logs app | grep otp
+docker compose -f /opt/homecare/docker-compose.yml logs app | grep otp
 ```
 Войдите по `ADMIN_PHONE` → **Настройки → Подтверждение номера** → подключите WhatsApp / Telegram / SMS.
 
@@ -108,15 +109,42 @@ SITE_ADDRESS=example.am, www.example.am
 APP_URL=https://example.am
 COOKIE_SECURE=true
 ```
-Затем `docker compose up -d`. Caddy сам выпустит и будет продлевать SSL-сертификат.
+Затем `docker compose up -d`. Caddy сам выпустит и будет продлевать SSL-сертификат. Также: `ROBOTS_TAG=all` (открыть сайт поисковикам).
 
-**Обновление.** `git pull && docker compose up -d --build` (миграции применяются автоматически).
+> **Общий сервер (порты 80/443 заняты nginx другого проекта).** Схема выше не сработает: Caddy не получит сертификат без портов 80/443.
+> Вариант: в nginx отдельный `server { server_name example.am; … proxy_pass http://127.0.0.1:8080; }` + сертификат certbot,
+> в `.env`: `HTTP_BIND=127.0.0.1:8080`, `SITE_ADDRESS=:80`, `APP_URL=https://example.am`, `COOKIE_SECURE=true`, `ROBOTS_TAG=all`, и `ufw delete allow 8080/tcp`.
+> Правка nginx затрагивает сервер соседей — только по согласованию.
 
-**Бэкапы.** Ежедневно в `./backups/db-YYYY-MM-DD.sql.gz`, хранятся 14 дней. Восстановление:
+**Обновление.**
 ```bash
-gunzip -c backups/db-2026-09-16.sql.gz | docker compose exec -T db psql -U app homeservices
+cd /opt/homecare && docker compose up -d --build && docker image prune -f
 ```
-Фото из админки лежат в docker-томе `uploads`. Рекомендуется копировать `backups/` и том `uploads` на внешнее хранилище.
+Миграции применяются автоматически, демо-данные повторно не заливаются. Если код приходит новым архивом (git-remote нет):
+распакуйте во временную папку и перенесите с `rsync -a --exclude .env --exclude backups --exclude .git <папка>/ /opt/homecare/`,
+затем `git -C /opt/homecare diff` — **не затирайте серверные доработки** (порты, контакты, бэкапы), после чего команда выше.
+
+**Бэкапы.** Ежедневно в `./backups/`: база `db-YYYY-MM-DD.sql.gz` и фото из админки `uploads-YYYY-MM-DD.tar.gz`, хранятся `BACKUP_KEEP_DAYS` (14) дней. Лог: `docker compose logs backup`. Файлы лежат на том же диске — копируйте `backups/` на внешнее хранилище.
+
+Восстановление базы (заменяет текущие данные):
+```bash
+cd /opt/homecare
+docker compose stop app cron backup
+docker compose exec -T db psql -U app -d postgres -c "DROP DATABASE homeservices WITH (FORCE)" -c "CREATE DATABASE homeservices OWNER app"
+gunzip -c backups/db-YYYY-MM-DD.sql.gz | docker compose exec -T db psql -U app -d homeservices -v ON_ERROR_STOP=1 -q
+docker compose up -d
+```
+Восстановление фото (заменяет текущие):
+```bash
+cd /opt/homecare
+docker run --rm -v homecare_uploads:/restore -v "$PWD/backups:/b:ro" postgres:16-alpine \
+  sh -c 'rm -rf /restore/* && tar -xzf /b/uploads-YYYY-MM-DD.tar.gz -C /restore && chown -R 1000:1000 /restore'
+```
+
+**Эксплуатация.**
+- `POSTGRES_PASSWORD` задаётся только при первом создании базы: менять его в `.env` без `ALTER USER app PASSWORD '…'` нельзя — приложение потеряет доступ к базе.
+- Смена `SESSION_SECRET` разлогинит всех пользователей.
+- Логи контейнеров ротируются (5 × 10 МБ на сервис), лимиты памяти — в `docker-compose.yml`.
 
 ## Контакты
 

@@ -5,7 +5,12 @@ set -u
 umask 077
 printf 'x-cron-secret: %s\n' "$CRON_SECRET" > /tmp/cron-headers
 while true; do
-  curl -fsS -H @/tmp/cron-headers http://app:3000/api/cron
-  echo
-  sleep 900
+  # Приложение ещё не поднялось (деплой, перезагрузка) — повтор через минуту, а не через 15
+  if curl -fsS -H @/tmp/cron-headers http://app:3000/api/cron; then
+    echo
+    sleep 900
+  else
+    echo
+    sleep 60
+  fi
 done
