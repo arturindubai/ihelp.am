@@ -6,8 +6,8 @@ import { db } from "../../db";
 import { requireSection } from "../../admin";
 import { audit } from "../../audit";
 import { recalcRatings } from "../../services/catalog";
-import { invalidateUiCache, saveSettingsSection, getSettings, type Settings } from "../../settings";
-import { notifyTeam } from "../../notify";
+import { invalidateUiCache, saveSettingsSection, getSettings, SECRET_PATHS, type Settings } from "../../settings";
+import { notifyTeam, notifyTech } from "../../notify";
 import { envContacts } from "../../contacts";
 import { normalizePhone } from "@/lib/phone";
 
@@ -157,7 +157,6 @@ export async function saveUiStringAction(locale: string, key: string, value: str
 }
 
 /* ───── Настройки ───── */
-const SECRET_PATHS = ["otp.sms.authToken", "otp.whatsapp.accessToken", "otp.telegram.gatewayToken", "notify.telegramBotToken"];
 
 export async function saveSettingsAction<K extends keyof Settings>(key: K, value: Settings[K]) {
   const u = await requireSection("settings");
@@ -188,7 +187,9 @@ export async function saveSettingsAction<K extends keyof Settings>(key: K, value
 
 export async function testNotifyAction() {
   await requireSection("settings");
+  const s = await getSettings();
   await notifyTeam("✅ Тестовое уведомление");
+  if (s.notify.techChatId) await notifyTech("✅ Тестовое уведомление (тех-чат)");
   return { ok: true };
 }
 

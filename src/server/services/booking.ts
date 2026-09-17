@@ -2,7 +2,7 @@ import "server-only";
 import { Prisma, type PaymentMethod, type User, type VisitStatus } from "@prisma/client";
 import { db } from "../db";
 import { getSettings } from "../settings";
-import { notifyTeam } from "../notify";
+import { html, notifyTeam } from "../notify";
 import { calculatePrice } from "@/lib/pricing";
 import { computeSlots, isMasterFree, type MasterAvailability } from "@/lib/slots";
 import { recurrenceDates, type Recurrence } from "@/lib/recurrence";
@@ -197,10 +197,11 @@ export async function createOrder(user: User, input: CreateOrderInput) {
   );
 
   const m = order.preferredMasterId ? await db.master.findUnique({ where: { id: order.preferredMasterId } }) : null;
+  // Имя, адрес и названия подставляются через html`` — спецсимволы не ломают сообщение в Telegram
   await notifyTeam(
-    `🆕 <b>Заказ №${order.number}</b>\n${tr(raw.title, "ru")} · ${tr(raw.plans.find((p) => p.id === plan?.id)?.title, "ru") || ""}\n` +
-      `📅 ${input.date} ${input.time} · ${Math.round(durationMin / 30) / 2} ч\n👤 ${user.name || ""} ${user.phone}\n📍 ${address.street} ${address.building}${address.apartment ? ", кв. " + address.apartment : ""}\n` +
-      `🧹 ${m ? tr(m.name, "ru") : "—"}\n💰 ${amd(price.payNow)} · ${input.paymentMethod === "CASH" ? "наличные" : "карта"}`,
+    html`🆕 <b>Заказ №${order.number}</b>\n${tr(raw.title, "ru")} · ${tr(raw.plans.find((p) => p.id === plan?.id)?.title, "ru") || ""}\n` +
+      html`📅 ${input.date} ${input.time} · ${Math.round(durationMin / 30) / 2} ч\n👤 ${user.name || ""} ${user.phone}\n📍 ${address.street} ${address.building}${address.apartment ? ", кв. " + address.apartment : ""}\n` +
+      html`🧹 ${m ? tr(m.name, "ru") : "—"}\n💰 ${amd(price.payNow)} · ${input.paymentMethod === "CASH" ? "наличные" : "карта"}`,
   );
   return order;
 }

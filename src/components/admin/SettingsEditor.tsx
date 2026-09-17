@@ -18,7 +18,7 @@ function Section<K extends keyof Settings>({ k, title, value, children, hint }: 
   );
 }
 
-export function SettingsEditor({ initial, devMode, lockedContacts = {} }: { initial: Settings; devMode: boolean; lockedContacts?: Partial<Record<ContactKey, string>> }) {
+export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardIntegrated = false }: { initial: Settings; devMode: boolean; lockedContacts?: Partial<Record<ContactKey, string>>; cardIntegrated?: boolean }) {
   const t = useTranslations("admin.settings");
   const [s, setS] = useState(initial);
   const [sent, setSent] = useState(false);
@@ -75,7 +75,7 @@ export function SettingsEditor({ initial, devMode, lockedContacts = {} }: { init
 
       <Section k="payments" title={t("payments")} value={s.payments}>
         <Toggle label={t("cash")} checked={s.payments.cashEnabled} onChange={(v) => set("payments", { cashEnabled: v })} />
-        <Toggle label={t("card")} checked={s.payments.cardEnabled} onChange={(v) => set("payments", { cardEnabled: v })} />
+        <Toggle label={t("card")} checked={s.payments.cardEnabled} disabled={!cardIntegrated} hint={cardIntegrated ? undefined : t("cardLocked")} onChange={(v) => set("payments", { cardEnabled: v })} />
       </Section>
 
       <Section k="otp" title={t("otp")} value={s.otp} hint={`${t("otpHint")}${devMode ? " (OTP_DEV_MODE=true)" : ""}`}>
@@ -114,6 +114,7 @@ export function SettingsEditor({ initial, devMode, lockedContacts = {} }: { init
         <div className="grid gap-3 md:grid-cols-2">
           <TextInput label={t("botToken")} hint={t("secretHint")} value={s.notify.telegramBotToken} onChange={(v) => set("notify", { telegramBotToken: v })} />
           <TextInput label={t("chatId")} value={s.notify.telegramChatId} onChange={(v) => set("notify", { telegramChatId: v })} />
+          <TextInput label={t("techChatId")} hint={t("techChatHint")} value={s.notify.techChatId} onChange={(v) => set("notify", { techChatId: v })} />
         </div>
         <button className="btn-outline btn-sm mt-3" onClick={async () => { await testNotifyAction(); setSent(true); }}>{sent ? t("testSent") : t("testNotify")}</button>
       </Section>

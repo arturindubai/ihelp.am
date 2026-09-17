@@ -18,7 +18,7 @@ export default async function AdminClient({ params }: { params: Promise<{ locale
   const [t, to, ta] = await Promise.all([getTranslations("admin"), getTranslations("order"), getTranslations("address")]);
   return (
     <div className="max-w-4xl">
-      <PageHead title={u.name || formatPhone(u.phone)} sub={`${formatPhone(u.phone)} · ${t(`staff.roles.${u.role}`)} · ${dateLabel(u.createdAt, locale, { day: "numeric", month: "long", year: "numeric" })}`} actions={<a href={`https://wa.me/${u.phone.replace("+", "")}`} target="_blank" className="btn-outline btn-sm">WhatsApp</a>} />
+      <PageHead title={u.name || formatPhone(u.phone)} sub={`${formatPhone(u.phone)} · ${t(`staff.roles.${u.role}`)} · ${dateLabel(u.createdAt, locale, { day: "numeric", month: "long", year: "numeric" })} · ${u.privacyConsentAt ? t("clients.consentAt", { date: dateLabel(u.privacyConsentAt, locale, { day: "numeric", month: "long", year: "numeric" }) }) : t("clients.noConsent")}`} actions={<a href={`https://wa.me/${u.phone.replace("+", "")}`} target="_blank" className="btn-outline btn-sm">WhatsApp</a>} />
       <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-4 md:col-span-2">
           <section className="card p-4">

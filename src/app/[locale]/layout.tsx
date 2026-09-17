@@ -13,6 +13,8 @@ const notoArm = Noto_Sans_Armenian({ subsets: ["armenian"], variable: "--font-no
 
 export const dynamic = "force-dynamic";
 
+const OG_LOCALE = { ru: "ru_RU", en: "en_US", am: "hy_AM" };
+
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#ffffff" };
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
@@ -28,6 +30,11 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       languages: Object.fromEntries(s.locales.enabled.map((l) => [localeIso[l as "ru"], `/${l}`])),
     },
     appleWebApp: { capable: true, title: s.brand.name, statusBarStyle: "default" },
+    // Превью ссылок в WhatsApp, Telegram, соцсетях; картинка — ./opengraph-image.tsx
+    openGraph: { type: "website", siteName: s.brand.name, title: `${s.brand.name} — ${tr(s.brand.tagline, locale)}`, description: tr(s.brand.tagline, locale), locale: OG_LOCALE[locale as "ru"] },
+    twitter: { card: "summary_large_image" },
+    // Выключенный язык открывается с русским текстом — не индексируем, чтобы не плодить дубли страниц
+    ...(s.locales.enabled.includes(locale) ? {} : { robots: { index: false, follow: false } }),
   };
 }
 

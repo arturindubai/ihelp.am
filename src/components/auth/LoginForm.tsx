@@ -4,6 +4,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { MessageCircle, Send, Smartphone } from "lucide-react";
 import { completeSignupAction, sendCodeAction, verifyCodeAction } from "@/server/actions/auth";
 import { formatPhone } from "@/lib/phone";
+import { Link } from "@/i18n/navigation";
 
 type Channel = "SMS" | "WHATSAPP" | "TELEGRAM";
 const ICONS = { WHATSAPP: MessageCircle, TELEGRAM: Send, SMS: Smartphone };
@@ -39,7 +40,7 @@ export function LoginForm({ channels, onDone }: { channels: Channel[]; onDone: (
     setError(undefined);
     setChannel(ch);
     start(async () => {
-      const r = await sendCodeAction(phone, ch);
+      const r = await sendCodeAction(phone, ch, locale);
       if (!r.ok) return setError(errText(r.error, "retryIn" in r ? r.retryIn : undefined));
       setNormalized(r.phone!);
       setDevCode(r.devCode);
@@ -83,6 +84,12 @@ export function LoginForm({ channels, onDone }: { channels: Channel[]; onDone: (
               );
             })}
           </div>
+          <p className="mt-3 text-xs text-muted">
+            {t.rich("consent", {
+              privacy: (c) => <Link href="/p/privacy" target="_blank" className="underline">{c}</Link>,
+              offer: (c) => <Link href="/p/offer" target="_blank" className="underline">{c}</Link>,
+            })}
+          </p>
         </div>
       )}
 

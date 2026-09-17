@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "./db";
 import type { PricingRules } from "@/lib/pricing";
 import { envContacts } from "./contacts";
+import { decrypt, encrypt, isEncrypted } from "@/lib/crypto";
 
 export interface Settings {
   brand: { name: string; tagline: Record<string, string>; phone: string; whatsapp: string; telegram: string; email: string; instagram: string; city: Record<string, string> };
@@ -27,7 +28,7 @@ export interface Settings {
     whatsapp: { enabled: boolean; phoneNumberId: string; accessToken: string; templateName: string; templateLang: string };
     telegram: { enabled: boolean; gatewayToken: string };
   };
-  notify: { telegramBotToken: string; telegramChatId: string };
+  notify: { telegramBotToken: string; telegramChatId: string; techChatId: string };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -63,10 +64,24 @@ export const DEFAULT_SETTINGS: Settings = {
     whatsapp: { enabled: false, phoneNumberId: "", accessToken: "", templateName: "", templateLang: "ru" },
     telegram: { enabled: false, gatewayToken: "" },
   },
-  notify: { telegramBotToken: "", telegramChatId: "" },
+  notify: { telegramBotToken: "", telegramChatId: "", techChatId: "" },
 };
 
+/** Ключи интеграций: в базе и бэкапах хранятся зашифрованными (ключ SETTINGS_ENCRYPTION_KEY — в .env, в бэкапы не попадает) */
+export const SECRET_PATHS = ["otp.sms.authToken", "otp.whatsapp.accessToken", "otp.telegram.gatewayToken", "notify.telegramBotToken"];
+
+/** Оплата картой включается после интеграции эквайринга (задача PAY-1). До этого переключатель в админке заблокирован */
+export const CARD_PAYMENTS_INTEGRATED = false;
+
 type AnyObj = Record<string, unknown>;
+
+/** Родительский объект и имя поля по пути "otp.sms.authToken" */
+function locate(root: AnyObj, parts: string[]) {
+  const parent = parts.slice(0, -1).reduce<AnyObj | undefined>((o, p) => o?.[p] as AnyObj | undefined, root);
+  return parent && typeof parent === "object" ? { parent, field: parts[parts.length - 1] } : null;
+}
+
+const warned = new Set<string>();
 function merge<T>(base: T, extra: unknown): T {
   if (!extra || typeof extra !== "object" || Array.isArray(extra)) return (extra as T) ?? base;
   const out: AnyObj = { ...(base as AnyObj) };
@@ -86,14 +101,42 @@ export async function getSettings(): Promise<Settings> {
   const rows = await db.setting.findMany();
   let s = DEFAULT_SETTINGS;
   for (const r of rows) if (!r.key.startsWith("_")) s = merge(s, { [r.key]: r.value });
+  s = structuredClone(s);
   // Контакты из .env важнее сохранённых в админке
-  s = { ...s, brand: { ...s.brand, ...envContacts() } };
+  s.brand = { ...s.brand, ...envContacts() };
+  const key = process.env.SETTINGS_ENCRYPTION_KEY;
+  for (const path of SECRET_PATHS) {
+    const at = locate(s as unknown as AnyObj, path.split("."));
+    const v = at?.parent[at.field];
+    if (!at || !isEncrypted(v)) continue;
+    try {
+      if (!key) throw new Error("SETTINGS_ENCRYPTION_KEY не задан");
+      at.parent[at.field] = decrypt(v, key);
+    } catch (e) {
+      at.parent[at.field] = "";
+      if (!warned.has(path)) console.error(`[settings] не удалось расшифровать ${path}: ${(e as Error).message}. Введите ключ заново в админке`);
+      warned.add(path);
+    }
+  }
+  if (!CARD_PAYMENTS_INTEGRATED) s.payments.cardEnabled = false;
   cache = { at: Date.now(), value: s };
   return s;
 }
 
 export async function saveSettingsSection<K extends keyof Settings>(key: K, value: Settings[K]) {
-  await db.setting.upsert({ where: { key }, create: { key, value: value as object }, update: { value: value as object } });
+  const stored = structuredClone(value) as unknown as AnyObj;
+  const encKey = process.env.SETTINGS_ENCRYPTION_KEY;
+  for (const path of SECRET_PATHS) {
+    const [root, ...rest] = path.split(".");
+    if (root !== key) continue;
+    const at = locate(stored, rest);
+    const v = at?.parent[at.field];
+    if (!at || typeof v !== "string" || !v || isEncrypted(v)) continue;
+    if (encKey) at.parent[at.field] = encrypt(v, encKey);
+    else console.warn(`[settings] SETTINGS_ENCRYPTION_KEY не задан: ${path} сохранён без шифрования`);
+  }
+  if (key === "payments" && !CARD_PAYMENTS_INTEGRATED) stored.cardEnabled = false;
+  await db.setting.upsert({ where: { key }, create: { key, value: stored as object }, update: { value: stored as object } });
   cache = null;
 }
 

@@ -6,14 +6,14 @@ import { normalizePhone } from "@/lib/phone";
 import { sendOtp, verifyOtp } from "../otp";
 import { createSession, getCurrentUser, hash, logout } from "../auth";
 
-export async function sendCodeAction(phoneRaw: string, channel: OtpChannel) {
+export async function sendCodeAction(phoneRaw: string, channel: OtpChannel, locale = "ru") {
   const phone = normalizePhone(phoneRaw);
   if (!phone) return { ok: false as const, error: "phone" };
   const existing = await db.user.findUnique({ where: { phone } });
   if (existing?.blocked) return { ok: false as const, error: "blocked" };
   const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || undefined;
-  const r = await sendOtp(phone, channel, ip);
+  const r = await sendOtp(phone, channel, ip, ["ru", "en", "am"].includes(locale) ? locale : "ru");
   return { ...r, phone };
 }
 
@@ -23,7 +23,9 @@ export async function verifyCodeAction(phoneRaw: string, code: string, locale: s
   if (!(await verifyOtp(phone, code))) return { ok: false as const, error: "code" };
   let user = await db.user.findUnique({ where: { phone } });
   if (user?.blocked) return { ok: false as const, error: "blocked" };
-  if (!user) user = await db.user.create({ data: { phone, locale } });
+  // Код запрошен из формы с уведомлением о политике конфиденциальности — фиксируем дату согласия
+  if (!user) user = await db.user.create({ data: { phone, locale, privacyConsentAt: new Date() } });
+  else if (!user.privacyConsentAt) user = await db.user.update({ where: { id: user.id }, data: { privacyConsentAt: new Date() } });
   // Если номер привязан к мастеру — выдаём роль мастера
   if (user.role === "CLIENT") {
     const m = await db.master.findFirst({ where: { phone, userId: null } });

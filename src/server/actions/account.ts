@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { getCurrentUser } from "../auth";
 import { getSettings } from "../settings";
-import { notifyTeam } from "../notify";
+import { html, notifyTeam } from "../notify";
 import { BookingError, scheduleVisit, BUSY_STATUSES } from "../services/booking";
 import { ymd } from "@/lib/time";
 
@@ -38,7 +38,7 @@ export async function cancelVisitAction(visitId: string) {
   const status = v.order.kind === "SUBSCRIPTION" ? "SKIPPED" : v.order.kind === "PACKAGE" ? "UNSCHEDULED" : "CANCELLED";
   await db.visit.update({ where: { id: v.id }, data: { status, ...(status === "UNSCHEDULED" ? { scheduledAt: null, masterId: null } : {}) } });
   if (v.order.kind === "ONE_TIME") await db.order.update({ where: { id: v.orderId }, data: { status: "CANCELLED", cancelReason: "client" } });
-  await notifyTeam(`❌ Клиент ${status === "SKIPPED" ? "пропустил" : "отменил"} визит · заказ №${v.order.number} · ${v.scheduledAt ? ymd(v.scheduledAt) : ""}`);
+  await notifyTeam(html`❌ Клиент ${status === "SKIPPED" ? "пропустил" : "отменил"} визит · заказ №${v.order.number} · ${v.scheduledAt ? ymd(v.scheduledAt) : ""}`);
   revalidatePath(`/[locale]/account/orders/${v.orderId}`, "page");
   return { ok: true };
 }
@@ -55,7 +55,7 @@ export async function rescheduleVisitAction(visitId: string, date: string, time:
     if (e instanceof BookingError) return { ok: false, error: e.message };
     throw e;
   }
-  await notifyTeam(`🔁 Перенос визита · заказ №${v.order.number} → ${date} ${time}`);
+  await notifyTeam(html`🔁 Перенос визита · заказ №${v.order.number} → ${date} ${time}`);
   return { ok: true };
 }
 
@@ -69,7 +69,7 @@ export async function cancelOrderAction(orderId: string) {
     db.visit.updateMany({ where: { orderId: o.id, status: { in: ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"] }, OR: [{ scheduledAt: null }, { scheduledAt: { gt: new Date(limit) } }] }, data: { status: "CANCELLED" } }),
     db.order.update({ where: { id: o.id }, data: { status: "CANCELLED", cancelReason: "client" } }),
   ]);
-  await notifyTeam(`❌ Клиент отменил ${o.kind === "SUBSCRIPTION" ? "подписку" : "заказ"} №${o.number}`);
+  await notifyTeam(html`❌ Клиент отменил ${o.kind === "SUBSCRIPTION" ? "подписку" : "заказ"} №${o.number}`);
   return { ok: true };
 }
 
@@ -84,7 +84,7 @@ export async function pauseOrderAction(orderId: string, until: string) {
     db.visit.updateMany({ where: { orderId: o.id, status: { in: ["SCHEDULED", "CONFIRMED"] }, scheduledAt: { gt: minFrom, lt: untilDate } }, data: { status: "SKIPPED" } }),
     db.order.update({ where: { id: o.id }, data: { status: "PAUSED", pausedUntil: untilDate } }),
   ]);
-  await notifyTeam(`⏸ Подписка №${o.number} на паузе до ${until}`);
+  await notifyTeam(html`⏸ Подписка №${o.number} на паузе до ${until}`);
   return { ok: true };
 }
 
@@ -96,7 +96,7 @@ export async function resumeOrderAction(orderId: string) {
   const s = await getSettings();
   const { generateSubscriptionVisits } = await import("../services/booking");
   await generateSubscriptionVisits(db, o.id, s.booking.subscriptionHorizonDays, s.booking.bufferMin);
-  await notifyTeam(`▶️ Подписка №${o.number} возобновлена`);
+  await notifyTeam(html`▶️ Подписка №${o.number} возобновлена`);
   return { ok: true };
 }
 
@@ -107,6 +107,6 @@ export async function reviewAction(visitId: string, rating: number, text: string
   const exists = await db.review.findUnique({ where: { visitId } });
   if (exists) return { ok: false };
   await db.review.create({ data: { visitId, userId: u.id, masterId: v.masterId, serviceId: v.order.serviceId, rating: r, text: text.trim().slice(0, 2000) || null, authorName: u.name, status: "PENDING" } });
-  await notifyTeam(`⭐ Новый отзыв ${r}/5 · заказ №${v.order.number} — на модерации`);
+  await notifyTeam(html`⭐ Новый отзыв ${r}/5 · заказ №${v.order.number} — на модерации`);
   return { ok: true };
 }

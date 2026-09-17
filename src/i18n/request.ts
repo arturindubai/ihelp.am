@@ -1,41 +1,10 @@
 import { getRequestConfig } from "next-intl/server";
 import { hasLocale } from "next-intl";
 import { routing } from "./routing";
-import { getUiOverrides } from "@/server/settings";
-import ru from "../../messages/ru.json";
-
-type Msg = { [k: string]: string | Msg };
-
-function deepMerge(base: Msg, extra: Msg): Msg {
-  const out: Msg = { ...base };
-  for (const [k, v] of Object.entries(extra || {})) {
-    if (v && typeof v === "object" && typeof out[k] === "object") out[k] = deepMerge(out[k] as Msg, v as Msg);
-    else if (v !== "" && v != null) out[k] = v;
-  }
-  return out;
-}
-
-function setPath(obj: Msg, path: string, value: string) {
-  const parts = path.split(".");
-  let cur = obj;
-  for (let i = 0; i < parts.length - 1; i++) {
-    if (typeof cur[parts[i]] !== "object") cur[parts[i]] = {};
-    cur = cur[parts[i]] as Msg;
-  }
-  cur[parts[parts.length - 1]] = value;
-}
+import { loadMessages } from "./messages";
 
 export default getRequestConfig(async ({ requestLocale }) => {
   const requested = await requestLocale;
   const locale = hasLocale(routing.locales, requested) ? requested : routing.defaultLocale;
-  // Русский — базовый язык: всё, что не переведено, показывается на русском
-  const own = (await import(`../../messages/${locale}.json`)).default as Msg;
-  let messages = locale === "ru" ? (ru as unknown as Msg) : deepMerge(ru as Msg, own);
-  // Тексты, отредактированные в админке
-  const overrides = await getUiOverrides(locale);
-  if (overrides.length) {
-    messages = JSON.parse(JSON.stringify(messages));
-    for (const o of overrides) setPath(messages, o.key, o.value);
-  }
-  return { locale, messages, timeZone: "Asia/Yerevan" };
+  return { locale, messages: await loadMessages(locale), timeZone: "Asia/Yerevan" };
 });

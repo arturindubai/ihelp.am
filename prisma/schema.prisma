@@ -36,6 +36,8 @@ model User {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   lastLoginAt DateTime?
+  /// Когда пользователь получил код из формы с уведомлением о политике конфиденциальности
+  privacyConsentAt DateTime?
 
   sessions    Session[]
   addresses   Address[]

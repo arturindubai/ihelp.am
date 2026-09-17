@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { pageUser } from "@/server/adminPage";
-import { getSettings, mask } from "@/server/settings";
+import { getSettings, mask, CARD_PAYMENTS_INTEGRATED } from "@/server/settings";
 import { lockedContacts } from "@/server/contacts";
 import { PageHead, Forbidden } from "@/components/admin/ui";
 import { SettingsEditor } from "@/components/admin/SettingsEditor";
@@ -16,7 +16,7 @@ export default async function AdminSettings() {
   return (
     <div className="max-w-3xl">
       <PageHead title={t("settings.title")} />
-      <SettingsEditor initial={s} devMode={process.env.OTP_DEV_MODE === "true"} lockedContacts={lockedContacts()} />
+      <SettingsEditor initial={s} devMode={process.env.OTP_DEV_MODE === "true"} lockedContacts={lockedContacts()} cardIntegrated={CARD_PAYMENTS_INTEGRATED} />
     </div>
   );
 }
