@@ -213,6 +213,7 @@ export async function systemStatus() {
     indexing: process.env.ROBOTS_TAG ?? null,
     https: (process.env.APP_URL ?? "").startsWith("https://"),
     agentApi: !!process.env.CC_AGENT_KEY,
+    linkLogin: !!process.env.ADMIN_LOGIN_TOKEN,
     data: { orders, visits, clients, masters },
     backlogInCode: BACKLOG.length,
   };

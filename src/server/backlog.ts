@@ -380,6 +380,26 @@ const AUTH: TaskSeed[] = [
   },
 ];
 
+const LINK_LOGIN: TaskSeed = {
+  key: "AUTH-7",
+  title: "Отключить запасной вход владельца по ссылке",
+  summary: "Пока каналы кода не подключены, владелец входит по секретной ссылке (`ADMIN_LOGIN_TOKEN` в .env). Это запасной ход: у кого есть ссылка — тот войдёт как владелец.",
+  details: "Сделано 20.09.2026 как временное решение. Каждое использование пишется в журнал и шлёт тех-алерт. Пока нет HTTPS, ссылка идёт по сети открытым текстом — не пересылайте её в переписке.",
+  requirements: [
+    "После подключения канала кода (AUTH-1) владелец входит обычным способом",
+    "`ADMIN_LOGIN_TOKEN` очищен в .env, ссылка перестала работать",
+    "В Control Center строка «Вход владельца по ссылке» показывает «не подключено»",
+  ],
+  depends: ["AUTH-1"],
+  epic: "Вход и безопасность",
+  area: "auth",
+  layer: "infra",
+  priority: "p1",
+  stage: "public",
+  owner: "tech",
+  estimate: "S",
+};
+
 const OTP: TaskSeed[] = [
   {
     key: "OTP-1",
@@ -1718,6 +1738,7 @@ const RISKS: TaskSeed[] = [
 export const BACKLOG: TaskSeed[] = [
   ...BASELINE,
   ...AUTH,
+  LINK_LOGIN,
   ...OTP,
   ...NOTIFY,
   ...PAY,

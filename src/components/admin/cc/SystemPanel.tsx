@@ -53,6 +53,7 @@ export async function SystemPanel({ system }: { system: System }) {
       <Row label={t("https")} value={flag(system.https)} tone={system.https ? "ok" : "warn"} />
       <Row label={t("indexing")} value={system.indexing === "all" ? t("on") : t("off")} />
       <Row label={t("agentApi")} value={flag(system.agentApi)} />
+      <Row label={t("linkLogin")} value={flag(system.linkLogin)} tone={system.linkLogin ? "warn" : "ok"} />
       <div className="mt-2 border-t border-line pt-2 text-xs text-muted">
         {t("data")}: {t("orders")} {system.data.orders} · {t("visits")} {system.data.visits} · {t("clients")} {system.data.clients} · {t("masters")} {system.data.masters}
       </div>

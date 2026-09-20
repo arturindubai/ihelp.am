@@ -9,9 +9,9 @@ const DAYS = 60;
 
 export const hash = (v: string) => crypto.createHmac("sha256", process.env.SESSION_SECRET || "dev").update(v).digest("hex");
 
-export async function createSession(userId: string) {
+export async function createSession(userId: string, days = DAYS) {
   const token = crypto.randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + DAYS * 86400_000);
+  const expiresAt = new Date(Date.now() + days * 86400_000);
   const ua = (await headers()).get("user-agent")?.slice(0, 200);
   await db.session.create({ data: { tokenHash: hash(token), userId, expiresAt, userAgent: ua } });
   await db.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } });
