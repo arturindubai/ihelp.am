@@ -28,13 +28,14 @@ export async function GET(req: Request) {
     await alertTech("admin-link-denied", "⚠️ <b>Неудачная попытка входа по ссылке владельца</b>", 30);
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+  // Владелец: номер из ADMIN_PHONE, иначе — первый аккаунт с ролью OWNER
   const phone = process.env.ADMIN_PHONE ?? "";
-  const user = await db.user.findUnique({ where: { phone } });
+  const user = (phone ? await db.user.findUnique({ where: { phone } }) : null) ?? (await db.user.findFirst({ where: { role: "OWNER" }, orderBy: { createdAt: "asc" } }));
   if (!user) return NextResponse.json({ error: "owner_not_found" }, { status: 500 });
 
   await createSession(user.id, SESSION_DAYS);
   await audit(user.id, "auth.link", "User", user.id);
   const ua = req.headers.get("user-agent")?.slice(0, 120) ?? "";
-  await alertTech("admin-link-used", html`🔑 <b>Вход владельца по ссылке</b>\n${phone}\n${ua}`, 1);
+  await alertTech("admin-link-used", html`🔑 <b>Вход владельца по ссылке</b>\n${user.phone}\n${ua}`, 1);
   return NextResponse.redirect(new URL("/ru/admin", base));
 }
