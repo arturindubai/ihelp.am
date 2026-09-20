@@ -440,6 +440,81 @@ model UiString {
   @@unique([locale, key])
 }
 
+/// Control Center: задача бэклога (источник — prisma/backlog.ts, статусы ведутся в интерфейсе)
+model Task {
+  id            String    @id @default(cuid())
+  key           String    @unique
+  title         String
+  summary       String
+  details       String?
+  /// Критерии приёмки
+  requirements  String[]  @default([])
+  /// Что нужно от продукта: аккаунты, документы, решения
+  needs         String[]  @default([])
+  /// Ключи задач, от которых зависит эта
+  depends       String[]  @default([])
+  /// Ссылки на документы и файлы
+  docs          String[]  @default([])
+  epic          String
+  area          String
+  /// back | front | fullstack | infra | none
+  layer         String
+  /// p0 до первых клиентов | p1 до запуска | p2 после запуска | p3 к сведению
+  priority      String
+  /// launch | public | growth | later | baseline
+  stage         String
+  /// backlog | in_progress | review | blocked | done
+  status        String    @default("backlog")
+  /// product | tech | both
+  owner         String    @default("tech")
+  estimate      String?
+  assignee      String?
+  blockedReason String?
+  sort          Int       @default(0)
+  /// Аренда задачи агентом (API /api/cc)
+  claimedBy     String?
+  claimUntil    DateTime?
+  startedAt     DateTime?
+  doneAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  comments      TaskComment[]
+  events        TaskEvent[]
+
+  @@index([status, priority])
+  @@index([stage])
+  @@index([area])
+}
+
+/// Комментарий или отчёт по задаче
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  /// note — заметка человека, report — отчёт агента
+  kind      String   @default("note")
+  author    String
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([taskId, createdAt])
+}
+
+/// История изменений задачи
+model TaskEvent {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor     String
+  field     String
+  from      String?
+  to        String?
+  createdAt DateTime @default(now())
+
+  @@index([taskId, createdAt])
+}
+
 model Setting {
   key   String @id
   value Json

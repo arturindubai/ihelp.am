@@ -4,7 +4,43 @@
  * Скрипт идемпотентный: существующие записи не перезаписываются.
  */
 import { PrismaClient } from "@prisma/client";
+import { BACKLOG } from "../src/server/backlog";
 const db = new PrismaClient();
+
+/**
+ * Бэклог Control Center: тексты, требования и связи берутся из кода,
+ * статусы, исполнители, комментарии и история остаются такими, какими их ведут в интерфейсе.
+ */
+async function syncBacklog() {
+  let created = 0;
+  for (const [i, t] of BACKLOG.entries()) {
+    const content = {
+      title: t.title,
+      summary: t.summary,
+      details: t.details ?? null,
+      requirements: t.requirements,
+      needs: t.needs ?? [],
+      depends: t.depends ?? [],
+      docs: t.docs ?? [],
+      epic: t.epic,
+      area: t.area,
+      layer: t.layer,
+      priority: t.priority,
+      stage: t.stage,
+      owner: t.owner,
+      estimate: t.estimate ?? null,
+      sort: i,
+    };
+    const existing = await db.task.findUnique({ where: { key: t.key }, select: { id: true } });
+    if (existing) await db.task.update({ where: { key: t.key }, data: content });
+    else {
+      created++;
+      await db.task.create({ data: { key: t.key, ...content, status: t.status ?? "backlog", doneAt: t.status === "done" ? new Date() : null } });
+    }
+  }
+  const extra = await db.task.findMany({ where: { key: { notIn: BACKLOG.map((t) => t.key) } }, select: { key: true } });
+  console.log(`Backlog: ${BACKLOG.length} tasks (${created} new)${extra.length ? `, not in code: ${extra.map((e) => e.key).join(", ")}` : ""}`);
+}
 
 const t = (ru: string, en = "", am = "") => ({ ru, en, am });
 
@@ -29,6 +65,8 @@ async function main() {
 
   // Демо-каталог заливается один раз. Seed выполняется при каждом деплое, и без флага
   // удалённые в админке демо-мастера, баннер, категории и страницы возвращались бы после обновления.
+  await syncBacklog();
+
   const SEED_FLAG = "_seed";
   if ((await db.setting.findUnique({ where: { key: SEED_FLAG } })) || (await db.service.count())) {
     await db.setting.upsert({ where: { key: SEED_FLAG }, create: { key: SEED_FLAG, value: { at: new Date().toISOString() } }, update: {} });

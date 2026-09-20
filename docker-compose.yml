@@ -53,6 +53,10 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       # Шифрование ключей интеграций в базе. Потеря ключа = ключи WhatsApp/SMS/Telegram придётся ввести заново
       SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:-}
+      # Ключ для API задач Control Center (агенты). Пусто — API выключено
+      CC_AGENT_KEY: ${CC_AGENT_KEY:-}
+      # Показывается в Control Center: открыт ли сайт поисковикам
+      ROBOTS_TAG: ${ROBOTS_TAG:-noindex, nofollow}
       # Контакты бизнеса (единое место — блок CONTACT_* в .env)
       CONTACT_PHONE: ${CONTACT_PHONE:-}
       CONTACT_WHATSAPP: ${CONTACT_WHATSAPP:-}

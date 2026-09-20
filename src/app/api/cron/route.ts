@@ -33,6 +33,11 @@ export async function GET(req: Request) {
   const s = await getSettings();
   const now = new Date();
 
+  // Отметка последнего запуска — видна в Control Center
+  const cronRow = await db.setting.findUnique({ where: { key: "_cron" } });
+  const cronMarks = { ...((cronRow?.value ?? {}) as Record<string, string>), lastRunAt: now.toISOString() };
+  await db.setting.upsert({ where: { key: "_cron" }, create: { key: "_cron", value: cronMarks }, update: { value: cronMarks } });
+
   // 1. Подписки, у которых закончилась пауза
   const resumed = await db.order.updateMany({ where: { status: "PAUSED", pausedUntil: { lte: now } }, data: { status: "ACTIVE", pausedUntil: null } });
 
