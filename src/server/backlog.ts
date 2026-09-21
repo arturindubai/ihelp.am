@@ -1596,6 +1596,26 @@ const DEV: TaskSeed[] = [
     owner: "both",
     estimate: "L",
   },
+  {
+    key: "DEV-8",
+    title: "Сквозной автотест в CI",
+    summary: "Сценарий «клиент оформил заказ» проверяется вручную скриптом. Нужно, чтобы он прогонялся автоматически на каждое изменение.",
+    details: "Скрипт готов: e2e/order.mjs — проходит витрину, вход по коду, адрес, слот, подтверждение, базу и админку, затем убирает за собой. Осталось поднять его в CI на отдельной базе, чтобы прод не трогался.",
+    requirements: [
+      "Тест запускается автоматически при изменении кода",
+      "Прогон идёт на отдельной базе, прод не затрагивается",
+      "Падение теста блокирует выкладку",
+    ],
+    depends: ["DEV-1"],
+    docs: ["e2e/README.md"],
+    epic: "Разработка и процесс",
+    area: "dev",
+    layer: "infra",
+    priority: "p2",
+    stage: "growth",
+    owner: "tech",
+    estimate: "M",
+  },
 ];
 
 const ROUTE: TaskSeed[] = [
@@ -2018,7 +2038,7 @@ const AUDIT: TaskSeed[] = [
     area: "legal",
     layer: "fullstack",
     priority: "p2",
-    stage: "public",
+    stage: "growth",
     owner: "tech",
     estimate: "S",
   },
