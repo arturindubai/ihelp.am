@@ -15,7 +15,7 @@ fi
 
 echo "▶ 1/6 Бэкап перед обновлением"
 if docker compose ps --status running --services | grep -qx backup; then
-  timeout 900 docker compose exec -T backup sh /backup.sh once
+  timeout 900 docker compose exec -T backup sh /backup.sh once predeploy
 else
   echo "  контейнер backup не запущен — пропускаю"
 fi

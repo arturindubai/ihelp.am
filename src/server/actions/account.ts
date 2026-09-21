@@ -68,12 +68,18 @@ export async function cancelOrderAction(orderId: string) {
   const s = await getSettings();
   const o = await db.order.findFirst({ where: { id: orderId, userId: u.id }, include: { visits: true } });
   if (!o || o.status === "CANCELLED" || o.status === "COMPLETED") return { ok: false };
-  const limit = Date.now() + s.booking.freeCancelHours * 3600_000;
+  // Отменяем все будущие визиты: иначе заказ закрыт, а мастер всё равно поедет.
+  // Визиты внутри срока бесплатной отмены отмечаем отдельно — команде нужно знать о поздней отмене.
+  const limit = new Date(Date.now() + s.booking.freeCancelHours * 3600_000);
+  const late = o.visits.filter((v) => ["SCHEDULED", "CONFIRMED"].includes(v.status) && v.scheduledAt && v.scheduledAt <= limit).length;
   await db.$transaction([
-    db.visit.updateMany({ where: { orderId: o.id, status: { in: ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"] }, OR: [{ scheduledAt: null }, { scheduledAt: { gt: new Date(limit) } }] }, data: { status: "CANCELLED" } }),
+    db.visit.updateMany({ where: { orderId: o.id, status: { in: ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"] } }, data: { status: "CANCELLED" } }),
     db.order.update({ where: { id: o.id }, data: { status: "CANCELLED", cancelReason: "client" } }),
   ]);
-  await notifyTeam(html`❌ Клиент отменил ${o.kind === "SUBSCRIPTION" ? "подписку" : "заказ"} №${o.number}`);
+  await notifyTeam(
+    html`❌ Клиент отменил ${o.kind === "SUBSCRIPTION" ? "подписку" : "заказ"} №${o.number}` +
+      (late ? html`\n⚠️ Поздняя отмена: визитов в ближайшие ${s.booking.freeCancelHours} ч — ${late}` : ""),
+  );
   return { ok: true };
 }
 
@@ -96,10 +102,9 @@ export async function resumeOrderAction(orderId: string) {
   const u = await me();
   const o = await db.order.findFirst({ where: { id: orderId, userId: u.id, status: "PAUSED" } });
   if (!o) return { ok: false };
-  await db.order.update({ where: { id: o.id }, data: { status: "ACTIVE", pausedUntil: null } });
   const s = await getSettings();
-  const { generateSubscriptionVisits } = await import("../services/booking");
-  await generateSubscriptionVisits(db, o.id, s.booking.subscriptionHorizonDays, s.booking.bufferMin);
+  const { resumeSubscription } = await import("../services/booking");
+  await resumeSubscription(o.id, s.booking.subscriptionHorizonDays, s.booking.bufferMin);
   await notifyTeam(html`▶️ Подписка №${o.number} возобновлена`);
   return { ok: true };
 }

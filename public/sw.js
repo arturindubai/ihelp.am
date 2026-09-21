@@ -19,15 +19,19 @@ self.addEventListener("fetch", (event) => {
   // Статика сборки и картинки: сначала кэш, затем сеть
   if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/img/") || url.pathname.startsWith("/fonts/")) {
     event.respondWith(
-      caches.match(request).then(
-        (cached) =>
-          cached ||
-          fetch(request).then((response) => {
-            const copy = response.clone();
-            caches.open(STATIC).then((cache) => cache.put(request, copy));
+      caches.match(request).then((cached) => {
+        // Сеть в фоне: картинка, заменённая в админке, обновится со следующего захода
+        const fresh = fetch(request)
+          .then((response) => {
+            if (response.ok) {
+              const copy = response.clone();
+              caches.open(STATIC).then((cache) => cache.put(request, copy));
+            }
             return response;
-          }),
-      ),
+          })
+          .catch(() => cached);
+        return cached || fresh;
+      }),
     );
     return;
   }

@@ -1,7 +1,8 @@
 #!/bin/sh
 # Бэкап базы (pg_dump) и фото из админки (том uploads) в ./backups, хранение BACKUP_KEEP_DAYS дней.
 #   sh /backup.sh       — режим контейнера: при старте — бэкап, если свежего (моложе 20 ч) нет; дальше каждую ночь в BACKUP_AT (UTC)
-#   sh /backup.sh once  — один бэкап прямо сейчас:  docker compose exec -T backup sh /backup.sh once
+#   sh /backup.sh once [метка] — один бэкап прямо сейчас: docker compose exec -T backup sh /backup.sh once
+#     метка попадает в имя файла (db-2026-09-21-predeploy.sql.gz), чтобы ручной бэкап не затирал ночной
 # Файл пишется во временный и переименовывается только после проверки — неудачный дамп не затрёт хороший.
 # Раз в 7 дней — проверка восстановления во временную базу. Отметки об успехах и ошибках пишутся в базу
 # (Setting `_backup`), по ним приложение шлёт тех-алерты. Лог: docker compose logs backup
@@ -99,7 +100,7 @@ sleep_until() {
 }
 
 if [ "${1:-}" = "once" ]; then
-  day="$(date +%F)"
+  day="$(date +%F)${2:+-$2}"
   backup_db_retry "$day" 1 && backup_uploads "$day"
   exit $?
 fi

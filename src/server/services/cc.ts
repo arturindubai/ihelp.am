@@ -107,6 +107,10 @@ export async function updateTask(key: string, patch: TaskPatch, actor: string) {
   const data: Prisma.TaskUpdateInput = { ...patch };
   if (patch.status && patch.status !== before.status) {
     if (patch.status === "done") data.doneAt = new Date();
+    if (patch.status === "review") {
+      data.claimedBy = null;
+      data.claimUntil = null;
+    }
     if (patch.status === "in_progress" && !before.startedAt) data.startedAt = new Date();
     if (patch.status !== "blocked") data.blockedReason = null;
     if (["done", "backlog"].includes(patch.status)) {
@@ -206,11 +210,11 @@ export async function addComment(key: string, text: string, author: string, kind
 export async function claimNext(agent: string, filter: { area?: string; layer?: string; priority?: string } = {}, leaseMin = 60) {
   const candidates = await db.task.findMany({
     where: {
-      status: "backlog",
+      // «в работе» с истёкшей арендой тоже свободна: агент мог упасть
+      OR: [{ status: "backlog" }, { status: "in_progress", claimUntil: { lt: new Date() } }],
       ...(filter.area ? { area: filter.area } : {}),
       ...(filter.layer ? { layer: filter.layer } : {}),
       ...(filter.priority ? { priority: filter.priority } : {}),
-      OR: [{ claimUntil: null }, { claimUntil: { lt: new Date() } }],
     },
     orderBy: [{ priority: "asc" }, { sort: "asc" }],
     take: 25,
@@ -219,11 +223,11 @@ export async function claimNext(agent: string, filter: { area?: string; layer?: 
   const ready = candidates.find((t) => t.depends.every((d) => doneKeys.has(d)));
   if (!ready) return null;
   const claimed = await db.task.updateMany({
-    where: { id: ready.id, status: "backlog", OR: [{ claimUntil: null }, { claimUntil: { lt: new Date() } }] },
+    where: { id: ready.id, status: ready.status, OR: [{ claimUntil: null }, { claimUntil: { lt: new Date() } }] },
     data: { status: "in_progress", claimedBy: agent, claimUntil: new Date(Date.now() + leaseMin * 60_000), startedAt: ready.startedAt ?? new Date() },
   });
   if (!claimed.count) return null;
-  await db.taskEvent.create({ data: { taskId: ready.id, actor: agent, field: "status", from: "backlog", to: "in_progress" } });
+  await db.taskEvent.create({ data: { taskId: ready.id, actor: agent, field: "status", from: ready.status, to: "in_progress" } });
   return db.task.findUnique({ where: { id: ready.id } });
 }
 

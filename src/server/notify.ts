@@ -8,8 +8,13 @@ export { html } from "@/lib/html";
  * Не бросает ошибок и не ждёт Telegram дольше 5 секунд — оформление заказа не должно зависеть от мессенджера.
  */
 async function send(chatId: string, text: string, tag: string) {
-  const s = await getSettings();
-  const token = s.notify.telegramBotToken;
+  let token = "";
+  try {
+    token = (await getSettings()).notify.telegramBotToken;
+  } catch (e) {
+    console.error(`[notify:${tag}] настройки недоступны`, e, "|", text);
+    return;
+  }
   if (!token || !chatId) {
     console.log(`[notify:${tag}]`, text);
     return;
@@ -29,12 +34,20 @@ async function send(chatId: string, text: string, tag: string) {
 
 /** Уведомления команде: заказы, отмены, переносы, отзывы (бот → группа операторов) */
 export async function notifyTeam(text: string) {
-  const s = await getSettings();
-  await send(s.notify.telegramChatId, text, "team");
+  try {
+    const s = await getSettings();
+    await send(s.notify.telegramChatId, text, "team");
+  } catch (e) {
+    console.error("[notify:team] не отправлено", e, "|", text);
+  }
 }
 
 /** Технические алерты: ошибки, бэкапы, диск. Отдельный чат, если задан, иначе — чат команды */
 export async function notifyTech(text: string) {
-  const s = await getSettings();
-  await send(s.notify.techChatId || s.notify.telegramChatId, text, "tech");
+  try {
+    const s = await getSettings();
+    await send(s.notify.techChatId || s.notify.telegramChatId, text, "tech");
+  } catch (e) {
+    console.error("[notify:tech] не отправлено", e, "|", text);
+  }
 }

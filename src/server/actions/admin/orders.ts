@@ -78,6 +78,7 @@ export async function adminGenerateAction(orderId: string) {
 
 export async function adminAddVisitAction(orderId: string, date: string, time: string, masterId: string | null) {
   const u = await requireSection("orders");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time) || Number.isNaN(atYerevan(date, time).getTime())) return { ok: false as const, error: "invalid" };
   const o = await db.order.findUniqueOrThrow({ where: { id: orderId }, include: { visits: { select: { index: true } } } });
   const v = await db.visit.create({ data: { orderId, index: Math.max(0, ...o.visits.map((x) => x.index)) + 1, scheduledAt: atYerevan(date, time), durationMin: o.durationMin, masterId, price: o.pricePerVisit } });
   await audit(u.id, "visit.create", "Visit", v.id, { orderId, date, time, masterId });

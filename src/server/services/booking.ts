@@ -127,7 +127,10 @@ export async function createOrder(user: User, input: CreateOrderInput) {
   if (promo && price.promoApplied) promoId = promo.id;
 
   const start = atYerevan(input.date, input.time);
+  if (Number.isNaN(start.getTime())) throw new BookingError("invalid");
   if (start.getTime() < Date.now() + settings.booking.leadHours * 3600_000 - 5 * 60_000) throw new BookingError("slot_taken");
+  // Верхняя граница: дальше горизонта записи заказ не создаётся даже прямым вызовом
+  if (start.getTime() > Date.now() + (settings.booking.horizonDays + 1) * 86400_000) throw new BookingError("slot_taken");
   const durationMin = sel.durationMin;
   const buffer = settings.booking.bufferMin;
 
@@ -207,6 +210,31 @@ export async function createOrder(user: User, input: CreateOrderInput) {
 }
 
 /** Досоздаёт визиты подписки до горизонта. Вызывается при создании заказа и по крону. */
+/**
+ * Генерация визитов вне оформления заказа (крон, возобновление, админка).
+ * Идёт в транзакции с той же блокировкой, что и оформление, иначе два процесса
+ * могут одновременно занять одного мастера на один слот.
+ */
+export async function generateSubscriptionVisitsSafe(orderId: string, horizonDays: number, bufferMin: number) {
+  return db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(424242)`;
+    return generateSubscriptionVisits(tx, orderId, horizonDays, bufferMin);
+  });
+}
+
+/**
+ * Возобновление подписки: пропущенные будущие визиты удаляем и создаём заново,
+ * иначе даты считаются занятыми и расписание после паузы остаётся пустым.
+ */
+export async function resumeSubscription(orderId: string, horizonDays: number, bufferMin: number) {
+  return db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(424242)`;
+    await tx.visit.deleteMany({ where: { orderId, status: "SKIPPED", scheduledAt: { gt: new Date() } } });
+    await tx.order.update({ where: { id: orderId }, data: { status: "ACTIVE", pausedUntil: null } });
+    return generateSubscriptionVisits(tx, orderId, horizonDays, bufferMin);
+  });
+}
+
 export async function generateSubscriptionVisits(tx: Tx, orderId: string, horizonDays: number, bufferMin: number) {
   const order = await tx.order.findUnique({ where: { id: orderId }, include: { visits: { select: { scheduledAt: true, index: true } } } });
   if (!order || order.kind !== "SUBSCRIPTION" || order.status !== "ACTIVE" || !order.recurrence) return 0;

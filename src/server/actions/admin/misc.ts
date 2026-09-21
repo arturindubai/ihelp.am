@@ -17,20 +17,31 @@ const J = (v: unknown) => (v == null ? Prisma.DbNull : (v as Prisma.InputJsonVal
 const rAll = () => revalidatePath("/", "layout");
 
 /* ───── Клиенты ───── */
-export async function clientAction(userId: string, patch: { blocked?: boolean; adminNotes?: string; name?: string }) {
+const clientPatch = z.object({ blocked: z.boolean().optional(), adminNotes: z.string().max(2000).optional(), name: z.string().max(80).optional() }).strict();
+
+/** Правка карточки клиента. Роль и телефон здесь менять нельзя: роли выдаются только в разделе «Сотрудники» */
+export async function clientAction(userId: string, patch: unknown) {
   const u = await requireSection("clients");
-  await db.user.update({ where: { id: userId }, data: patch });
-  if (patch.blocked) await db.session.deleteMany({ where: { userId } });
-  await audit(u.id, "client.update", "User", userId, patch);
-  return { ok: true };
+  const parsed = clientPatch.safeParse(patch);
+  if (!parsed.success) return { ok: false as const, error: "invalid" };
+  await db.user.update({ where: { id: userId }, data: parsed.data });
+  if (parsed.data.blocked) await db.session.deleteMany({ where: { userId } });
+  await audit(u.id, "client.update", "User", userId, parsed.data);
+  return { ok: true as const };
 }
 
 /* ───── Отзывы ───── */
-export async function reviewModerateAction(id: string, patch: { status?: "APPROVED" | "REJECTED" | "PENDING"; reply?: string; text?: string; rating?: number }) {
+const reviewPatch = z
+  .object({ status: z.enum(["APPROVED", "REJECTED", "PENDING"]).optional(), reply: z.string().max(2000).optional(), text: z.string().max(2000).optional(), rating: z.number().int().min(1).max(5).optional() })
+  .strict();
+
+export async function reviewModerateAction(id: string, patch: unknown) {
   const u = await requireSection("reviews");
-  const r = await db.review.update({ where: { id }, data: patch });
+  const parsed = reviewPatch.safeParse(patch);
+  if (!parsed.success) return { ok: false as const, error: "invalid" };
+  const r = await db.review.update({ where: { id }, data: parsed.data });
   await recalcRatings(r.masterId, r.serviceId);
-  await audit(u.id, "review.update", "Review", id, patch);
+  await audit(u.id, "review.update", "Review", id, parsed.data);
   rAll();
   return { ok: true };
 }
@@ -159,8 +170,13 @@ export async function saveUiStringAction(locale: string, key: string, value: str
 
 /* ───── Настройки ───── */
 
+const SETTING_KEYS = ["brand", "locales", "booking", "pricing", "payments", "otp", "notify", "google", "mail"] as const;
+
 export async function saveSettingsAction<K extends keyof Settings>(key: K, value: Settings[K]) {
   const u = await requireSection("settings");
+  // Ключ раздела приходит из браузера: принимаем только известные, иначе можно записать служебные отметки
+  if (!(SETTING_KEYS as readonly string[]).includes(key as string)) return { ok: false as const, error: "invalid" };
+  if (value == null || typeof value !== "object" || Array.isArray(value)) return { ok: false as const, error: "invalid" };
   const current = await getSettings();
   const next = JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
   // Секреты: если пришло маскированное значение — оставляем сохранённое

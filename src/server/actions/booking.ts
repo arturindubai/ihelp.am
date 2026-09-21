@@ -51,8 +51,10 @@ export async function deleteAddressAction(id: string) {
   return { ok: true };
 }
 
+/** Проверка промокода: только для вошедшего клиента, иначе коды можно перебирать анонимно */
 export async function promoAction(slug: string, optionIds: string[], planId: string | null, code: string) {
   const u = await getCurrentUser();
+  if (!u) return { ok: false as const, error: "auth" };
   const raw = await loadServiceRaw(slug);
   if (!raw) return { ok: false as const, error: "not_found" };
   const settings = await getSettings();
