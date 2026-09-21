@@ -192,10 +192,16 @@
       "too_many": "Слишком много попыток. Попробуйте позже.",
       "channel_unavailable": "Этот способ сейчас недоступен",
       "delivery_failed": "Не удалось отправить код. Попробуйте другой способ.",
-      "blocked": "Аккаунт заблокирован"
+      "blocked": "Аккаунт заблокирован",
+      "google_off": "Вход через Google сейчас выключен",
+      "google_state": "Сессия входа устарела, попробуйте ещё раз",
+      "google_failed": "Google не подтвердил вход. Попробуйте ещё раз",
+      "google_not_linked": "Этот Google-аккаунт не привязан. Войдите по номеру телефона и укажите эту почту в профиле"
     },
     "noChannels": "Вход временно недоступен",
-    "smsText": "{brand}: код для входа {code}"
+    "smsText": "{brand}: код для входа {code}",
+    "google": "Войти через Google",
+    "googleHint": "Для сотрудников: вход по рабочей почте, указанной в профиле"
   },
   "account": {
     "title": "Профиль",
@@ -691,6 +697,22 @@
       "techChatId": "ID тех-чата (алерты)",
       "techChatHint": "Ошибки сайта, сбои бэкапов, подбор кодов. Если пусто — алерты приходят в чат команды",
       "testNotify": "Отправить тест",
+      "google": "Вход через Google",
+      "googleEnabled": "Разрешить вход через Google",
+      "clientId": "Client ID",
+      "clientSecret": "Client Secret",
+      "googleRedirect": "Адрес возврата для Google Cloud Console",
+      "googleHint": "Работает только по https: сначала домен и сертификат. Пускаем только тех, у кого этот email указан в профиле",
+      "mail": "Почта (Resend)",
+      "mailEnabled": "Отправлять письма",
+      "mailApiKey": "Ключ API",
+      "mailFrom": "Отправитель",
+      "mailFromPh": "HomeCare <info@ваш-домен>",
+      "mailReplyTo": "Адрес для ответов",
+      "mailHint": "Домен отправителя должен быть подтверждён в кабинете Resend (записи SPF и DKIM)",
+      "testMail": "Отправить тестовое письмо",
+      "testMailSent": "Письмо отправлено",
+      "testMailTo": "Кому отправить тест",
       "testSent": "Отправлено"
     },
     "staff": {

@@ -1,7 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { saveSettingsAction, testNotifyAction } from "@/server/actions/admin/misc";
+import { saveSettingsAction, testMailAction, testNotifyAction } from "@/server/actions/admin/misc";
 import type { Settings } from "@/server/settings";
 import type { ContactKey } from "@/lib/contacts";
 import { Card, I18nInput, NumInput, TextInput, Toggle } from "./fields";
@@ -18,10 +18,12 @@ function Section<K extends keyof Settings>({ k, title, value, children, hint }: 
   );
 }
 
-export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardIntegrated = false }: { initial: Settings; devMode: boolean; lockedContacts?: Partial<Record<ContactKey, string>>; cardIntegrated?: boolean }) {
+export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardIntegrated = false, googleRedirect = "" }: { initial: Settings; devMode: boolean; lockedContacts?: Partial<Record<ContactKey, string>>; cardIntegrated?: boolean; googleRedirect?: string }) {
   const t = useTranslations("admin.settings");
   const [s, setS] = useState(initial);
   const [sent, setSent] = useState(false);
+  const [mailTo, setMailTo] = useState("");
+  const [mailSent, setMailSent] = useState<string | null>(null);
   const set = <K extends keyof Settings>(k: K, v: Partial<Settings[K]>) => setS((x) => ({ ...x, [k]: { ...x[k], ...v } }));
   const b = s.brand, bk = s.booking, pr = s.pricing, o = s.otp;
   const contact = (k: ContactKey, type = "text") => {
@@ -108,6 +110,38 @@ export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardInte
             </div>
           </div>
         </div>
+      </Section>
+
+      <Section k="google" title={t("google")} value={s.google} hint={t("googleHint")}>
+        <Toggle label={t("googleEnabled")} checked={s.google.enabled} onChange={(v) => set("google", { enabled: v })} />
+        <div className="mt-2 grid gap-2 md:grid-cols-2">
+          <TextInput label={t("clientId")} value={s.google.clientId} onChange={(v) => set("google", { clientId: v })} />
+          <TextInput label={t("clientSecret")} hint={t("secretHint")} value={s.google.clientSecret} onChange={(v) => set("google", { clientSecret: v })} />
+        </div>
+        {googleRedirect && (
+          <p className="mt-2 text-xs text-muted">
+            {t("googleRedirect")}: <code className="font-mono">{googleRedirect}</code>
+          </p>
+        )}
+      </Section>
+
+      <Section k="mail" title={t("mail")} value={s.mail} hint={t("mailHint")}>
+        <Toggle label={t("mailEnabled")} checked={s.mail.enabled} onChange={(v) => set("mail", { enabled: v })} />
+        <div className="mt-2 grid gap-2 md:grid-cols-2">
+          <TextInput label={t("mailApiKey")} hint={t("secretHint")} value={s.mail.apiKey} onChange={(v) => set("mail", { apiKey: v })} />
+          <TextInput label={t("mailFrom")} placeholder={t("mailFromPh")} value={s.mail.from} onChange={(v) => set("mail", { from: v })} />
+          <TextInput label={t("mailReplyTo")} type="email" value={s.mail.replyTo} onChange={(v) => set("mail", { replyTo: v })} />
+          <TextInput label={t("testMailTo")} type="email" value={mailTo} onChange={setMailTo} />
+        </div>
+        <button
+          className="btn-outline btn-sm mt-3"
+          onClick={async () => {
+            const r = await testMailAction(mailTo);
+            setMailSent(r.ok ? t("testMailSent") : ("error" in r ? r.error : "error"));
+          }}
+        >
+          {mailSent ?? t("testMail")}
+        </button>
       </Section>
 
       <Section k="notify" title={t("notify")} value={s.notify}>

@@ -95,6 +95,7 @@ curl http://localhost/api/health          # на общем сервере: http
 ```
 
 Сайт откроется по `http://<IP>/ru` (на общем сервере — `http://<IP>:8080/ru`).
+Подключение домена, входа через Google и почты: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
 Полный чек-лист деплоя и проверок: [docs/DEPLOY_CHECKLIST.md](docs/DEPLOY_CHECKLIST.md), задачи и риски: [docs/GAPS.md](docs/GAPS.md), бэклог продукта: [docs/BACKLOG.md](docs/BACKLOG.md), страница управления проектом: [docs/CONTROL_CENTER.md](docs/CONTROL_CENTER.md).
 
 **Первый вход в админку.** Пока каналы отправки кода не подключены, код пишется в лог сервера:

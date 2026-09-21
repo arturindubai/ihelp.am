@@ -9,6 +9,7 @@ import { recalcRatings } from "../../services/catalog";
 import { invalidateUiCache, saveSettingsSection, getSettings, SECRET_PATHS, type Settings } from "../../settings";
 import { notifyTeam, notifyTech } from "../../notify";
 import { envContacts } from "../../contacts";
+import { sendMail, mailTemplate } from "../../services/mail";
 import { normalizePhone } from "@/lib/phone";
 
 const i18n = z.object({ ru: z.string().max(20000).optional(), en: z.string().max(20000).optional(), am: z.string().max(20000).optional() }).partial();
@@ -194,6 +195,26 @@ export async function testNotifyAction() {
 }
 
 /* ───── Сотрудники ───── */
+export async function testMailAction(to: string) {
+  const u = await requireSection("settings");
+  const s = await getSettings();
+  const address = (to || "").trim() || s.brand.email;
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(address)) return { ok: false as const, error: "email" };
+  const r = await sendMail({
+    to: address,
+    subject: `${s.brand.name}: тестовое письмо`,
+    html: mailTemplate({
+      brand: s.brand.name,
+      title: "Почта подключена",
+      lines: ["Это тестовое письмо из админки. Если вы его видите, отправка писем работает."],
+      button: process.env.APP_URL ? { text: "Открыть сайт", url: process.env.APP_URL } : undefined,
+    }),
+    text: "Это тестовое письмо из админки. Отправка писем работает.",
+  });
+  await audit(u.id, "mail.test", "Setting", "mail", { to: address, ok: r.ok });
+  return r.ok ? { ok: true as const } : { ok: false as const, error: r.error };
+}
+
 export async function setRoleAction(phoneRaw: string, role: Role) {
   const u = await requireSection("staff");
   const phone = normalizePhone(phoneRaw);
