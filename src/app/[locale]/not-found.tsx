@@ -1,12 +1,24 @@
-import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/navigation";
+import { getLocale } from "next-intl/server";
+import { loadMessages } from "@/i18n/messages";
 
-export default function NotFound() {
-  const t = useTranslations("errors");
+/** Страница 404 внутри языкового раздела: тексты берутся из переводов, при сбое — по-русски */
+export default async function NotFound() {
+  let texts = { notFound: "Страница не найдена", toHome: "На главную" };
+  let locale = "ru";
+  try {
+    locale = await getLocale();
+    const m = (await loadMessages(locale)) as { common?: { notFound?: string; toHome?: string } };
+    texts = { notFound: m.common?.notFound ?? texts.notFound, toHome: m.common?.toHome ?? texts.toHome };
+  } catch {
+    // без языкового контекста показываем русский текст
+  }
   return (
     <div className="container-m py-20 text-center">
-      <h1 className="h1">{t("notFound")}</h1>
-      <Link href="/" className="btn-primary mt-6">{t("toHome")}</Link>
+      <h1 className="h1 mb-2">404</h1>
+      <p className="mb-6 text-muted">{texts.notFound}</p>
+      <a className="btn-primary" href={`/${locale}`}>
+        {texts.toHome}
+      </a>
     </div>
   );
 }

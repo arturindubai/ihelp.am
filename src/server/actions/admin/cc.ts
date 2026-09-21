@@ -3,8 +3,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSection } from "../../admin";
 import { audit } from "../../audit";
-import { addComment, updateTask } from "../../services/cc";
-import { OWNERS, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
+import { addComment, deleteTask, saveTask, updateTask, type TaskContent } from "../../services/cc";
+import { AREAS, EPICS, LAYERS, OWNERS, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { formatPhone } from "@/lib/phone";
 import type { User } from "@prisma/client";
 
@@ -29,6 +29,52 @@ export async function ccUpdateTaskAction(key: string, patch: z.infer<typeof patc
   await audit(u.id, "cc.task", "Task", key, data);
   rAll();
   return { ok: true as const };
+}
+
+const lines = z.array(z.string().max(500)).max(20);
+const contentSchema = z.object({
+  key: z.string().min(3).max(30),
+  title: z.string().min(5).max(200),
+  summary: z.string().min(10).max(2000),
+  details: z.string().max(5000).nullable().optional(),
+  requirements: lines,
+  needs: lines,
+  depends: z.array(z.string().max(30)).max(20),
+  docs: lines,
+  epic: z.enum(EPICS),
+  area: z.enum(Object.keys(AREAS) as [string, ...string[]]),
+  layer: z.enum(Object.keys(LAYERS) as [string, ...string[]]),
+  priority: z.enum(Object.keys(PRIORITIES) as [string, ...string[]]),
+  stage: z.enum(Object.keys(STAGES) as [string, ...string[]]),
+  owner: z.enum(Object.keys(OWNERS) as [string, ...string[]]),
+  estimate: z.enum(["S", "M", "L"]).nullable().optional(),
+});
+
+/** Создание или изменение задачи в админке. После этого деплой не перезаписывает её тексты */
+export async function ccSaveTaskAction(content: unknown, isNew: boolean) {
+  const u = await requireSection("control");
+  const parsed = contentSchema.safeParse(content);
+  if (!parsed.success) return { ok: false as const, error: "invalid" };
+  try {
+    const task = await saveTask(parsed.data as TaskContent, who(u), isNew);
+    await audit(u.id, isNew ? "cc.task.create" : "cc.task.edit", "Task", task.key);
+    rAll();
+    return { ok: true as const, key: task.key };
+  } catch (e) {
+    return { ok: false as const, error: (e as Error).message };
+  }
+}
+
+export async function ccDeleteTaskAction(key: string) {
+  const u = await requireSection("control");
+  try {
+    await deleteTask(key, who(u));
+    await audit(u.id, "cc.task.delete", "Task", key);
+    rAll();
+    return { ok: true as const };
+  } catch (e) {
+    return { ok: false as const, error: (e as Error).message };
+  }
 }
 
 export async function ccCommentAction(key: string, text: string) {

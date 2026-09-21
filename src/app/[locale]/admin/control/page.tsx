@@ -63,6 +63,9 @@ export default async function ControlCenter({ params, searchParams }: { params: 
             <Link href={href(sp, { all: sp.all ? "" : "1" })} className={sp.all ? "btn-outline btn-sm" : "btn-dark btn-sm"}>
               {sp.all ? t("all") : t("openOnly")}
             </Link>
+            <Link href="/admin/control/new" className="btn-primary btn-sm">
+              {t("newTask")}
+            </Link>
           </div>
         }
       />

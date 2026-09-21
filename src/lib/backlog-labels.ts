@@ -22,6 +22,7 @@ export const EPICS = [
   "Разработка и процесс",
   "Маршруты и умное расписание",
   "Архитектура и качество",
+  "Мобильный опыт",
 ] as const;
 
 export const AREAS: Record<string, string> = {

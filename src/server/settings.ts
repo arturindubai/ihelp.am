@@ -37,7 +37,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   brand: {
-    name: "HomeCare",
+    name: "iHelp",
     tagline: { ru: "Уборка и услуги для дома в Ереване", en: "Home cleaning & services in Yerevan", am: "" },
     phone: "",
     whatsapp: "",

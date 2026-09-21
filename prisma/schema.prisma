@@ -468,6 +468,10 @@ model Task {
   /// product | tech | both
   owner         String    @default("tech")
   estimate      String?
+  /// code — тексты задачи приходят из src/server/backlog.ts и обновляются при деплое
+  /// ui   — задачу создали или отредактировали в админке, деплой её не трогает
+  source        String    @default("code")
+  createdBy     String?
   assignee      String?
   blockedReason String?
   sort          Int       @default(0)

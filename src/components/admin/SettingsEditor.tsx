@@ -47,7 +47,7 @@ export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardInte
       </Section>
 
       <Section k="locales" title={t("locales")} value={s.locales} hint={t("localesHint")}>
-        <Toggle label="RU — Русский" checked onChange={() => {}} />
+        <Toggle label={t("langRu")} checked onChange={() => {}} />
         <Toggle label="ENG — English" checked={s.locales.enabled.includes("en")} onChange={(v) => set("locales", { enabled: v ? [...s.locales.enabled, "en"] : s.locales.enabled.filter((x) => x !== "en") })} />
         <Toggle label="ARM — Հայերեն" checked={s.locales.enabled.includes("am")} onChange={(v) => set("locales", { enabled: v ? [...s.locales.enabled, "am"] : s.locales.enabled.filter((x) => x !== "am") })} />
       </Section>

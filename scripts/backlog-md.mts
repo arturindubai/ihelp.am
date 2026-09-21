@@ -10,7 +10,7 @@ const done = BACKLOG.filter((t) => t.status === "done").length;
 const partial = BACKLOG.filter((t) => t.status === "in_progress").length;
 
 const out: string[] = [
-  "# Бэклог продукта HomeCare",
+  "# Бэклог продукта iHelp",
   "",
   `Всего задач: ${BACKLOG.length} · выполнено: ${done} · в работе: ${partial}. Статусы ведутся в Control Center (Админка → Control Center), этот файл генерируется из кода: \`npx tsx scripts/backlog-md.mts > docs/BACKLOG.md\`.`,
   "",

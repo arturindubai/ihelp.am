@@ -126,6 +126,74 @@ export async function updateTask(key: string, patch: TaskPatch, actor: string) {
   return task;
 }
 
+export interface TaskContent {
+  key: string;
+  title: string;
+  summary: string;
+  details?: string | null;
+  requirements: string[];
+  needs: string[];
+  depends: string[];
+  docs: string[];
+  epic: string;
+  area: string;
+  layer: string;
+  priority: string;
+  stage: string;
+  owner: string;
+  estimate?: string | null;
+}
+
+/**
+ * Создание или изменение задачи из админки. Такая задача помечается source="ui",
+ * и деплой больше не перезаписывает её тексты из репозитория.
+ */
+export async function saveTask(content: TaskContent, actor: string, isNew: boolean) {
+  const key = content.key.trim().toUpperCase();
+  if (!/^[A-Z][A-Z0-9-]{2,29}$/.test(key)) throw new Error("bad_key");
+  const deps = [...new Set(content.depends.map((d) => d.trim().toUpperCase()).filter(Boolean))].filter((d) => d !== key);
+  const known = new Set((await db.task.findMany({ where: { key: { in: deps } }, select: { key: true } })).map((t) => t.key));
+  const unknown = deps.filter((d) => !known.has(d));
+  if (unknown.length) throw new Error(`unknown_depends:${unknown.join(", ")}`);
+  const data = {
+    title: content.title.trim().slice(0, 200),
+    summary: content.summary.trim().slice(0, 2000),
+    details: content.details?.trim().slice(0, 5000) || null,
+    requirements: content.requirements.map((r) => r.trim()).filter(Boolean).slice(0, 20),
+    needs: content.needs.map((r) => r.trim()).filter(Boolean).slice(0, 20),
+    depends: deps,
+    docs: content.docs.map((r) => r.trim()).filter(Boolean).slice(0, 20),
+    epic: content.epic,
+    area: content.area,
+    layer: content.layer,
+    priority: content.priority,
+    stage: content.stage,
+    owner: content.owner,
+    estimate: content.estimate || null,
+    source: "ui",
+  };
+  const existing = await db.task.findUnique({ where: { key } });
+  if (isNew && existing) throw new Error("key_exists");
+  if (!isNew && !existing) throw new Error("not_found");
+  const maxSort = existing?.sort ?? ((await db.task.aggregate({ _max: { sort: true } }))._max.sort ?? 0) + 1;
+  const task = existing
+    ? await db.task.update({ where: { key }, data })
+    : await db.task.create({ data: { key, ...data, sort: maxSort, createdBy: actor, status: "backlog" } });
+  await db.taskEvent.create({ data: { taskId: task.id, actor, field: existing ? "edited" : "created", from: null, to: key } });
+  return task;
+}
+
+/** Удалить можно только задачу, созданную в админке: задачу из репозитория деплой создаст заново */
+export async function deleteTask(key: string, actor: string) {
+  const task = await db.task.findUnique({ where: { key } });
+  if (!task) throw new Error("not_found");
+  if (task.source !== "ui") throw new Error("code_task");
+  const blocking = await db.task.findMany({ where: { depends: { has: key } }, select: { key: true } });
+  if (blocking.length) throw new Error(`blocking:${blocking.map((b) => b.key).join(",")}`);
+  await db.task.delete({ where: { key } });
+  console.log(`[cc] задача ${key} удалена (${actor})`);
+}
+
 export async function addComment(key: string, text: string, author: string, kind: "note" | "report" = "note") {
   const task = await db.task.findUnique({ where: { key }, select: { id: true } });
   if (!task) throw new Error("not_found");

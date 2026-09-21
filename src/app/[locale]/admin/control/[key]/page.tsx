@@ -8,6 +8,7 @@ import { AREAS, LAYERS, OWNERS, PRIORITIES, STAGES, STATUSES } from "@/lib/backl
 import { PageHead, Forbidden } from "@/components/admin/ui";
 import { Card } from "@/components/admin/fields";
 import { CommentForm, TaskEditor } from "@/components/admin/cc/TaskControls";
+import { TaskEditorForm } from "@/components/admin/cc/TaskEditorForm";
 import { dateLabel, timeLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,7 @@ export default async function TaskPage({ params }: { params: Promise<{ locale: s
             {task.title}
           </span>
         }
-        sub={`${STAGES[task.stage]} · ${AREAS[task.area]} · ${LAYERS[task.layer]} · ${PRIORITIES[task.priority]} · ${OWNERS[task.owner]}${task.estimate ? ` · ${task.estimate}` : ""}`}
+        sub={`${STAGES[task.stage]} · ${AREAS[task.area]} · ${LAYERS[task.layer]} · ${PRIORITIES[task.priority]} · ${OWNERS[task.owner]}${task.estimate ? ` · ${task.estimate}` : ""} · ${task.source === "ui" ? t("form.sourceUi") : t("form.sourceCode")}`}
       />
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -97,6 +98,30 @@ export default async function TaskPage({ params }: { params: Promise<{ locale: s
                 )}
               </div>
             )}
+          </Card>
+
+          <Card title={t("form.edit")} className="mt-4">
+            <TaskEditorForm
+              isNew={false}
+              canDelete={task.source === "ui"}
+              initial={{
+                key: task.key,
+                title: task.title,
+                summary: task.summary,
+                details: task.details ?? "",
+                requirements: task.requirements.join("\n"),
+                needs: task.needs.join("\n"),
+                depends: task.depends.join("\n"),
+                docs: task.docs.join("\n"),
+                epic: task.epic,
+                area: task.area,
+                layer: task.layer,
+                priority: task.priority,
+                stage: task.stage,
+                owner: task.owner,
+                estimate: task.estimate ?? "",
+              }}
+            />
           </Card>
 
           <Card title={t("comments")}>

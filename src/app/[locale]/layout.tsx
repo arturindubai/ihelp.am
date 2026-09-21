@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { localeIso, tr } from "@/i18n/locales";
 import { getSettings } from "@/server/settings";
+import { ServiceWorker } from "@/components/ServiceWorker";
 import "../globals.css";
 
 const noto = Noto_Sans({ subsets: ["latin", "cyrillic"], variable: "--font-noto", display: "swap" });
@@ -30,6 +31,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       languages: Object.fromEntries(s.locales.enabled.map((l) => [localeIso[l as "ru"], `/${l}`])),
     },
     appleWebApp: { capable: true, title: s.brand.name, statusBarStyle: "default" },
+    icons: { icon: "/img/icon.svg", apple: "/icon-180.png" },
     // Превью ссылок в WhatsApp, Telegram, соцсетях; картинка — ./opengraph-image.tsx
     openGraph: { type: "website", siteName: s.brand.name, title: `${s.brand.name} — ${tr(s.brand.tagline, locale)}`, description: tr(s.brand.tagline, locale), locale: OG_LOCALE[locale as "ru"] },
     twitter: { card: "summary_large_image" },
@@ -47,6 +49,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
     <html lang={localeIso[locale]} className={`${noto.variable} ${notoArm.variable}`}>
       <body className="min-h-dvh antialiased">
         <NextIntlClientProvider messages={messages}>{children}</NextIntlClientProvider>
+        <ServiceWorker />
       </body>
     </html>
   );

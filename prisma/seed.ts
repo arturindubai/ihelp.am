@@ -31,8 +31,11 @@ async function syncBacklog() {
       estimate: t.estimate ?? null,
       sort: i,
     };
-    const existing = await db.task.findUnique({ where: { key: t.key }, select: { id: true } });
-    if (existing) await db.task.update({ where: { key: t.key }, data: content });
+    const existing = await db.task.findUnique({ where: { key: t.key }, select: { id: true, source: true } });
+    // Задачу, отредактированную в админке, деплой не перезаписывает
+    if (existing) {
+      if (existing.source === "code") await db.task.update({ where: { key: t.key }, data: content });
+    }
     else {
       created++;
       await db.task.create({ data: { key: t.key, ...content, status: t.status ?? "backlog", doneAt: t.status === "done" ? new Date() : null } });
