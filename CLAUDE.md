@@ -10,7 +10,7 @@ iHelp (в коде и в инфраструктуре ещё встречает�
 личный кабинет, кабинет мастера, админка и Control Center — доска задач проекта.
 
 Стек: Next.js 15 (App Router, server actions), React 19, TypeScript, Tailwind 4, PostgreSQL 16 + Prisma 6, next-intl (ru/en/am), Docker Compose.
-Каталог проекта: `/opt/homecare` (git-репозиторий). Сайт: http://37.60.236.202:8080 — после подключения домена будет https://ihelp.am.
+Каталог проекта: `/opt/homecare` (git-репозиторий, `origin` → github.com/arturindubai/ihelp.am). Сайт: http://37.60.236.202:8080 — после подключения домена будет https://ihelp.am.
 
 ## Правила, которые нельзя нарушать
 
@@ -34,7 +34,7 @@ iHelp (в коде и в инфраструктуре ещё встречает�
    cd /opt/homecare && docker run --rm -v $PWD/src:/app/src -v $PWD/prisma:/app/prisma -v $PWD/messages:/app/messages \
      -w /app --entrypoint sh homecare-migrate -c 'npx prisma generate >/dev/null 2>&1; npx tsc --noEmit -p .; npx vitest run'
    ```
-4. Зафиксируй в git осмысленным сообщением (на английском, как в истории).
+4. Зафиксируй в git осмысленным сообщением и отправь в репозиторий: `git push origin main`.
 5. Выложи и проверь:
    ```bash
    cd /opt/homecare && deploy/update.sh https://liacontentos.com https://aistudiolia.com https://arturoganesian.com
@@ -61,6 +61,7 @@ docker compose ps                                   # состояние кон�
 docker compose logs --tail 50 app                   # логи приложения
 docker compose logs app | grep otp                  # код входа, пока не подключены каналы
 docker compose exec -T db psql -U app -d homeservices -tAc 'select count(*) from "Order"'   # запрос к базе
+git push origin main                                # отправить код в репозиторий
 deploy/smoke.sh                                     # быстрая проверка, что всё живо
 docker compose exec -T backup sh /backup.sh once    # бэкап прямо сейчас
 ```
@@ -70,7 +71,8 @@ docker compose exec -T backup sh /backup.sh once    # бэкап прямо се
 | Документ | О чём |
 |---|---|
 | `docs/CONTROL_CENTER.md` | доска задач, как ведётся бэклог, API для агентов |
-| `docs/BACKLOG.md` | печатная версия бэклога: 100 задач с критериями приёмки |
+| `docs/BACKLOG.md` | печатная версия бэклога: 118 задач с критериями приёмки |
+| `docs/IMAGES.md` | какие картинки нужны сайту и промпт на каждую |
 | `docs/GAPS.md` | аудит: риски, техдолг, что закрыто |
 | `docs/DEPLOY_CHECKLIST.md` | как устроен деплой и что проверять |
 | `docs/INTEGRATIONS.md` | домен, вход через Google, почта Resend |
@@ -78,9 +80,19 @@ docker compose exec -T backup sh /backup.sh once    # бэкап прямо се
 | `docs/TEAM_GUIDE.md` | инструкция для операторов и мастеров |
 | `README.md`, `DESIGN.md` | архитектура, эксплуатация, дизайн-токены |
 
+## Код и репозиторий
+
+Репозиторий: **github.com/arturindubai/ihelp.am**. На сервере он уже прописан как `origin` (по SSH, ключ `/root/.ssh/ihelp_deploy`).
+Рабочая копия — прямо на сервере в `/opt/homecare`: правки делаются там, оттуда же выкладываются и отправляются в репозиторий. Отдельного стенда пока нет (DEV-3).
+
+Если `git push` отвечает `Permission denied (publickey)` — значит открытый ключ сервера ещё не добавлен в репозиторий: Settings → Deploy keys → Add deploy key, **с галкой Allow write access**, содержимое `/root/.ssh/ihelp_deploy.pub`.
+
 ## Текущее состояние (21.09.2026)
 
 - Работает: каталог, цены, оформление заказа, подписки, кабинеты клиента и мастера, админка, Control Center, ночные бэкапы с проверкой восстановления, тех-алерты.
 - Главный блокер: **не подключён ни один канал доставки кодов входа** (задача AUTH-1) — клиенты не могут войти. Владелец входит по секретной ссылке (`ADMIN_LOGIN_TOKEN`).
 - Нет домена и HTTPS (INFRA-1…3): от этого зависят вход через Google, почта и реклама.
-- Переводы на английский и армянский не заполнены (SEO-5). Бренд переименован в iHelp, логотип и цвета ещё прежние (CONTENT-6).
+- Переводы на английский и армянский не заполнены (SEO-5). Бренд переименован в iHelp, логотип и цвета ещё прежние (CONTENT-6, DSN-2).
+- Каталог наполнен демо-данными: 5 категорий, одна услуга, картинки — схематичные заглушки (DSN-3, DSN-4).
+- Главная страница пересобирается по образцу маркетплейса услуг (DSN-1) — сначала цвета, шрифты и картинки.
+- Техаудит 21.09.2026: критичное исправлено, остальное — задачи AUD-1…11, разбор в `docs/GAPS.md`, раздел 0.
