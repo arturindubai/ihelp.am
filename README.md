@@ -1,6 +1,6 @@
 # iHelp — платформа бытовых услуг (Ереван)
 
-> Проект переименован из HomeCare 21.09.2026. Инфраструктура (каталог `/opt/homecare`, контейнеры `homecare-*`) сохраняет прежнее имя — это не влияет на сайт.
+> Проект переименован из HomeCare 21.09.2026: каталог `/opt/ihelp.am`, репозиторий `github.com/arturindubai/ihelp.am`. Контейнеры и тома сохраняют прежний префикс `homecare` — переименование потребовало бы переноса базы, на работу сайта это не влияет.
 
 Web-app в стиле Urban Company: каталог услуг → параметры и калькулятор → адрес, дата, время, мастер → оплата наличными (картой — после подключения эквайринга) → личный кабинет. Сверху: кабинет мастера и админка с полным управлением.
 
@@ -76,7 +76,7 @@ npm test                      # unit-тесты цены, слотов, расп
 curl -fsSL https://get.docker.com | sh
 
 # 2. Код
-git clone <repo> /opt/homecare && cd /opt/homecare     # или загрузите архив
+git clone <repo> /opt/ihelp.am && cd /opt/ihelp.am     # или загрузите архив
 
 # 3. Настройки
 cp .env.example .env
@@ -102,7 +102,7 @@ curl http://localhost/api/health          # на общем сервере: http
 
 **Первый вход в админку.** Пока каналы отправки кода не подключены, код пишется в лог сервера:
 ```bash
-docker compose -f /opt/homecare/docker-compose.yml logs app | grep otp
+docker compose -f /opt/ihelp.am/docker-compose.yml logs app | grep otp
 ```
 Войдите по `ADMIN_PHONE` → **Настройки → Подтверждение номера** → подключите WhatsApp / Telegram / SMS.
 
@@ -121,25 +121,25 @@ COOKIE_SECURE=true
 
 **Обновление.** Изменения кода сначала фиксируются в git, затем:
 ```bash
-cd /opt/homecare && deploy/update.sh https://liacontentos.com https://aistudiolia.com https://arturoganesian.com
+cd /opt/ihelp.am && deploy/update.sh
 ```
-Скрипт: бэкап → сохранение текущих образов для отката → сборка → запуск (миграции применяются автоматически, демо-данные повторно не заливаются) → smoke-тест HomeCare и соседних сайтов → очистка старых образов и кэша. Если сборка упала — работающий сайт не трогается.
+Скрипт: бэкап → сохранение текущих образов для отката → сборка → запуск (миграции применяются автоматически, демо-данные повторно не заливаются) → smoke-тест iHelp и соседних сайтов → очистка старых образов и кэша. Если сборка упала — работающий сайт не трогается.
 Откат на предыдущую версию: `deploy/rollback.sh` (база не откатывается). Проверка в любой момент: `deploy/smoke.sh`.
 
-Если код приходит новым архивом (git-remote нет): распакуйте во временную папку, перенесите с `rsync -a --exclude .env --exclude backups --exclude .git <папка>/ /opt/homecare/`,
-проверьте `git -C /opt/homecare diff` — **не затирайте серверные доработки** (порты, контакты, бэкапы, скрипты `deploy/`), закоммитьте и запустите `deploy/update.sh`.
+Если код приходит новым архивом (git-remote нет): распакуйте во временную папку, перенесите с `rsync -a --exclude .env --exclude backups --exclude .git <папка>/ /opt/ihelp.am/`,
+проверьте `git -C /opt/ihelp.am diff` — **не затирайте серверные доработки** (порты, контакты, бэкапы, скрипты `deploy/`), закоммитьте и запустите `deploy/update.sh`.
 Скрипты в `deploy/` на работающем сервере не редактируйте на месте: контейнер читает их во время работы — заменяйте файл целиком (git, rsync).
 
 **Бэкапы.** Каждую ночь в `BACKUP_AT` (23:30 UTC = 03:30 по Еревану) в `./backups/`: база `db-YYYY-MM-DD.sql.gz` и фото из админки `uploads-YYYY-MM-DD.tar.gz`, хранятся `BACKUP_KEEP_DAYS` (14) дней, доступ только у root. При старте контейнера бэкап снимается, только если свежего (моложе 20 ч) нет. Раз в неделю бэкап автоматически разворачивается во временную базу и сверяется. Отметки об успехах и ошибках пишутся в базу — по ним приходят тех-алерты (бэкап старше 26 ч, ошибка, проваленная проверка). Лог: `docker compose logs backup`. Файлы лежат на том же диске — копируйте `backups/` на внешнее хранилище.
 
 Бэкап прямо сейчас (например, перед ручными правками базы):
 ```bash
-docker compose -f /opt/homecare/docker-compose.yml exec -T backup sh /backup.sh once
+docker compose -f /opt/ihelp.am/docker-compose.yml exec -T backup sh /backup.sh once
 ```
 
 Восстановление базы (заменяет текущие данные):
 ```bash
-cd /opt/homecare
+cd /opt/ihelp.am
 docker compose stop app cron backup
 docker compose exec -T db psql -U app -d postgres -c "DROP DATABASE homeservices WITH (FORCE)" -c "CREATE DATABASE homeservices OWNER app"
 gunzip -c backups/db-YYYY-MM-DD.sql.gz | docker compose exec -T db psql -U app -d homeservices -v ON_ERROR_STOP=1 -q
@@ -147,7 +147,7 @@ docker compose up -d
 ```
 Восстановление фото (заменяет текущие):
 ```bash
-cd /opt/homecare
+cd /opt/ihelp.am
 docker run --rm -v homecare_uploads:/restore -v "$PWD/backups:/b:ro" postgres:16-alpine \
   sh -c 'rm -rf /restore/* && tar -xzf /b/uploads-YYYY-MM-DD.tar.gz -C /restore && chown -R 1000:1000 /restore'
 ```

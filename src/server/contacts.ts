@@ -2,7 +2,7 @@ import "server-only";
 import { CONTACT_KEYS, type ContactKey } from "@/lib/contacts";
 
 /**
- * ЕДИНОЕ МЕСТО КОНТАКТОВ БИЗНЕСА — блок CONTACT_* в /opt/homecare/.env.
+ * ЕДИНОЕ МЕСТО КОНТАКТОВ БИЗНЕСА — блок CONTACT_* в /opt/ihelp.am/.env.
  * Заданное там значение перекрывает админку (поле в настройках становится только для чтения).
  * Смена контактов: поправить .env → docker compose up -d (пересборка не нужна).
  */

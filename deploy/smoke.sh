@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Smoke-тест HomeCare после деплоя: контейнеры, страницы, защита, заголовки, бэкапы. Ничего не меняет.
-#   deploy/smoke.sh                                   — только HomeCare
-#   deploy/smoke.sh https://liacontentos.com …         — плюс сайты соседей по серверу (должны отвечать 200)
+# Smoke-тест iHelp после деплоя: контейнеры, страницы, защита, заголовки, бэкапы. Ничего не меняет.
+#   deploy/smoke.sh                — iHelp и, если задан NEIGHBORS в .env, сайты соседей по серверу
+#   deploy/smoke.sh https://… …    — проверить конкретные адреса соседей
+# Соседи — чужие проекты на этом же сервере: они обязаны отвечать 200 после нашей выкладки.
+# Список держим в .env (NEIGHBORS), чтобы чужие домены не попадали в репозиторий.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -43,9 +45,11 @@ check "X-Robots-Tag: ${robots:-noindex, nofollow}" [ "$(curl -sI -m 20 "$BASE/ru
 echo "Бэкапы"
 check "бэкап базы моложе 26 часов" [ -n "$(find backups -maxdepth 1 -name 'db-*.sql.gz' -mmin -1560 2> /dev/null | head -n 1)" ]
 
-if [ $# -gt 0 ]; then
+neighbors=("$@")
+if [ ${#neighbors[@]} -eq 0 ]; then read -r -a neighbors <<< "$(env_val NEIGHBORS | tr -d '"')"; fi
+if [ ${#neighbors[@]} -gt 0 ]; then
   echo "Соседние сайты"
-  for u in "$@"; do check "$u → 200" [ "$(http_code -L "$u")" = 200 ]; done
+  for u in "${neighbors[@]}"; do check "$u → 200" [ "$(http_code -L "$u")" = 200 ]; done
 fi
 
 if [ "$fail" = 0 ]; then echo "SMOKE OK"; else echo "SMOKE FAILED"; fi

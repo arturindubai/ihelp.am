@@ -5,7 +5,7 @@
 Нужны Node 20+, пакет `playwright` и браузер Chrome. Если playwright не установлен в проекте, укажите путь к нему и к браузеру:
 
 ```bash
-cd /opt/homecare
+cd /opt/ihelp.am
 TOKEN=$(grep '^ADMIN_LOGIN_TOKEN=' .env | cut -d= -f2) \
 PW=/root/.npm/_npx/*/node_modules/playwright/index.mjs \
 CHROME=/путь/к/chrome \

@@ -15,7 +15,7 @@
 | Тексты интерфейса | `messages/ru.json` или Админка → Тексты и переводы | пересборка / сразу |
 | Контакты | `.env`, блок `CONTACT_*` (см. README → Контакты) | `docker compose up -d` |
 
-Пересборка: `cd /opt/homecare && docker compose up -d --build`.
+Пересборка: `cd /opt/ihelp.am && docker compose up -d --build`.
 
 ## Токены (`theme.css`)
 

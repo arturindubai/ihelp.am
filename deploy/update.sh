@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Обновление HomeCare: проверка git → бэкап → образы для отката → сборка → запуск → smoke-тест → очистка.
-#   deploy/update.sh                                  — обновить
-#   deploy/update.sh https://liacontentos.com …        — и проверить, что соседние сайты отвечают 200
+# Обновление iHelp: проверка git → бэкап → образы для отката → сборка → запуск → smoke-тест → очистка.
+#   deploy/update.sh              — обновить (соседние сайты берутся из NEIGHBORS в .env)
+#   deploy/update.sh https://… …  — проверить конкретные адреса соседей
 # Откат, если что-то пошло не так: deploy/rollback.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."

@@ -19,5 +19,5 @@ for _ in $(seq 1 60); do
 done
 deploy/smoke.sh "$@" || true
 
-echo "Откат выполнен. Код в /opt/homecare остался новым: следующий deploy/update.sh снова соберёт его —"
+echo "Откат выполнен. Код в /opt/ihelp.am остался новым: следующий deploy/update.sh снова соберёт его —"
 echo "сначала исправьте проблему или верните код: git revert <коммит>."

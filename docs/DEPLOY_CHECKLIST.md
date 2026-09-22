@@ -1,6 +1,6 @@
 # Чек-лист деплоя iHelp
 
-Сервер Contabo `37.60.236.202`, каталог `/opt/homecare`. Обновлён 17.09.2026 по итогам деплоя и аудита.
+Сервер Contabo `37.60.236.202`, каталог `/opt/ihelp.am`. Обновлён 17.09.2026 по итогам деплоя и аудита.
 Задачи до полноценной работы сервиса, гапы и риски — в [GAPS.md](GAPS.md).
 
 **Сайт:** http://37.60.236.202:8080/ru · **Админка:** http://37.60.236.202:8080/ru/admin · **Control Center:** http://37.60.236.202:8080/ru/admin/control
@@ -9,15 +9,15 @@
 
 ## 0. Принципы (общий сервер)
 
-На сервере уже работают чужие проекты, HomeCare их не касается:
+На сервере уже работают чужие проекты, iHelp их не касается:
 
-| Сосед | Что это | Как HomeCare от него отделён |
+| Сосед | Что это | Как iHelp от него отделён |
 |---|---|---|
-| nginx :80/:443 | liacontentos.com, aistudiolia.com, arturoganesian.com | HomeCare на своём порту 8080, конфиги nginx не менялись |
-| pm2 (10 процессов) | LIA dev/prod, ai-blog | HomeCare в Docker, pm2 не трогаем |
+| nginx :80/:443 | сайты чужого проекта (адреса — в `NEIGHBORS` в `.env`) | iHelp на своём порту 8080, конфиги nginx не менялись |
+| pm2 (10 процессов) | приложения чужого проекта | iHelp в Docker, pm2 не трогаем |
 | WireGuard wg0/wg1/wg2 + dnsmasq | VPN | правила файрвола VPN сохранены (бэкап до установки Docker) |
 
-HomeCare изолирован: отдельный каталог, docker-проект `homecare` (своя сеть и тома `homecare_*`), свой Postgres, лимиты памяти, свой git.
+iHelp изолирован: отдельный каталог `/opt/ihelp.am`, docker-проект `homecare` (прежнее имя; своя сеть и тома `homecare_*`), свой Postgres, лимиты памяти, свой git и репозиторий.
 
 ## 1. Разведка (до изменений)
 
@@ -46,9 +46,9 @@ HomeCare изолирован: отдельный каталог, docker-про�
 
 | Пункт | Статус | Факт |
 |---|---|---|
-| Архив → `/opt/homecare` | ✅ | скачан с Google Drive, оригинал в `/root/homecare-mvp.zip` |
+| Архив → `/opt/ihelp.am` | ✅ | скачан с Google Drive, оригинал в `/root/homecare-mvp.zip` |
 | README прочитан до запуска | ✅ | нюанс: compose жёстко занимал 80/443 → вынесено в `HTTP_BIND`/`HTTPS_BIND` |
-| История изменений | ✅ ➕ | локальный git в `/opt/homecare`, первый коммит — оригинальный архив. Remote нет — GAPS → DEV-1 |
+| История изменений | ✅ ➕ | локальный git в `/opt/ihelp.am`, первый коммит — оригинальный архив. Remote нет — GAPS → DEV-1 |
 | Ревью кода на скрытые проблемы | ✅ ➕ | время (Asia/Yerevan) считается корректно; healthcheck проверяет базу; найдены и исправлены 2 бага (seed, длина кода) |
 
 ## 4. Настройки `.env`
@@ -125,32 +125,32 @@ HomeCare изолирован: отдельный каталог, docker-про�
 
 ```bash
 # Первый вход в админку: на /ru/login ввести ADMIN_PHONE, выбрать любой канал, затем код (6 цифр):
-docker compose -f /opt/homecare/docker-compose.yml logs app | grep otp
+docker compose -f /opt/ihelp.am/docker-compose.yml logs app | grep otp
 
 # Проверить, что всё работает (ничего не меняет)
-cd /opt/homecare && deploy/smoke.sh https://liacontentos.com https://aistudiolia.com https://arturoganesian.com
+cd /opt/ihelp.am && deploy/smoke.sh https://liacontentos.com https://aistudiolia.com https://arturoganesian.com
 
 # Обновление (после git commit) и откат
-cd /opt/homecare && deploy/update.sh https://liacontentos.com https://aistudiolia.com https://arturoganesian.com
-cd /opt/homecare && deploy/rollback.sh
+cd /opt/ihelp.am && deploy/update.sh https://liacontentos.com https://aistudiolia.com https://arturoganesian.com
+cd /opt/ihelp.am && deploy/rollback.sh
 
 # Статус и логи
-cd /opt/homecare && docker compose ps
+cd /opt/ihelp.am && docker compose ps
 docker compose logs --tail 50 app
 docker compose logs backup cron
 docker compose logs app | grep notify:tech        # тех-алерты, пока бот не подключён
 
 # Бэкап прямо сейчас
-cd /opt/homecare && docker compose exec -T backup sh /backup.sh once
+cd /opt/ihelp.am && docker compose exec -T backup sh /backup.sh once
 
 # Смена контактов: правка CONTACT_* в .env, затем (без пересборки)
-cd /opt/homecare && docker compose up -d
+cd /opt/ihelp.am && docker compose up -d
 ```
 
 ## Чек-лист повторного деплоя (обновление)
 
-1. Если код пришёл новым архивом: распаковать во временную папку, `rsync -a --exclude .env --exclude backups --exclude .git <папка>/ /opt/homecare/`, затем `git -C /opt/homecare diff` — **не потерять серверные доработки**: порты (`HTTP_BIND`), контакты, скрипты `deploy/`, фиксы seed, формы входа, уведомлений.
-2. `git -C /opt/homecare add -A && git -C /opt/homecare commit -m "…"` — `update.sh` не запускается с незафиксированными правками.
+1. Если код пришёл новым архивом: распаковать во временную папку, `rsync -a --exclude .env --exclude backups --exclude .git <папка>/ /opt/ihelp.am/`, затем `git -C /opt/ihelp.am diff` — **не потерять серверные доработки**: порты (`HTTP_BIND`), контакты, скрипты `deploy/`, фиксы seed, формы входа, уведомлений.
+2. `git -C /opt/ihelp.am add -A && git -C /opt/ihelp.am commit -m "…"` — `update.sh` не запускается с незафиксированными правками.
 3. Вне пиковых часов (сборка нагружает общий сервер): `deploy/update.sh https://liacontentos.com https://aistudiolia.com https://arturoganesian.com`.
    Скрипт сам: бэкап → образы для отката → сборка → запуск и миграции → ожидание healthy → smoke-тест (контейнеры, `OTP_DEV_MODE=false`, ключ шифрования, страницы, защита `/api/cron`, превью ссылок, `X-Robots-Tag`, свежесть бэкапа, соседние сайты) → очистка.
 4. Упал на сборке — прод не тронут, смотреть вывод. Упал smoke-тест — `docker compose logs --tail 100 app migrate`, при необходимости `deploy/rollback.sh`.

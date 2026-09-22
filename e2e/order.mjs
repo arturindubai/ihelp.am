@@ -23,7 +23,7 @@ const check = (name, ok, extra = "") => {
   results.push(ok);
   console.log(ok ? "PASS" : "FAIL", name, extra);
 };
-const sh = (c) => execSync(c, { shell: "/bin/bash", cwd: "/opt/homecare" }).toString().trim();
+const sh = (c) => execSync(c, { shell: "/bin/bash", cwd: "/opt/ihelp.am" }).toString().trim();
 const sql = (q) => sh(`docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -F"|" -c ${JSON.stringify(q).replace(/'/g, "'\\''")}'`);
 
 /** Подставляет известный код входа: хэш считает сам контейнер приложения */
