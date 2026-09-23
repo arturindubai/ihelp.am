@@ -90,6 +90,8 @@ docker compose exec -T backup sh /backup.sh once    # бэкап прямо се
 | `docs/BACKLOG.md` | печатная версия бэклога: 118 задач с критериями приёмки |
 | `docs/IMAGES.md` | какие картинки нужны сайту и промпт на каждую |
 | `docs/GAPS.md` | аудит: риски, техдолг, что закрыто |
+| `docs/COMPETITORS.md` | анализ JustLife и Urban Company: каталог, воронка заказа, дизайн, слабые места по отзывам |
+| `docs/COMPETITOR_BACKLOG.md` | задачи из анализа конкурентов (COMP-*), с приоритетом и размером — черновик до переноса в Control Center |
 | `docs/DEPLOY_CHECKLIST.md` | как устроен деплой и что проверять |
 | `docs/INTEGRATIONS.md` | домен, вход через Google, почта Resend |
 | `docs/PERSONAL_DATA.md` | какие персональные данные собираются и куда уходят |
