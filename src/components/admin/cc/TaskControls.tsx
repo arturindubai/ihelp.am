@@ -7,14 +7,22 @@ import { OWNERS, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { TextInput } from "@/components/admin/fields";
 import { cn } from "@/lib/format";
 
-/** Быстрая смена статуса в списке задач */
-export function TaskStatus({ taskKey, status }: { taskKey: string; status: string }) {
+const STATUS_SELECT_TONE: Record<string, string> = {
+  backlog: "bg-surface text-ink",
+  in_progress: "bg-brand-50 text-brand",
+  review: "bg-warn-50 text-warn",
+  blocked: "bg-bad-50 text-bad",
+  done: "bg-ok-50 text-ok",
+};
+
+/** Быстрая смена статуса — цвет фона совпадает с бейджем статуса, чтобы читалось как бейдж, а не как форма */
+export function TaskStatus({ taskKey, status, className }: { taskKey: string; status: string; className?: string }) {
   const [value, setValue] = useState(status);
   const [pending, start] = useTransition();
   const router = useRouter();
   return (
     <select
-      className="input min-h-9 w-auto py-1 text-sm"
+      className={cn("input min-h-8 w-auto border-transparent py-1 text-xs font-medium", STATUS_SELECT_TONE[value], className)}
       value={value}
       disabled={pending}
       onChange={(e) => {

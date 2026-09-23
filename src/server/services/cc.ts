@@ -14,6 +14,7 @@ export type TaskFilters = {
   priority?: string;
   owner?: string;
   epic?: string;
+  epicKey?: string;
   q?: string;
   /** true — скрыть выполненные и то, что уже работает */
   open?: boolean;
@@ -31,6 +32,7 @@ function where(f: TaskFilters): Prisma.TaskWhereInput {
   if (f.priority) w.priority = f.priority;
   if (f.owner) w.owner = f.owner;
   if (f.epic) w.epic = f.epic;
+  if (f.epicKey) w.epicKey = f.epicKey === "none" ? null : f.epicKey;
   if (f.q) {
     const q = f.q.trim();
     w.OR = [
