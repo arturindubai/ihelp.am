@@ -3,15 +3,23 @@ import { redirect } from "@/i18n/navigation";
 import { getCurrentUser } from "@/server/auth";
 import { availableChannels } from "@/server/otp";
 import { getSettings } from "@/server/settings";
+import { unpackSignupTicket } from "@/server/services/signupTicket";
 import { LoginClient } from "./LoginClient";
 
-export default async function LoginPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ next?: string; error?: string }> }) {
+export default async function LoginPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ next?: string; error?: string; complete?: string }> }) {
   const { locale } = await params;
-  const { next, error } = await searchParams;
+  const { next, error, complete } = await searchParams;
   setRequestLocale(locale);
   const user = await getCurrentUser();
   const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : null;
   if (user) redirect({ href: safeNext || "/account", locale });
+  // Пришли из Google/Apple (email уже проверен) или из Telegram-бота (телефон-подсказка) без
+  // существующего аккаунта — AUTH-11: телефон всё равно подтвердится SMS-кодом на этой же форме
+  const completeTicket = complete ? unpackSignupTicket(complete) : null;
+  const prefill =
+    completeTicket?.kind === "new"
+      ? { email: completeTicket.email || undefined, phone: completeTicket.phone || undefined }
+      : undefined;
   const [channels, s, t] = await Promise.all([availableChannels(), getSettings(), getTranslations("auth")]);
   const google = s.google.enabled && !!s.google.clientId;
   const apple = s.apple.enabled && !!s.apple.clientId;
@@ -46,7 +54,7 @@ export default async function LoginPage({ params, searchParams }: { params: Prom
           )}
         </div>
       )}
-      <LoginClient channels={channels} next={safeNext} />
+      <LoginClient channels={channels} next={safeNext} prefill={prefill} />
     </div>
   );
 }

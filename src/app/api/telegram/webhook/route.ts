@@ -3,12 +3,15 @@ import { db } from "@/server/db";
 import { normalizePhone } from "@/lib/phone";
 import { verifyTelegramWebhookSecret } from "@/lib/telegramAuth";
 import { signState } from "@/server/services/oauth";
+import { packSignupTicket } from "@/server/services/signupTicket";
 import { sendChatMessage } from "@/server/services/telegramBot";
 
 /**
- * Вебхук Telegram-бота — вход через бота (задача AUTH-10). Сотрудник или клиент открывает бота,
- * жмёт «Поделиться номером»; телефон уже подтверждён Telegram, поэтому бот сразу присылает
- * одноразовую ссылку входа (10 минут, /api/auth/telegram/callback).
+ * Вебхук Telegram-бота — вход через бота (задача AUTH-10). Существующий пользователь жмёт
+ * «Поделиться номером» — телефон уже подтверждён Telegram, бот сразу присылает одноразовую
+ * ссылку входа (10 минут, /api/auth/telegram/callback). Новый номер (AUTH-11) — на телефон от
+ * бота не полагаемся как на единственное подтверждение: ссылка ведёт на страницу входа с
+ * тикетом, там номер всё равно проходит через SMS-код, плюс потребуется email.
  * X-Telegram-Bot-Api-Secret-Token обязателен: без него любой мог бы прислать чужой номер
  * телефона напрямую в этот роут и получить ссылку входа в свой чат.
  */
@@ -32,12 +35,23 @@ export async function POST(req: Request) {
 
   if (msg.contact?.phone_number) {
     const phone = normalizePhone(msg.contact.phone_number);
-    const user = phone ? await db.user.findUnique({ where: { phone } }) : null;
-    if (!user || user.blocked) {
-      await sendChatMessage(msg.chat.id, "Этот номер не найден в iHelp. Сначала войдите на сайте по коду с этим номером, затем возвращайтесь сюда.");
+    if (!phone) return NextResponse.json({ ok: true });
+    const user = await db.user.findUnique({ where: { phone } });
+    const base = (process.env.APP_URL || "").replace(/\/$/, "");
+
+    if (user?.blocked) {
+      await sendChatMessage(msg.chat.id, "Этот номер заблокирован в iHelp.");
       return NextResponse.json({ ok: true });
     }
-    const base = (process.env.APP_URL || "").replace(/\/$/, "");
+    if (!user) {
+      // Номер не найден — не аккаунт, а начало регистрации (AUTH-11): телефон всё равно
+      // подтвердится SMS-кодом на сайте, Telegram здесь только подсказал номер для автозаполнения.
+      const ticket = packSignupTicket({ kind: "new", phone, email: "", locale: "ru" });
+      const link = `${base}/ru/login?complete=${encodeURIComponent(ticket)}`;
+      await sendChatMessage(msg.chat.id, `Этот номер ещё не зарегистрирован в iHelp. Перейдите по ссылке, чтобы завершить регистрацию — телефон и почта потребуются на сайте (ссылка активна 10 минут):\n${link}`);
+      return NextResponse.json({ ok: true });
+    }
+
     const token = signState(user.id, process.env.SESSION_SECRET || "dev");
     const link = `${base}/api/auth/telegram/callback?token=${encodeURIComponent(token)}`;
     await sendChatMessage(msg.chat.id, `Вход в iHelp — ссылка одноразовая, действует 10 минут:\n${link}`);

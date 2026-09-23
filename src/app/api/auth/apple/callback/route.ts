@@ -4,13 +4,13 @@ import { db } from "@/server/db";
 import { createSession, STAFF_ROLES } from "@/server/auth";
 import { getSettings } from "@/server/settings";
 import { audit } from "@/server/audit";
-import { alertTech } from "@/server/alerts";
-import { html } from "@/server/notify";
 import { exchangeAppleCode, verifyState } from "@/server/services/oauth";
+import { packSignupTicket } from "@/server/services/signupTicket";
 
 /**
  * Возврат из Apple. В отличие от Google, Apple шлёт форму POST (response_mode=form_post), не GET.
- * Пускаем только тех, у кого в системе уже указан этот email: новый аккаунт не создаём.
+ * Если email уже привязан — обычный вход. Если нет (AUTH-11) — email проверен Apple, телефон ещё
+ * нет: на страницу входа с тикетом на завершение регистрации, телефон подтвердят SMS-кодом.
  */
 export async function POST(req: Request) {
   const base = process.env.APP_URL || new URL(req.url).origin;
@@ -31,15 +31,17 @@ export async function POST(req: Request) {
   const profile = await exchangeAppleCode(s, code);
   if (!profile || !profile.emailVerified) return fail("apple_failed");
 
-  const user = await db.user.findFirst({ where: { email: { equals: profile.email, mode: "insensitive" } } });
+  const email = profile.email.toLowerCase();
+  const user = await db.user.findUnique({ where: { email } });
   if (!user) {
-    await alertTech("apple-unknown", html`⚠️ <b>Вход через Apple: аккаунт не привязан</b>\n${profile.email}`, 30);
-    return fail("apple_not_linked");
+    await audit(null, "auth.apple.signup_start", "User", null, { email });
+    const ticket = packSignupTicket({ kind: "new", phone: "", email, locale: "ru" });
+    return NextResponse.redirect(new URL(`/ru/login?complete=${encodeURIComponent(ticket)}`, base), { status: 303 });
   }
   if (user.blocked) return fail("blocked");
 
   await createSession(user.id);
-  await audit(user.id, "auth.apple", "User", user.id, { email: profile.email });
+  await audit(user.id, "auth.apple", "User", user.id, { email });
   const next = (verifyState(state, process.env.SESSION_SECRET || "dev") ?? "").split("|")[1] || "";
   const dest = next.startsWith("/") ? `/ru${next}` : STAFF_ROLES.includes(user.role) ? "/ru/admin" : "/ru/account";
   return NextResponse.redirect(new URL(dest, base), { status: 303 });

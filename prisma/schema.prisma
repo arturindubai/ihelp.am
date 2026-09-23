@@ -28,7 +28,7 @@ model User {
   id          String    @id @default(cuid())
   phone       String    @unique
   name        String?
-  email       String?
+  email       String?   @unique
   role        Role      @default(CLIENT)
   locale      String    @default("ru")
   blocked     Boolean   @default(false)

@@ -9,21 +9,24 @@ import { Link } from "@/i18n/navigation";
 type Channel = "SMS" | "WHATSAPP" | "TELEGRAM";
 const ICONS = { WHATSAPP: MessageCircle, TELEGRAM: Send, SMS: Smartphone };
 
-export function LoginForm({ channels, onDone }: { channels: Channel[]; onDone: (role: string) => void }) {
+export function LoginForm({ channels, prefill, onDone }: { channels: Channel[]; prefill?: { email?: string; phone?: string }; onDone: (role: string) => void }) {
   const t = useTranslations("auth");
   const tc = useTranslations("common");
   const locale = useLocale();
-  const [step, setStep] = useState<"phone" | "code" | "name">("phone");
-  const [phone, setPhone] = useState("+374 ");
+  const [step, setStep] = useState<"phone" | "code" | "profile">("phone");
+  const [phone, setPhone] = useState(prefill?.phone ? formatPhone(prefill.phone) : "+374 ");
   const [normalized, setNormalized] = useState("");
   const [channel, setChannel] = useState<Channel>(channels[0]);
+  const [usedChannel, setUsedChannel] = useState<Channel>(channels[0]);
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [requireEmail, setRequireEmail] = useState(false);
+  const trustedEmail = prefill?.email;
   const [devCode, setDevCode] = useState<string>();
   const [codeLength, setCodeLength] = useState(4);
   const [error, setError] = useState<string>();
   const [resendIn, setResendIn] = useState(0);
-  const [role, setRole] = useState("CLIENT");
   const [ticket, setTicket] = useState("");
   const [pending, start] = useTransition();
   const codeRef = useRef<HTMLInputElement>(null);
@@ -43,6 +46,7 @@ export function LoginForm({ channels, onDone }: { channels: Channel[]; onDone: (
       const r = await sendCodeAction(phone, ch, locale);
       if (!r.ok) return setError(errText(r.error, "retryIn" in r ? r.retryIn : undefined));
       setNormalized(r.phone!);
+      setUsedChannel(r.channel);
       setDevCode(r.devCode);
       setCodeLength(r.codeLength);
       setResendIn(r.resendIn);
@@ -57,11 +61,13 @@ export function LoginForm({ channels, onDone }: { channels: Channel[]; onDone: (
     verifying.current = value;
     setError(undefined);
     start(async () => {
-      const r = await verifyCodeAction(normalized, value, locale);
+      const r = await verifyCodeAction(normalized, value, locale, trustedEmail);
       if (!r.ok) { verifying.current = ""; return setError(errText(r.error)); }
-      setRole(r.role);
-      if (r.needName) { setTicket(r.ticket || ""); setStep("name"); }
-      else onDone(r.role);
+      if (r.needProfile) {
+        setTicket(r.ticket || "");
+        setRequireEmail(r.requireEmail);
+        setStep("profile");
+      } else onDone(r.role);
     });
   }
 
@@ -95,7 +101,8 @@ export function LoginForm({ channels, onDone }: { channels: Channel[]; onDone: (
 
       {step === "code" && (
         <div>
-          <p className="text-sm text-muted">{t("codeSent", { channel: t(`channel.${channel}`), phone: formatPhone(normalized) })}</p>
+          <p className="text-sm text-muted">{t("codeSent", { channel: t(`channel.${usedChannel}`), phone: formatPhone(normalized) })}</p>
+          {usedChannel !== channel && <p className="mt-1 text-sm text-muted">{t("newNumberSms")}</p>}
           {devCode && <p className="mt-2 rounded-lg bg-warn-50 px-3 py-2 text-sm text-warn">{t("devCode", { code: devCode })}</p>}
           <label className="label mt-4" htmlFor="code">{t("code")}</label>
           <input
@@ -122,11 +129,28 @@ export function LoginForm({ channels, onDone }: { channels: Channel[]; onDone: (
         </div>
       )}
 
-      {step === "name" && (
-        <form onSubmit={(e) => { e.preventDefault(); start(async () => { const r = await completeSignupAction(ticket, name); if (!r.ok) return setError(tc("error")); onDone(role); }); }}>
+      {step === "profile" && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            start(async () => {
+              const r = await completeSignupAction(ticket, name, requireEmail ? email : undefined);
+              if (!r.ok) return setError(errText(r.error));
+              onDone(r.role);
+            });
+          }}
+        >
           <label className="label" htmlFor="name">{t("yourName")}</label>
           <input id="name" className="input" autoFocus value={name} placeholder={t("namePlaceholder")} onChange={(e) => setName(e.target.value)} />
-          <button className="btn-primary mt-3 w-full" disabled={pending || !name.trim()}>{tc("continue")}</button>
+          {requireEmail ? (
+            <div className="mt-3">
+              <label className="label" htmlFor="email">{t("email")}</label>
+              <input id="email" type="email" className="input" autoComplete="email" value={email} placeholder={t("emailPlaceholder")} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+          ) : (
+            trustedEmail && <p className="mt-2 text-sm text-muted">{t("email")}: {trustedEmail}</p>
+          )}
+          <button className="btn-primary mt-3 w-full" disabled={pending || !name.trim() || (requireEmail && !email.trim())}>{tc("continue")}</button>
         </form>
       )}
 
