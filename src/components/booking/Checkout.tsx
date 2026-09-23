@@ -10,6 +10,7 @@ import { createOrderAction, promoAction, slotsAction } from "@/server/actions/bo
 import { Sheet } from "@/components/ui/Sheet";
 import { PriceBar } from "@/components/service/PriceBar";
 import { AddressForm, addressLine, type AddressRow } from "./AddressForm";
+import { Img } from "@/components/Img";
 
 type Line = { groupTitle: string; optionTitle: string; price: number; discountable: boolean; durationMin: number };
 type Plan = { id: string; kind: "ONE_TIME" | "SUBSCRIPTION" | "PACKAGE"; title: string; discountPercent: number; packageVisits: number | null; visitsPerWeek: number | null } | null;
@@ -242,7 +243,7 @@ export function Checkout(props: {
               const free = !slot || slot.masterIds.includes(m.id);
               return (
                 <button key={m.id} disabled={!time || !free} data-on={masterId === m.id} onClick={() => setMasterId(m.id)} className="select-card min-h-0 w-full flex-row items-center gap-3 py-3 disabled:opacity-50">
-                  <img src={m.photo || "/img/master-1.svg"} alt="" className="size-11 rounded-full object-cover" />
+                  <Img src={m.photo || "/img/master-1.svg"} width={44} className="size-11 rounded-full object-cover" />
                   <span className="flex-1">
                     <span className="block text-sm font-semibold">{m.name}</span>
                     <span className="block text-xs text-muted">

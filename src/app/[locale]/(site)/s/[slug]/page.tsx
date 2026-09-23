@@ -11,6 +11,7 @@ import { amd, dateLabel } from "@/lib/format";
 import { Icon } from "@/components/Icon";
 import { Rating, StarRow } from "@/components/Stars";
 import { ServiceConfigurator } from "@/components/service/ServiceConfigurator";
+import { Img } from "@/components/Img";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;
@@ -32,7 +33,7 @@ export default async function ServicePage({ params }: { params: Promise<{ locale
   return (
     <div className="container-m">
       <div className="relative -mx-4">
-        {s.bannerImage ? <img src={s.bannerImage} alt="" className="aspect-[16/9] w-full object-cover" /> : <div className="h-14" />}
+        {s.bannerImage ? <div className="relative aspect-[16/9] w-full"><Img src={s.bannerImage} fill sizes="(max-width: 768px) 100vw, 768px" className="object-cover" /></div> : <div className="h-14" />}
         <Link href={`/`} className="absolute top-3 left-3 grid size-9 place-items-center rounded-full bg-paper shadow" aria-label="back">
           <ArrowLeft size={18} />
         </Link>
@@ -90,7 +91,7 @@ export default async function ServicePage({ params }: { params: Promise<{ locale
           <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4">
             {masters.map((m) => (
               <Link key={m.id} href={`/masters/${m.slug}`} className="card w-36 shrink-0 p-3 text-center">
-                <img src={m.photo || "/img/master-1.svg"} alt="" className="mx-auto size-16 rounded-full object-cover" />
+                <Img src={m.photo || "/img/master-1.svg"} width={64} className="mx-auto size-16 rounded-full object-cover" />
                 <div className="mt-2 font-semibold">{tr(m.name, locale)}</div>
                 <div className="text-xs text-muted">{m.reviewsCount ? `★ ${m.rating.toFixed(1)} · ${tc("reviews", { count: m.reviewsCount })}` : tc("new")}</div>
               </Link>
