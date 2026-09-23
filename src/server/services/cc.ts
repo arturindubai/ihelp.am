@@ -54,7 +54,12 @@ export async function listTasks(f: TaskFilters = {}) {
 export async function getTask(key: string) {
   const task = await db.task.findUnique({
     where: { key },
-    include: { comments: { orderBy: { createdAt: "asc" } }, events: { orderBy: { createdAt: "desc" }, take: 50 } },
+    include: {
+      comments: { orderBy: { createdAt: "asc" } },
+      events: { orderBy: { createdAt: "desc" }, take: 50 },
+      attachments: { orderBy: { createdAt: "desc" } },
+      epicRef: { select: { key: true, title: true } },
+    },
   });
   if (!task) return null;
   const related = await db.task.findMany({
@@ -136,10 +141,14 @@ export interface TaskContent {
   summary: string;
   details?: string | null;
   requirements: string[];
+  design?: string | null;
+  qaNotes?: string | null;
+  deployNotes?: string | null;
   needs: string[];
   depends: string[];
   docs: string[];
-  epic: string;
+  /** Ключ эпика (Epic.key) — пусто значит простая задача без эпика */
+  epicKey?: string | null;
   area: string;
   layer: string;
   priority: string;
@@ -159,15 +168,28 @@ export async function saveTask(content: TaskContent, actor: string, isNew: boole
   const known = new Set((await db.task.findMany({ where: { key: { in: deps } }, select: { key: true } })).map((t) => t.key));
   const unknown = deps.filter((d) => !known.has(d));
   if (unknown.length) throw new Error(`unknown_depends:${unknown.join(", ")}`);
+  // epicKey необязателен — пустой значит простая задача. Если задан, эпик должен существовать:
+  // epic (текстовая метка для старых карточек) выводится из его названия автоматически
+  const epicKey = content.epicKey?.trim() || null;
+  let epicTitle: string | null = null;
+  if (epicKey) {
+    const epic = await db.epic.findUnique({ where: { key: epicKey }, select: { title: true } });
+    if (!epic) throw new Error("unknown_epic");
+    epicTitle = epic.title;
+  }
   const data = {
     title: content.title.trim().slice(0, 200),
     summary: content.summary.trim().slice(0, 2000),
     details: content.details?.trim().slice(0, 5000) || null,
     requirements: content.requirements.map((r) => r.trim()).filter(Boolean).slice(0, 20),
+    design: content.design?.trim().slice(0, 5000) || null,
+    qaNotes: content.qaNotes?.trim().slice(0, 5000) || null,
+    deployNotes: content.deployNotes?.trim().slice(0, 5000) || null,
     needs: content.needs.map((r) => r.trim()).filter(Boolean).slice(0, 20),
     depends: deps,
     docs: content.docs.map((r) => r.trim()).filter(Boolean).slice(0, 20),
-    epic: content.epic,
+    epicKey,
+    epic: epicTitle,
     area: content.area,
     layer: content.layer,
     priority: content.priority,

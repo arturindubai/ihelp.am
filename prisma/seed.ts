@@ -5,13 +5,46 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { BACKLOG } from "../src/server/backlog";
+import { EPIC_SEED } from "../src/server/epics";
 const db = new PrismaClient();
+
+/**
+ * Эпики Control Center: та же логика, что и у бэклога ниже — правки в админке (source="ui") не перезаписываются.
+ * Синкуется первым: у задач ниже есть внешний ключ Task.epicKey → Epic.key.
+ */
+async function syncEpics() {
+  let created = 0;
+  for (const [i, e] of EPIC_SEED.entries()) {
+    const content = {
+      title: e.title,
+      summary: e.summary,
+      requirements: e.requirements ?? [],
+      design: e.design ?? null,
+      techNotes: e.techNotes ?? null,
+      testingNotes: e.testingNotes ?? null,
+      deployNotes: e.deployNotes ?? null,
+      depends: e.depends ?? [],
+      docs: e.docs ?? [],
+      sort: i,
+    };
+    const existing = await db.epic.findUnique({ where: { key: e.key }, select: { id: true, source: true } });
+    if (existing) {
+      if (existing.source === "code") await db.epic.update({ where: { key: e.key }, data: content });
+    } else {
+      created++;
+      await db.epic.create({ data: { key: e.key, ...content, status: e.status ?? "planned" } });
+    }
+  }
+  console.log(`Epics: ${EPIC_SEED.length} (${created} new)`);
+}
 
 /**
  * Бэклог Control Center: тексты, требования и связи берутся из кода,
  * статусы, исполнители, комментарии и история остаются такими, какими их ведут в интерфейсе.
  */
 async function syncBacklog() {
+  // Задача не указала epicKey явно — находим эпик по совпадению старой текстовой метки epic с названием эпика
+  const epicKeyByTitle = new Map((await db.epic.findMany({ select: { key: true, title: true } })).map((e) => [e.title, e.key]));
   let created = 0;
   for (const [i, t] of BACKLOG.entries()) {
     const content = {
@@ -19,10 +52,14 @@ async function syncBacklog() {
       summary: t.summary,
       details: t.details ?? null,
       requirements: t.requirements,
+      design: t.design ?? null,
+      qaNotes: t.qaNotes ?? null,
+      deployNotes: t.deployNotes ?? null,
       needs: t.needs ?? [],
       depends: t.depends ?? [],
       docs: t.docs ?? [],
-      epic: t.epic,
+      epic: t.epic ?? null,
+      epicKey: t.epicKey ?? (t.epic ? (epicKeyByTitle.get(t.epic) ?? null) : null),
       area: t.area,
       layer: t.layer,
       priority: t.priority,
@@ -68,6 +105,7 @@ async function main() {
 
   // Демо-каталог заливается один раз. Seed выполняется при каждом деплое, и без флага
   // удалённые в админке демо-мастера, баннер, категории и страницы возвращались бы после обновления.
+  await syncEpics();
   await syncBacklog();
 
   const SEED_FLAG = "_seed";

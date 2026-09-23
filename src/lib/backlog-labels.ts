@@ -4,6 +4,7 @@
  */
 
 export const EPICS = [
+  "Command Center: эпики, требования и файлы",
   "Каталог и цены",
   "Оформление заказа",
   "Подписки и пакеты",
@@ -48,6 +49,7 @@ export const PRIORITIES: Record<string, string> = { p0: "До первых кл�
 export const STAGES: Record<string, string> = { baseline: "Уже работает", launch: "1. Первые клиенты", public: "2. Публичный запуск", growth: "3. Рост", later: "4. Позже" };
 export const STATUSES: Record<string, string> = { backlog: "Бэклог", in_progress: "В работе", review: "На проверке", blocked: "Заблокирована", done: "Готово" };
 export const OWNERS: Record<string, string> = { product: "Продукт", tech: "Техника", both: "Продукт + техника" };
+export const EPIC_STATUSES: Record<string, string> = { planned: "Задуман", in_progress: "В работе", testing: "Проверяется", ready: "Готов к деплою", done: "Готово" };
 
 export interface TaskSeed {
   key: string;
@@ -56,11 +58,20 @@ export interface TaskSeed {
   details?: string;
   /** Критерии приёмки: по ним задача считается выполненной */
   requirements: string[];
+  /** Дизайн: требования и заметки к интерфейсу, при необходимости */
+  design?: string;
+  /** Проверка и тестирование: что и как проверено */
+  qaNotes?: string;
+  /** Готовность к деплою: миграции, флаги, порядок выкладки */
+  deployNotes?: string;
   /** Что нужно от продукта: аккаунты, документы, решения */
   needs?: string[];
   depends?: string[];
   docs?: string[];
-  epic: (typeof EPICS)[number];
+  /** Метка эпика для печатной версии и старых карточек. Необязательна — задача без эпика простая */
+  epic?: (typeof EPICS)[number] | string;
+  /** Ключ эпика (EpicSeed.key). Если не задан, а epic указан — эпик находится по совпадению названия */
+  epicKey?: string;
   area: keyof typeof AREAS;
   layer: keyof typeof LAYERS;
   priority: keyof typeof PRIORITIES;
@@ -68,4 +79,20 @@ export interface TaskSeed {
   owner: keyof typeof OWNERS;
   estimate?: "S" | "M" | "L";
   status?: keyof typeof STATUSES;
+}
+
+export interface EpicSeed {
+  key: string;
+  title: string;
+  summary: string;
+  requirements?: string[];
+  /** Дизайн: принципы, ссылки на макеты, что должно быть видно пользователю */
+  design?: string;
+  /** Технические заметки: стек, архитектура, алгоритм */
+  techNotes?: string;
+  testingNotes?: string;
+  deployNotes?: string;
+  status?: keyof typeof EPIC_STATUSES;
+  depends?: string[];
+  docs?: string[];
 }

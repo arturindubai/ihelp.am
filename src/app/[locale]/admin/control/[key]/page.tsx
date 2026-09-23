@@ -4,11 +4,13 @@ import { ArrowLeft } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { pageUser } from "@/server/adminPage";
 import { getTask } from "@/server/services/cc";
+import { listEpics } from "@/server/services/epics";
 import { AREAS, LAYERS, OWNERS, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { PageHead, Forbidden } from "@/components/admin/ui";
 import { Card } from "@/components/admin/fields";
 import { CommentForm, TaskEditor } from "@/components/admin/cc/TaskControls";
 import { TaskEditorForm } from "@/components/admin/cc/TaskEditorForm";
+import { Attachments } from "@/components/admin/cc/Attachments";
 import { dateLabel, timeLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +21,7 @@ export default async function TaskPage({ params }: { params: Promise<{ locale: s
   const { locale, key } = await params;
   setRequestLocale(locale);
   if (!(await pageUser("control"))) return <Forbidden />;
-  const data = await getTask(decodeURIComponent(key));
+  const [data, epics] = await Promise.all([getTask(decodeURIComponent(key)), listEpics()]);
   if (!data) notFound();
   const { task, blockers, blocking } = data;
   const t = await getTranslations("admin.cc");
@@ -44,6 +46,13 @@ export default async function TaskPage({ params }: { params: Promise<{ locale: s
       <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-4 md:col-span-2">
           <Card title={task.summary}>
+            {task.epicRef && (
+              <p className="mb-3 text-sm">
+                <Link href={`/admin/control/epics/${task.epicRef.key}`} className="text-brand hover:underline">
+                  {t("form.epicOf")}: {task.epicRef.title}
+                </Link>
+              </p>
+            )}
             {task.details && <p className="whitespace-pre-line text-sm">{task.details}</p>}
             <h3 className="h3 mt-4 mb-2">{t("requirements")}</h3>
             <ul className="space-y-1.5 text-sm">
@@ -54,6 +63,24 @@ export default async function TaskPage({ params }: { params: Promise<{ locale: s
                 </li>
               ))}
             </ul>
+            {task.design && (
+              <>
+                <h3 className="h3 mt-4 mb-2">{t("form.design")}</h3>
+                <p className="whitespace-pre-line text-sm">{task.design}</p>
+              </>
+            )}
+            {task.qaNotes && (
+              <>
+                <h3 className="h3 mt-4 mb-2">{t("form.qaNotes")}</h3>
+                <p className="whitespace-pre-line text-sm">{task.qaNotes}</p>
+              </>
+            )}
+            {task.deployNotes && (
+              <>
+                <h3 className="h3 mt-4 mb-2">{t("form.deployNotes")}</h3>
+                <p className="whitespace-pre-line text-sm">{task.deployNotes}</p>
+              </>
+            )}
             {task.needs.length > 0 && (
               <>
                 <h3 className="h3 mt-4 mb-2">{t("needs")}</h3>
@@ -104,16 +131,20 @@ export default async function TaskPage({ params }: { params: Promise<{ locale: s
             <TaskEditorForm
               isNew={false}
               canDelete={task.source === "ui"}
+              epics={epics.map((e) => ({ key: e.key, title: e.title }))}
               initial={{
                 key: task.key,
                 title: task.title,
                 summary: task.summary,
                 details: task.details ?? "",
                 requirements: task.requirements.join("\n"),
+                design: task.design ?? "",
+                qaNotes: task.qaNotes ?? "",
+                deployNotes: task.deployNotes ?? "",
                 needs: task.needs.join("\n"),
                 depends: task.depends.join("\n"),
                 docs: task.docs.join("\n"),
-                epic: task.epic,
+                epicKey: task.epicKey ?? "",
                 area: task.area,
                 layer: task.layer,
                 priority: task.priority,
@@ -122,6 +153,10 @@ export default async function TaskPage({ params }: { params: Promise<{ locale: s
                 estimate: task.estimate ?? "",
               }}
             />
+          </Card>
+
+          <Card title={t("form.files")}>
+            <Attachments subject={{ taskKey: task.key }} items={task.attachments} />
           </Card>
 
           <Card title={t("comments")}>

@@ -449,13 +449,23 @@ model Task {
   details       String?
   /// Критерии приёмки
   requirements  String[]  @default([])
+  /// Дизайн: требования и заметки к интерфейсу, при необходимости
+  design        String?
+  /// Проверка и тестирование: что и как проверено
+  qaNotes       String?
+  /// Готовность к деплою: миграции, флаги, порядок выкладки
+  deployNotes   String?
   /// Что нужно от продукта: аккаунты, документы, решения
   needs         String[]  @default([])
   /// Ключи задач, от которых зависит эта
   depends       String[]  @default([])
   /// Ссылки на документы и файлы
   docs          String[]  @default([])
-  epic          String
+  /// Метка эпика для старых карточек (человекочитаемая строка) — реальная связь через epicKey
+  epic          String?
+  /// Ключ эпика (Epic.key). Пусто — простая задача без эпика
+  epicKey       String?
+  epicRef       Epic?     @relation(fields: [epicKey], references: [key])
   area          String
   /// back | front | fullstack | infra | none
   layer         String
@@ -485,10 +495,67 @@ model Task {
 
   comments      TaskComment[]
   events        TaskEvent[]
+  attachments   Attachment[]
 
   @@index([status, priority])
   @@index([stage])
   @@index([area])
+  @@index([epicKey])
+}
+
+/// Эпик — крупная область работы с собственными требованиями, дизайном, статусом проверки и готовности к деплою.
+/// Задачи привязываются через Task.epicKey; задача без эпика — «простая задача».
+model Epic {
+  id           String   @id @default(cuid())
+  key          String   @unique
+  title        String
+  summary      String
+  /// Продуктовые требования к эпику целиком
+  requirements String[] @default([])
+  /// Дизайн: принципы, ссылки на макеты, что должно быть видно пользователю
+  design       String?
+  /// Технические заметки: стек, архитектура, алгоритм — при необходимости
+  techNotes    String?
+  /// Как проверяем, что эпик готов
+  testingNotes String?
+  /// Что нужно для деплоя: миграции, флаги, порядок выкладки
+  deployNotes  String?
+  /// planned | in_progress | testing | ready | done
+  status       String   @default("planned")
+  /// Ключи эпиков, от которых зависит этот
+  depends      String[] @default([])
+  /// Ссылки на документы
+  docs         String[] @default([])
+  sort         Int      @default(0)
+  /// code — из src/server/backlog.ts, ui — создан или отредактирован в админке
+  source       String   @default("code")
+  createdBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tasks        Task[]
+  attachments  Attachment[]
+
+  @@index([status])
+}
+
+/// Файл, прикреплённый к задаче или эпику (макет, документ, скриншот) — хранится в томе uploads,
+/// который уже входит в ночной бэкап (deploy/backup.sh)
+model Attachment {
+  id         String   @id @default(cuid())
+  taskId     String?
+  task       Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  epicKey    String?
+  epic       Epic?    @relation(fields: [epicKey], references: [key], onDelete: Cascade)
+  fileName   String
+  url        String
+  size       Int
+  mime       String
+  uploadedBy String
+  createdAt  DateTime @default(now())
+
+  @@index([taskId])
+  @@index([epicKey])
 }
 
 /// Комментарий или отчёт по задаче

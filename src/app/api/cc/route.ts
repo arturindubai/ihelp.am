@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { claimNext, heartbeat, listTasks, releaseTask, addComment } from "@/server/services/cc";
+import { listEpics, getEpic } from "@/server/services/epics";
 
 /**
- * API задач Control Center для агентов. Ключ — заголовок x-cc-key (CC_AGENT_KEY в .env).
+ * API задач Control Center для агентов и других рабочих сессий. Ключ — заголовок x-cc-key (CC_AGENT_KEY в .env).
  * Пустой ключ в окружении полностью выключает API.
  *
- *   GET  /api/cc?status=backlog&area=back            — список задач
+ *   GET  /api/cc?status=backlog&area=back             — список задач (у каждой — epicKey и epicTitle)
+ *   GET  /api/cc?resource=epics                       — список эпиков: требования, дизайн, техзаметки, статус
+ *   GET  /api/cc?resource=epics&key=command-center     — один эпик целиком, со связанными задачами
  *   POST /api/cc  {"action":"claim","agent":"...","area":"back"}      — взять задачу в работу (аренда 60 минут)
  *   POST /api/cc  {"action":"heartbeat","agent":"...","key":"AUTH-1"} — продлить аренду
  *   POST /api/cc  {"action":"report","agent":"...","key":"AUTH-1","text":"...","status":"review"} — отчёт и передача человеку
@@ -22,6 +25,19 @@ const deny = () => NextResponse.json({ error: "forbidden" }, { status: 403 });
 export async function GET(req: Request) {
   if (!authorized(req)) return deny();
   const p = new URL(req.url).searchParams;
+
+  if (p.get("resource") === "epics") {
+    if (p.get("key")) {
+      const data = await getEpic(p.get("key") as string);
+      if (!data) return NextResponse.json({ error: "not_found" }, { status: 404 });
+      return NextResponse.json({ epic: data.epic, tasks: data.epic.tasks, blockers: data.blockers, blocking: data.blocking });
+    }
+    const epics = await listEpics({ status: p.get("status") ?? undefined });
+    return NextResponse.json({
+      epics: epics.map((e) => ({ key: e.key, title: e.title, summary: e.summary, requirements: e.requirements, status: e.status, taskTotal: e.taskTotal, taskDone: e.taskDone })),
+    });
+  }
+
   const tasks = await listTasks({
     status: p.get("status") ?? undefined,
     area: p.get("area") ?? undefined,
@@ -36,6 +52,9 @@ export async function GET(req: Request) {
       summary: t.summary,
       details: t.details,
       requirements: t.requirements,
+      design: t.design,
+      qaNotes: t.qaNotes,
+      deployNotes: t.deployNotes,
       depends: t.depends,
       area: t.area,
       layer: t.layer,
@@ -43,6 +62,7 @@ export async function GET(req: Request) {
       stage: t.stage,
       status: t.status,
       claimedBy: t.claimedBy,
+      epicKey: t.epicKey,
     })),
   });
 }

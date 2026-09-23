@@ -3,7 +3,7 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { ccDeleteTaskAction, ccSaveTaskAction } from "@/server/actions/admin/cc";
-import { AREAS, EPICS, LAYERS, OWNERS, PRIORITIES, STAGES } from "@/lib/backlog-labels";
+import { AREAS, LAYERS, OWNERS, PRIORITIES, STAGES } from "@/lib/backlog-labels";
 import { TextInput } from "@/components/admin/fields";
 
 export interface TaskFormValue {
@@ -12,10 +12,13 @@ export interface TaskFormValue {
   summary: string;
   details: string;
   requirements: string;
+  design: string;
+  qaNotes: string;
+  deployNotes: string;
   needs: string;
   depends: string;
   docs: string;
-  epic: string;
+  epicKey: string;
   area: string;
   layer: string;
   priority: string;
@@ -30,10 +33,13 @@ export const EMPTY_TASK: TaskFormValue = {
   summary: "",
   details: "",
   requirements: "",
+  design: "",
+  qaNotes: "",
+  deployNotes: "",
   needs: "",
   depends: "",
   docs: "",
-  epic: EPICS[0],
+  epicKey: "",
   area: "product",
   layer: "fullstack",
   priority: "p1",
@@ -45,7 +51,7 @@ export const EMPTY_TASK: TaskFormValue = {
 const toLines = (v: string) => v.split("\n").map((l) => l.trim()).filter(Boolean);
 
 /** Форма задачи: создание новой и правка существующей. Правка переводит задачу на ручное ведение */
-export function TaskEditorForm({ initial, isNew, canDelete }: { initial: TaskFormValue; isNew: boolean; canDelete?: boolean }) {
+export function TaskEditorForm({ initial, isNew, canDelete, epics }: { initial: TaskFormValue; isNew: boolean; canDelete?: boolean; epics: { key: string; title: string }[] }) {
   const t = useTranslations("admin.cc");
   const [v, setV] = useState(initial);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +78,20 @@ export function TaskEditorForm({ initial, isNew, canDelete }: { initial: TaskFor
     </div>
   );
 
+  const epicSelect = (
+    <div>
+      <label className="label">{t("epic")}</label>
+      <select className="input" value={v.epicKey} onChange={(e) => set({ epicKey: e.target.value })}>
+        <option value="">{t("form.noEpic")}</option>
+        {epics.map((e) => (
+          <option key={e.key} value={e.key}>
+            {e.title}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
   const area = (field: keyof TaskFormValue, label: string, hint?: string, rows = 4) => (
     <div>
       <label className="label">{label}</label>
@@ -90,10 +110,13 @@ export function TaskEditorForm({ initial, isNew, canDelete }: { initial: TaskFor
           summary: v.summary,
           details: v.details || null,
           requirements: toLines(v.requirements),
+          design: v.design || null,
+          qaNotes: v.qaNotes || null,
+          deployNotes: v.deployNotes || null,
           needs: toLines(v.needs),
           depends: toLines(v.depends.replace(/,/g, "\n")),
           docs: toLines(v.docs),
-          epic: v.epic,
+          epicKey: v.epicKey || null,
           area: v.area,
           layer: v.layer,
           priority: v.priority,
@@ -117,13 +140,18 @@ export function TaskEditorForm({ initial, isNew, canDelete }: { initial: TaskFor
       {area("summary", t("form.summary"), t("form.summaryHint"), 3)}
       {area("details", t("form.details"), undefined, 4)}
       {area("requirements", t("form.requirements"), t("form.perLine"), 4)}
+      <div className="grid gap-3 sm:grid-cols-3">
+        {area("design", t("form.design"), t("form.designHint"), 3)}
+        {area("qaNotes", t("form.qaNotes"), t("form.qaNotesHint"), 3)}
+        {area("deployNotes", t("form.deployNotes"), t("form.deployNotesHint"), 3)}
+      </div>
       {area("needs", t("form.needs"), t("form.perLine"), 3)}
       <div className="grid gap-3 sm:grid-cols-2">
         {area("depends", t("form.depends"), t("form.dependsHint"), 2)}
         {area("docs", t("form.docs"), t("form.perLine"), 2)}
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
-        {select("epic", EPICS, t("epic"))}
+        {epicSelect}
         {select("area", AREAS, t("area"))}
         {select("layer", LAYERS, t("layer"))}
         {select("priority", PRIORITIES, t("priority"))}
