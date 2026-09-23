@@ -10,6 +10,8 @@ import { invalidateUiCache, saveSettingsSection, getSettings, SECRET_PATHS, type
 import { notifyTeam, notifyTech } from "../../notify";
 import { envContacts } from "../../contacts";
 import { sendMail, mailTemplate } from "../../services/mail";
+import { registerTelegramWebhook } from "../../services/telegramBot";
+import { telegramWebhookSecret } from "@/lib/telegramAuth";
 import { normalizePhone } from "@/lib/phone";
 
 const i18n = z.object({ ru: z.string().max(20000).optional(), en: z.string().max(20000).optional(), am: z.string().max(20000).optional() }).partial();
@@ -208,6 +210,18 @@ export async function testNotifyAction() {
   await notifyTeam("✅ Тестовое уведомление");
   if (s.notify.techChatId) await notifyTech("✅ Тестовое уведомление (тех-чат)");
   return { ok: true };
+}
+
+/** Подключить вход через Telegram-бота (AUTH-10): регистрирует вебхук на текущем APP_URL */
+export async function registerTelegramWebhookAction() {
+  const u = await requireSection("settings");
+  const appUrl = process.env.APP_URL;
+  if (!appUrl || !appUrl.startsWith("https://")) return { ok: false as const, error: "https" };
+  const secret = telegramWebhookSecret(process.env.SESSION_SECRET || "dev");
+  const r = await registerTelegramWebhook(appUrl, secret);
+  if (!r.ok) return { ok: false as const, error: "telegram" };
+  await audit(u.id, "settings.telegramWebhook", "Setting", "notify");
+  return { ok: true as const, username: r.username };
 }
 
 /* ───── Сотрудники ───── */

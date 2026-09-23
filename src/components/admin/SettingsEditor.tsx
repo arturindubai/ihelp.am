@@ -1,7 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { saveSettingsAction, testMailAction, testNotifyAction } from "@/server/actions/admin/misc";
+import { saveSettingsAction, testMailAction, testNotifyAction, registerTelegramWebhookAction } from "@/server/actions/admin/misc";
 import type { Settings } from "@/server/settings";
 import type { ContactKey } from "@/lib/contacts";
 import { Card, I18nInput, NumInput, TextInput, Toggle } from "./fields";
@@ -24,6 +24,7 @@ export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardInte
   const [sent, setSent] = useState(false);
   const [mailTo, setMailTo] = useState("");
   const [mailSent, setMailSent] = useState<string | null>(null);
+  const [tgWebhook, setTgWebhook] = useState<string | null>(null);
   const set = <K extends keyof Settings>(k: K, v: Partial<Settings[K]>) => setS((x) => ({ ...x, [k]: { ...x[k], ...v } }));
   const b = s.brand, bk = s.booking, pr = s.pricing, o = s.otp;
   const contact = (k: ContactKey, type = "text") => {
@@ -169,7 +170,20 @@ export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardInte
           <TextInput label={t("chatId")} value={s.notify.telegramChatId} onChange={(v) => set("notify", { telegramChatId: v })} />
           <TextInput label={t("techChatId")} hint={t("techChatHint")} value={s.notify.techChatId} onChange={(v) => set("notify", { techChatId: v })} />
         </div>
-        <button className="btn-outline btn-sm mt-3" onClick={async () => { await testNotifyAction(); setSent(true); }}>{sent ? t("testSent") : t("testNotify")}</button>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button className="btn-outline btn-sm" onClick={async () => { await testNotifyAction(); setSent(true); }}>{sent ? t("testSent") : t("testNotify")}</button>
+          <button
+            className="btn-outline btn-sm"
+            onClick={async () => {
+              const r = await registerTelegramWebhookAction();
+              setTgWebhook(r.ok ? t("tgWebhookOk", { username: r.username ? `@${r.username}` : "" }) : t(`tgWebhookError.${r.error}` as "tgWebhookError.https"));
+            }}
+          >
+            {t("tgWebhookConnect")}
+          </button>
+          {tgWebhook && <span className="text-xs text-muted">{tgWebhook}</span>}
+        </div>
+        <p className="mt-2 text-xs text-muted">{t("tgWebhookHint")}</p>
       </Section>
     </div>
   );
