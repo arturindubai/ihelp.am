@@ -198,12 +198,18 @@
       "google_off": "Вход через Google сейчас выключен",
       "google_state": "Сессия входа устарела, попробуйте ещё раз",
       "google_failed": "Google не подтвердил вход. Попробуйте ещё раз",
-      "google_not_linked": "Этот Google-аккаунт не привязан. Войдите по номеру телефона и укажите эту почту в профиле"
+      "google_not_linked": "Этот Google-аккаунт не привязан. Войдите по номеру телефона и укажите эту почту в профиле",
+      "apple_off": "Вход через Apple сейчас выключен",
+      "apple_state": "Сессия входа устарела, попробуйте ещё раз",
+      "apple_failed": "Apple не подтвердил вход. Попробуйте ещё раз",
+      "apple_not_linked": "Этот Apple ID не привязан. Войдите по номеру телефона и укажите эту почту в профиле"
     },
     "noChannels": "Вход временно недоступен",
     "smsText": "{brand}: код для входа {code}",
     "google": "Войти через Google",
-    "googleHint": "Для сотрудников: вход по рабочей почте, указанной в профиле"
+    "googleHint": "Для сотрудников: вход по рабочей почте, указанной в профиле",
+    "apple": "Войти через Apple",
+    "appleHint": "Для тех, у кого эта почта уже указана в профиле"
   },
   "account": {
     "title": "Профиль",
@@ -705,6 +711,14 @@
       "clientSecret": "Client Secret",
       "googleRedirect": "Адрес возврата для Google Cloud Console",
       "googleHint": "Работает только по https: сначала домен и сертификат. Пускаем только тех, у кого этот email указан в профиле",
+      "apple": "Вход через Apple",
+      "appleEnabled": "Разрешить вход через Apple",
+      "appleTeamId": "Team ID",
+      "appleKeyId": "Key ID",
+      "appleClientId": "Services ID (Client ID)",
+      "applePrivateKey": "Приватный ключ (.p8)",
+      "appleRedirect": "Адрес возврата для Apple Developer",
+      "appleHint": "Работает только по https: сначала домен и сертификат. Пускаем только тех, у кого этот email указан в профиле",
       "mail": "Почта (Resend)",
       "mailEnabled": "Отправлять письма",
       "mailApiKey": "Ключ API",

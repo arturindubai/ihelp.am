@@ -31,6 +31,9 @@ export interface Settings {
   notify: { telegramBotToken: string; telegramChatId: string; techChatId: string };
   /** Вход через Google (OAuth). Адрес возврата: <APP_URL>/api/auth/google/callback — работает только по https */
   google: { enabled: boolean; clientId: string; clientSecret: string };
+  /** Вход через Apple (Sign in with Apple). Адрес возврата: <APP_URL>/api/auth/apple/callback — работает только по https.
+   *  clientId — Services ID из Apple Developer, privateKey — содержимое .p8 целиком */
+  apple: { enabled: boolean; teamId: string; keyId: string; clientId: string; privateKey: string };
   /** Отправка писем через Resend: домен должен быть подтверждён в кабинете сервиса */
   mail: { enabled: boolean; apiKey: string; from: string; replyTo: string };
 }
@@ -70,11 +73,12 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   notify: { telegramBotToken: "", telegramChatId: "", techChatId: "" },
   google: { enabled: false, clientId: "", clientSecret: "" },
+  apple: { enabled: false, teamId: "", keyId: "", clientId: "", privateKey: "" },
   mail: { enabled: false, apiKey: "", from: "", replyTo: "" },
 };
 
 /** Ключи интеграций: в базе и бэкапах хранятся зашифрованными (ключ SETTINGS_ENCRYPTION_KEY — в .env, в бэкапы не попадает) */
-export const SECRET_PATHS = ["otp.sms.authToken", "otp.whatsapp.accessToken", "otp.telegram.gatewayToken", "notify.telegramBotToken", "google.clientSecret", "mail.apiKey"];
+export const SECRET_PATHS = ["otp.sms.authToken", "otp.whatsapp.accessToken", "otp.telegram.gatewayToken", "notify.telegramBotToken", "google.clientSecret", "apple.privateKey", "mail.apiKey"];
 
 /** Оплата картой включается после интеграции эквайринга (задача PAY-1). До этого переключатель в админке заблокирован */
 export const CARD_PAYMENTS_INTEGRATED = false;

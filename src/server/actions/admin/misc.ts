@@ -170,7 +170,7 @@ export async function saveUiStringAction(locale: string, key: string, value: str
 
 /* ───── Настройки ───── */
 
-const SETTING_KEYS = ["brand", "locales", "booking", "pricing", "payments", "otp", "notify", "google", "mail"] as const;
+const SETTING_KEYS = ["brand", "locales", "booking", "pricing", "payments", "otp", "notify", "google", "apple", "mail"] as const;
 
 export async function saveSettingsAction<K extends keyof Settings>(key: K, value: Settings[K]) {
   const u = await requireSection("settings");

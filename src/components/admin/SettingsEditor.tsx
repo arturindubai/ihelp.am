@@ -18,7 +18,7 @@ function Section<K extends keyof Settings>({ k, title, value, children, hint }: 
   );
 }
 
-export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardIntegrated = false, googleRedirect = "" }: { initial: Settings; devMode: boolean; lockedContacts?: Partial<Record<ContactKey, string>>; cardIntegrated?: boolean; googleRedirect?: string }) {
+export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardIntegrated = false, googleRedirect = "", appleRedirect = "" }: { initial: Settings; devMode: boolean; lockedContacts?: Partial<Record<ContactKey, string>>; cardIntegrated?: boolean; googleRedirect?: string; appleRedirect?: string }) {
   const t = useTranslations("admin.settings");
   const [s, setS] = useState(initial);
   const [sent, setSent] = useState(false);
@@ -121,6 +121,25 @@ export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardInte
         {googleRedirect && (
           <p className="mt-2 text-xs text-muted">
             {t("googleRedirect")}: <code className="font-mono">{googleRedirect}</code>
+          </p>
+        )}
+      </Section>
+
+      <Section k="apple" title={t("apple")} value={s.apple} hint={t("appleHint")}>
+        <Toggle label={t("appleEnabled")} checked={s.apple.enabled} onChange={(v) => set("apple", { enabled: v })} />
+        <div className="mt-2 grid gap-2 md:grid-cols-2">
+          <TextInput label={t("appleTeamId")} value={s.apple.teamId} onChange={(v) => set("apple", { teamId: v })} />
+          <TextInput label={t("appleKeyId")} value={s.apple.keyId} onChange={(v) => set("apple", { keyId: v })} />
+          <TextInput label={t("appleClientId")} value={s.apple.clientId} onChange={(v) => set("apple", { clientId: v })} />
+        </div>
+        <div className="mt-2">
+          <label className="label">{t("applePrivateKey")}</label>
+          <textarea className="input min-h-24 py-2 font-mono text-xs" value={s.apple.privateKey} onChange={(e) => set("apple", { privateKey: e.target.value })} placeholder="-----BEGIN PRIVATE KEY-----" />
+          <p className="mt-1 text-xs text-muted">{t("secretHint")}</p>
+        </div>
+        {appleRedirect && (
+          <p className="mt-2 text-xs text-muted">
+            {t("appleRedirect")}: <code className="font-mono">{appleRedirect}</code>
           </p>
         )}
       </Section>
