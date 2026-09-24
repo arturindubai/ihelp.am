@@ -36,6 +36,7 @@ interface NotifySettings {
   telegramBotToken: string;
   telegramChatId: string;
   techChatId: string;
+  telegramBotUsername?: string;
 }
 
 const row = await db.setting.findUnique({ where: { key: "notify" } });
@@ -62,5 +63,10 @@ await tg("setWebhook", { url: webhookUrl, secret_token: secret, allowed_updates:
 const me = await tg<{ username?: string }>("getMe", {});
 console.log(`[tg] вебхук зарегистрирован: ${webhookUrl}`);
 console.log(`[tg] бот: @${me.username}`);
+// Имя бота — для кнопки «Войти через Telegram» на сайте (AUTH-11)
+if (me.username) {
+  const saved = { ...next, telegramBotUsername: me.username };
+  await db.setting.upsert({ where: { key: "notify" }, create: { key: "notify", value: saved }, update: { value: saved } });
+}
 
 await db.$disconnect();

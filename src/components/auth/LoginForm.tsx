@@ -5,30 +5,57 @@ import { Mail, MessageCircle, Send, Smartphone } from "lucide-react";
 import { completeSignupAction, sendCodeAction, sendEmailLoginCodeAction, verifyCodeAction, verifyEmailLoginCodeAction } from "@/server/actions/auth";
 import { formatPhone } from "@/lib/phone";
 import { Link } from "@/i18n/navigation";
+import { SignupCompletion } from "./SignupCompletion";
 
 type Channel = "SMS" | "WHATSAPP" | "TELEGRAM";
 type Method = "phone" | "email";
 const ICONS = { WHATSAPP: MessageCircle, TELEGRAM: Send, SMS: Smartphone };
 
-/** Способы входа: коды на телефон (channels) и код из письма (emailEnabled). Если способ один — сразу он, иначе выбор */
-export function LoginForm({ channels, emailEnabled = false, onDone }: { channels: Channel[]; emailEnabled?: boolean; onDone: (role: string) => void }) {
+/**
+ * Способы входа: Telegram-бот (telegramBot — имя бота), код из письма (emailEnabled), коды на телефон (channels).
+ * Если способ один — сразу он, иначе выбор. signup — тикет регистрации: номер уже подтверждён (бот или код),
+ * остаются имя и email с кодом из письма (AUTH-11).
+ */
+export function LoginForm({
+  channels,
+  emailEnabled = false,
+  telegramBot,
+  signup: initialSignup,
+  onDone,
+}: {
+  channels: Channel[];
+  emailEnabled?: boolean;
+  telegramBot?: string | null;
+  signup?: { ticket: string; phone: string };
+  onDone: (role: string) => void;
+}) {
   const t = useTranslations("auth");
   const methods: Method[] = [...(emailEnabled ? (["email"] as const) : []), ...(channels.length ? (["phone"] as const) : [])];
-  const [method, setMethod] = useState<Method | null>(methods.length === 1 ? methods[0] : null);
+  const [method, setMethod] = useState<Method | null>(methods.length === 1 && !telegramBot ? methods[0] : null);
+  const [signup, setSignup] = useState(initialSignup);
 
-  if (!methods.length) return <p className="text-muted">{t("noChannels")}</p>;
-  const back = methods.length > 1 ? () => setMethod(null) : undefined;
+  if (signup) return <SignupCompletion ticket={signup.ticket} phone={signup.phone} emailEnabled={emailEnabled} onDone={onDone} />;
+  if (!methods.length && !telegramBot) return <p className="text-muted">{t("noChannels")}</p>;
+  const back = methods.length + (telegramBot ? 1 : 0) > 1 ? () => setMethod(null) : undefined;
 
   if (method === "email") return <EmailLogin onDone={onDone} onBack={back} />;
-  if (method === "phone") return <PhoneLogin channels={channels} onDone={onDone} onBack={back} />;
+  if (method === "phone") return <PhoneLogin channels={channels} onDone={onDone} onBack={back} onSignup={(ticket, phone) => setSignup({ ticket, phone })} />;
   return (
     <div>
       <p className="mb-2 text-sm font-medium">{t("chooseMethod")}</p>
       <div className="grid gap-2">
+        {telegramBot && (
+          <div>
+            <a className="btn-primary w-full" href={`https://t.me/${telegramBot}?start=login`} target="_blank" rel="noopener">
+              <Send size={18} /> {t("telegram")}
+            </a>
+            <p className="mt-1 text-center text-xs text-muted">{t("telegramHint")}</p>
+          </div>
+        )}
         {methods.map((m) => {
           const I = m === "email" ? Mail : Smartphone;
           return (
-            <button key={m} className={m === methods[0] ? "btn-primary" : "btn-outline"} onClick={() => setMethod(m)}>
+            <button key={m} className={m === methods[0] && !telegramBot ? "btn-primary" : "btn-outline"} onClick={() => setMethod(m)}>
               <I size={18} /> {t(`method.${m}`)}
             </button>
           );
@@ -138,7 +165,7 @@ function EmailLogin({ onDone, onBack }: { onDone: (role: string) => void; onBack
   );
 }
 
-function PhoneLogin({ channels, onDone, onBack }: { channels: Channel[]; onDone: (role: string) => void; onBack?: () => void }) {
+function PhoneLogin({ channels, onDone, onBack, onSignup }: { channels: Channel[]; onDone: (role: string) => void; onBack?: () => void; onSignup: (ticket: string, phone: string) => void }) {
   const t = useTranslations("auth");
   const tc = useTranslations("common");
   const locale = useLocale();
@@ -188,6 +215,7 @@ function PhoneLogin({ channels, onDone, onBack }: { channels: Channel[]; onDone:
     start(async () => {
       const r = await verifyCodeAction(normalized, value, locale);
       if (!r.ok) { verifying.current = ""; return setError(errText(r.error)); }
+      if (r.needSignup) return onSignup(r.signupTicket, r.phone);
       setRole(r.role);
       if (r.needName) { setTicket(r.ticket || ""); setStep("name"); }
       else onDone(r.role);

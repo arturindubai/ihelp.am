@@ -16,12 +16,14 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
   const ta = useTranslations("address");
   const tc = useTranslations("common");
   const tn = useTranslations("nav");
+  const ta2 = useTranslations("auth");
   const router = useRouter();
   const [form, setForm] = useState({ name: user.name || "", email: user.email || "", locale: user.locale });
   const [saved, setSaved] = useState(false);
   // Какой адрес сохранён и подтверждён: подтверждать можно только сохранённый, смена адреса сбрасывает подтверждение
   const [savedEmail, setSavedEmail] = useState((user.email || "").trim().toLowerCase());
   const [emailVerified, setEmailVerified] = useState(user.emailVerified);
+  const [saveError, setSaveError] = useState<string>();
   const [addresses, setAddresses] = useState(initial);
   const [edit, setEdit] = useState<Partial<AddressRow> | null>(null);
   const [pending, start] = useTransition();
@@ -34,13 +36,14 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
           e.preventDefault();
           start(async () => {
             const r = await updateProfileAction(form);
+            setSaveError(r.ok ? undefined : "error" in r ? r.error : "error");
             if (r.ok) {
               const next = form.email.trim().toLowerCase();
               if (next !== savedEmail) setEmailVerified(false);
               setSavedEmail(next);
+              setSaved(true);
+              setTimeout(() => setSaved(false), 2000);
             }
-            setSaved(true);
-            setTimeout(() => setSaved(false), 2000);
           });
         }}>
           <div><label className="label">{t("phone")}</label><input className="input bg-surface" disabled value={formatPhone(user.phone)} /></div>
@@ -55,6 +58,7 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
               </select>
             </div>
           )}
+          {saveError && <p className="text-sm text-bad">{saveError === "email_taken" ? ta2("errors.email_taken") : tc("error")}</p>}
           <button className="btn-dark w-full" disabled={pending}>{saved ? tc("saved") : tc("save")}</button>
         </form>
       </section>
