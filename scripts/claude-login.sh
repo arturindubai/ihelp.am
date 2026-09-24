@@ -25,9 +25,11 @@ check() {
   local tok
   tok=$(grep -E '^CLAUDE_CODE_OAUTH_TOKEN=' "$env" | tail -n 1 | cut -d= -f2-)
   [ -n "$tok" ] || { echo "✗ Токена нет: scripts/claude-login.sh"; return 1; }
-  local out
+  local out code
   out=$(cd /tmp && env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN="$tok" timeout 120 claude -p "Ответь одним словом: работает" --model haiku --output-format text --strict-mcp-config 2>&1)
-  if grep -qi "работает" <<< "$out"; then
+  code=$?
+  # Модель может ответить своими словами («Готов», «Работает!») — важно лишь, что ответила без отказа входа
+  if [ "$code" -eq 0 ] && [ -n "$out" ] && ! grep -qiE "not logged in|/login|failed to authenticate|authentication_error|invalid.*token|\b401\b" <<< "$out"; then
     echo "✓ Вход работает: воркеры будут тратить лимит подписки Claude"
   else
     echo "✗ Вход не работает: ${out:0:200}"
