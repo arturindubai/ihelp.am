@@ -3,6 +3,7 @@ import { attention, getTask, listTasks, annotate, saveTask } from "@/server/serv
 import { CcError, agentActor, agentNote, claim, heartbeat, markTriaged, reviewRelease, reviewTake, testPass, transition, type TransitionInput } from "@/server/services/ccWork";
 import { dispatchPlan, pauseWorkers, runFinish, runStart, tickLog, triageQueue, workersOverview } from "@/server/services/workers";
 import { sendMessage, takeInbox } from "@/server/services/ccMessages";
+import { intakeCreate } from "@/server/services/ccBoard";
 import { listEpics, getEpic } from "@/server/services/epics";
 import { DESIGNER_FIELDS, taskContentSchema } from "@/lib/cc-schema";
 import { roleOf, type TaskStatusKey } from "@/lib/cc-flow";
@@ -22,6 +23,7 @@ import type { Task } from "@prisma/client";
  *   GET  /api/cc?resource=inbox&agent=dev-1   — непрочитанные сообщения роли агента (отмечаются прочитанными)
  *   POST /api/cc {"action":"triaged","agent":"triage","key":"IN-3","text":"вердикт"} — карточка разобрана триажем
  *   POST /api/cc {"action":"message","agent":"triage","to":"owner","text":"…"[,"key":"AUTH-1"]} — сообщение роли
+ *   POST /api/cc {"action":"intake","agent":"chat","text":"что и зачем"} — новая работа в очередь триажа карточкой IN-N
  *   POST /api/cc {"action":"claim","agent":"dev-1"[,"key":"AUTH-1"]}  — взять задачу (аренда 60 минут, пульс продлевает)
  *   POST /api/cc {"action":"heartbeat","agent":"dev-1","key":"AUTH-1"} — пульс
  *   POST /api/cc {"action":"note","agent":"dev-1","key":"AUTH-1","text":"…","kind":"progress|error|note"}
@@ -235,6 +237,15 @@ export async function POST(req: Request) {
         if (!key) return json({ error: "key_required" }, 400);
         await markTriaged(key, agent, text);
         return json({ ok: true });
+      }
+      // Чат получил от человека новую работу: не исполняет сам, а кладёт в очередь триажа
+      case "intake": {
+        try {
+          const task = await intakeCreate(text, agent);
+          return json({ ok: true, key: task.key });
+        } catch (e) {
+          return json({ error: (e as Error).message }, 400);
+        }
       }
       case "message": {
         const to = str(body.to) ?? "owner";

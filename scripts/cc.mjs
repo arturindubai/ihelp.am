@@ -41,6 +41,9 @@ const HELP = `cc — Control Center из командной строки (docs/D
   triaged КЛЮЧ "вердикт"                        карточка разобрана: вердикт в ленту, из очереди триажа уходит
   (в очередь — ready, вопрос — block --on owner|product, поправить поля — update --file)
 
+Новая работа (любой чат — вместо того чтобы делать её сразу):
+  intake "что нужно и зачем"                    карточка IN-N в очередь триажа; дальше — триаж и воркеры
+
 Сообщения:
   msg "текст" --to owner|cto|workers|triage|dev|tester|deployer [--key КЛЮЧ]
   inbox                                         непрочитанные сообщения твоей роли (отмечаются прочитанными)
@@ -566,6 +569,15 @@ async function main() {
       if (text().length < 10) die("нужен вердикт словами: что проверено и что решено (в очередь, вопрос, отложено, разбито на …)");
       await api("POST", null, { action: "triaged", agent: agentFor(k), key: k, text: text() });
       console.log(`✓ ${k} разобрана триажем`);
+      return;
+    }
+    case "intake": {
+      const body = pos.join(" ").trim();
+      if (body.length < 10) die('опишите работу хотя бы парой фраз: intake "что нужно и зачем"');
+      const agent = flags.agent && flags.agent !== true ? String(flags.agent) : process.env.CC_AGENT || "chat";
+      const r = await api("POST", null, { action: "intake", agent, text: body });
+      const app = (process.env.CC_URL ? "" : envValue("APP_URL")).replace(/\/$/, "");
+      console.log(`✓ ${r.key} в очереди триажа. Сама работа не начинается: триаж превратит текст в задачу, вопросы придут владельцу («Нужен ты»), готовое возьмут воркеры.${app ? `\n  ${app}/ru/admin/control?task=${r.key}` : ""}`);
       return;
     }
     case "msg": {
