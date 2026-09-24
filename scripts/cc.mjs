@@ -36,10 +36,19 @@ const HELP = `cc — Control Center из командной строки (docs/D
   pass КЛЮЧ "что проверено"                     протестировано (отметка на текущий коммит ветки)
   fail КЛЮЧ "что не так"                        вернуть разработчику
 
+Триаж (--agent triage; также cto и product):
+  triage                                        очередь триажа: карточки, которые ещё никто не разобрал
+  triaged КЛЮЧ "вердикт"                        карточка разобрана: вердикт в ленту, из очереди триажа уходит
+  (в очередь — ready, вопрос — block --on owner|product, поправить поля — update --file)
+
+Сообщения:
+  msg "текст" --to owner|cto|workers|triage|dev|tester|deployer [--key КЛЮЧ]
+  inbox                                         непрочитанные сообщения твоей роли (отмечаются прочитанными)
+
 Техдиректор и продукт (--agent cto | product):
   ready КЛЮЧ ["комментарий"]                    готова к работе (проверка готовности)
-  create --file задача.json                     завести задачу
-  update КЛЮЧ --file поля.json                  изменить тексты задачи
+  create --file задача.json                     завести задачу (или --data '{…}' — JSON прямо в команде)
+  update КЛЮЧ --file поля.json                  изменить тексты задачи (или --data '{…}')
   cancel КЛЮЧ "причина"
 
 Деплоер (--agent deployer):
@@ -534,11 +543,44 @@ async function main() {
     }
     case "create":
     case "update": {
-      if (!flags.file) die("нужен файл с полями задачи: --file task.json (поля — docs/DEV_SYSTEM.md, раздел «Как завести задачу»)");
-      const task = JSON.parse(fs.readFileSync(String(flags.file), "utf8"));
+      if (!flags.file && !flags.data) die("нужны поля задачи: --file task.json или --data '{\"summary\":\"…\"}' (поля — docs/DEV_SYSTEM.md, раздел «Как завести задачу»)");
+      let task;
+      try {
+        task = JSON.parse(flags.data ? String(flags.data) : fs.readFileSync(String(flags.file), "utf8"));
+      } catch (e) {
+        die(`поля задачи — не JSON: ${e.message}`);
+      }
       const k = cmd === "update" ? needKey() : undefined;
       const r = await api("POST", null, { action: cmd, agent: agentFor(k), key: k, task });
       console.log(`✓ ${r.task.key} ${cmd === "create" ? "заведена" : "обновлена"} · ${STATUS[r.task.status]}`);
+      return;
+    }
+    case "triage": {
+      const r = await api("GET", { resource: "triage" });
+      if (flags.json) return console.log(JSON.stringify(r.tasks, null, 2));
+      console.log(r.tasks.length ? r.tasks.map((t) => `${t.key.padEnd(12)} ${t.priority} ${t.status === "blocked" ? "✋ ответ владельца · " : ""}${t.title}`).join("\n") : "Очередь триажа пуста");
+      return;
+    }
+    case "triaged": {
+      const k = needKey();
+      if (text().length < 10) die("нужен вердикт словами: что проверено и что решено (в очередь, вопрос, отложено, разбито на …)");
+      await api("POST", null, { action: "triaged", agent: agentFor(k), key: k, text: text() });
+      console.log(`✓ ${k} разобрана триажем`);
+      return;
+    }
+    case "msg": {
+      const body = pos.join(" ").trim();
+      if (body.length < 2) die('нужен текст: msg "текст" --to owner');
+      const to = typeof flags.to === "string" ? flags.to : "owner";
+      const key = typeof flags.key === "string" ? flags.key.toUpperCase() : undefined;
+      await api("POST", null, { action: "message", agent: agentFor(key), to, key, text: body });
+      console.log(`✓ сообщение отправлено: ${to}`);
+      return;
+    }
+    case "inbox": {
+      const r = await api("GET", { resource: "inbox", agent: agentFor() });
+      if (flags.json) return console.log(JSON.stringify(r.messages, null, 2));
+      console.log(r.messages.length ? r.messages.map((m) => `[${m.at}] ${m.from}${m.key ? ` · ${m.key}` : ""}: ${m.text}`).join("\n") : "Новых сообщений нет");
       return;
     }
     case "worktrees": {

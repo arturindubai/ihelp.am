@@ -96,11 +96,15 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   if (!(STATUSES as Record<string, string>)[to]) throw new CcError("bad_status");
   const force = !!input.force && (actor.role === "owner" || actor.role === "cto");
   if (!canTransition(from, to, actor.role) && !force) throw new CcError("forbidden_transition", `${from}→${to}`);
+  // Триаж отменяет только входящие карточки IN-*, разобранные в настоящие задачи; остальное отменяет человек
+  if (actor.role === "triage" && to === "cancelled" && !key.startsWith("IN-")) throw new CcError("forbidden_transition", "triage: cancel IN-* only");
   if ((needsReason(from, to) || force) && text.length < 5) throw new CcError("reason_required");
   // Задачу в работе сдаёт, передаёт или блокирует только тот, кто её держит
   if (from === "in_progress" && actor.role === "dev" && task.claimedBy && task.claimedBy !== actor.name) throw new CcError("not_your_task", task.claimedBy);
 
   const data: Prisma.TaskUpdateManyMutationInput = { status: to };
+  // Решение по карточке из бэклога принято — триаж её больше не ждёт
+  if (from === "backlog" && ["owner", "cto", "product", "triage"].includes(actor.role)) Object.assign(data, { triagedAt: new Date(), triagedBy: actor.name });
   // В очередь разработчикам — только готовое: из бэклога, блокировки или отмены задача идёт через проверку готовности
   if (to === "ready" && ["backlog", "blocked", "cancelled"].includes(from) && actor.role !== "watchdog" && !force) {
     const failed = readiness(task, await closedKeys(), task._count.attachments).filter((i) => i.hard && !i.ok);
@@ -182,7 +186,7 @@ export type ClaimOptions = {
 export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Task | null> {
   const actor = agentActor(agent);
   // Деплоер задачи не берёт: кто выкладывает, тот не пишет — иначе пропадает вторая пара глаз
-  if (actor.role === "deployer" || actor.role === "watchdog") throw new CcError("forbidden_role", actor.role);
+  if (actor.role === "deployer" || actor.role === "watchdog" || actor.role === "triage") throw new CcError("forbidden_role", actor.role);
   const closed = await closedKeys();
   const now = new Date();
 
@@ -290,6 +294,29 @@ export async function heartbeat(key: string, agent: string, extra: { branch?: st
 }
 
 /** Запись в ленту задачи от агента. Запись исполнителя по своей задаче заодно считается пульсом */
+/**
+ * Итог триажа карточки: когда и кем разобрана, вердикт — в ленту. Статус меняется отдельными переходами
+ * (ready, block); здесь — только отметка, после которой карточка уходит из очереди триажа
+ */
+export async function markTriaged(key: string, agent: string, text: string) {
+  const role = roleOf(agent);
+  if (!["triage", "cto", "product", "owner"].includes(role)) throw new CcError("forbidden_role", role);
+  if (text.trim().length < 10) throw new CcError("reason_required");
+  const t = await db.task.findUnique({ where: { key }, select: { id: true } });
+  if (!t) throw new CcError("not_found");
+  await db.task.update({ where: { key }, data: { triagedAt: new Date(), triagedBy: agent, triageNote: text.trim().slice(0, 1000) } });
+  await say(t.id, agent, "triage", text);
+  await log(t.id, agent, "triaged", null, text.trim().slice(0, 120));
+}
+
+/** Человек ответил в ленте задачи, заблокированной на нём, или поправил карточку бэклога — триаж посмотрит её снова */
+export async function retriage(key: string) {
+  await db.task.updateMany({
+    where: { key, triagedAt: { not: null }, OR: [{ status: "backlog" }, { status: "blocked", blockedOn: { in: ["owner", "product"] } }] },
+    data: { triagedAt: null },
+  });
+}
+
 export async function agentNote(key: string, agent: string, kind: CommentKind, text: string) {
   const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, claimedBy: true } });
   if (!t) throw new CcError("not_found");

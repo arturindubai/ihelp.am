@@ -1,11 +1,11 @@
-# iHelp: диспетчер воркеров раз в 5 минут. Выключатель воркеров — в Control Center; этот таймер — страховка уровня сервера.
+# iHelp: диспетчер воркеров раз в минуту. Выключатель воркеров — в Control Center; этот таймер — страховка уровня сервера.
 [Unit]
-Description=iHelp: диспетчер воркеров раз в 5 минут
+Description=iHelp: диспетчер воркеров раз в минуту
 
 [Timer]
-OnBootSec=3min
-OnUnitActiveSec=5min
-AccuracySec=30s
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=10s
 
 [Install]
 WantedBy=timers.target

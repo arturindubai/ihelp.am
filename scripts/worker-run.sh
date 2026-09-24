@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Один запуск воркера: claude -p под подпиской Claude, в которую вошёл Claude Code на сервере, — не API.
 # Запускает диспетчер (scripts/dispatcher.mjs) через systemd-run; вручную запускать не нужно.
-#   scripts/worker-run.sh <dev|tester|deployer> <модель> <файл с заданием>
+#   scripts/worker-run.sh <triage|dev|tester|deployer> <модель> <файл с заданием>
 # Права: только инструменты своей роли. Код в прод попадает только через scripts/deploy-task.sh (деплоер),
 # .env и чужие проекты не читаются, в main напрямую не пушится. Ответ — JSON claude -p в stdout.
 set -uo pipefail
@@ -37,6 +37,12 @@ case "$role" in
   tester)
     # Тестировщик код не правит: проверяет и пишет вердикт
     deny+=("Edit" "Write" "MultiEdit" "Bash(git commit *)" "Bash(git push *)")
+    ;;
+  triage)
+    # Триаж только читает код и документы и работает с карточками через scripts/cc.mjs (поля — через --data)
+    allow=(Read Glob Grep TodoWrite "Bash(node scripts/cc.mjs *)" "Bash(git log *)" "Bash(git show *)" "Bash(git diff *)" "Bash(git status)"
+      "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(date)")
+    deny+=("Edit" "Write" "MultiEdit" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(cat >*)" "Bash(cat *>*)")
     ;;
   dev) ;;
   *) echo '{"is_error":true,"result":"неизвестная роль"}'; exit 2 ;;

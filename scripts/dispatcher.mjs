@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 /**
- * Диспетчер воркеров iHelp. Запускается таймером systemd (deploy/systemd/ihelp-dispatcher.timer) раз в 5 минут.
- * Сам токенов не тратит: смотрит очереди в Control Center и запускает claude -p только тогда, когда для воркера есть работа.
+ * Диспетчер воркеров iHelp. Запускается таймером systemd (deploy/systemd/ihelp-dispatcher.timer) раз в минуту.
+ * Сам токенов не тратит: смотрит очереди в Control Center и запускает claude -p только тогда, когда для воркера есть работа
+ * или человек нажал «Запустить сейчас».
  *
- * Проход: сверить работающие запуски с systemd (закончившиеся — записать итог, недоделанную задачу вернуть в очередь,
- * исчерпанный лимит подписки — пауза) → спросить у Control Center план → взять задачу и запустить воркера
- * отдельным юнитом systemd (ihelp-w-*) с ограничением по времени. Настройки и стоп-кран — Control Center → Воркеры.
+ * Проход: сверить работающие запуски с systemd (закончившиеся — записать итог, лог и токены; недоделанную задачу вернуть
+ * в очередь; исчерпанный лимит подписки — пауза; «Остановить» — остановить юнит) → спросить у Control Center план →
+ * взять задачу и запустить воркера отдельным юнитом systemd (ihelp-w-*) с ограничением по времени → отправить журнал
+ * прохода во вкладку «Воркеры». Настройки, очереди и стоп-кран — Control Center → Воркеры.
  *
  *   node scripts/dispatcher.mjs            — один проход (так его вызывает таймер)
  *   node scripts/dispatcher.mjs --dry-run  — показать, кого бы запустил, ничего не запуская
@@ -21,19 +23,27 @@ const DRY = process.argv.includes("--dry-run");
 fs.mkdirSync(DATA, { recursive: true });
 
 /** Сколько минут воркер может работать, прежде чем systemd его остановит */
-const LIMIT_MIN = { dev: 100, tester: 60, deployer: 75 };
+const LIMIT_MIN = { triage: 45, dev: 100, tester: 60, deployer: 75 };
 
 function envValue(name) {
   if (process.env[name]) return process.env[name];
-  const line = fs
-    .readFileSync(path.join(ROOT, ".env"), "utf8")
-    .split("\n")
-    .find((l) => l.startsWith(`${name}=`));
+  let env = "";
+  try {
+    env = fs.readFileSync(path.join(ROOT, ".env"), "utf8");
+  } catch {}
+  const line = env.split("\n").find((l) => l.startsWith(`${name}=`));
   return line ? line.slice(name.length + 1).trim().replace(/^["']|["']$/g, "") : "";
 }
 const URL_BASE = envValue("CC_URL") || "http://127.0.0.1:8080/api/cc";
 const KEY = envValue("CC_AGENT_KEY");
-const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
+
+/** Журнал прохода: в stdout (journalctl) и во вкладку «Воркеры» в конце прохода */
+const lines = [];
+const log = (...a) => {
+  const line = [new Date().toISOString().slice(11, 19), ...a].join(" ");
+  lines.push(line);
+  console.log(line);
+};
 
 async function api(body) {
   const res = await fetch(URL_BASE, {
@@ -53,6 +63,15 @@ async function asAgent(agent, body) {
     return await res.json();
   } catch (e) {
     return { error: String(e) };
+  }
+}
+/** Непрочитанные сообщения роли воркера — в его задание; отмечаются прочитанными */
+async function inbox(agent) {
+  try {
+    const res = await fetch(`${URL_BASE}?${new URLSearchParams({ resource: "inbox", agent })}`, { headers: { "x-cc-key": KEY }, signal: AbortSignal.timeout(15000) });
+    return (await res.json()).messages ?? [];
+  } catch {
+    return [];
   }
 }
 
@@ -101,37 +120,55 @@ function resetAt(result) {
   return new Date(Math.max(t, Date.now() + 5 * 60_000));
 }
 
-const workDir = (pool, key) => (pool === "deployer" ? ROOT : path.join(ROOT, ".claude", "worktrees", pool === "tester" ? `test-${key}` : key));
+const workDir = (pool, key) => (pool === "deployer" || pool === "triage" ? ROOT : path.join(ROOT, ".claude", "worktrees", pool === "tester" ? `test-${key}` : key));
 
 /** Снести стенд, который воркер мог оставить поднятым */
 function standDown(dir) {
   if (fs.existsSync(path.join(dir, "scripts", "stand.sh"))) sh("bash", ["scripts/stand.sh", "down"], { cwd: dir });
 }
 
-async function reconcile(running, stopRunning) {
+const readText = (file) => {
+  try {
+    return fs.readFileSync(file, "utf8");
+  } catch {
+    return "";
+  }
+};
+
+/** Сверить запуски с systemd. Возвращает, сколько запусков закончилось в этот проход */
+async function reconcile(running, stopAll) {
+  let finished = 0;
   for (const run of running) {
     let stopped = false;
     if (isActive(run.unit)) {
-      if (!stopRunning) continue;
+      if (!stopAll && !run.stopRequested) continue;
       sh("systemctl", ["stop", run.unit]);
       stopped = true;
-      log(`■ остановлен ${run.unit}`);
+      log(`■ остановлен ${run.unit}${run.stopRequested ? " (кнопка «Стоп»)" : ""}`);
     }
     let result = null;
     try {
-      result = JSON.parse(fs.readFileSync(path.join(DATA, `${run.id}.json`), "utf8"));
+      result = JSON.parse(readText(path.join(DATA, `${run.id}.json`)));
     } catch {}
+    const err = readText(path.join(DATA, `${run.id}.err`)).trim();
     const minutes = (Date.now() - Date.parse(run.startedAt)) / 60000;
     const status = stopped ? "stopped" : outcome(result, minutes >= LIMIT_MIN[run.pool] - 1);
-    let summary = result?.result ? String(result.result) : "";
-    if (!summary) {
-      try {
-        summary = fs.readFileSync(path.join(DATA, `${run.id}.err`), "utf8");
-      } catch {}
-    }
-    summary = (summary.trim() || "нет ответа").slice(-1500);
-    await api({ action: "run-finish", id: run.id, status, summary, turns: result?.num_turns });
-    log(`${status === "done" ? "✓" : "✗"} ${run.agent} ${run.taskKey ?? ""}: ${status}`);
+    const summary = ((result?.result ? String(result.result) : err) || "нет ответа").trim().slice(-1500);
+    const logText = [result?.result ? String(result.result) : "", err ? `--- stderr ---\n${err.slice(-8000)}` : ""].filter(Boolean).join("\n\n").slice(-20000);
+    const u = result?.usage ?? {};
+    finished++;
+    await api({
+      action: "run-finish",
+      id: run.id,
+      status,
+      summary,
+      turns: result?.num_turns,
+      log: logText || undefined,
+      tokensIn: result?.usage ? (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) : undefined,
+      tokensOut: u.output_tokens,
+      costUsd: result?.total_cost_usd,
+    });
+    log(`${status === "done" ? "✓" : "✗"} ${run.agent} ${run.taskKey ?? (run.keys?.join(",") || (run.pool === "triage" ? "обзор" : "—"))}: ${status}`);
     if (status === "limit") await api({ action: "workers-pause", until: resetAt(result).toISOString(), text: summary.slice(0, 300) });
     // Вход в подписку пропал или истёк — пауза, пока человек не войдёт заново
     if (/not logged in|\/login|oauth|failed to authenticate|authentication_error|\b401\b/i.test(summary)) {
@@ -150,14 +187,32 @@ async function reconcile(running, stopRunning) {
       if (r.ok) log(`↩ ${run.taskKey}: аренда проверки снята`);
     }
   }
+  return finished;
 }
 
-function prompt(pool, agent, key, extra) {
-  const brief = cc(["brief", key, "--role", pool === "dev" ? (extra.role ?? "dev") : pool, "--agent", agent]);
-  const common = `Ты — автономный воркер iHelp, агент ${agent}, тебя запустил диспетчер по расписанию. Людей рядом нет: вопросов в чат не задавай.
-Всё, что требует решения человека, — запиши в ленту задачи и заблокируй её (node scripts/cc.mjs block ${key} "вопрос, варианты, предложение" --on owner|product|design|tech --agent ${agent}), затем заверши работу.
+/** Задание воркеру: общие правила, роль, брифинг по задаче (или список карточек триажа) и сообщения его роли */
+async function prompt(pool, agent, key, extra) {
+  const messages = await inbox(agent);
+  const notes = messages.length
+    ? `\n\nСообщения для твоей роли от людей (учти их в этой работе, если они к ней относятся):\n${messages.map((m) => `- ${m.from}${m.key ? ` · ${m.key}` : ""}: ${m.text}`).join("\n")}`
+    : "";
+  const ask = key
+    ? `Всё, что требует решения человека, — запиши в ленту задачи и заблокируй её (node scripts/cc.mjs block ${key} "вопрос, варианты, предложение" --on owner|product|design|tech --agent ${agent}), затем заверши работу.`
+    : `Всё, что требует решения человека, — вопрос с вариантами в карточке (block … --on owner|product) или сообщение владельцу (node scripts/cc.mjs msg "…" --to owner --agent ${agent}).`;
+  const common = `Ты — автономный воркер iHelp, агент ${agent}, тебя запустил диспетчер. Людей рядом нет: вопросов в чат не задавай.
+${ask}
 Сначала прочитай CLAUDE.md и docs/DEV_SYSTEM.md, затем действуй строго по брифингу ниже. Основную копию /opt/ihelp.am не переключай, секреты не выводи.
-В самом конце ответь одной строкой: что сделано и в каком статусе задача.`;
+В самом конце ответь одной строкой: что сделано и в каком статусе задача.${notes}`;
+
+  if (pool === "triage") {
+    const role = readText(path.join(ROOT, "docs", "roles", "TRIAGE.md")) || "(нет docs/roles/TRIAGE.md)";
+    const task = extra.keys?.length
+      ? `Разбери карточки по порядку: ${extra.keys.join(", ")}. Для каждой: show → решение (ready / block с вопросами / отложить) → обязательно triaged с вердиктом. Не успеваешь все — лучше меньше, но честно; неразобранные останутся в очереди.`
+      : "Очередь триажа пуста — сделай обзор бэклога по разделу «Обзор бэклога (по расписанию)» и отправь итог владельцу одним сообщением (msg --to owner).";
+    return `${common}\n\n${task}\n\n═══ РОЛЬ: ТРИАЖ (docs/roles/TRIAGE.md) ═══\n${role}`;
+  }
+
+  const brief = cc(["brief", key, "--role", pool === "dev" ? (extra.role ?? "dev") : pool, "--agent", agent]);
   const role =
     pool === "dev"
       ? `Задача ${key} уже взята за тобой. Текущая папка — её рабочая копия (ветка task/${key}). Доведи задачу до review: сделано, scripts/check.sh зелёный, интерфейс — на стенде со скриншотами, коммиты «${key}: …», git push -u origin task/${key}, честный отчёт. Не успеваешь — закоммить, отправь ветку и сделай handoff с состоянием.`
@@ -170,9 +225,9 @@ function prompt(pool, agent, key, extra) {
 async function spawn(pool, agent, key, model, extra = {}) {
   const dir = extra.dir ?? workDir(pool, key);
   const unit = `ihelp-w-${agent}-${Date.now().toString(36)}`;
-  const { id } = await api({ action: "run-start", pool, worker: agent, key, unit, model });
+  const { id } = await api({ action: "run-start", pool, worker: agent, key: key ?? undefined, keys: extra.keys ?? [], unit, model, requestedBy: extra.requestedBy });
   const promptFile = path.join(DATA, `${id}.prompt`);
-  fs.writeFileSync(promptFile, prompt(pool, agent, key, extra));
+  fs.writeFileSync(promptFile, await prompt(pool, agent, key, extra));
   const r = sh("systemd-run", [
     `--unit=${unit}`,
     "--collect",
@@ -194,34 +249,40 @@ async function spawn(pool, agent, key, model, extra = {}) {
     await api({ action: "run-finish", id, status: "failed", summary: `systemd-run: ${(r.stderr || r.stdout).slice(0, 500)}` });
     throw new Error(`systemd-run не запустил ${unit}`);
   }
-  log(`▶ ${agent} → ${key} (${model}, ${unit})`);
+  log(`▶ ${agent} → ${key ?? (extra.keys?.length ? extra.keys.join(", ") : "обзор бэклога")} (${model}, ${unit})${extra.requestedBy ? ` · по кнопке: ${extra.requestedBy}` : ""}`);
 }
 
 async function main() {
-  if (!KEY) return log("CC_AGENT_KEY пуст — API Control Center выключено, воркеров не запускаю");
-  const plan = await api({ action: "dispatch", heads: heads() });
-  await reconcile(plan.running, plan.config.stopRunning);
-  if (!plan.config.enabled) return log("воркеры выключены в Control Center");
-  if (!plan.actions.length) return log("работы нет");
+  if (!KEY) return console.log("CC_AGENT_KEY пуст — API Control Center выключено, воркеров не запускаю");
+  const h = heads();
+  let plan = await api({ action: "dispatch", heads: h });
+  // Кто-то закончил — слот освободился, пауза могла начаться: план пересчитываем сразу, не ждём следующего прохода
+  if (await reconcile(plan.running, plan.config.stopRunning)) plan = await api({ action: "dispatch", heads: h });
+  for (const u of plan.unmet ?? []) log(`· «Запустить сейчас» не выполнено — ${u}`);
+  const paused = plan.config.pausedUntil && Date.parse(plan.config.pausedUntil) > Date.now();
+  if (!plan.actions.length) return log(paused ? `на паузе до ${plan.config.pausedUntil}` : plan.config.enabled ? "работы нет" : "воркеры выключены в Control Center");
   if (!envValue("CLAUDE_CODE_OAUTH_TOKEN")) return log("нет входа в подписку Claude — задачи не беру: scripts/claude-login.sh");
-  if (DRY) return log("план:", JSON.stringify(plan.actions));
+  if (DRY || plan.config.dryRun) return log("пробный режим, план:", JSON.stringify(plan.actions));
 
   const pools = plan.config.pools;
   for (const a of plan.actions) {
+    const extra = { requestedBy: a.requestedBy };
     try {
       if (a.pool === "dev") {
-        const out = JSON.parse(cc(["next", "--agent", a.agent, "--auto", "--json"]));
+        const out = JSON.parse(cc(a.key ? ["take", a.key, "--agent", a.agent, "--json"] : ["next", "--agent", a.agent, "--auto", "--json"]));
         if (!out.task) {
           log(`${a.agent}: подходящей задачи нет`);
           continue;
         }
-        await spawn("dev", a.agent, out.task, pools.dev.model, { dir: out.dir, role: out.role });
+        await spawn("dev", a.agent, out.task, pools.dev.model, { ...extra, dir: out.dir, role: out.role });
       } else if (a.pool === "tester") {
         const out = JSON.parse(cc(["test", a.key, "--agent", a.agent, "--json"]));
-        await spawn("tester", a.agent, a.key, pools.tester.model, { dir: out.dir, sha: out.sha });
-      } else {
+        await spawn("tester", a.agent, a.key, pools.tester.model, { ...extra, dir: out.dir, sha: out.sha });
+      } else if (a.pool === "deployer") {
         cc(["lock", a.key, "--agent", "deployer"]);
-        await spawn("deployer", "deployer", a.key, pools.deployer.model);
+        await spawn("deployer", "deployer", a.key, pools.deployer.model, extra);
+      } else if (a.pool === "triage") {
+        await spawn("triage", "triage", null, pools.triage.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
       }
     } catch (e) {
       log(`! ${a.agent} ${a.key ?? ""}: ${String(e.message ?? e).slice(0, 300)}`);
@@ -229,7 +290,12 @@ async function main() {
   }
 }
 
-main().catch((e) => {
-  log("✗ проход диспетчера упал:", String(e.message ?? e).slice(0, 500));
-  process.exit(1);
-});
+main()
+  .catch((e) => {
+    log("✗ проход диспетчера упал:", String(e.message ?? e).slice(0, 500));
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    // Журнал прохода — во вкладку «Воркеры»; пустые проходы «работы нет» тоже видны: диспетчер жив
+    if (KEY && lines.length) await api({ action: "tick", lines }).catch(() => null);
+  });
