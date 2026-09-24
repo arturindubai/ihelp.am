@@ -10,6 +10,8 @@ import { CommentForm, QuickMove, STATUS_TONE, TaskEditor, TransitionPanel } from
 import { TaskEditorForm } from "@/components/admin/cc/TaskEditorForm";
 import { Attachments } from "@/components/admin/cc/Attachments";
 import { Collapsible } from "@/components/admin/cc/Collapsible";
+import { RunWorkerButton } from "@/components/admin/cc/CcControls";
+import { poolForTask } from "@/lib/workers";
 import { cn, dateLabel, timeLabel } from "@/lib/format";
 
 const REPO = process.env.REPO_URL || "https://github.com/arturindubai/ihelp.am";
@@ -22,6 +24,7 @@ const KIND_TONE: Record<string, string> = {
   review: "border-warn",
   error: "border-bad",
   system: "border-line bg-surface/60",
+  triage: "border-brand bg-brand-50/40",
 };
 
 /** Ссылка на документ: путь в репозитории ведёт на GitHub, адрес — как есть */
@@ -61,6 +64,7 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
   ].sort((a, b) => a.at.getTime() - b.at.getTime());
   const errors = task.comments.filter((c) => c.kind === "error").length;
   const moves = nextStatuses(task.status, "owner");
+  const pool = poolForTask(task);
   const branchUrl = task.branch ? `${REPO}/compare/main...${encodeURIComponent(task.branch)}` : null;
   const chips = [
     health.stale && { tone: "bg-bad-50 text-bad", text: `🪦 ${t("health.stale")}` },
@@ -88,8 +92,14 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
         <h1 className="mt-1 text-2xl font-bold tracking-tight">{task.title}</h1>
         <div className="text-sm text-muted">
           {STAGES[task.stage]} · {AREAS[task.area]} · {LAYERS[task.layer]} · {PRIORITIES[task.priority]} · {OWNERS[task.owner]}
-          {task.estimate ? ` · ${task.estimate}` : ""} · {task.source === "code" ? t("form.sourceCode") : t("form.sourceUi")}
+          {task.estimate ? ` · ${task.estimate}` : ""} · {task.source === "code" ? t("form.sourceCode") : task.source === "intake" ? t("form.sourceIntake") : t("form.sourceUi")}
         </div>
+        {pool && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <RunWorkerButton pool={pool} taskKey={task.key} label={t("runWorker.button", { pool: t(`workers.pools.${pool}`) })} />
+            <span className="text-xs text-muted">{t("runWorker.hint")}</span>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -284,6 +294,9 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
                   </dd>
                 </div>
               )}
+              {task.testedSha && (
+                <Row label={t("work.tested")} value={`${task.testedBy ?? ""} · ${task.testedSha.slice(0, 10)}${task.testedAt ? ` · ${when(task.testedAt)}` : ""}`} />
+              )}
               {task.deployedSha && (
                 <div className="flex items-baseline justify-between gap-2">
                   <dt className="text-muted">{t("work.commit")}</dt>
@@ -304,6 +317,19 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
               {task.rework > 0 && <Row label={t("work.rework")} value={String(task.rework)} />}
             </dl>
           </Card>
+
+          {(task.triagedAt || ["backlog", "blocked"].includes(task.status)) && (
+            <Card title={t("triage.title")}>
+              {task.triagedAt ? (
+                <>
+                  <p className="text-xs text-muted">{t("triage.by", { who: task.triagedBy ?? "—", date: when(task.triagedAt) })}</p>
+                  {task.triageNote && <p className="mt-1 whitespace-pre-line text-sm">{task.triageNote}</p>}
+                </>
+              ) : (
+                <p className="text-xs text-brand">{t("triage.waiting")}</p>
+              )}
+            </Card>
+          )}
 
           {["backlog", "ready", "blocked"].includes(task.status) && (
             <Card title={t("dor.title")}>

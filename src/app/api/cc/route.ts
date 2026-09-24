@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { attention, getTask, listTasks, annotate, saveTask } from "@/server/services/cc";
-import { CcError, agentActor, agentNote, claim, heartbeat, transition, type TransitionInput } from "@/server/services/ccWork";
+import { CcError, agentActor, agentNote, claim, heartbeat, markTriaged, reviewRelease, reviewTake, testPass, transition, type TransitionInput } from "@/server/services/ccWork";
+import { dispatchPlan, pauseWorkers, runFinish, runStart, tickLog, triageQueue, workersOverview } from "@/server/services/workers";
+import { sendMessage, takeInbox } from "@/server/services/ccMessages";
+import { intakeCreate } from "@/server/services/ccBoard";
 import { listEpics, getEpic } from "@/server/services/epics";
 import { DESIGNER_FIELDS, taskContentSchema } from "@/lib/cc-schema";
 import { roleOf, type TaskStatusKey } from "@/lib/cc-flow";
@@ -16,6 +19,11 @@ import type { Task } from "@prisma/client";
  *   GET  /api/cc?key=AUTH-1                   — задача целиком: тексты, связи, лента, история, готовность, здоровье
  *   GET  /api/cc?resource=attention           — «нужно вам»: брошенные, очередь проверки, ждут владельца
  *   GET  /api/cc?resource=epics[&key=…]       — эпики
+ *   GET  /api/cc?resource=triage              — очередь триажа: карточки, которые ещё никто не разобрал
+ *   GET  /api/cc?resource=inbox&agent=dev-1   — непрочитанные сообщения роли агента (отмечаются прочитанными)
+ *   POST /api/cc {"action":"triaged","agent":"triage","key":"IN-3","text":"вердикт"} — карточка разобрана триажем
+ *   POST /api/cc {"action":"message","agent":"triage","to":"owner","text":"…"[,"key":"AUTH-1"]} — сообщение роли
+ *   POST /api/cc {"action":"intake","agent":"chat","text":"что и зачем"} — новая работа в очередь триажа карточкой IN-N
  *   POST /api/cc {"action":"claim","agent":"dev-1"[,"key":"AUTH-1"]}  — взять задачу (аренда 60 минут, пульс продлевает)
  *   POST /api/cc {"action":"heartbeat","agent":"dev-1","key":"AUTH-1"} — пульс
  *   POST /api/cc {"action":"note","agent":"dev-1","key":"AUTH-1","text":"…","kind":"progress|error|note"}
@@ -80,6 +88,9 @@ const full = (t: Task) => ({
   deployedSha: t.deployedSha,
   proof: t.proof,
   source: t.source,
+  testedSha: t.testedSha,
+  testedBy: t.testedBy,
+  testedAt: t.testedAt,
 });
 
 export async function GET(req: Request) {
@@ -99,6 +110,14 @@ export async function GET(req: Request) {
     }
 
     if (p.get("resource") === "attention") return json(await attention());
+    if (p.get("resource") === "workers") return json(await workersOverview());
+    if (p.get("resource") === "triage") return json({ tasks: await triageQueue() });
+    if (p.get("resource") === "inbox") {
+      const agent = (p.get("agent") ?? "").trim().slice(0, 60);
+      if (!agent) return json({ error: "agent_required" }, 400);
+      const messages = await takeInbox(roleOf(agent), agent);
+      return json({ messages: messages.map((m) => ({ from: m.fromAgent, text: m.text, key: m.taskKey, at: m.createdAt })) });
+    }
 
     if (p.get("key")) {
       const data = await getTask((p.get("key") as string).toUpperCase());
@@ -145,6 +164,7 @@ const SHORTCUTS: Record<string, { to: TaskStatusKey; from?: string }> = {
   unblock: { to: "ready", from: "blocked" },
   ready: { to: "ready" },
   return: { to: "ready", from: "review" },
+  "test-fail": { to: "ready", from: "review" },
   done: { to: "done" },
   cancel: { to: "cancelled" },
 };
@@ -162,8 +182,79 @@ export async function POST(req: Request) {
   try {
     switch (action) {
       case "claim": {
-        const task = await claim(agent, { key, area: str(body.area), layer: str(body.layer), priority: str(body.priority), branch: str(body.branch), session: str(body.session) });
+        const task = await claim(agent, { key, area: str(body.area), layer: str(body.layer), priority: str(body.priority), branch: str(body.branch), session: str(body.session), auto: body.auto === true });
         return json({ ok: true, task: task ? full(task) : null });
+      }
+      // Тестировщик и деплоер держат задачу «На проверке», не меняя её статуса
+      case "test-take":
+      case "deploy-take": {
+        if (!key) return json({ error: "key_required" }, 400);
+        return json({ ok: true, task: full(await reviewTake(key, agent)) });
+      }
+      case "test-pass": {
+        if (!key) return json({ error: "key_required" }, 400);
+        return json({ ok: true, task: brief(await testPass(key, agent, str(body.sha) ?? "", text)) });
+      }
+      case "review-release": {
+        if (!key) return json({ error: "key_required" }, 400);
+        await reviewRelease(key, agent, text || "Аренда проверки снята без решения.");
+        return json({ ok: true });
+      }
+      // Диспетчер воркеров (scripts/dispatcher.mjs): план запусков и журнал
+      case "dispatch":
+      case "run-start":
+      case "run-finish":
+      case "tick":
+      case "workers-pause": {
+        if (agent !== "dispatcher") return json({ error: "forbidden_role" }, 403);
+        const num = (v: unknown) => (typeof v === "number" ? v : undefined);
+        if (action === "dispatch") return json(await dispatchPlan((body.heads ?? {}) as Record<string, string>));
+        if (action === "tick") {
+          await tickLog(Array.isArray(body.lines) ? body.lines.map(String) : []);
+          return json({ ok: true });
+        }
+        if (action === "run-start") {
+          const keys = Array.isArray(body.keys) ? body.keys.map(String) : [];
+          return json({ ok: true, id: await runStart({ pool: str(body.pool) ?? "", agent: str(body.worker) ?? "", taskKey: key ?? null, keys, unit: str(body.unit) ?? "", model: str(body.model) ?? "", requestedBy: str(body.requestedBy) ?? null }) });
+        }
+        if (action === "run-finish") {
+          const run = await runFinish(str(body.id) ?? "", {
+            status: str(body.status) ?? "failed",
+            summary: str(body.summary),
+            turns: num(body.turns),
+            log: str(body.log),
+            tokensIn: num(body.tokensIn),
+            tokensOut: num(body.tokensOut),
+            costUsd: num(body.costUsd),
+          });
+          return json({ ok: true, run });
+        }
+        const until = new Date(str(body.until) ?? Date.now() + 3600_000);
+        return json({ ok: true, config: await pauseWorkers(Number.isNaN(until.getTime()) ? new Date(Date.now() + 3600_000) : until, text || "лимит подписки") });
+      }
+      // Триаж: отметка «карточка разобрана» с вердиктом в ленте
+      case "triaged": {
+        if (!key) return json({ error: "key_required" }, 400);
+        await markTriaged(key, agent, text);
+        return json({ ok: true });
+      }
+      // Чат получил от человека новую работу: не исполняет сам, а кладёт в очередь триажа
+      case "intake": {
+        try {
+          const task = await intakeCreate(text, agent);
+          return json({ ok: true, key: task.key });
+        } catch (e) {
+          return json({ error: (e as Error).message }, 400);
+        }
+      }
+      case "message": {
+        const to = str(body.to) ?? "owner";
+        try {
+          await sendMessage({ to, from: agent, text, taskKey: key ?? null });
+        } catch (e) {
+          return json({ error: (e as Error).message }, 400);
+        }
+        return json({ ok: true });
       }
       case "heartbeat": {
         if (!key) return json({ error: "key_required" }, 400);
@@ -184,6 +275,7 @@ export async function POST(req: Request) {
       case "unblock":
       case "ready":
       case "return":
+      case "test-fail":
       case "done":
       case "cancel": {
         if (!key) return json({ error: "key_required" }, 400);
@@ -210,7 +302,7 @@ export async function POST(req: Request) {
       case "create":
       case "update": {
         const role = roleOf(agent);
-        if (!["cto", "product", "owner", "designer"].includes(role) || (action === "create" && role === "designer")) return json({ error: "forbidden_role", detail: role }, 403);
+        if (!["cto", "product", "owner", "designer", "triage"].includes(role) || (action === "create" && role === "designer")) return json({ error: "forbidden_role", detail: role }, 403);
         const raw = (body.task ?? {}) as Body;
         let content: Body = raw;
         if (action === "update") {

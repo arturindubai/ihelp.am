@@ -17,7 +17,7 @@ common=$(git -C "$cwd" rev-parse --path-format=absolute --git-common-dir 2>/dev/
 cc="$common/cc"
 
 # Чат только что взял задачу — запоминаем, чтобы пульс шёл и из других папок
-if [ -n "$session" ] && [ "$(field '.tool_name')" = "Bash" ] && field '.tool_input.command' | grep -q 'cc\.mjs \(take\|next\)'; then
+if [ -n "$session" ] && [ "$(field '.tool_name')" = "Bash" ] && field '.tool_input.command' | grep -q 'cc\.mjs \(take\|next\|test\)'; then
   taken=$(field '.tool_response.stdout // .tool_response' | sed -n 's/.*✓ \([A-Z][A-Z0-9-]*\) взята.*/\1/p' | head -n 1)
   [ -n "$taken" ] && mkdir -p "$cc/sessions" 2>/dev/null && printf '%s' "$taken" > "$cc/sessions/$session"
 fi
@@ -25,6 +25,11 @@ fi
 key=""
 branch=$(git -C "$cwd" branch --show-current 2>/dev/null)
 case "$branch" in task/*) key=${branch#task/} ;; esac
+# Копия тестировщика — без ветки (коммит ветки задачи), папка test-<КЛЮЧ>
+if [ -z "$key" ]; then
+  top=$(basename "$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)")
+  case "$top" in test-*) key=${top#test-} ;; esac
+fi
 if { [ -z "$key" ] || [ ! -f "$cc/tasks/$key.json" ]; } && [ -n "$session" ] && [ -f "$cc/sessions/$session" ]; then
   key=$(tr -cd 'A-Z0-9-' < "$cc/sessions/$session")
 fi

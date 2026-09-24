@@ -12,7 +12,7 @@ export const OPEN_STATUSES: TaskStatusKey[] = ["backlog", "ready", "in_progress"
 /** Закрытые: зависимость от такой задачи считается снятой (отменённая больше никого не держит) */
 export const CLOSED_STATUSES: TaskStatusKey[] = ["done", "cancelled"];
 
-export const ROLES = ["owner", "cto", "product", "designer", "dev", "deployer", "watchdog"] as const;
+export const ROLES = ["owner", "cto", "product", "designer", "triage", "dev", "tester", "deployer", "watchdog"] as const;
 export type Role = (typeof ROLES)[number];
 
 /** Кто должен снять блокировку */
@@ -20,7 +20,7 @@ export const BLOCKED_ON = ["owner", "product", "design", "tech", "external", "de
 export type BlockedOn = (typeof BLOCKED_ON)[number];
 
 /** Виды записей в ленте задачи */
-export const COMMENT_KINDS = ["note", "progress", "report", "handoff", "review", "error", "system"] as const;
+export const COMMENT_KINDS = ["note", "progress", "report", "handoff", "review", "error", "system", "triage"] as const;
 export type CommentKind = (typeof COMMENT_KINDS)[number];
 
 /** Аренда задачи исполнителем: столько минут без пульса — и задача считается брошенной */
@@ -41,20 +41,22 @@ export function roleOf(agent: string): Role {
 }
 
 const PLAN: Role[] = ["owner", "cto", "product"];
+/** Триаж решает судьбу новой карточки: в очередь, обратно в бэклог. Отменять может только входящие IN-* (проверка в сервисе) */
+const TRIAGE: Role[] = [...PLAN, "triage"];
 const WORK: Role[] = ["dev", "cto", "owner"];
 const RELEASE: Role[] = ["deployer", "owner"];
-const ANY: Role[] = ["owner", "cto", "product", "designer", "dev", "deployer", "watchdog"];
+const ANY: Role[] = ["owner", "cto", "product", "designer", "triage", "dev", "tester", "deployer", "watchdog"];
 
 /**
  * Разрешённые переходы: из какого статуса, в какой и кому.
  * «В работу» задачу переводит только аренда (claim) — отдельным путём, не этой таблицей.
  */
 const TRANSITIONS: Record<TaskStatusKey, Partial<Record<TaskStatusKey, Role[]>>> = {
-  backlog: { ready: PLAN, blocked: ANY, cancelled: PLAN },
-  ready: { backlog: PLAN, blocked: ANY, cancelled: PLAN },
+  backlog: { ready: TRIAGE, blocked: ANY, cancelled: TRIAGE },
+  ready: { backlog: TRIAGE, blocked: ANY, cancelled: PLAN },
   in_progress: { review: WORK, ready: [...WORK, ...PLAN, "watchdog"], blocked: ANY, backlog: PLAN },
-  review: { done: RELEASE, ready: [...RELEASE, ...PLAN], blocked: [...RELEASE, ...PLAN] },
-  blocked: { ready: ANY, backlog: PLAN, cancelled: PLAN },
+  review: { done: RELEASE, ready: [...RELEASE, ...PLAN, "tester"], blocked: [...RELEASE, ...PLAN, "tester"] },
+  blocked: { ready: ANY, backlog: TRIAGE, cancelled: PLAN },
   done: { ready: RELEASE },
   cancelled: { backlog: PLAN },
 };
@@ -230,11 +232,13 @@ export type WatchdogPlan = {
   unblock: string[];
   /** Слишком долго ждёт проверки */
   stuckReview: string[];
+  /** Тестировщик или деплоер держал задачу на проверке и замолчал — снять аренду, статус не трогать */
+  releaseLease: string[];
 };
 
 /** Решения сторожа по текущему состоянию доски. Применяет их сервис — здесь только логика */
 export function watchdogPlan(tasks: HealthTask[], closedKeys: Set<string>, now = new Date()): WatchdogPlan {
-  const plan: WatchdogPlan = { markStale: [], revive: [], autoReturn: [], phantom: [], unblock: [], stuckReview: [] };
+  const plan: WatchdogPlan = { markStale: [], revive: [], autoReturn: [], phantom: [], unblock: [], stuckReview: [], releaseLease: [] };
   for (const t of tasks) {
     const h = taskHealth(t, closedKeys, now);
     if (h.stale && !t.staleAt) plan.markStale.push(t.key);
@@ -243,6 +247,7 @@ export function watchdogPlan(tasks: HealthTask[], closedKeys: Set<string>, now =
     if (h.phantom) plan.phantom.push(t.key);
     if (t.status === "blocked" && t.blockedOn === "deps" && t.depends.every((d) => closedKeys.has(d))) plan.unblock.push(t.key);
     if (h.stuckReview) plan.stuckReview.push(t.key);
+    if (t.status === "review" && t.claimedBy && (!t.claimUntil || t.claimUntil < now)) plan.releaseLease.push(t.key);
   }
   return plan;
 }

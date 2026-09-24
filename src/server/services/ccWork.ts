@@ -17,6 +17,7 @@ import {
   reviewGate,
   roleOf,
   scopeOverlap,
+  SHA_RE,
   watchdogPlan,
   type CommentKind,
   type Role,
@@ -95,11 +96,15 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   if (!(STATUSES as Record<string, string>)[to]) throw new CcError("bad_status");
   const force = !!input.force && (actor.role === "owner" || actor.role === "cto");
   if (!canTransition(from, to, actor.role) && !force) throw new CcError("forbidden_transition", `${from}→${to}`);
+  // Триаж отменяет только входящие карточки IN-*, разобранные в настоящие задачи; остальное отменяет человек
+  if (actor.role === "triage" && to === "cancelled" && !key.startsWith("IN-")) throw new CcError("forbidden_transition", "triage: cancel IN-* only");
   if ((needsReason(from, to) || force) && text.length < 5) throw new CcError("reason_required");
   // Задачу в работе сдаёт, передаёт или блокирует только тот, кто её держит
   if (from === "in_progress" && actor.role === "dev" && task.claimedBy && task.claimedBy !== actor.name) throw new CcError("not_your_task", task.claimedBy);
 
   const data: Prisma.TaskUpdateManyMutationInput = { status: to };
+  // Решение по карточке из бэклога принято — триаж её больше не ждёт
+  if (from === "backlog" && ["owner", "cto", "product", "triage"].includes(actor.role)) Object.assign(data, { triagedAt: new Date(), triagedBy: actor.name });
   // В очередь разработчикам — только готовое: из бэклога, блокировки или отмены задача идёт через проверку готовности
   if (to === "ready" && ["backlog", "blocked", "cancelled"].includes(from) && actor.role !== "watchdog" && !force) {
     const failed = readiness(task, await closedKeys(), task._count.attachments).filter((i) => i.hard && !i.ok);
@@ -129,7 +134,10 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   }
   // Уход из «В работе» снимает аренду. Ветка остаётся: следующий исполнитель продолжит с неё
   if (from === "in_progress") Object.assign(data, { claimedBy: null, claimUntil: null, staleAt: null, session: null });
+  if (from === "review") Object.assign(data, { claimedBy: null, claimUntil: null });
   if (from === "review" && to === "ready") data.rework = { increment: 1 };
+  // Проверка относится к конкретному коммиту: возврат на доработку и новая сдача её обнуляют
+  if (to === "review" || (from === "review" && to === "ready")) Object.assign(data, { testedSha: null, testedBy: null, testedAt: null });
   if (from === "done") Object.assign(data, { doneAt: null, deployedSha: null, proof: null });
 
   // Условие на прежний статус: если кто-то успел изменить задачу раньше, не затираем его изменение
@@ -142,6 +150,10 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   const extra = from === "done" && task.deployedSha ? `\nБыла выложена в ${task.deployedSha}.` : "";
   await say(task.id, actor.name, kindFor(from, to, actor, task.claimedBy), text + extra);
   if (to === "done" || to === "cancelled") await releaseDependents(key);
+  if (to === "done" && actor.role === "deployer") {
+    await alertTech(`cc:done:${key}`, html`🚀 <b>Выложено: ${key}</b> ${task.title}${input.sha ? ` · ${input.sha.slice(0, 10)}` : ""}
+${text.slice(0, 300)}`, 1);
+  }
   return db.task.findUniqueOrThrow({ where: { id: task.id } });
 }
 
@@ -155,7 +167,16 @@ async function releaseDependents(key: string) {
   }
 }
 
-export type ClaimOptions = { key?: string; area?: string; layer?: string; priority?: string; branch?: string; session?: string };
+export type ClaimOptions = {
+  key?: string;
+  area?: string;
+  layer?: string;
+  priority?: string;
+  branch?: string;
+  session?: string;
+  /** Автономный воркер: только код-задачи без открытых вопросов к продукту — остальное людям и чатам */
+  auto?: boolean;
+};
 
 /**
  * Аренда задачи исполнителем. С ключом — конкретная задача, без ключа — следующая подходящая из «Готова к работе».
@@ -165,7 +186,7 @@ export type ClaimOptions = { key?: string; area?: string; layer?: string; priori
 export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Task | null> {
   const actor = agentActor(agent);
   // Деплоер задачи не берёт: кто выкладывает, тот не пишет — иначе пропадает вторая пара глаз
-  if (actor.role === "deployer" || actor.role === "watchdog") throw new CcError("forbidden_role", actor.role);
+  if (actor.role === "deployer" || actor.role === "watchdog" || actor.role === "triage") throw new CcError("forbidden_role", actor.role);
   const closed = await closedKeys();
   const now = new Date();
 
@@ -214,6 +235,7 @@ export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Tas
       if (opts.area) filter.area = opts.area;
       if (opts.layer) filter.layer = opts.layer;
       if (opts.priority) filter.priority = opts.priority;
+      if (opts.auto) Object.assign(filter, { layer: opts.layer ?? { not: "none" }, owner: { not: "product" }, needs: { isEmpty: true } });
       const candidates = await tx.task.findMany({ where: filter, take: 200 });
       const exclude = new Set<string>();
       // Несколько попыток на случай гонки: два исполнителя одновременно выбрали одну задачу
@@ -253,7 +275,8 @@ export type Pulse = { ok: true; until: Date } | { ok: false; lost: boolean; stat
 export async function heartbeat(key: string, agent: string, extra: { branch?: string; session?: string } = {}): Promise<Pulse> {
   const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, claimedBy: true, branch: true, staleAt: true } });
   if (!t) return { ok: false, lost: false };
-  if (t.status !== "in_progress" || t.claimedBy !== agent) return { ok: false, lost: true, status: t.status, holder: t.claimedBy };
+  // Держать можно задачу в работе (разработчик) или на проверке (тестировщик, деплоер)
+  if (!["in_progress", "review"].includes(t.status) || t.claimedBy !== agent) return { ok: false, lost: true, status: t.status, holder: t.claimedBy };
   const now = new Date();
   const until = new Date(now.getTime() + LEASE_MS);
   await db.task.update({
@@ -271,12 +294,84 @@ export async function heartbeat(key: string, agent: string, extra: { branch?: st
 }
 
 /** Запись в ленту задачи от агента. Запись исполнителя по своей задаче заодно считается пульсом */
+/**
+ * Итог триажа карточки: когда и кем разобрана, вердикт — в ленту. Статус меняется отдельными переходами
+ * (ready, block); здесь — только отметка, после которой карточка уходит из очереди триажа
+ */
+export async function markTriaged(key: string, agent: string, text: string) {
+  const role = roleOf(agent);
+  if (!["triage", "cto", "product", "owner"].includes(role)) throw new CcError("forbidden_role", role);
+  if (text.trim().length < 10) throw new CcError("reason_required");
+  const t = await db.task.findUnique({ where: { key }, select: { id: true } });
+  if (!t) throw new CcError("not_found");
+  await db.task.update({ where: { key }, data: { triagedAt: new Date(), triagedBy: agent, triageNote: text.trim().slice(0, 1000) } });
+  await say(t.id, agent, "triage", text);
+  await log(t.id, agent, "triaged", null, text.trim().slice(0, 120));
+}
+
+/** Человек ответил в ленте задачи, заблокированной на нём, или поправил карточку бэклога — триаж посмотрит её снова */
+export async function retriage(key: string) {
+  await db.task.updateMany({
+    where: { key, triagedAt: { not: null }, OR: [{ status: "backlog" }, { status: "blocked", blockedOn: { in: ["owner", "product"] } }] },
+    data: { triagedAt: null },
+  });
+}
+
 export async function agentNote(key: string, agent: string, kind: CommentKind, text: string) {
   const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, claimedBy: true } });
   if (!t) throw new CcError("not_found");
   if (text.trim().length < 2) throw new CcError("text_required");
   await say(t.id, agent, kind, text);
-  if (t.status === "in_progress" && t.claimedBy === agent) await heartbeat(key, agent);
+  if (["in_progress", "review"].includes(t.status) && t.claimedBy === agent) await heartbeat(key, agent);
+  if (kind === "error" && roleOf(agent) === "deployer") await alertTech(`cc:error:${key}`, html`❌ <b>${key}</b> · ${agent}
+${text.slice(0, 400)}`, 5);
+}
+
+/**
+ * Аренда задачи «На проверке» тестировщиком или деплоером: статус не меняется, но второй проверяющий
+ * или деплоер её не возьмёт. Истёкшую аренду снимает сторож
+ */
+export async function reviewTake(key: string, agent: string) {
+  const role = roleOf(agent);
+  if (role !== "tester" && role !== "deployer") throw new CcError("forbidden_role", role);
+  const now = new Date();
+  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, branch: true, claimedBy: true, claimUntil: true, testedSha: true } });
+  if (!t) throw new CcError("not_found");
+  if (t.status !== "review") throw new CcError("wrong_status", t.status);
+  if (!t.branch) throw new CcError("branch_required");
+  if (t.claimedBy && t.claimedBy !== agent && t.claimUntil && t.claimUntil > now) throw new CcError("claimed", t.claimedBy);
+  const r = await db.task.updateMany({
+    where: { id: t.id, status: "review", OR: [{ claimedBy: null }, { claimedBy: agent }, { claimUntil: null }, { claimUntil: { lt: now } }] },
+    data: { claimedBy: agent, claimUntil: new Date(now.getTime() + LEASE_MS), heartbeatAt: now },
+  });
+  if (!r.count) throw new CcError("conflict");
+  if (t.claimedBy !== agent) await log(t.id, agent, "claimedBy", t.claimedBy, agent);
+  return db.task.findUniqueOrThrow({ where: { id: t.id } });
+}
+
+/** Тестировщик: проверка пройдена на конкретном коммите ветки. Новый коммит в ветке потребует новой проверки */
+export async function testPass(key: string, agent: string, sha: string, text: string) {
+  if (roleOf(agent) !== "tester") throw new CcError("forbidden_role", roleOf(agent));
+  if (!SHA_RE.test(sha.trim())) throw new CcError("sha_required");
+  if (text.trim().length < 40) throw new CcError("report_required");
+  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, claimedBy: true } });
+  if (!t) throw new CcError("not_found");
+  if (t.status !== "review") throw new CcError("wrong_status", t.status);
+  if (t.claimedBy !== agent) throw new CcError("not_your_task", t.claimedBy ?? "");
+  await db.task.update({ where: { id: t.id }, data: { testedSha: sha.trim(), testedBy: agent, testedAt: new Date(), claimedBy: null, claimUntil: null } });
+  await log(t.id, agent, "tested", null, sha.trim().slice(0, 10));
+  await say(t.id, agent, "review", `✅ Протестировано на коммите ${sha.trim().slice(0, 10)}.\n${text.trim()}`);
+  return db.task.findUniqueOrThrow({ where: { id: t.id } });
+}
+
+/** Снять свою аренду с задачи на проверке без решения (например, не хватило времени) */
+export async function reviewRelease(key: string, agent: string, text: string) {
+  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, claimedBy: true } });
+  if (!t) throw new CcError("not_found");
+  if (t.status !== "review" || t.claimedBy !== agent) throw new CcError("not_your_task", t.claimedBy ?? "");
+  await db.task.update({ where: { id: t.id }, data: { claimedBy: null, claimUntil: null } });
+  await log(t.id, agent, "claimedBy", agent, null);
+  await say(t.id, agent, "note", text);
 }
 
 /** Какой статус был у задачи до того, как её взяли в работу: брошенная возвращается туда же */
@@ -358,6 +453,14 @@ export async function runWatchdog(now = new Date()) {
     await alertTech(`cc:return:${key}`, html`↩️ <b>${key}</b> возвращена в очередь сторожем: ${t.claimedBy ?? "?"} не отвечал.\n${t.title}`, 60);
   }
 
+  for (const key of plan.releaseLease) {
+    const t = byKey.get(key)!;
+    const r = await db.task.updateMany({ where: { id: t.id, status: "review", claimedBy: t.claimedBy, claimUntil: t.claimUntil }, data: { claimedBy: null, claimUntil: null } });
+    if (!r.count) continue;
+    await log(t.id, "watchdog", "claimedBy", t.claimedBy, null);
+    await say(t.id, "watchdog", "system", `${t.claimedBy} держал задачу на проверке и замолчал с ${clock(t.heartbeatAt ?? t.claimUntil)} — аренда снята, задача снова в очереди проверки.`);
+  }
+
   for (const key of plan.unblock) {
     await transition(key, { to: "ready", text: "Все зависимости закрыты — задача вернулась в очередь." }, WATCHDOG).catch(() => null);
   }
@@ -369,7 +472,7 @@ export async function runWatchdog(now = new Date()) {
     await alertTech("cc:review", html`⏳ Ждут проверки дольше суток: ${plan.stuckReview.join(", ")}\nОчередь деплоера: /admin/control?status=review`, 24 * 60);
   }
 
-  return { stale: plan.markStale.length, returned: plan.autoReturn.length, unblocked: plan.unblock.length, phantom: plan.phantom.length, stuckReview: plan.stuckReview.length };
+  return { stale: plan.markStale.length, returned: plan.autoReturn.length, unblocked: plan.unblock.length, phantom: plan.phantom.length, stuckReview: plan.stuckReview.length, releasedLeases: plan.releaseLease.length };
 }
 
 /** Подписи для писем сторожа и интерфейса: кто должен снять блокировку */

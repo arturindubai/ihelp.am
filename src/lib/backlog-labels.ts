@@ -75,6 +75,7 @@ export const COMMENT_KIND_LABELS: Record<string, string> = {
   review: "Замечания проверки",
   error: "Ошибка",
   system: "Система",
+  triage: "Триаж",
 };
 export const OWNERS: Record<string, string> = { product: "Продукт", tech: "Техника", both: "Продукт + техника" };
 export const EPIC_STATUSES: Record<string, string> = { planned: "Задуман", in_progress: "В работе", testing: "Проверяется", ready: "Готов к деплою", done: "Готово" };
