@@ -182,14 +182,19 @@ export async function intakeCreate(text: string, by: string) {
   throw new Error("key_busy");
 }
 
-/** Очередь и история Intake: последние входящие и что с ними сделал триаж */
+/** Очередь и история Intake: последние входящие, что с ними сделал триаж и какие он разбирает прямо сейчас */
 export async function intakeHistory(take = 12) {
-  return db.task.findMany({
-    where: { source: "intake" },
-    orderBy: { createdAt: "desc" },
-    take,
-    select: { key: true, title: true, status: true, triagedAt: true, triageNote: true, createdAt: true, createdBy: true },
-  });
+  const [items, running] = await Promise.all([
+    db.task.findMany({
+      where: { source: "intake" },
+      orderBy: { createdAt: "desc" },
+      take,
+      select: { key: true, title: true, status: true, triagedAt: true, triageNote: true, createdAt: true, createdBy: true },
+    }),
+    db.workerRun.findMany({ where: { status: "running", pool: "triage" }, select: { keys: true } }),
+  ]);
+  const inWork = new Set(running.flatMap((r) => r.keys));
+  return items.map((i) => ({ ...i, inWork: inWork.has(i.key) }));
 }
 
 /* ───────────── Здоровье ───────────── */

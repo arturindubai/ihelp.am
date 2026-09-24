@@ -7,7 +7,6 @@ import { db } from "@/server/db";
 import { AREAS, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { FLOWS, LANES, SIZES, countBy } from "@/lib/cc-lanes";
 import { TaskBadges } from "@/components/admin/cc/TaskBadges";
-import { QuickMove } from "@/components/admin/cc/TaskControls";
 import { FilterBar } from "@/components/admin/cc/FilterBar";
 import { TaskBoard } from "@/components/admin/cc/TaskBoard";
 import { FLOW_TONE, LANE_DOT, PRIORITY_TONE, ccHref, type CcSearch } from "./shared";
@@ -171,7 +170,6 @@ export async function BacklogTab({ sp, taskHref }: { sp: CcSearch; taskHref: (ke
                       {task.size !== "none" && <span className="chip bg-surface text-[10px] text-muted">{task.size}</span>}
                       {view !== "lanes" && <span className={cn("size-2 rounded-full", LANE_DOT[task.lane])} title={tb(`lanes.${task.lane}`)} />}
                     </span>
-                    {task.status === "backlog" && task.dorOk && <QuickMove taskKey={task.key} to="ready" label={`→ ${t("move.quickReady")}`} />}
                   </li>
                 ))}
               </ul>
