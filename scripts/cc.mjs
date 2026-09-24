@@ -44,6 +44,10 @@ const HELP = `cc — Control Center из командной строки (docs/D
 Новая работа (любой чат — вместо того чтобы делать её сразу):
   intake "что нужно и зачем"                    карточка IN-N в очередь триажа; дальше — триаж и воркеры
 
+Библиотека (знания, инструкции, решения — Control Center → «Библиотека»):
+  lib [--kind knowledge|rules|role|process|decision|spec] [--q слово]   список документов
+  lib <slug>                                    текущий текст документа (slug — путь в репозитории или note-…)
+
 Сообщения:
   msg "текст" --to owner|cto|workers|triage|dev|tester|deployer [--key КЛЮЧ]
   inbox                                         непрочитанные сообщения твоей роли (отмечаются прочитанными)
@@ -583,6 +587,18 @@ async function main() {
       if (text().length < 10) die("нужен вердикт словами: что проверено и что решено (в очередь, вопрос, отложено, разбито на …)");
       await api("POST", null, { action: "triaged", agent: agentFor(k), key: k, text: text() });
       console.log(`✓ ${k} разобрана триажем`);
+      return;
+    }
+    case "lib": {
+      const base = URL_BASE.replace(/\/api\/cc\/?$/, "/api/cc/library");
+      const slug = pos[0];
+      const query = new URLSearchParams(slug ? { slug } : { ...(typeof flags.kind === "string" ? { kind: flags.kind } : {}), ...(typeof flags.q === "string" ? { q: flags.q } : {}) });
+      const res = await fetch(`${base}?${query}`, { headers: { "x-cc-key": KEY }, signal: AbortSignal.timeout(15000) }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) die(d.error ?? res.status);
+      if (flags.json) return console.log(JSON.stringify(d, null, 2));
+      if (slug) return console.log(`# ${d.title} · v${d.version} · ${d.kind}\n\n${d.content}`);
+      console.log(d.docs.length ? d.docs.map((x) => `${x.slug.padEnd(40)} ${x.kind.padEnd(9)} v${x.version}  ${x.title}`).join("\n") : "Документов нет");
       return;
     }
     case "intake": {

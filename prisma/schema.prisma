@@ -636,6 +636,48 @@ model WorkerRun {
   @@index([startedAt])
 }
 
+/// Библиотека знаний и инструкций (как Canon в админке LIA): документы из репозитория — снимок при каждой выкладке —
+/// и записи, которые ведут люди в Control Center. Каждая правка — новая версия, прошлые версии не удаляются (это и бэкап)
+model LibraryDoc {
+  id        String   @id @default(cuid())
+  /// Для документа из репозитория — его путь (docs/WORKERS.md), для записи из админки — note-<случайный хвост>
+  slug      String   @unique
+  title     String
+  /// rules | role | process | decision | spec | knowledge
+  kind      String
+  /// repo — документ репозитория, меняется только через код; admin — запись владельца или команды
+  source    String
+  /// Путь в репозитории (для source=repo)
+  path      String?
+  /// Номер текущей версии
+  version   Int      @default(1)
+  archived  Boolean  @default(false)
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions  LibraryVersion[]
+
+  @@index([kind])
+}
+
+model LibraryVersion {
+  id        String     @id @default(cuid())
+  docId     String
+  doc       LibraryDoc @relation(fields: [docId], references: [id], onDelete: Cascade)
+  n         Int
+  title     String
+  content   String
+  /// sha256 содержимого: снимок при выкладке пишет новую версию, только если текст изменился
+  hash      String
+  author    String
+  note      String?
+  createdAt DateTime   @default(now())
+
+  @@unique([docId, n])
+  @@index([docId, createdAt])
+}
+
 /// Сообщение в Control Center (вкладка «Сообщения»): владелец пишет роли или воркерам, воркеры — владельцу.
 /// Воркер получает непрочитанные сообщения своей роли в брифинге при запуске
 model CcMessage {

@@ -199,7 +199,9 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
   const triageBatch = () => s.triageQueue.filter((k) => !taken().has(k)).slice(0, config.triageBatch);
 
   for (const r of s.requests) {
-    if (free(r.pool) <= 0) continue;
+    // Входящие IN-N не ждут пачку бэклога: у триажа для них второй, быстрый слот
+    const fast = r.pool === "triage" && !!r.key && r.key.startsWith("IN-");
+    if (free(r.pool) + (fast ? 1 : 0) <= 0) continue;
     const base = { requestAt: r.at };
     if (r.pool === "dev" || r.pool === "nocode") {
       actions.push({ pool: r.pool, agent: freeName(r.pool, names(r.pool)), ...(r.key ? { key: r.key } : {}), ...base });
@@ -211,7 +213,8 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
       if (t && !taken().has(t.key)) actions.push({ pool: "deployer", agent: "deployer", key: t.key, ...base });
     } else {
       const keys = r.key ? [r.key] : triageBatch();
-      actions.push(keys.length ? { pool: "triage", agent: "triage", keys, ...base } : { pool: "triage", agent: "triage", sweep: true, ...base });
+      const agent = names("triage").includes("triage") ? freeName("triage", names("triage")) : "triage";
+      actions.push(keys.length ? { pool: "triage", agent, keys, ...base } : { pool: "triage", agent, sweep: true, ...base });
     }
   }
 

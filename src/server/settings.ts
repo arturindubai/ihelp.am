@@ -3,6 +3,7 @@ import { db } from "./db";
 import type { PricingRules } from "@/lib/pricing";
 import { envContacts } from "./contacts";
 import { decrypt, encrypt, isEncrypted } from "@/lib/crypto";
+import { KEYS } from "@/lib/keys";
 
 export interface Settings {
   brand: { name: string; tagline: Record<string, string>; phone: string; whatsapp: string; telegram: string; email: string; instagram: string; city: Record<string, string> };
@@ -36,6 +37,19 @@ export interface Settings {
   apple: { enabled: boolean; teamId: string; keyId: string; clientId: string; privateKey: string };
   /** Отправка писем через Resend: домен должен быть подтверждён в кабинете сервиса */
   mail: { enabled: boolean; apiKey: string; from: string; replyTo: string };
+  /**
+   * Бот команды в Telegram (как бот LIA): задачи владельца → входящие IN-N, «статус», сообщения «Нужен ты».
+   * Отдельный от бота входа клиентов (notify.telegramBotToken). Токен вставляется в Control Center → «Ключи»
+   */
+  team: {
+    botToken: string;
+    botUsername: string;
+    /** Привязанные к боту люди команды: только им бот принимает задачи и пишет */
+    members: { telegramId: number; name: string; addedAt: string; addedBy: string }[];
+    /** Одноразовый код привязки: ссылка t.me/<бот>?start=<код>, действует 30 минут */
+    linkCode: string;
+    linkCodeAt: string;
+  };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -75,10 +89,11 @@ export const DEFAULT_SETTINGS: Settings = {
   google: { enabled: false, clientId: "", clientSecret: "" },
   apple: { enabled: false, teamId: "", keyId: "", clientId: "", privateKey: "" },
   mail: { enabled: false, apiKey: "", from: "", replyTo: "" },
+  team: { botToken: "", botUsername: "", members: [], linkCode: "", linkCodeAt: "" },
 };
 
 /** Ключи интеграций: в базе и бэкапах хранятся зашифрованными (ключ SETTINGS_ENCRYPTION_KEY — в .env, в бэкапы не попадает) */
-export const SECRET_PATHS = ["otp.sms.authToken", "otp.whatsapp.accessToken", "otp.telegram.gatewayToken", "notify.telegramBotToken", "google.clientSecret", "apple.privateKey", "mail.apiKey"];
+export const SECRET_PATHS = KEYS.map((k) => k.path);
 
 /** Оплата картой включается после интеграции эквайринга (задача PAY-1). До этого переключатель в админке заблокирован */
 export const CARD_PAYMENTS_INTEGRATED = false;

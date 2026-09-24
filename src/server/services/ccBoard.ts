@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "../db";
 import { annotate, attention, systemStatus } from "./cc";
-import { getTick, getWorkersConfig } from "./workers";
+import { getTick, getWorkersConfig, requestRun } from "./workers";
 import { unreadForOwner } from "./ccMessages";
 import { recentErrors } from "../logbuffer";
 import { flowOf, intakeTitle, laneOf, nextIntakeKey, sizeOf, weekStart } from "@/lib/cc-lanes";
@@ -169,6 +169,8 @@ export async function intakeCreate(text: string, by: string) {
         },
       });
       await db.taskEvent.create({ data: { taskId: task.id, actor: by, field: "created", from: null, to: key } });
+      // Входящие не ждут очереди бэклога: триаж возьмёт карточку на ближайшем проходе диспетчера (быстрый слот)
+      await requestRun("triage", key, by).catch(() => null);
       return task;
     } catch (e) {
       // Два Intake в одну секунду получили один номер — берём следующий

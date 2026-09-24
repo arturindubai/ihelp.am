@@ -15,6 +15,10 @@ import { requestRun, requestStop, saveWorkersConfig } from "../../services/worke
 import { intakeCreate } from "../../services/ccBoard";
 import { MESSAGE_ROLES, markRead, sendMessage } from "../../services/ccMessages";
 import { db } from "../../db";
+import { KeyError, checkKey, clearKey, setKey } from "../../services/keys";
+import { TeamBotError, connectTeamBot, removeMember, startLink } from "../../services/teamBot";
+import { LibraryError, createNote, restoreVersion, setArchived, updateNote } from "../../services/library";
+import { LIBRARY_KINDS } from "@/lib/library";
 import { formatPhone } from "@/lib/phone";
 import type { User } from "@prisma/client";
 
@@ -285,3 +289,135 @@ export async function ccApproveManyAction(keys: string[]) {
   rAll();
   return { ok: true as const, done, failed };
 }
+
+/* ───── Ключи (как Secrets в LIA) ───── */
+
+const keyPath = z.string().max(80);
+
+/** Задать или заменить ключ. Значение не возвращается и не пишется в журнал */
+export async function ccSetKeyAction(path: string, value: string) {
+  const u = await requireSection("control");
+  const p = keyPath.safeParse(path);
+  if (!p.success || typeof value !== "string") return { ok: false as const, error: "invalid" };
+  try {
+    await setKey(p.data, value, u.id);
+    // Новый токен бота команды — сразу подключаем: вебхук и имя бота, чтобы владельцу не делать второй шаг
+    if (p.data === "team.botToken") await connectTeamBot().catch(() => null);
+    rAll();
+    return { ok: true as const };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof KeyError ? e.message : "error" };
+  }
+}
+
+export async function ccClearKeyAction(path: string) {
+  const u = await requireSection("control");
+  const p = keyPath.safeParse(path);
+  if (!p.success) return { ok: false as const, error: "invalid" };
+  try {
+    await clearKey(p.data, u.id);
+    rAll();
+    return { ok: true as const };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof KeyError ? e.message : "error" };
+  }
+}
+
+export async function ccCheckKeyAction(path: string) {
+  await requireSection("control");
+  const p = keyPath.safeParse(path);
+  if (!p.success) return { ok: false as const, error: "invalid" };
+  try {
+    return { ok: true as const, result: await checkKey(p.data) };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof KeyError ? e.message : "error" };
+  }
+}
+
+/* ───── Бот команды ───── */
+
+export async function ccConnectTeamBotAction() {
+  const u = await requireSection("control");
+  try {
+    const r = await connectTeamBot();
+    await audit(u.id, "teambot.connect", "Setting", "team", { username: r.username });
+    rAll();
+    return { ok: true as const, username: r.username };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof TeamBotError ? e.message : "error" };
+  }
+}
+
+export async function ccTeamLinkAction() {
+  const u = await requireSection("control");
+  try {
+    const r = await startLink();
+    await audit(u.id, "teambot.link", "Setting", "team");
+    return { ok: true as const, ...r };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof TeamBotError ? e.message : "error" };
+  }
+}
+
+export async function ccTeamRemoveMemberAction(telegramId: number) {
+  const u = await requireSection("control");
+  if (!Number.isInteger(telegramId)) return { ok: false as const, error: "invalid" };
+  await removeMember(telegramId);
+  await audit(u.id, "teambot.remove", "Setting", "team", { telegramId });
+  rAll();
+  return { ok: true as const };
+}
+
+/* ───── Библиотека (как Canon в LIA) ───── */
+
+const noteSchema = z.object({ title: z.string().trim().max(200), kind: z.enum(LIBRARY_KINDS), content: z.string().max(200_000) });
+
+export async function ccLibraryCreateAction(input: z.infer<typeof noteSchema>) {
+  const u = await requireSection("control");
+  const parsed = noteSchema.safeParse(input);
+  if (!parsed.success || !parsed.data.content.trim()) return { ok: false as const, error: "invalid" };
+  const doc = await createNote(parsed.data, who(u));
+  await audit(u.id, "library.create", "LibraryDoc", doc.slug);
+  rAll();
+  return { ok: true as const, slug: doc.slug };
+}
+
+export async function ccLibraryUpdateAction(slug: string, input: { title: string; content: string; note?: string }) {
+  const u = await requireSection("control");
+  const parsed = z.object({ title: z.string().trim().max(200), content: z.string().max(200_000), note: z.string().max(300).optional() }).safeParse(input);
+  if (!parsed.success || !parsed.data.content.trim()) return { ok: false as const, error: "invalid" };
+  try {
+    const r = await updateNote(slug, parsed.data, who(u));
+    if (r.changed) await audit(u.id, "library.update", "LibraryDoc", slug);
+    rAll();
+    return { ok: true as const, changed: r.changed };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof LibraryError ? e.message : "error" };
+  }
+}
+
+export async function ccLibraryRestoreAction(slug: string, n: number) {
+  const u = await requireSection("control");
+  if (!Number.isInteger(n) || n < 1) return { ok: false as const, error: "invalid" };
+  try {
+    await restoreVersion(slug, n, who(u));
+    await audit(u.id, "library.restore", "LibraryDoc", slug, { n });
+    rAll();
+    return { ok: true as const };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof LibraryError ? e.message : "error" };
+  }
+}
+
+export async function ccLibraryArchiveAction(slug: string, archived: boolean) {
+  const u = await requireSection("control");
+  try {
+    await setArchived(slug, archived);
+    await audit(u.id, archived ? "library.archive" : "library.unarchive", "LibraryDoc", slug);
+    rAll();
+    return { ok: true as const };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof LibraryError ? e.message : "error" };
+  }
+}
+

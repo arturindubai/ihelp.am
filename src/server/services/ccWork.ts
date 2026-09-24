@@ -150,11 +150,27 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   const extra = from === "done" && task.deployedSha ? `\nБыла выложена в ${task.deployedSha}.` : "";
   await say(task.id, actor.name, kindFor(from, to, actor, task.claimedBy), text + extra);
   if (to === "done" || to === "cancelled") await releaseDependents(key);
+  await tellTeam(task, from, to, text, data.blockedOn as string | null, actor).catch(() => null);
   if (to === "done" && actor.role === "deployer") {
     await alertTech(`cc:done:${key}`, html`🚀 <b>Выложено: ${key}</b> ${task.title}${input.sha ? ` · ${input.sha.slice(0, 10)}` : ""}
 ${text.slice(0, 300)}`, 1);
   }
   return db.task.findUniqueOrThrow({ where: { id: task.id } });
+}
+
+/**
+ * Бот команды (Control Center → «Ключи»): владельцу приходит то, что ждёт его — вопрос на задаче, работа без кода
+ * на приёмку — и что выложено. Бот не подключён — ничего не происходит
+ */
+async function tellTeam(task: { key: string; title: string; layer: string }, from: string, to: string, text: string, blockedOn: string | null, actor: Actor) {
+  const link = `${(process.env.APP_URL || "").replace(/\/$/, "")}/ru/admin/control?task=${task.key}`;
+  let msg = "";
+  if (to === "blocked" && (blockedOn === "owner" || blockedOn === "product")) msg = html`✋ <b>${task.key}</b> ждёт вашего решения — ${task.title}\n\n${text.slice(0, 1200)}\n\nОтветьте в карточке: ${link}`;
+  else if (to === "review" && task.layer === "none") msg = html`✅ <b>${task.key}</b> готово к приёмке — ${task.title}\n${link}`;
+  else if (to === "done" && actor.role === "deployer" && from === "review") msg = html`🚀 Выложено: <b>${task.key}</b> ${task.title}`;
+  if (!msg) return;
+  const { notifyMembers } = await import("./teamBot");
+  await notifyMembers(msg);
 }
 
 /** Задача закрылась: те, кто был заблокирован только ею, возвращаются в очередь */

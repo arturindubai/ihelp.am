@@ -11,6 +11,8 @@ const PAGES = [
   { id: "releases", href: "/admin/control/releases", icon: "📝" },
   { id: "health", href: "/admin/control/health", icon: "❤" },
   { id: "logs", href: "/admin/control/logs", icon: "📋" },
+  { id: "library", href: "/admin/control/library", icon: "📚" },
+  { id: "keys", href: "/admin/control/keys", icon: "🔑" },
   { id: "epics", href: "/admin/control/epics", icon: "📐" },
 ] as const;
 

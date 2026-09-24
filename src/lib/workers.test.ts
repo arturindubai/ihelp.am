@@ -209,3 +209,17 @@ describe("«Продукт и не-код»", () => {
     ]);
   });
 });
+
+describe("быстрый слот триажа для входящих", () => {
+  const at = "2026-09-24T07:59:00Z";
+  it("входящая IN-N по просьбе запускается, даже когда триаж занят пачкой бэклога", () => {
+    const s = state({ requests: [{ pool: "triage", key: "IN-7", at, by: "telegram" }], running: [{ pool: "triage", agent: "triage" }] });
+    expect(planDispatch(s, noon)).toEqual([{ pool: "triage", agent: "triage-1", keys: ["IN-7"], requestAt: at }]);
+  });
+  it("обычная карточка по просьбе ждёт свободного слота; третьего триажа не бывает", () => {
+    expect(planDispatch(state({ requests: [{ pool: "triage", key: "AUTH-1", at, by: "owner" }], running: [{ pool: "triage", agent: "triage" }] }), noon)).toEqual([]);
+    const busy = [{ pool: "triage" as const, agent: "triage" }, { pool: "triage" as const, agent: "triage-1" }];
+    expect(planDispatch(state({ requests: [{ pool: "triage", key: "IN-8", at, by: "owner" }], running: busy }), noon)).toEqual([]);
+  });
+});
+
