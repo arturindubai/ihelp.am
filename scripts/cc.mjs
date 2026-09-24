@@ -495,7 +495,7 @@ async function main() {
       const report = text() + branchFacts(branch);
       await api("POST", null, { action: "review", agent: agentFor(k), key: k, text: report, branch });
       dropState(k);
-      console.log(`✓ ${k} на проверке у деплоера. Ветка ${branch}. Worktree оставьте — уберёт gc после выкладки.`);
+      console.log(`✓ ${k} на проверке: сначала тестировщик, затем деплоер. Ветка ${branch}. Рабочую копию оставьте — её уберёт gc после выкладки.`);
       return;
     }
     case "handoff": {
