@@ -118,7 +118,7 @@ export function TransitionPanel({ taskKey, status, layer, moves }: { taskKey: st
   );
 }
 
-/** Одна кнопка перехода без формы: «Готова» у готовой по чек-листу задачи, «Вернуть в очередь» у брошенной */
+/** Одна кнопка перехода без формы: «В очереди» у готовой по чек-листу задачи, «Вернуть в очередь» у брошенной */
 export function QuickMove({ taskKey, to, text, label, className }: { taskKey: string; to: TaskStatusKey; text?: string; label: string; className?: string }) {
   const router = useRouter();
   const gateError = useGateError();

@@ -9,8 +9,8 @@ const PRIORITY_TONE: Record<string, string> = { p0: "bg-bad-50 text-bad", p1: "b
 const COLUMN_ORDER = ["backlog", "ready", "in_progress", "review", "blocked", "done", "cancelled"] as const;
 
 /**
- * Канбан по статусам. «Готово» и «Отменена» показываются, только если такие задачи есть в выборке (обычно — при «Все»).
- * Клик по карточке открывает шторку со всем по задаче; у готовой по чек-листу задачи в бэклоге — кнопка «Готова»
+ * Канбан по статусам. «Сделано» и «Отменена» показываются, только если такие задачи есть в выборке (обычно — при «Все»).
+ * Клик по карточке открывает шторку со всем по задаче; у готовой по чек-листу задачи в бэклоге — кнопка «В очереди»
  */
 export async function TaskBoard({ tasks, taskHref }: { tasks: AnnotatedTask[]; taskHref: (key: string) => string }) {
   const t = await getTranslations("admin.cc");

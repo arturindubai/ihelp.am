@@ -169,7 +169,7 @@ async function api(method, query, body, soft = false) {
 function hint(code) {
   const h = {
     agent_busy: "\n  У вас уже есть задача в работе: сдайте (review), передайте (handoff) или заблокируйте её.",
-    not_ready_status: "\n  Брать можно только «Готова к работе». Если задача нужна — попросите техдиректора проверить готовность.",
+    not_ready_status: "\n  Брать можно только «В очереди». Если задача нужна — попросите техдиректора проверить готовность.",
     deps_open: "\n  Сначала должны закрыться зависимости.",
     scope_conflict: "\n  Эти файлы уже меняет другая задача в работе — возьмите другую или договоритесь в ленте.",
     claimed: "\n  Задачу держит другой исполнитель с живой арендой.",
@@ -186,7 +186,7 @@ function hint(code) {
 
 /* ───── вывод ───── */
 
-const STATUS = { backlog: "Бэклог", ready: "Готова", in_progress: "В работе", review: "На проверке", blocked: "Заблокирована", done: "Готово", cancelled: "Отменена" };
+const STATUS = { backlog: "Бэклог", ready: "В очереди", in_progress: "В работе", review: "На проверке", blocked: "Заблокирована", done: "Сделано", cancelled: "Отменена" };
 const line = (t) =>
   `${t.key.padEnd(10)} ${String(STATUS[t.status] ?? t.status).padEnd(13)} ${t.priority}  ${t.title}${t.claimedBy ? `  · ${t.claimedBy}` : ""}${t.health?.stale ? "  · 🪦 брошена?" : ""}${t.health?.phantom ? "  · 👻 без исполнителя" : ""}${t.rework ? `  · ↩${t.rework}` : ""}`;
 
@@ -258,7 +258,7 @@ const ROLE_DOCS = {
   dev: { title: "Разработчик", doc: "docs/roles/DEVELOPER.md" },
   tester: { title: "Тестировщик", doc: "docs/roles/TESTER.md" },
   deployer: { title: "Деплоер", doc: "docs/DEPLOYER_GUIDE.md" },
-  nocode: { title: "Исполнитель задачи без кода", doc: "docs/roles/PRODUCT.md" },
+  nocode: { title: "Исполнитель задачи без кода", doc: "docs/roles/NOCODE.md" },
 };
 
 /** Какая роль нужна задаче: код — разработчик, без кода — продуктовая работа; проверка и выкладка — по команде */
@@ -272,6 +272,12 @@ function finishSteps(role, t, agent, dir) {
 3. Не прошло — node scripts/cc.mjs fail ${k} "Что не так: … Как воспроизвести: … Что ожидалось: …" --agent ${agent}
 4. Нужен человек — node scripts/cc.mjs block ${k} "вопрос" --on owner|product|tech --agent ${agent}
 5. Стенд, если поднимал, — scripts/stand.sh down. Код не чинить, не мёрджить, не выкладывать.`;
+  if (role === "nocode")
+    return `1. Результат — в карточке: файлы проекта не правь, ветку не создавай. Материал (инструкция, тексты, расчёт, таблица, ссылки на источники) — в отчёте сдачи.
+2. Шаги, которые может сделать только человек (аккаунт, оплата, пароль, DNS у регистратора), не делай: node scripts/cc.mjs block ${k} "Что сделать: 1) … 2) … Зачем: …" --on owner --agent ${agent}. После ответа задача вернётся в очередь.
+3. Ход работы — note ${k} "…"; не успеваешь — handoff ${k} "что готово, что осталось".
+4. Сдать: node scripts/cc.mjs review ${k} "Сделано: … Материал: … Что сделать владельцу: … Как проверить: … Источники: …" --agent ${agent} — задача уйдёт владельцу в «Согласования».
+Не мёрджить, не выкладывать, не ставить «Сделано».`;
   if (role === "deployer")
     return `1. Прочитай карточку, отчёт разработчика и отметку тестировщика (лента), диф: git diff origin/main...origin/task/${k}.
 2. Если есть ручные шаги (поле «Готовность к деплою»), удаляющая миграция, секрет в коде или отчёт тестировщика не убеждает —
@@ -284,7 +290,7 @@ function finishSteps(role, t, agent, dir) {
 4. Коммиты «${k}: что сделано», git push -u origin task/${k}.
 5. Сдать: node scripts/cc.mjs review ${k} "Сделано: … Проверено: … Проверить: … Миграции: … Риски и что не сделано: …" --agent ${agent}
    Ход работы — note ${k} "…"; ошибка — note ${k} "…" --error; не успеваешь — handoff ${k} "что сделано, что осталось".
-Не мёрджить, не выкладывать, не ставить «Готово».`;
+Не мёрджить, не выкладывать, не ставить «Сделано».`;
 }
 
 function briefing(role, d, agent, dir) {
@@ -328,7 +334,8 @@ async function takeTask(key) {
   }
   const t = r.task;
   const branch = t.branch || `task/${t.key}`;
-  const { dir, created } = ensureWorktree(t.key, branch);
+  // Задача без кода у воркера «Продукт и не-код»: результат — в карточке, рабочая копия с веткой не нужна
+  const { dir, created } = agent.startsWith("nocode") && t.layer === "none" ? { dir: ROOT, created: false } : ensureWorktree(t.key, branch);
   writeState(t.key, { agent, branch, dir, takenAt: new Date().toISOString() });
   if (flags.json) return console.log(JSON.stringify({ task: t.key, agent, dir, branch, role: roleForTask(t) }));
   if (auto) console.log(`Ваше имя агента: ${agent} — используйте его во всех командах этого чата (--agent ${agent}).\n`);
@@ -502,6 +509,13 @@ async function main() {
     case "review": {
       const k = needKey();
       if (text().length < 40) die("отчёт от 40 символов: что сделано, как проверено (tsc, vitest, стенд), как проверить деплоеру, риски");
+      // Задача без кода сдаётся отчётом: ветки и коммитов нет, принимает владелец в «Согласованиях»
+      if ((await api("GET", { key: k })).task.layer === "none") {
+        await api("POST", null, { action: "review", agent: agentFor(k), key: k, text: text() });
+        dropState(k);
+        console.log(`✓ ${k} на проверке: задача без кода — её примет владелец в «Согласованиях».`);
+        return;
+      }
       const st = readState(k);
       const branch = flags.branch || st?.branch || `task/${k}`;
       const report = text() + branchFacts(branch);
@@ -517,7 +531,7 @@ async function main() {
       const facts = st?.branch ? `\nВетка: ${st.branch}${tryGit(["rev-parse", "--verify", "-q", `refs/remotes/origin/${st.branch}`], ROOT) ? " (отправлена)" : " (НЕ отправлена — работа только на этом сервере)"}` : "";
       await api("POST", null, { action: "handoff", agent: agentFor(k), key: k, text: text() + facts });
       dropState(k);
-      console.log(`✓ ${k} передана — вернулась в «Готова к работе». Следующий продолжит с ветки.`);
+      console.log(`✓ ${k} передана — вернулась в «В очереди». Следующий продолжит с ветки.`);
       return;
     }
     case "block": {

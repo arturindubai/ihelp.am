@@ -1,10 +1,10 @@
 /**
- * Воркеры Control Center: пулы (триаж, разработчики, тестировщик, деплоер), их настройки и план запуска.
+ * Воркеры Control Center: пулы (триаж, разработчики, «Продукт и не-код», тестировщик, деплоер), их настройки и план запуска.
  * Чистые функции без базы: диспетчер на сервере (scripts/dispatcher.mjs) присылает состояние,
  * сервис решает, кого запускать. Правила словами — docs/WORKERS.md.
  */
 
-export const POOLS = ["triage", "dev", "tester", "deployer"] as const;
+export const POOLS = ["triage", "dev", "nocode", "tester", "deployer"] as const;
 export type Pool = (typeof POOLS)[number];
 
 export const MODELS = ["sonnet", "opus", "haiku"] as const;
@@ -59,6 +59,7 @@ export const DEFAULT_WORKERS: WorkersConfig = {
   pools: {
     triage: { enabled: true, max: 1, model: "sonnet", dailyCap: 12, mode: "auto", everyMin: 30 },
     dev: { enabled: true, max: 2, model: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
+    nocode: { enabled: true, max: 1, model: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
     tester: { enabled: true, max: 1, model: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
     deployer: { enabled: true, max: 1, model: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
   },
@@ -132,6 +133,8 @@ export type DispatchState = {
   review: ReviewTask[];
   /** Сколько задач готово для автономной разработки */
   readyForDev: number;
+  /** Сколько готовых задач без кода может взять воркер «Продукт и не-код» */
+  readyForNocode: number;
   /** Текущие коммиты веток в репозитории: ветка → sha. Их присылает диспетчер из git */
   heads: Record<string, string>;
   /** Карточки, ждущие триажа, в порядке разбора */
@@ -198,8 +201,8 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
   for (const r of s.requests) {
     if (free(r.pool) <= 0) continue;
     const base = { requestAt: r.at };
-    if (r.pool === "dev") {
-      actions.push({ pool: "dev", agent: freeName("dev", names("dev")), ...(r.key ? { key: r.key } : {}), ...base });
+    if (r.pool === "dev" || r.pool === "nocode") {
+      actions.push({ pool: r.pool, agent: freeName(r.pool, names(r.pool)), ...(r.key ? { key: r.key } : {}), ...base });
     } else if (r.pool === "tester") {
       const t = r.key ? q.test.find((x) => x.key === r.key) : nextTest();
       if (t && !taken().has(t.key)) actions.push({ pool: "tester", agent: freeName("tester", names("tester")), key: t.key, ...base });
@@ -242,9 +245,14 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
     else if (s.sweepDue && config.sweepEveryH > 0) actions.push({ pool: "triage", agent: "triage", sweep: true });
   }
 
-  if (due("dev")) {
-    const requested = actions.filter((a) => a.pool === "dev").length;
-    for (let i = Math.min(free("dev"), left("dev"), s.readyForDev - requested); i > 0; i--) actions.push({ pool: "dev", agent: freeName("dev", names("dev")) });
+  // Разработчики и «Продукт и не-код» — по числу готовых задач своего вида; запущенные по просьбе уже заняли часть
+  for (const [pool, ready] of [
+    ["dev", s.readyForDev],
+    ["nocode", s.readyForNocode],
+  ] as const) {
+    if (!due(pool)) continue;
+    const requested = actions.filter((a) => a.pool === pool).length;
+    for (let i = Math.min(free(pool), left(pool), ready - requested); i > 0; i--) actions.push({ pool, agent: freeName(pool, names(pool)) });
   }
   return actions;
 }
@@ -268,7 +276,7 @@ export function runOutcome(result: { is_error?: boolean; result?: string; subtyp
 /** Какой пул подходит задаче для кнопки «▶ Запустить воркера» в шторке: по статусу и проверке */
 export function poolForTask(t: { status: string; layer: string; testedSha?: string | null }): Pool | null {
   if (t.status === "backlog" || t.status === "blocked") return "triage";
-  if (t.status === "ready") return t.layer === "none" ? "triage" : "dev";
+  if (t.status === "ready") return t.layer === "none" ? "nocode" : "dev";
   if (t.status === "review" && t.layer !== "none") return t.testedSha ? "deployer" : "tester";
   return null;
 }

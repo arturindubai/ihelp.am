@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Один запуск воркера: claude -p под подпиской Claude, в которую вошёл Claude Code на сервере, — не API.
 # Запускает диспетчер (scripts/dispatcher.mjs) через systemd-run; вручную запускать не нужно.
-#   scripts/worker-run.sh <triage|dev|tester|deployer> <модель> <файл с заданием>
+#   scripts/worker-run.sh <triage|dev|nocode|tester|deployer> <модель> <файл с заданием>
 # Права: только инструменты своей роли. Код в прод попадает только через scripts/deploy-task.sh (деплоер),
 # .env и чужие проекты не читаются, в main напрямую не пушится. Ответ — JSON claude -p в stdout.
 set -uo pipefail
@@ -43,6 +43,13 @@ case "$role" in
     allow=(Read Glob Grep TodoWrite "Bash(node scripts/cc.mjs *)" "Bash(git log *)" "Bash(git show *)" "Bash(git diff *)" "Bash(git status)"
       "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(date)")
     deny+=("Edit" "Write" "MultiEdit" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(cat >*)" "Bash(cat *>*)")
+    ;;
+  nocode)
+    # «Продукт и не-код»: читает проект, ищет и читает страницы в интернете, проверяет DNS, работает с карточками.
+    # Файлы не правит, git не пишет: результат — в карточке. Аккаунты, оплату и пароли делает человек
+    allow=(Read Glob Grep TodoWrite WebSearch WebFetch "Bash(node scripts/cc.mjs *)" "Bash(dig *)" "Bash(host *)" "Bash(nslookup *)" "Bash(whois *)"
+      "Bash(git log *)" "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(date)")
+    deny+=("Edit" "Write" "MultiEdit" "NotebookEdit" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(cat >*)" "Bash(cat *>*)" "Bash(curl *)")
     ;;
   dev) ;;
   *) echo '{"is_error":true,"result":"неизвестная роль"}'; exit 2 ;;

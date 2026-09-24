@@ -78,7 +78,7 @@ export type TransitionInput = {
   force?: boolean;
   /** Для «Заблокирована»: кто должен снять блокировку */
   blockedOn?: string;
-  /** Для «Готово»: коммит в main, с которым задача выложена */
+  /** Для «Сделано»: коммит в main, с которым задача выложена */
   sha?: string;
   /** Для «На проверке»: ветка, если не записана при аренде */
   branch?: string;
@@ -100,7 +100,7 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   if (actor.role === "triage" && to === "cancelled" && !key.startsWith("IN-")) throw new CcError("forbidden_transition", "triage: cancel IN-* only");
   if ((needsReason(from, to) || force) && text.length < 5) throw new CcError("reason_required");
   // Задачу в работе сдаёт, передаёт или блокирует только тот, кто её держит
-  if (from === "in_progress" && actor.role === "dev" && task.claimedBy && task.claimedBy !== actor.name) throw new CcError("not_your_task", task.claimedBy);
+  if (from === "in_progress" && (actor.role === "dev" || actor.role === "nocode") && task.claimedBy && task.claimedBy !== actor.name) throw new CcError("not_your_task", task.claimedBy);
 
   const data: Prisma.TaskUpdateManyMutationInput = { status: to };
   // Решение по карточке из бэклога принято — триаж её больше не ждёт
@@ -179,7 +179,7 @@ export type ClaimOptions = {
 };
 
 /**
- * Аренда задачи исполнителем. С ключом — конкретная задача, без ключа — следующая подходящая из «Готова к работе».
+ * Аренда задачи исполнителем. С ключом — конкретная задача, без ключа — следующая подходящая из «В очереди».
  * Одна задача — один исполнитель, один исполнитель — одна задача. Своя задача в работе продлевается
  * (продолжение в новом чате), брошенную чужую можно перехватить, когда её аренда истекла.
  */
@@ -219,6 +219,8 @@ export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Tas
         const takeover = t.status === "in_progress" && !!t.claimedBy && (!t.claimUntil || t.claimUntil < now);
         if (t.status === "in_progress" && !takeover) throw new CcError("claimed", t.claimedBy ?? "");
         if (t.status !== "ready" && !takeover) throw new CcError("not_ready_status", t.status);
+        // Воркер «Продукт и не-код» берёт только задачи без кода: код пишет разработчик, проверяет тестировщик
+        if (actor.role === "nocode" && t.layer !== "none") throw new CcError("forbidden_role", "nocode: code task");
         const missing = t.depends.filter((d) => !closed.has(d));
         if (missing.length && !takeover) throw new CcError("deps_open", missing.join(","));
         const clash = busy.filter((b) => b.key !== t.key && scopeOverlap(t.scope, b.scope).length > 0);
@@ -235,7 +237,8 @@ export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Tas
       if (opts.area) filter.area = opts.area;
       if (opts.layer) filter.layer = opts.layer;
       if (opts.priority) filter.priority = opts.priority;
-      if (opts.auto) Object.assign(filter, { layer: opts.layer ?? { not: "none" }, owner: { not: "product" }, needs: { isEmpty: true } });
+      if (actor.role === "nocode") Object.assign(filter, { layer: "none", needs: { isEmpty: true } });
+      else if (opts.auto) Object.assign(filter, { layer: opts.layer ?? { not: "none" }, owner: { not: "product" }, needs: { isEmpty: true } });
       const candidates = await tx.task.findMany({ where: filter, take: 200 });
       const exclude = new Set<string>();
       // Несколько попыток на случай гонки: два исполнителя одновременно выбрали одну задачу

@@ -50,11 +50,11 @@ export const STAGES: Record<string, string> = { baseline: "Уже работае
 /** Статусы задачи. Что каждый значит и кто его ставит — docs/DEV_SYSTEM.md, переходы — src/lib/cc-flow.ts */
 export const STATUSES: Record<string, string> = {
   backlog: "Бэклог",
-  ready: "Готова к работе",
+  ready: "В очереди",
   in_progress: "В работе",
   review: "На проверке",
   blocked: "Заблокирована",
-  done: "Готово",
+  done: "Сделано",
   cancelled: "Отменена",
 };
 /** Кто должен снять блокировку */
@@ -78,7 +78,7 @@ export const COMMENT_KIND_LABELS: Record<string, string> = {
   triage: "Триаж",
 };
 export const OWNERS: Record<string, string> = { product: "Продукт", tech: "Техника", both: "Продукт + техника" };
-export const EPIC_STATUSES: Record<string, string> = { planned: "Задуман", in_progress: "В работе", testing: "Проверяется", ready: "Готов к деплою", done: "Готово" };
+export const EPIC_STATUSES: Record<string, string> = { planned: "Задуман", in_progress: "В работе", testing: "Проверяется", ready: "Готов к деплою", done: "Сделано" };
 
 export interface TaskSeed {
   key: string;
@@ -112,7 +112,7 @@ export interface TaskSeed {
   /**
    * Статус при первом появлении задачи в базе. Учитываются только два: "done" — уже работает,
    * и "review" — задача заведена в той же ветке, что и её код, и сразу приходит на проверку.
-   * Остальные игнорируются: «Готова к работе» ставит техдиректор, «В работе» — только аренда исполнителя.
+   * Остальные игнорируются: «В очереди» ставит техдиректор, «В работе» — только аренда исполнителя.
    */
   status?: keyof typeof STATUSES;
 }

@@ -62,7 +62,7 @@ export async function WorkersTab({ locale, taskHref }: { locale: string; taskHre
           const pc = data.config.pools[p];
           const queue = queueOf(p);
           const running = data.running.filter((r) => r.pool === p);
-          const takeable = p === "dev" ? data.readyDev : p === "tester" ? queue.filter((q) => q.reason === "test" || q.reason === "retest").length : p === "deployer" ? queue.filter((q) => q.reason === "deploy").length : queue.length;
+          const takeable = p === "dev" ? data.readyDev : p === "nocode" ? data.readyNocode : p === "tester" ? queue.filter((q) => q.reason === "test" || q.reason === "retest").length : p === "deployer" ? queue.filter((q) => q.reason === "deploy").length : queue.length;
           return (
             <Card
               key={p}

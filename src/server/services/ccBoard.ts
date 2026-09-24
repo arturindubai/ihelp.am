@@ -26,7 +26,7 @@ export async function boardTasks(opts: { closed?: boolean } = {}) {
   return (await annotate(tasks)).map((t) => ({
     ...t,
     lane: laneOf(t),
-    flow: flowOf(t, t.status === "review" && knowHeads ? testedCurrent(t, heads) : undefined),
+    flow: flowOf(t, t.status === "review" && knowHeads ? testedCurrent({ ...t, branch: t.branch || `task/${t.key}` }, heads) : undefined),
     size: sizeOf(t.estimate),
   }));
 }

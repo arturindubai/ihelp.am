@@ -266,7 +266,7 @@ export async function ccMessageToIntakeAction(id: string) {
   return { ok: true as const, key: task.key };
 }
 
-/** «Принять все» в Согласованиях: каждая задача закрывается своим переходом через гейт «Готово» */
+/** «Принять все» в Согласованиях: каждая задача закрывается своим переходом через гейт «Сделано» */
 export async function ccApproveManyAction(keys: string[]) {
   const u = await requireSection("control");
   const list = z.array(z.string().max(30)).max(50).safeParse(keys);
