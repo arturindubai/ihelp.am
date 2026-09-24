@@ -78,6 +78,9 @@ export default async function ControlCenter({ params, searchParams }: { params: 
             <Link href="/admin/control/epics" className="btn-outline btn-sm">
               {t("epics.title")}
             </Link>
+            <Link href="/admin/control/workers" className="btn-outline btn-sm">
+              {t("workers.title")}
+            </Link>
             <Link href="/admin/control/new" className="btn-primary btn-sm">
               {t("newTask")}
             </Link>

@@ -9,8 +9,10 @@
 | Продакт | `product` | [PRODUCT.md](PRODUCT.md) | [KICKOFF.md](KICKOFF.md#продакт) |
 | Дизайнер | `designer` | [DESIGNER.md](DESIGNER.md) | [KICKOFF.md](KICKOFF.md#дизайнер) |
 | Разработчик | `dev-N` | [DEVELOPER.md](DEVELOPER.md) | [KICKOFF.md](KICKOFF.md#разработчик) |
+| Тестировщик | `tester` | [TESTER.md](TESTER.md) | [KICKOFF.md](KICKOFF.md#тестировщик) |
 | Деплоер | `deployer` | [../DEPLOYER_GUIDE.md](../DEPLOYER_GUIDE.md) | [KICKOFF.md](KICKOFF.md#деплоер) |
 | Сторож | автомат | [../DEV_SYSTEM.md](../DEV_SYSTEM.md#6-аренда-пульс-и-сторож) | — |
+| Воркеры | автомат: разработчики, тестировщик, деплоер | [../WORKERS.md](../WORKERS.md) | запускает диспетчер |
 
 Требования ко всем, кроме владельца:
 

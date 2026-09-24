@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { attention, getTask, listTasks, annotate, saveTask } from "@/server/services/cc";
-import { CcError, agentActor, agentNote, claim, heartbeat, transition, type TransitionInput } from "@/server/services/ccWork";
+import { CcError, agentActor, agentNote, claim, heartbeat, reviewRelease, reviewTake, testPass, transition, type TransitionInput } from "@/server/services/ccWork";
+import { dispatchPlan, pauseWorkers, runFinish, runStart, workersOverview } from "@/server/services/workers";
 import { listEpics, getEpic } from "@/server/services/epics";
 import { DESIGNER_FIELDS, taskContentSchema } from "@/lib/cc-schema";
 import { roleOf, type TaskStatusKey } from "@/lib/cc-flow";
@@ -80,6 +81,9 @@ const full = (t: Task) => ({
   deployedSha: t.deployedSha,
   proof: t.proof,
   source: t.source,
+  testedSha: t.testedSha,
+  testedBy: t.testedBy,
+  testedAt: t.testedAt,
 });
 
 export async function GET(req: Request) {
@@ -99,6 +103,7 @@ export async function GET(req: Request) {
     }
 
     if (p.get("resource") === "attention") return json(await attention());
+    if (p.get("resource") === "workers") return json(await workersOverview());
 
     if (p.get("key")) {
       const data = await getTask((p.get("key") as string).toUpperCase());
@@ -145,6 +150,7 @@ const SHORTCUTS: Record<string, { to: TaskStatusKey; from?: string }> = {
   unblock: { to: "ready", from: "blocked" },
   ready: { to: "ready" },
   return: { to: "ready", from: "review" },
+  "test-fail": { to: "ready", from: "review" },
   done: { to: "done" },
   cancel: { to: "cancelled" },
 };
@@ -162,8 +168,35 @@ export async function POST(req: Request) {
   try {
     switch (action) {
       case "claim": {
-        const task = await claim(agent, { key, area: str(body.area), layer: str(body.layer), priority: str(body.priority), branch: str(body.branch), session: str(body.session) });
+        const task = await claim(agent, { key, area: str(body.area), layer: str(body.layer), priority: str(body.priority), branch: str(body.branch), session: str(body.session), auto: body.auto === true });
         return json({ ok: true, task: task ? full(task) : null });
+      }
+      // Тестировщик и деплоер держат задачу «На проверке», не меняя её статуса
+      case "test-take":
+      case "deploy-take": {
+        if (!key) return json({ error: "key_required" }, 400);
+        return json({ ok: true, task: full(await reviewTake(key, agent)) });
+      }
+      case "test-pass": {
+        if (!key) return json({ error: "key_required" }, 400);
+        return json({ ok: true, task: brief(await testPass(key, agent, str(body.sha) ?? "", text)) });
+      }
+      case "review-release": {
+        if (!key) return json({ error: "key_required" }, 400);
+        await reviewRelease(key, agent, text || "Аренда проверки снята без решения.");
+        return json({ ok: true });
+      }
+      // Диспетчер воркеров (scripts/dispatcher.mjs): план запусков и журнал
+      case "dispatch":
+      case "run-start":
+      case "run-finish":
+      case "workers-pause": {
+        if (agent !== "dispatcher") return json({ error: "forbidden_role" }, 403);
+        if (action === "dispatch") return json(await dispatchPlan((body.heads ?? {}) as Record<string, string>));
+        if (action === "run-start") return json({ ok: true, id: await runStart({ pool: str(body.pool) ?? "", agent: str(body.worker) ?? "", taskKey: key ?? null, unit: str(body.unit) ?? "", model: str(body.model) ?? "" }) });
+        if (action === "run-finish") return json({ ok: true, run: await runFinish(str(body.id) ?? "", { status: str(body.status) ?? "failed", summary: str(body.summary), turns: typeof body.turns === "number" ? body.turns : undefined }) });
+        const until = new Date(str(body.until) ?? Date.now() + 3600_000);
+        return json({ ok: true, config: await pauseWorkers(Number.isNaN(until.getTime()) ? new Date(Date.now() + 3600_000) : until, text || "лимит подписки") });
       }
       case "heartbeat": {
         if (!key) return json({ error: "key_required" }, 400);
@@ -184,6 +217,7 @@ export async function POST(req: Request) {
       case "unblock":
       case "ready":
       case "return":
+      case "test-fail":
       case "done":
       case "cancel": {
         if (!key) return json({ error: "key_required" }, 400);

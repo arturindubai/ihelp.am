@@ -1,0 +1,15 @@
+# iHelp: один проход диспетчера воркеров (docs/WORKERS.md). Запускается таймером ihelp-dispatcher.timer.
+# Воркеры стартуют отдельными юнитами ihelp-w-* и не зависят от этого прохода.
+# Установка: deploy/systemd/install.sh · Остановить всё: systemctl stop ihelp-dispatcher.timer 'ihelp-w-*'
+[Unit]
+Description=iHelp: диспетчер воркеров Control Center
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/ihelp.am
+Environment=HOME=/root
+ExecStart=/usr/bin/node /opt/ihelp.am/scripts/dispatcher.mjs
+Nice=5
+TimeoutStartSec=300

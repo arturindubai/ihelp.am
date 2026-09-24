@@ -10,6 +10,8 @@ import { deleteAttachment } from "../../services/attachments";
 import { EPIC_STATUSES, OWNERS, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { BLOCKED_ON, type TaskStatusKey } from "@/lib/cc-flow";
 import { taskContentSchema } from "@/lib/cc-schema";
+import { MODELS } from "@/lib/workers";
+import { saveWorkersConfig } from "../../services/workers";
 import { formatPhone } from "@/lib/phone";
 import type { User } from "@prisma/client";
 
@@ -153,4 +155,26 @@ export async function ccDeleteAttachmentAction(id: string) {
   } catch (e) {
     return { ok: false as const, error: (e as Error).message };
   }
+}
+
+/* ───── Воркеры ───── */
+
+const poolSchema = z.object({ enabled: z.boolean(), max: z.number().int().min(0).max(4), model: z.enum(MODELS), dailyCap: z.number().int().min(0).max(100) });
+const workersSchema = z.object({
+  enabled: z.boolean().optional(),
+  pools: z.object({ dev: poolSchema, tester: poolSchema, deployer: poolSchema }).optional(),
+  deployWindow: z.tuple([z.number().int().min(0).max(23), z.number().int().min(1).max(24)]).optional(),
+  stopRunning: z.boolean().optional(),
+  pausedUntil: z.null().optional(),
+});
+
+/** Настройки воркеров из Control Center: выключатель, пулы, окно выкладки, стоп-кран, снятие паузы */
+export async function ccSaveWorkersAction(patch: z.infer<typeof workersSchema>) {
+  const u = await requireSection("control");
+  const parsed = workersSchema.safeParse(patch);
+  if (!parsed.success) return { ok: false as const, error: "invalid" };
+  await saveWorkersConfig(parsed.data, who(u));
+  await audit(u.id, "cc.workers", "Setting", "cc.workers", parsed.data);
+  rAll();
+  return { ok: true as const };
 }

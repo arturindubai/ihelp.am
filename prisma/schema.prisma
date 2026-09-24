@@ -509,6 +509,10 @@ model Task {
   deployedSha   String?
   /// Что проверено после выкладки: smoke, живая проверка, ссылка или скриншот
   proof         String?
+  /// Проверка тестировщика: какой коммит ветки проверен, кем и когда. Новый коммит в ветке требует новой проверки
+  testedSha     String?
+  testedBy      String?
+  testedAt      DateTime?
   startedAt     DateTime?
   doneAt        DateTime?
   createdAt     DateTime  @default(now())
@@ -592,6 +596,27 @@ model TaskComment {
   createdAt DateTime @default(now())
 
   @@index([taskId, createdAt])
+}
+
+/// Запуск воркера (claude -p на сервере): кто, с какой задачей, чем кончилось. Пишет диспетчер через /api/cc
+model WorkerRun {
+  id         String    @id @default(cuid())
+  /// dev | tester | deployer
+  pool       String
+  agent      String
+  taskKey    String?
+  /// Имя юнита systemd, в котором идёт запуск
+  unit       String
+  model      String
+  /// running | done | failed | timeout | limit | stopped
+  status     String    @default("running")
+  summary    String?
+  turns      Int?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([status])
+  @@index([startedAt])
 }
 
 /// История изменений задачи

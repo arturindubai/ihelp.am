@@ -157,6 +157,17 @@ describe("здоровье и сторож", () => {
     expect(plan.autoReturn).toEqual(["S2"]);
     expect(plan.revive).toEqual(["S3"]);
   });
+  it("брошенная проверка освобождает задачу, но оставляет её «На проверке»", () => {
+    const r = task({ key: "R1", status: "review", claimedBy: "tester", claimUntil: min(-1) });
+    const plan = watchdogPlan([r], new Set(), now);
+    expect(plan.releaseLease).toEqual(["R1"]);
+    expect(plan.markStale).toEqual([]);
+  });
+  it("тестировщик возвращает на доработку, но не закрывает задачу", () => {
+    expect(roleOf("tester")).toBe("tester");
+    expect(canTransition("review", "ready", "tester")).toBe(true);
+    expect(canTransition("review", "done", "tester")).toBe(false);
+  });
   it("задача, заблокированная только зависимостями, разблокируется, когда они закрылись", () => {
     const b = task({ key: "B1", status: "blocked", blockedOn: "deps", depends: ["X"], claimedBy: null, claimUntil: null });
     expect(watchdogPlan([b], new Set(), now).unblock).toEqual([]);

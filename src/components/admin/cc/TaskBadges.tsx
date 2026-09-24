@@ -27,6 +27,8 @@ export async function TaskBadges({ task }: { task: AnnotatedTask }) {
     h.waitingDeps && { tone: "bg-surface text-muted", text: `🔒 ${t("health.waitingDeps")}` },
     task.rework > 0 && { tone: "bg-warn-50 text-warn", text: `↩ ${t("health.rework", { n: task.rework })}` },
     task.status === "backlog" && task.dorOk && { tone: "bg-ok-50 text-ok", text: `✓ ${t("health.dorOk")}` },
+    task.status === "review" && task.claimedBy && { tone: "bg-brand-50 text-brand", text: `🧪 ${task.claimedBy}` },
+    task.status === "review" && task.testedSha && { tone: "bg-ok-50 text-ok", text: `✅ ${t("health.tested")}` },
     task.branch && ["in_progress", "review"].includes(task.status) && { tone: "bg-surface text-muted font-mono", text: `⎇ ${task.branch}` },
   ].filter(Boolean) as { tone: string; text: string }[];
   if (!items.length) return null;

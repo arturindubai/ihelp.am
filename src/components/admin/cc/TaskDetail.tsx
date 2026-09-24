@@ -284,6 +284,9 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
                   </dd>
                 </div>
               )}
+              {task.testedSha && (
+                <Row label={t("work.tested")} value={`${task.testedBy ?? ""} · ${task.testedSha.slice(0, 10)}${task.testedAt ? ` · ${when(task.testedAt)}` : ""}`} />
+              )}
               {task.deployedSha && (
                 <div className="flex items-baseline justify-between gap-2">
                   <dt className="text-muted">{t("work.commit")}</dt>
