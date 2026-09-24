@@ -732,7 +732,7 @@
       "mailEnabled": "Отправлять письма",
       "mailApiKey": "Ключ API",
       "mailFrom": "Отправитель",
-      "mailFromPh": "iHelp <info@ваш-домен>",
+      "mailFromPh": "iHelp '<info@ваш-домен>'",
       "mailReplyTo": "Адрес для ответов",
       "mailHint": "Домен отправителя должен быть подтверждён в кабинете Resend (записи SPF и DKIM)",
       "testMail": "Отправить тестовое письмо",
