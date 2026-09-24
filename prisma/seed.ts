@@ -66,6 +66,7 @@ async function syncBacklog() {
       stage: t.stage,
       owner: t.owner,
       estimate: t.estimate ?? null,
+      scope: t.scope ?? [],
       sort: i,
     };
     const existing = await db.task.findUnique({ where: { key: t.key }, select: { id: true, source: true } });
@@ -75,7 +76,12 @@ async function syncBacklog() {
     }
     else {
       created++;
-      await db.task.create({ data: { key: t.key, ...content, status: t.status ?? "backlog", doneAt: t.status === "done" ? new Date() : null } });
+      // Из кода берём только «Готово» и «На проверке» (задача пришла вместе со своим кодом): «В работе» и прочее
+      // ведёт Control Center — иначе на доске появляются задачи «в работе», над которыми никто не работает
+      const status = t.status === "done" || t.status === "review" ? t.status : "backlog";
+      await db.task.create({
+        data: { key: t.key, ...content, status, doneAt: status === "done" ? new Date() : null, branch: status === "review" ? `task/${t.key}` : null },
+      });
     }
   }
   const extra = await db.task.findMany({ where: { key: { notIn: BACKLOG.map((t) => t.key) } }, select: { key: true } });

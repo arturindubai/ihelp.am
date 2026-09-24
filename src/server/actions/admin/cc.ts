@@ -4,9 +4,12 @@ import { z } from "zod";
 import { requireSection } from "../../admin";
 import { audit } from "../../audit";
 import { addComment, deleteTask, saveTask, updateTask, type TaskContent } from "../../services/cc";
+import { CcError, transition } from "../../services/ccWork";
 import { saveEpic, deleteEpic, type EpicContent } from "../../services/epics";
 import { deleteAttachment } from "../../services/attachments";
-import { AREAS, EPIC_STATUSES, LAYERS, OWNERS, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
+import { EPIC_STATUSES, OWNERS, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
+import { BLOCKED_ON, type TaskStatusKey } from "@/lib/cc-flow";
+import { taskContentSchema } from "@/lib/cc-schema";
 import { formatPhone } from "@/lib/phone";
 import type { User } from "@prisma/client";
 
@@ -14,12 +17,10 @@ const who = (u: User) => u.name || formatPhone(u.phone);
 const rAll = () => revalidatePath("/", "layout");
 
 const patchSchema = z.object({
-  status: z.enum(Object.keys(STATUSES) as [string, ...string[]]).optional(),
   owner: z.enum(Object.keys(OWNERS) as [string, ...string[]]).optional(),
   priority: z.enum(Object.keys(PRIORITIES) as [string, ...string[]]).optional(),
   stage: z.enum(Object.keys(STAGES) as [string, ...string[]]).optional(),
   assignee: z.string().max(60).nullable().optional(),
-  blockedReason: z.string().max(200).nullable().optional(),
 });
 
 export async function ccUpdateTaskAction(key: string, patch: z.infer<typeof patchSchema>) {
@@ -33,27 +34,35 @@ export async function ccUpdateTaskAction(key: string, patch: z.infer<typeof patc
   return { ok: true as const };
 }
 
-const lines = z.array(z.string().max(500)).max(20);
-const contentSchema = z.object({
-  key: z.string().min(3).max(30),
-  title: z.string().min(5).max(200),
-  summary: z.string().min(10).max(2000),
-  details: z.string().max(5000).nullable().optional(),
-  requirements: lines,
-  design: z.string().max(5000).nullable().optional(),
-  qaNotes: z.string().max(5000).nullable().optional(),
-  deployNotes: z.string().max(5000).nullable().optional(),
-  needs: lines,
-  depends: z.array(z.string().max(30)).max(20),
-  docs: lines,
-  epicKey: z.string().max(60).nullable().optional(),
-  area: z.enum(Object.keys(AREAS) as [string, ...string[]]),
-  layer: z.enum(Object.keys(LAYERS) as [string, ...string[]]),
-  priority: z.enum(Object.keys(PRIORITIES) as [string, ...string[]]),
-  stage: z.enum(Object.keys(STAGES) as [string, ...string[]]),
-  owner: z.enum(Object.keys(OWNERS) as [string, ...string[]]),
-  estimate: z.enum(["S", "M", "L"]).nullable().optional(),
+const transitionSchema = z.object({
+  to: z.enum(Object.keys(STATUSES) as [string, ...string[]]),
+  text: z.string().max(5000).optional(),
+  force: z.boolean().optional(),
+  blockedOn: z.enum(BLOCKED_ON).optional(),
+  sha: z.string().max(40).optional(),
 });
+
+/**
+ * Смена статуса из админки. Люди с доступом к Control Center действуют с правами владельца,
+ * но через те же гейты, что и агенты: обойти гейт можно только явно, с причиной — это видно в истории
+ */
+export async function ccTransitionAction(key: string, input: z.infer<typeof transitionSchema>) {
+  const u = await requireSection("control");
+  const parsed = transitionSchema.safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: "invalid" };
+  try {
+    const { to, ...rest } = parsed.data;
+    await transition(key, { to: to as TaskStatusKey, ...rest }, { name: who(u), role: "owner", via: "ui" });
+    await audit(u.id, "cc.task.status", "Task", key, { to, force: !!rest.force });
+    rAll();
+    return { ok: true as const };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof CcError ? e.code : (e as Error).message, detail: e instanceof CcError ? e.detail : undefined };
+  }
+}
+
+const contentSchema = taskContentSchema;
+const lines = z.array(z.string().max(500)).max(20);
 
 /** Создание или изменение задачи в админке. После этого деплой не перезаписывает её тексты */
 export async function ccSaveTaskAction(content: unknown, isNew: boolean) {

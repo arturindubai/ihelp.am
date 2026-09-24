@@ -299,7 +299,6 @@ const AUTH: TaskSeed[] = [
     stage: "launch",
     owner: "both",
     estimate: "S",
-    status: "in_progress",
   },
   {
     key: "AUTH-3",
@@ -358,7 +357,6 @@ const AUTH: TaskSeed[] = [
     stage: "public",
     owner: "tech",
     estimate: "M",
-    status: "in_progress",
   },
   {
     key: "AUTH-6",
@@ -423,7 +421,6 @@ const SOCIAL: TaskSeed[] = [
     stage: "public",
     owner: "both",
     estimate: "M",
-    status: "in_progress",
   },
   {
     key: "AUTH-9",
@@ -449,7 +446,6 @@ const SOCIAL: TaskSeed[] = [
     stage: "public",
     owner: "both",
     estimate: "L",
-    status: "in_progress",
   },
   {
     key: "AUTH-10",
@@ -471,7 +467,6 @@ const SOCIAL: TaskSeed[] = [
     stage: "public",
     owner: "both",
     estimate: "M",
-    status: "in_progress",
   },
 ];
 
@@ -549,7 +544,6 @@ const OTP: TaskSeed[] = [
     stage: "public",
     owner: "both",
     estimate: "S",
-    status: "in_progress",
   },
 ];
 
@@ -671,7 +665,6 @@ const NOTIFY: TaskSeed[] = [
     stage: "public",
     owner: "tech",
     estimate: "S",
-    status: "in_progress",
   },
   {
     key: "NOTIFY-8",
@@ -692,7 +685,6 @@ const NOTIFY: TaskSeed[] = [
     stage: "public",
     owner: "both",
     estimate: "M",
-    status: "in_progress",
   },
   {
     key: "NOTIFY-7",
@@ -1046,7 +1038,6 @@ const MON: TaskSeed[] = [
     stage: "public",
     owner: "both",
     estimate: "M",
-    status: "in_progress",
   },
   {
     key: "MON-3",
@@ -1175,7 +1166,6 @@ const SEO: TaskSeed[] = [
     stage: "growth",
     owner: "both",
     estimate: "L",
-    status: "in_progress",
   },
   {
     key: "SEO-6",
@@ -1247,7 +1237,6 @@ const LEGAL: TaskSeed[] = [
     stage: "launch",
     owner: "both",
     estimate: "M",
-    status: "in_progress",
   },
   {
     key: "LEGAL-3",
@@ -1268,7 +1257,6 @@ const LEGAL: TaskSeed[] = [
     stage: "public",
     owner: "both",
     estimate: "M",
-    status: "in_progress",
   },
   {
     key: "LEGAL-5",
@@ -1386,7 +1374,6 @@ const CONTENT: TaskSeed[] = [
     stage: "growth",
     owner: "both",
     estimate: "M",
-    status: "in_progress",
   },
 ];
 
@@ -1408,7 +1395,6 @@ const MOBILE: TaskSeed[] = [
     stage: "public",
     owner: "tech",
     estimate: "M",
-    status: "in_progress",
     depends: ["INFRA-1"],
   },
   {
@@ -1469,7 +1455,6 @@ const TEAM: TaskSeed[] = [
     stage: "public",
     owner: "product",
     estimate: "S",
-    status: "in_progress",
   },
 ];
 
@@ -1545,7 +1530,6 @@ const DEV: TaskSeed[] = [
     stage: "public",
     owner: "tech",
     estimate: "M",
-    status: "in_progress",
   },
   {
     key: "DEV-12",
@@ -1614,7 +1598,7 @@ const DEV: TaskSeed[] = [
     key: "DEV-6",
     title: "Агенты-исполнители задач",
     summary: "Демон поднимает воркеров Claude Code, они берут задачи из Control Center по API, делают работу в песочнице и отдают результат на проверку человеку.",
-    details: "Нужен отдельный демон с пулами воркеров и режимами (ручной, авто, по расписанию); воркеры никогда не выкладывают на прод. API задач уже готов, не хватает самого демона и решения по доступам и расходам.",
+    details: "Нужен отдельный демон с пулами воркеров и режимами (ручной, авто, по расписанию); воркеры никогда не выкладывают на прод. С 24.09.2026 (DEV-13) готово всё, кроме самого запуска: аренда с пульсом, сторож брошенных задач, CLI scripts/cc.mjs, worktree на задачу и стартовое сообщение автономного разработчика (docs/roles/KICKOFF.md). Проще всего начать с задач по расписанию в Claude Code — без своего демона. Не хватает решения по доступам и расходам.",
     requirements: [
       "Агент берёт задачу только своей категории и держит аренду, пока работает",
       "Результат уходит на проверку человеку, выкладка остаётся за человеком",
@@ -1711,6 +1695,99 @@ const DEV: TaskSeed[] = [
     layer: "infra",
     priority: "p2",
     stage: "growth",
+    owner: "tech",
+    estimate: "M",
+  },
+  {
+    key: "DEV-13",
+    title: "Система разработки: роли, жизненный цикл задач, аренда с пульсом и сторож",
+    summary:
+      "Несколько чатов работают над iHelp параллельно, но «В работе» ничего не значило (13 задач без исполнителя), брошенные задачи никто не замечал, ветки появлялись без карточек, задачи закрывались без доказательства. Нужна система, в которой каждая задача входит в работу понятной и выходит с доказательством, как в Command Center проекта LIA.",
+    details:
+      "24.09.2026, по запросу владельца. Сделано: статусы «Готова к работе» и «Отменена», таблица переходов по ролям (src/lib/cc-flow.ts); гейты: готовность к работе (DoR), сдача — ветка и отчёт, «Готово» — коммит в main и доказательство, эпик — только когда закрыты все его задачи; аренда задачи с пульсом из хука Claude Code (.claude/hooks/cc-pulse.sh); сторож в /api/cron: брошенная задача через 60 минут без пульса отмечается и сообщается в тех-чат, ещё через 4 часа возвращается в очередь с сохранённой веткой; CLI scripts/cc.mjs с отдельным git worktree на задачу; шторка с карточкой задачи по клику, панель «Нужно вам», метки здоровья, лента из отчётов, ошибок и истории. Документы: docs/DEV_SYSTEM.md, docs/roles/, docs/DECISIONS.md, docs/specs/README.md. Миграция аддитивная; 12 задач «В работе» без исполнителя (статус из кода) переведены в бэклог с записью в историю.",
+    requirements: [
+      "Задача берётся в работу только из «Готова к работе», одним исполнителем, с арендой; один исполнитель держит одну задачу",
+      "Брошенная задача видна на доске и в тех-чате через час без пульса и сама возвращается в очередь, ветка сохраняется",
+      "На проверку код-задача уходит только с отправленной веткой и отчётом, «Готово» — только с коммитом в main и доказательством",
+      "По клику на задачу видно всё: требования, связи в обе стороны, кто держит и когда был пульс, ветка, коммит, лента отчётов и ошибок, история, файлы",
+      "Роли, требования к участникам и первые сообщения для каждого чата описаны в docs/roles",
+      "Несколько чатов-разработчиков работают параллельно в своих worktree и не берут пересекающиеся по коду задачи",
+    ],
+    qaNotes:
+      "tsc и vitest (новые тесты src/lib/cc-flow.test.ts). Прогон на изолированном стенде с копией задач Control Center из прода: миграция и нормализация статусов, полный цикл CLI (готовность → взять → пульс → сдать → вернуть → сдать → закрыть), сторож (отметка брошенной, возврат через 4 часа, сигнал вернувшемуся чату), гонка трёх одновременно стартовавших чатов, скриншоты списка, доски, шторки и страницы задачи.",
+    deployNotes:
+      "Миграция 20260924120000_dev_system: только новые колонки Task и перевод «В работе» без исполнителя в бэклог. Бэкап перед выкладкой — как обычно. После выкладки: node scripts/cc.mjs attention; первичный разбор бэклога — DEV-16.",
+    docs: ["docs/DEV_SYSTEM.md", "docs/roles/README.md", "docs/roles/KICKOFF.md", "docs/DECISIONS.md", "docs/CONTROL_CENTER.md"],
+    epic: "Command Center: эпики, требования и файлы",
+    epicKey: "command-center",
+    area: "dev",
+    layer: "fullstack",
+    priority: "p1",
+    stage: "public",
+    owner: "both",
+    estimate: "L",
+    scope: ["src/lib/cc-flow.ts", "src/server/services/cc.ts", "src/server/services/ccWork.ts", "src/app/api/cc", "src/components/admin/cc", "src/app/[locale]/admin/control", "scripts/cc.mjs", ".claude"],
+    // Задача заведена в той же ветке, что и её код: появится в Control Center сразу «На проверке», закрывает деплоер
+    status: "review",
+  },
+  {
+    key: "DEV-14",
+    title: "Журнал ошибок приложения в Control Center",
+    summary: "Ошибки сайта сейчас приходят только тех-алертами в Telegram и теряются в чате. Нужен журнал в Control Center: повторяющаяся ошибка становится задачей-багом с историей, а не сообщением, которое никто не нашёл.",
+    details: "Аналог log-monitor из LIA, но без автономных действий: только запись и задача, решает человек. Источник — тот же alertTech (src/server/alerts.ts) и reportRequestError.",
+    requirements: [
+      "Каждый тех-алерт записывается в журнал: когда, где, текст, сколько раз повторился",
+      "Повторяющаяся ошибка одним нажатием или автоматически становится задачей-багом со ссылкой на записи журнала, без дублей",
+      "Журнал виден в Control Center рядом с состоянием системы и чистится по сроку хранения",
+    ],
+    depends: ["DEV-13"],
+    epic: "Command Center: эпики, требования и файлы",
+    epicKey: "command-center",
+    area: "dev",
+    layer: "fullstack",
+    priority: "p2",
+    stage: "growth",
+    owner: "tech",
+    estimate: "M",
+    scope: ["src/server/alerts.ts", "src/server/services/cc.ts", "src/components/admin/cc"],
+  },
+  {
+    key: "DEV-15",
+    title: "Спецификации сквозных алгоритмов в docs/specs",
+    summary: "Как считаются цены, как строятся слоты, как живут подписки, как устроен вход — сейчас это знание приходится каждый раз восстанавливать по коду. Разработчик, который его не знает, ломает соседние сценарии, и задачу переделывают.",
+    details: "Шаблон и порядок — docs/specs/README.md. Спецификация живёт в git: версии, разница и откат — бесплатно, правка проходит ту же проверку, что и код. Задачи ссылаются на спецификацию в поле «Документы».",
+    requirements: [
+      "Есть спецификации: цены и скидки, слоты и расписание мастеров, подписки и пакеты, вход и роли, уведомления",
+      "Каждая спецификация описывает правила, крайние случаи и где это в коде, и сверена с кодом на дату написания",
+      "Задачи, которые меняют эти алгоритмы, ссылаются на спецификацию, а изменение правил правит и её",
+    ],
+    needs: ["Подтверждение владельцем бизнес-правил: скидки, отмены, переносы, пакеты"],
+    depends: ["DEV-13"],
+    epic: "Command Center: эпики, требования и файлы",
+    epicKey: "command-center",
+    area: "dev",
+    layer: "none",
+    priority: "p1",
+    stage: "public",
+    owner: "both",
+    estimate: "M",
+  },
+  {
+    key: "DEV-16",
+    title: "Первичный разбор бэклога по новой системе",
+    summary: "После выкладки DEV-13 ни одна задача ещё не «Готова к работе»: разработчикам нечего брать. Техдиректор проходит бэклог, проверяет готовность и переводит готовое в очередь, недосказанное — к продукту или владельцу.",
+    requirements: [
+      "Задачи этапа «Первые клиенты» разобраны: готовые — в «Готова к работе», у остальных в ленте написано, чего не хватает и от кого",
+      "У задач, взятых в работу параллельно, заполнено поле «Затрагивает файлы»",
+      "Устаревшие и задвоенные задачи отменены с причиной",
+    ],
+    depends: ["DEV-13"],
+    epic: "Command Center: эпики, требования и файлы",
+    epicKey: "command-center",
+    area: "dev",
+    layer: "none",
+    priority: "p1",
+    stage: "public",
     owner: "tech",
     estimate: "M",
   },

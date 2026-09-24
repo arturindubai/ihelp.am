@@ -15,6 +15,13 @@
           { "type": "command", "timeout": 10, "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/session-start.sh" }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          { "type": "command", "timeout": 10, "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/cc-pulse.sh\"; [ -f \"$f\" ] && bash \"$f\" || true" }
+        ]
+      }
     ]
   }
 }
