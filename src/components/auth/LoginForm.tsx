@@ -3,18 +3,33 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { MessageCircle, Send, Smartphone } from "lucide-react";
 import { completeSignupAction, sendCodeAction, verifyCodeAction } from "@/server/actions/auth";
-import { formatPhone } from "@/lib/phone";
+import { composePhone, formatPhone, splitPhone } from "@/lib/phone";
+import { COUNTRIES, DEFAULT_COUNTRY, countryByIso, flagEmoji } from "@/lib/countries";
 import { Link } from "@/i18n/navigation";
 
 type Channel = "SMS" | "WHATSAPP" | "TELEGRAM";
 const ICONS = { WHATSAPP: MessageCircle, TELEGRAM: Send, SMS: Smartphone };
 
-export function LoginForm({ channels, prefill, onDone }: { channels: Channel[]; prefill?: { email?: string; phone?: string }; onDone: (role: string) => void }) {
+/** defaultCountry — ISO страны посетителя по IP (AUTH-12), подсказка для селектора; пусто — Армения */
+export function LoginForm({
+  channels,
+  prefill,
+  defaultCountry,
+  onDone,
+}: {
+  channels: Channel[];
+  prefill?: { email?: string; phone?: string };
+  defaultCountry?: string | null;
+  onDone: (role: string) => void;
+}) {
   const t = useTranslations("auth");
   const tc = useTranslations("common");
   const locale = useLocale();
   const [step, setStep] = useState<"phone" | "code" | "profile">("phone");
-  const [phone, setPhone] = useState(prefill?.phone ? formatPhone(prefill.phone) : "+374 ");
+  const prefilled = prefill?.phone ? splitPhone(prefill.phone) : null;
+  const [iso, setIso] = useState(prefilled?.iso ?? countryByIso(defaultCountry)?.iso ?? DEFAULT_COUNTRY);
+  const [national, setNational] = useState(prefilled?.national ?? "");
+  const country = countryByIso(iso) ?? COUNTRIES[0];
   const [normalized, setNormalized] = useState("");
   const [channel, setChannel] = useState<Channel>(channels[0]);
   const [usedChannel, setUsedChannel] = useState<Channel>(channels[0]);
@@ -41,9 +56,11 @@ export function LoginForm({ channels, prefill, onDone }: { channels: Channel[]; 
 
   function send(ch: Channel) {
     setError(undefined);
+    const full = composePhone(country.dial, national);
+    if (!full) return setError(errText("phone"));
     setChannel(ch);
     start(async () => {
-      const r = await sendCodeAction(phone, ch, locale);
+      const r = await sendCodeAction(full, ch, locale);
       if (!r.ok) return setError(errText(r.error, "retryIn" in r ? r.retryIn : undefined));
       setNormalized(r.phone!);
       setUsedChannel(r.channel);
@@ -78,7 +95,15 @@ export function LoginForm({ channels, prefill, onDone }: { channels: Channel[]; 
       {step === "phone" && (
         <div>
           <label className="label" htmlFor="phone">{t("phone")}</label>
-          <input id="phone" className="input text-lg tracking-wide" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <div className="grid gap-2">
+            <select className="input" aria-label={t("country")} value={iso} onChange={(e) => setIso(e.target.value)}>
+              {COUNTRIES.map((c) => (
+                <option key={c.iso} value={c.iso}>{flagEmoji(c.iso)} {c.name} +{c.dial}</option>
+              ))}
+            </select>
+            <input id="phone" className="input text-lg tracking-wide" inputMode="tel" autoComplete="tel-national" value={national} placeholder={t("phonePlaceholder")} onChange={(e) => setNational(e.target.value)} />
+          </div>
+          <p className="mt-1 text-xs text-muted">{t("phoneHint")}</p>
           <p className="mt-4 mb-2 text-sm font-medium">{t("getCodeVia")}</p>
           <div className="grid gap-2">
             {channels.map((ch) => {

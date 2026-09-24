@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/server/auth";
 import { availableChannels } from "@/server/otp";
 import { getSettings } from "@/server/settings";
 import { unpackSignupTicket } from "@/server/services/signupTicket";
+import { detectCountry } from "@/server/services/geoip";
 import { LoginClient } from "./LoginClient";
 
 export default async function LoginPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ next?: string; error?: string; complete?: string }> }) {
@@ -20,7 +21,7 @@ export default async function LoginPage({ params, searchParams }: { params: Prom
     completeTicket?.kind === "new"
       ? { email: completeTicket.email || undefined, phone: completeTicket.phone || undefined }
       : undefined;
-  const [channels, s, t] = await Promise.all([availableChannels(), getSettings(), getTranslations("auth")]);
+  const [channels, s, t, country] = await Promise.all([availableChannels(), getSettings(), getTranslations("auth"), detectCountry()]);
   const google = s.google.enabled && !!s.google.clientId;
   const apple = s.apple.enabled && !!s.apple.clientId;
   const errorKey =
@@ -54,7 +55,7 @@ export default async function LoginPage({ params, searchParams }: { params: Prom
           )}
         </div>
       )}
-      <LoginClient channels={channels} next={safeNext} prefill={prefill} />
+      <LoginClient channels={channels} next={safeNext} prefill={prefill} defaultCountry={country} />
     </div>
   );
 }

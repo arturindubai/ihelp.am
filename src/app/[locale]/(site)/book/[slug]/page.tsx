@@ -9,6 +9,7 @@ import { getMastersForService, loadServiceRaw, localizeService, resolveSelection
 import { isFirstOrder } from "@/server/services/booking";
 import { tr } from "@/i18n/locales";
 import { Checkout } from "@/components/booking/Checkout";
+import { detectCountry } from "@/server/services/geoip";
 import { InlineLogin } from "./InlineLogin";
 
 export default async function BookPage({ params, searchParams }: { params: Promise<{ locale: string; slug: string }>; searchParams: Promise<{ o?: string; p?: string }> }) {
@@ -37,7 +38,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
         {header}
         <div className="card mt-4 p-4">
           <h2 className="h3 mb-3">{t("loginToContinue")}</h2>
-          <InlineLogin channels={await availableChannels(settings)} />
+          <InlineLogin channels={await availableChannels(settings)} defaultCountry={await detectCountry()} />
         </div>
       </div>
     );
