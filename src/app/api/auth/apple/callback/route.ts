@@ -32,17 +32,19 @@ export async function POST(req: Request) {
   if (!profile || !profile.emailVerified) return fail("apple_failed");
 
   const email = profile.email.toLowerCase();
+  const next = (verifyState(state, process.env.SESSION_SECRET || "dev") ?? "").split("|")[1] || "";
   const user = await db.user.findUnique({ where: { email } });
   if (!user) {
     await audit(null, "auth.apple.signup_start", "User", null, { email });
     const ticket = packSignupTicket({ kind: "new", phone: "", email, locale: "ru" });
-    return NextResponse.redirect(new URL(`/ru/login?complete=${encodeURIComponent(ticket)}`, base), { status: 303 });
+    // next сохраняем — человек мог начать с оформления заказа и после регистрации должен туда вернуться
+    const q = new URLSearchParams({ complete: ticket, ...(next.startsWith("/") ? { next } : {}) });
+    return NextResponse.redirect(new URL(`/ru/login?${q}`, base), { status: 303 });
   }
   if (user.blocked) return fail("blocked");
 
   await createSession(user.id);
   await audit(user.id, "auth.apple", "User", user.id, { email });
-  const next = (verifyState(state, process.env.SESSION_SECRET || "dev") ?? "").split("|")[1] || "";
   const dest = next.startsWith("/") ? `/ru${next}` : STAFF_ROLES.includes(user.role) ? "/ru/admin" : "/ru/account";
   return NextResponse.redirect(new URL(dest, base), { status: 303 });
 }
