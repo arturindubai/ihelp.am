@@ -17,7 +17,7 @@ CLAUDE_CODE_OAUTH_TOKEN=$(grep -E '^CLAUDE_CODE_OAUTH_TOKEN=' "$root/.env" 2> /d
 export CLAUDE_CODE_OAUTH_TOKEN
 [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] || { echo '{"is_error":true,"result":"Not logged in: нет токена подписки, нужен scripts/claude-login.sh"}'; exit 2; }
 
-allow=(Read Glob Grep Edit Write MultiEdit TodoWrite
+allow=(Read Glob Grep Edit Write TodoWrite
   "Bash(git *)" "Bash(node scripts/cc.mjs *)" "Bash(scripts/check.sh)" "Bash(scripts/stand.sh *)" "Bash(node scripts/stand-shot.mjs *)"
   "Bash(ls *)" "Bash(ls)" "Bash(pwd)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(jq *)"
   "Bash(diff *)" "Bash(sort *)" "Bash(sed -n *)" "Bash(node --check *)" "Bash(bash -n *)" "Bash(python3 -c *)" "Bash(mkdir *)" "Bash(date)"
@@ -32,24 +32,24 @@ case "$role" in
     # Деплоер ничего не правит руками: только проверка и одна команда выкладки
     allow=(Read Glob Grep TodoWrite "Bash(git log *)" "Bash(git diff *)" "Bash(git show *)" "Bash(git status)" "Bash(git fetch *)" "Bash(git rev-parse *)"
       "Bash(node scripts/cc.mjs *)" "Bash(scripts/deploy-task.sh *)" "Bash(deploy/smoke.sh)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(ls *)")
-    deny+=("Edit" "Write" "MultiEdit" "Bash(git merge *)" "Bash(git checkout *)" "Bash(git reset *)" "Bash(git commit *)" "Bash(git push *)")
+    deny+=("Edit" "Write" "Bash(git merge *)" "Bash(git checkout *)" "Bash(git reset *)" "Bash(git commit *)" "Bash(git push *)")
     ;;
   tester)
     # Тестировщик код не правит: проверяет и пишет вердикт
-    deny+=("Edit" "Write" "MultiEdit" "Bash(git commit *)" "Bash(git push *)")
+    deny+=("Edit" "Write" "Bash(git commit *)" "Bash(git push *)")
     ;;
   triage)
     # Триаж только читает код и документы и работает с карточками через scripts/cc.mjs (поля — через --data)
     allow=(Read Glob Grep TodoWrite "Bash(node scripts/cc.mjs *)" "Bash(git log *)" "Bash(git show *)" "Bash(git diff *)" "Bash(git status)"
       "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(date)")
-    deny+=("Edit" "Write" "MultiEdit" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(cat >*)" "Bash(cat *>*)")
+    deny+=("Edit" "Write" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(cat >*)" "Bash(cat *>*)")
     ;;
   nocode)
     # «Продукт и не-код»: читает проект, ищет и читает страницы в интернете, проверяет DNS, работает с карточками.
     # Файлы не правит, git не пишет: результат — в карточке. Аккаунты, оплату и пароли делает человек
     allow=(Read Glob Grep TodoWrite WebSearch WebFetch "Bash(node scripts/cc.mjs *)" "Bash(dig *)" "Bash(host *)" "Bash(nslookup *)" "Bash(whois *)"
       "Bash(git log *)" "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(date)")
-    deny+=("Edit" "Write" "MultiEdit" "NotebookEdit" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(cat >*)" "Bash(cat *>*)" "Bash(curl *)")
+    deny+=("Edit" "Write" "NotebookEdit" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(cat >*)" "Bash(cat *>*)" "Bash(curl *)")
     ;;
   dev) ;;
   *) echo '{"is_error":true,"result":"неизвестная роль"}'; exit 2 ;;
