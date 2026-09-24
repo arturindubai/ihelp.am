@@ -5,6 +5,7 @@ import { hash } from "./auth";
 import { getSettings, Settings } from "./settings";
 import { alertTech } from "./alerts";
 import { html } from "./notify";
+import { sendMail, mailTemplate } from "./services/mail";
 import { createTranslator } from "next-intl";
 import { loadMessages } from "@/i18n/messages";
 import type { OtpChannel } from "@prisma/client";
@@ -16,23 +17,51 @@ const MAX_FAILS_PER_DAY = 20;
 /** После стольких неверных кодов за сутки — тех-алерт о возможном подборе */
 const ALERT_FAILS_PER_DAY = 10;
 
+/** Каналы кода на телефон: всё, кроме EMAIL (код на почту идёт по адресу, а не по номеру) */
+export type PhoneChannel = Exclude<OtpChannel, "EMAIL">;
+
 export type OtpResult = { ok: true; devCode?: string; resendIn: number; codeLength: number } | { ok: false; error: string; retryIn?: number };
 
-export async function availableChannels(s?: Settings): Promise<OtpChannel[]> {
-  const st = s || (await getSettings());
-  const list: OtpChannel[] = [];
+/** Подключённые каналы кода на телефон: только реально включённые в настройках, без запасного набора */
+function enabledPhoneChannels(st: Settings): PhoneChannel[] {
+  const list: PhoneChannel[] = [];
   if (st.otp.whatsapp.enabled) list.push("WHATSAPP");
   if (st.otp.telegram.enabled) list.push("TELEGRAM");
   if (st.otp.sms.enabled) list.push("SMS");
+  return list;
+}
+
+/** Коды на email работают, когда почта подключена: включена, есть ключ Resend и адрес отправителя */
+export const emailCodesAvailable = (st: Settings) => st.mail.enabled && !!st.mail.apiKey && !!st.mail.from;
+
+export async function availableChannels(s?: Settings): Promise<PhoneChannel[]> {
+  const st = s || (await getSettings());
+  const list = enabledPhoneChannels(st);
   // Пока ни один канал не подключён: код пишется в лог сервера (docker compose logs app | grep otp),
   // а при OTP_DEV_MODE=true ещё и показывается на экране. Так владелец может войти и настроить каналы.
   if (!list.length) return ["WHATSAPP", "TELEGRAM", "SMS"];
   return list;
 }
 
-export async function sendOtp(phone: string, channel: OtpChannel, ip?: string, locale = "ru"): Promise<OtpResult> {
+/**
+ * Способы входа для формы (AUTH-14): коды на телефон и на email. Если работает почта, запасной набор
+ * каналов «код в лог сервера» клиентам не показываем — они бы просили код, который никуда не придёт.
+ */
+export async function loginMethods(s?: Settings): Promise<{ channels: PhoneChannel[]; email: boolean }> {
+  const st = s || (await getSettings());
+  const email = emailCodesAvailable(st);
+  const real = enabledPhoneChannels(st);
+  return { email, channels: real.length || email ? real : await availableChannels(st) };
+}
+
+/**
+ * Для канала EMAIL в phone лежит адрес почты (нижний регистр): поле OtpCode.phone историческое, лимиты и хэш общие.
+ * skipDelivery — код создаётся и лимиты списываются, но письмо не уходит: так ответ одинаков для существующего
+ * и несуществующего адреса, и по ответу нельзя узнать, есть ли у человека аккаунт.
+ */
+export async function sendOtp(phone: string, channel: OtpChannel, ip?: string, locale = "ru", opts: { skipDelivery?: boolean } = {}): Promise<OtpResult> {
   const s = await getSettings();
-  const channels = await availableChannels(s);
+  const channels: OtpChannel[] = channel === "EMAIL" ? (emailCodesAvailable(s) ? ["EMAIL"] : []) : await availableChannels(s);
   if (!channels.includes(channel)) return { ok: false, error: "channel_unavailable" };
 
   const last = await db.otpCode.findFirst({ where: { phone }, orderBy: { createdAt: "desc" } });
@@ -54,14 +83,17 @@ export async function sendOtp(phone: string, channel: OtpChannel, ip?: string, l
     data: { phone, channel, codeHash: hash(`${phone}:${code}`), expiresAt: new Date(Date.now() + s.otp.ttlMin * 60_000), ip },
   });
 
+  if (opts.skipDelivery) return { ok: true, resendIn: s.otp.resendSec, codeLength: s.otp.codeLength };
+
   const dev = process.env.OTP_DEV_MODE === "true";
-  const configured = channel === "SMS" ? s.otp.sms.enabled : channel === "WHATSAPP" ? s.otp.whatsapp.enabled : s.otp.telegram.enabled;
+  const configured = channel === "SMS" ? s.otp.sms.enabled : channel === "WHATSAPP" ? s.otp.whatsapp.enabled : channel === "EMAIL" ? emailCodesAvailable(s) : s.otp.telegram.enabled;
   if (configured) {
     try {
       await deliver(s, channel, phone, code, locale);
     } catch (e) {
       console.error("[otp] delivery failed", channel, e);
-      await alertTech(`otp-delivery:${channel}`, html`❌ <b>Не доставлен код входа</b> · ${channel}\n<code>${String((e as Error).message ?? e).slice(0, 400)}</code>\nПроверить: Настройки → Подтверждение номера`, 30);
+      const where = channel === "EMAIL" ? "Настройки → Почта" : "Настройки → Подтверждение номера";
+      await alertTech(`otp-delivery:${channel}`, html`❌ <b>Не доставлен код входа</b> · ${channel}\n<code>${String((e as Error).message ?? e).slice(0, 400)}</code>\nПроверить: ${where}`, 30);
       if (!dev) return { ok: false, error: "delivery_failed" };
     }
   } else {
@@ -87,6 +119,14 @@ export async function verifyOtp(phone: string, code: string): Promise<boolean> {
 }
 
 async function deliver(s: Settings, channel: OtpChannel, phone: string, code: string, locale: string) {
+  if (channel === "EMAIL") {
+    const tr = createTranslator({ locale, messages: await loadMessages(locale), namespace: "auth" }) as unknown as (key: string, values?: Record<string, string>) => string;
+    const brand = s.brand.name;
+    const lines = [tr("emailCodeLine", { code }), tr("emailCodeTtl", { min: String(s.otp.ttlMin) }), tr("emailCodeIgnore")];
+    const r = await sendMail({ to: phone, subject: tr("emailCodeSubject", { brand, code }), html: mailTemplate({ brand, title: tr("emailCodeTitle"), lines }), text: lines.join("\n") });
+    if (!r.ok) throw new Error(r.error);
+    return;
+  }
   if (channel === "TELEGRAM") {
     // Telegram Gateway API — https://core.telegram.org/gateway/api
     const r = await fetch("https://gatewayapi.telegram.org/sendVerificationMessage", {
