@@ -18,7 +18,7 @@ function readPath(root: unknown, path: string): unknown {
 }
 
 async function writePath(path: string, value: string) {
-  const s = await getSettings();
+  const s = await getSettings({ fresh: true });
   const [root, ...rest] = path.split(".") as [keyof Settings, ...string[]];
   const section = structuredClone(s[root]) as unknown as AnyObj;
   let node = section;
@@ -29,7 +29,7 @@ async function writePath(path: string, value: string) {
 
 export async function keysOverview() {
   const [s, logs] = await Promise.all([
-    getSettings(),
+    getSettings({ fresh: true }),
     db.auditLog.findMany({ where: { entity: "Key" }, orderBy: { createdAt: "desc" }, take: 300, include: { user: { select: { name: true, phone: true } } } }),
   ]);
   return KEYS.map((k) => {
@@ -74,7 +74,7 @@ export type KeyCheckResult = { ok: boolean | null; detail: string };
 export async function checkKey(path: string): Promise<KeyCheckResult> {
   const def = keyDef(path);
   if (!def) throw new KeyError("unknown_key");
-  const value = readPath(await getSettings(), path);
+  const value = readPath(await getSettings({ fresh: true }), path);
   if (typeof value !== "string" || !value) return { ok: false, detail: "empty" };
   try {
     if (def.check === "telegram") {

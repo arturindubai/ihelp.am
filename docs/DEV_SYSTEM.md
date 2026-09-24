@@ -232,7 +232,9 @@ node scripts/cc.mjs review AUTH-12 "Сделано: … Проверено: … 
 | Тексты планового бэклога и эпиков | `src/server/backlog.ts`, `src/server/epics.ts` | git и GitHub |
 | Файлы к задачам и эпикам | том `uploads` | ночной бэкап вместе с базой |
 | Код | ветки `task/<КЛЮЧ>`, `main` | GitHub |
-| Правила и роли | этот документ, [roles/](roles/README.md), `CLAUDE.md` | git |
+| Правила и роли | этот документ, [roles/](roles/README.md), `CLAUDE.md` | git; копия с версиями — Control Center → «Библиотека» |
+| Знания команды: прайсы, договорённости, как устроены аккаунты | Control Center → «Библиотека», записи `note-…` с версиями (`node scripts/cc.mjs lib`) | ночной бэкап базы |
+| Ключи сервисов (боты, SMS, почта, вход Google и Apple) | Control Center → «Ключи», в базе зашифрованы | ночной бэкап базы |
 | Решения владельца | [DECISIONS.md](DECISIONS.md) | git |
 | Сквозные алгоритмы и техстек | [specs/](specs/README.md), эпики | git |
 | Передача между чатами | лента задачи (`handoff`); у CTO ещё и память проекта Claude | база, память |

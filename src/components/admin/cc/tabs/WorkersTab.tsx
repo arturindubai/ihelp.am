@@ -77,7 +77,8 @@ export async function WorkersTab({ locale, taskHref }: { locale: string; taskHre
                   </span>
                 </span>
               }
-              actions={<RunWorkerButton pool={p} label={tw("runNow")} small />}
+              // Ключ нужен: Card кладёт actions рядом с заголовком, а если кнопка приходит с сервера отложенной частью, React проверяет её как элемент списка
+              actions={<RunWorkerButton key="run" pool={p} label={tw("runNow")} small />}
             >
               <p key="hint" className="mb-3 text-xs text-muted">{tw(`poolHints.${p}`)}</p>
               <PoolSettings key="settings" pool={p} initial={pc} />
@@ -140,8 +141,8 @@ export async function WorkersTab({ locale, taskHref }: { locale: string; taskHre
       </div>
 
       <Card title={tw("runs")}>
-        {data.runs.length === 0 && <p className="text-sm text-muted">{tw("noRuns")}</p>}
-        <ul className="divide-y divide-line">
+        {data.runs.length === 0 && <p key="empty" className="text-sm text-muted">{tw("noRuns")}</p>}
+        <ul key="runs" className="divide-y divide-line">
           {data.runs.map((r) => (
             <li key={r.id} className="py-2 text-sm">
               <div key="head" className="flex flex-wrap items-center gap-2">

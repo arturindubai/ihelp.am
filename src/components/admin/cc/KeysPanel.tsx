@@ -6,11 +6,11 @@ import { ccCheckKeyAction, ccClearKeyAction, ccConnectTeamBotAction, ccSetKeyAct
 import { KEY_GROUPS } from "@/lib/keys";
 import { cn } from "@/lib/format";
 
-type Row = { path: string; group: string; check?: string; url?: string; present: boolean; changedAt: string | null; changedBy: string | null };
-type Team = { token: boolean; username: string; webhook: string | null; lastError: string | null; members: { telegramId: number; name: string; addedAt: string }[] };
+/** Даты приходят уже подписанными с сервера: так разметка сервера и браузера совпадает */
+type Row = { path: string; group: string; check?: string; url?: string; present: boolean; changedLabel: string | null; changedBy: string | null };
+type Team = { token: boolean; username: string; webhook: string | null; lastError: string | null; members: { telegramId: number; name: string; addedLabel: string }[] };
 
 const idOf = (path: string) => path.replace(/\./g, "_");
-const when = (iso: string) => new Date(iso).toLocaleString("ru-RU", { timeZone: "Asia/Yerevan", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
 /**
  * «Ключи» — как Secrets в админке LIA: один список ключей сервисов. Значение только вводится: в браузер оно
@@ -104,7 +104,7 @@ function KeyRow({ row }: { row: Row }) {
               </>
             )}
           </p>
-          {row.changedAt && <p className="text-xs text-muted">{t("changed", { when: when(row.changedAt), who: row.changedBy ?? "—" })}</p>}
+          {row.changedLabel && <p className="text-xs text-muted">{t("changed", { when: row.changedLabel, who: row.changedBy ?? "—" })}</p>}
         </div>
         <div className="flex flex-wrap gap-1.5">
           <button className="btn-outline btn-sm" disabled={pending} onClick={() => setMode(mode === "edit" ? null : "edit")}>
@@ -229,7 +229,7 @@ function TeamBot({ team, tokenSet }: { team: Team; tokenSet: boolean }) {
             {team.members.map((m) => (
               <li key={m.telegramId} className="flex items-center justify-between gap-2 py-1.5">
                 <span>
-                  {m.name} <span className="text-xs text-muted">· {when(m.addedAt)}</span>
+                  {m.name} <span className="text-xs text-muted">· {m.addedLabel}</span>
                 </span>
                 <button className="btn-ghost btn-sm text-bad" disabled={pending} onClick={() => remove(m.telegramId)}>
                   {t("remove")}

@@ -121,8 +121,9 @@ let cache: { at: number; value: Settings } | null = null;
 let uiCache: { at: number; value: Map<string, { key: string; value: string }[]> } | null = null;
 const TTL = 15_000;
 
-export async function getSettings(): Promise<Settings> {
-  if (cache && Date.now() - cache.at < TTL) return cache.value;
+/** fresh — мимо кеша: страницы, где только что поменяли настройку («Ключи»), должны видеть новое значение сразу */
+export async function getSettings(opts?: { fresh?: boolean }): Promise<Settings> {
+  if (!opts?.fresh && cache && Date.now() - cache.at < TTL) return cache.value;
   const rows = await db.setting.findMany();
   let s = DEFAULT_SETTINGS;
   for (const r of rows) if (!r.key.startsWith("_")) s = merge(s, { [r.key]: r.value });
@@ -187,4 +188,21 @@ export function invalidateUiCache() {
 export function mask(v: string) {
   if (!v) return "";
   return v.length <= 6 ? "••••" : `${v.slice(0, 3)}••••${v.slice(-3)}`;
+}
+
+/**
+ * Настройки для браузера (страница «Настройки»): каждый ключ из реестра src/lib/keys.ts замаскирован,
+ * код привязки бота команды убран. Новый ключ в реестре маскируется здесь сам — поимённо перечислять не нужно
+ */
+export function maskedSettings(s: Settings): Settings {
+  const out = structuredClone(s);
+  for (const path of SECRET_PATHS) {
+    const [root, ...rest] = path.split(".");
+    let node = out[root as keyof Settings] as unknown as Record<string, unknown>;
+    for (const p of rest.slice(0, -1)) node = (node?.[p] ?? null) as Record<string, unknown>;
+    const last = rest[rest.length - 1];
+    if (node && typeof node[last] === "string") node[last] = mask(node[last] as string);
+  }
+  out.team = { ...out.team, linkCode: "", linkCodeAt: "" };
+  return out;
 }

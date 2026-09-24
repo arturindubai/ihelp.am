@@ -26,17 +26,18 @@ export function teamWebhookSecret() {
 }
 
 export function verifyTeamWebhook(header: string | null) {
+  if (!process.env.SESSION_SECRET) return false;
   const a = Buffer.from(header || "");
   const b = Buffer.from(teamWebhookSecret());
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-async function team(): Promise<TeamSettings> {
-  return (await getSettings()).team;
+async function team(fresh = false): Promise<TeamSettings> {
+  return (await getSettings({ fresh })).team;
 }
 
 async function saveTeam(patch: Partial<TeamSettings>) {
-  const current = await team();
+  const current = await team(true);
   await saveSettingsSection("team", { ...current, ...patch });
 }
 
@@ -65,7 +66,7 @@ export class TeamBotError extends Error {}
 
 /** Подключить бота: проверить токен, зарегистрировать вебхук и команды меню. Нужен https-адрес сайта */
 export async function connectTeamBot() {
-  const t = await team();
+  const t = await team(true);
   if (!t.botToken) throw new TeamBotError("no_token");
   const me = await call<{ username: string }>(t.botToken, "getMe", {});
   if (!me.ok || !me.result) throw new TeamBotError("bad_token");
@@ -84,7 +85,7 @@ export async function connectTeamBot() {
 
 /** Состояние подключения для страницы «Ключи»: имя бота, вебхук, ошибка последней доставки */
 export async function teamBotStatus() {
-  const t = await team();
+  const t = await team(true);
   if (!t.botToken) return { token: false, username: t.botUsername, webhook: null as string | null, lastError: null as string | null, members: t.members };
   const info = await call<{ url: string; last_error_message?: string }>(t.botToken, "getWebhookInfo", {});
   return { token: true, username: t.botUsername, webhook: info.result?.url || null, lastError: info.result?.last_error_message ?? null, members: t.members };
@@ -92,7 +93,7 @@ export async function teamBotStatus() {
 
 /** Ссылка привязки: человек команды открывает её в Telegram и жмёт «Start» — бот запоминает его как своего */
 export async function startLink() {
-  const t = await team();
+  const t = await team(true);
   if (!t.botToken || !t.botUsername) throw new TeamBotError("not_connected");
   const code = crypto.randomBytes(9).toString("base64url");
   await saveTeam({ linkCode: code, linkCodeAt: new Date().toISOString() });
