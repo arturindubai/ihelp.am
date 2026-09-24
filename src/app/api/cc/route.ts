@@ -203,7 +203,8 @@ export async function POST(req: Request) {
         if (!key || !text) return json({ error: "key_and_text_required" }, 400);
         const wanted = str(body.status) ?? "review";
         const to: TaskStatusKey = wanted === "blocked" ? "blocked" : wanted === "backlog" ? "ready" : "review";
-        const task = await transition(key, { to, text, branch: str(body.branch) }, actor);
+        // Чаты со старыми правилами не передают ветку — по правилам проекта она и так task/<КЛЮЧ>
+        const task = await transition(key, { to, text, branch: str(body.branch) ?? `task/${key}` }, actor);
         return json({ ok: true, status: task.status });
       }
       case "create":
