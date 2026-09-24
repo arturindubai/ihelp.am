@@ -440,7 +440,7 @@ model UiString {
   @@unique([locale, key])
 }
 
-/// Control Center: задача бэклога (источник — prisma/backlog.ts, статусы ведутся в интерфейсе)
+/// Control Center: задача бэклога (тексты — src/server/backlog.ts, статусы и работа — в Control Center; правила — docs/DEV_SYSTEM.md)
 model Task {
   id            String    @id @default(cuid())
   key           String    @unique
@@ -473,21 +473,42 @@ model Task {
   priority      String
   /// launch | public | growth | later | baseline
   stage         String
-  /// backlog | in_progress | review | blocked | done
+  /// backlog | ready | in_progress | review | blocked | done | cancelled — переходы и гейты: src/lib/cc-flow.ts
   status        String    @default("backlog")
   /// product | tech | both
   owner         String    @default("tech")
   estimate      String?
   /// code — тексты задачи приходят из src/server/backlog.ts и обновляются при деплое
   /// ui   — задачу создали или отредактировали в админке, деплой её не трогает
+  /// api  — задачу завела рабочая сессия через API, деплой её тоже не трогает
   source        String    @default("code")
   createdBy     String?
   assignee      String?
   blockedReason String?
+  /// Кто должен снять блокировку: owner | product | design | tech | external | deps
+  blockedOn     String?
   sort          Int       @default(0)
-  /// Аренда задачи агентом (API /api/cc)
+  /// Аренда задачи исполнителем (API /api/cc): кто держит и до какого времени. Пульс продлевает аренду
   claimedBy     String?
   claimUntil    DateTime?
+  /// Последний признак жизни исполнителя: пульс из хука Claude Code или команды scripts/cc.mjs
+  heartbeatAt   DateTime?
+  /// Когда сторож заметил истёкшую аренду без пульса. Пусто — с задачей всё в порядке
+  staleAt       DateTime?
+  /// Чат исполнителя (id сессии Claude Code), чтобы найти, кто держит задачу
+  session       String?
+  /// Ветка git с работой по задаче, обычно task/<КЛЮЧ>. Остаётся после возврата — следующий продолжает с неё
+  branch        String?
+  /// Файлы и папки, которые задача затрагивает: параллельные исполнители не берут пересекающиеся задачи
+  scope         String[]  @default([])
+  /// Сколько раз задачу возвращали в очередь брошенной
+  reclaims      Int       @default(0)
+  /// Сколько раз проверка возвращала задачу на доработку
+  rework        Int       @default(0)
+  /// Коммит в main, с которым задача выложена, — доказательство готовности код-задачи
+  deployedSha   String?
+  /// Что проверено после выкладки: smoke, живая проверка, ссылка или скриншот
+  proof         String?
   startedAt     DateTime?
   doneAt        DateTime?
   createdAt     DateTime  @default(now())
@@ -563,7 +584,8 @@ model TaskComment {
   id        String   @id @default(cuid())
   taskId    String
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  /// note — заметка человека, report — отчёт агента
+  /// note — заметка человека, progress — ход работы, report — отчёт о сдаче, handoff — передача задачи,
+  /// review — замечания проверки, error — ошибка (тест, сборка, выкладка), system — запись сторожа или системы
   kind      String   @default("note")
   author    String
   text      String

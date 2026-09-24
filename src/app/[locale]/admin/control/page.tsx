@@ -1,13 +1,17 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { pageUser } from "@/server/adminPage";
-import { listTasks, systemStatus, taskStats, type TaskFilters } from "@/server/services/cc";
+import { annotate, attention, listTasks, systemStatus, taskStats, type TaskFilters } from "@/server/services/cc";
 import { listEpics } from "@/server/services/epics";
 import { AREAS, LAYERS, OWNERS, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { PageHead, Forbidden, Stat } from "@/components/admin/ui";
 import { Card } from "@/components/admin/fields";
-import { TaskStatus } from "@/components/admin/cc/TaskControls";
+import { QuickMove, STATUS_TONE } from "@/components/admin/cc/TaskControls";
 import { TaskBoard } from "@/components/admin/cc/TaskBoard";
+import { TaskBadges } from "@/components/admin/cc/TaskBadges";
+import { TaskDetail } from "@/components/admin/cc/TaskDetail";
+import { TaskDrawer } from "@/components/admin/cc/TaskDrawer";
+import { AttentionPanel } from "@/components/admin/cc/AttentionPanel";
 import { FilterBar } from "@/components/admin/cc/FilterBar";
 import { Collapsible } from "@/components/admin/cc/Collapsible";
 import { SystemPanel } from "@/components/admin/cc/SystemPanel";
@@ -26,15 +30,8 @@ const OPTIONS: Record<(typeof FILTERS)[number], Record<string, string>> = {
 };
 
 const PRIORITY_TONE: Record<string, string> = { p0: "bg-bad-50 text-bad", p1: "bg-warn-50 text-warn", p2: "bg-surface text-muted", p3: "bg-surface text-muted" };
-const STATUS_TONE: Record<string, string> = {
-  backlog: "bg-surface text-muted",
-  in_progress: "bg-brand-50 text-brand",
-  review: "bg-warn-50 text-warn",
-  blocked: "bg-bad-50 text-bad",
-  done: "bg-ok-50 text-ok",
-};
 
-type Search = Partial<Record<(typeof FILTERS)[number] | "q" | "all" | "epicKey" | "view", string>>;
+type Search = Partial<Record<(typeof FILTERS)[number] | "q" | "all" | "epicKey" | "view" | "task" | "claimedBy" | "attention", string>>;
 
 function href(sp: Search, patch: Search) {
   const next: Record<string, string> = {};
@@ -54,10 +51,19 @@ export default async function ControlCenter({ params, searchParams }: { params: 
   for (const f of FILTERS) if (sp[f] && OPTIONS[f][sp[f]!]) filters[f] = sp[f];
   if (sp.q) filters.q = sp.q;
   if (sp.epicKey) filters.epicKey = sp.epicKey;
+  if (sp.claimedBy) filters.claimedBy = sp.claimedBy;
 
-  const [tasks, stats, system, epics] = await Promise.all([listTasks(filters), taskStats(), systemStatus(), listEpics()]);
-  const open = Object.entries(stats.byStatus).filter(([s]) => s !== "done").reduce((s, [, n]) => s + n, 0);
+  const [all, stats, system, epics, attn] = await Promise.all([listTasks(filters).then(annotate), taskStats(), systemStatus(), listEpics(), attention()]);
+  const tasks = sp.attention ? all.filter((task) => task.attention) : all;
+  const open = Object.entries(stats.byStatus)
+    .filter(([s]) => s !== "done" && s !== "cancelled")
+    .reduce((s, [, n]) => s + n, 0);
+  const attentionCount = attn.stale.length + attn.owner.length + attn.review.filter((r) => r.health.stuckReview).length;
   const view = sp.view === "board" ? "board" : "list";
+  const taskHref = (key: string) => href(sp, { task: key });
+  const workers = [...new Set([...attn.working, ...attn.stale].map((w) => w.claimedBy).filter(Boolean) as string[])];
+  // Фильтры не должны тащить за собой открытую шторку
+  const current = Object.fromEntries(Object.entries(sp).filter(([k]) => k !== "task")) as Record<string, string>;
 
   return (
     <div className="max-w-6xl">
@@ -66,7 +72,7 @@ export default async function ControlCenter({ params, searchParams }: { params: 
         sub={t("subtitle")}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Link href={href(sp, { all: sp.all ? "" : "1" })} className={sp.all ? "btn-outline btn-sm" : "btn-dark btn-sm"}>
+            <Link href={href(sp, { all: sp.all ? "" : "1", task: "" })} className={sp.all ? "btn-outline btn-sm" : "btn-dark btn-sm"}>
               {sp.all ? t("all") : t("openOnly")}
             </Link>
             <Link href="/admin/control/epics" className="btn-outline btn-sm">
@@ -79,11 +85,14 @@ export default async function ControlCenter({ params, searchParams }: { params: 
         }
       />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+      <div className="mb-4 grid gap-3 sm:grid-cols-4">
         <Stat label={t("openTasks")} value={open} hint={`${t("doneTasks")}: ${stats.byStatus.done ?? 0} / ${stats.total}`} />
-        <Stat label={STATUSES.in_progress} value={(stats.byStatus.in_progress ?? 0) + (stats.byStatus.review ?? 0)} tone="ok" />
-        <Stat label={STATUSES.blocked} value={stats.byStatus.blocked ?? 0} tone={(stats.byStatus.blocked ?? 0) > 0 ? "bad" : undefined} />
+        <Stat label={t("stats.ready")} value={stats.byStatus.ready ?? 0} tone="ok" />
+        <Stat label={t("stats.working")} value={`${stats.byStatus.in_progress ?? 0} · ${stats.byStatus.review ?? 0}`} hint={`${STATUSES.in_progress} · ${STATUSES.review}`} />
+        <Stat label={t("stats.attention")} value={attentionCount} tone={attentionCount > 0 ? "bad" : undefined} />
       </div>
+
+      <AttentionPanel data={attn} taskHref={taskHref} readyHref={href({}, { status: "ready" })} attentionHref={href(sp, { attention: "1", task: "" })} />
 
       <Collapsible title={t("systemToggle")}>
         <div className="grid gap-4 lg:grid-cols-3">
@@ -92,7 +101,7 @@ export default async function ControlCenter({ params, searchParams }: { params: 
               {stats.byStage
                 .filter((s) => s.total > 0)
                 .map((s) => (
-                  <Link key={s.stage} href={href(sp, { stage: s.stage })} className="block">
+                  <Link key={s.stage} href={href(sp, { stage: s.stage, task: "" })} className="block">
                     <div className="flex items-baseline justify-between text-sm">
                       <span className="font-medium">{STAGES[s.stage]}</span>
                       <span className="text-xs text-muted">{t("stageLine", { done: s.done, total: s.total, inWork: s.inWork })}</span>
@@ -111,31 +120,43 @@ export default async function ControlCenter({ params, searchParams }: { params: 
       <Card
         title={`${t("tasks")} · ${tasks.length}`}
         actions={
-          <div className="flex gap-1 rounded-lg bg-surface p-1 text-xs">
-            <Link href={href(sp, { view: "" })} className={cn("rounded-md px-2.5 py-1", view === "list" ? "bg-paper font-medium shadow-sm" : "text-muted")}>
-              {t("viewList")}
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href={href(sp, { attention: sp.attention ? "" : "1", task: "" })} className={cn("chip text-xs", sp.attention ? "bg-bad-50 text-bad" : "bg-surface text-muted")}>
+              {t("filterAttention")}
             </Link>
-            <Link href={href(sp, { view: "board" })} className={cn("rounded-md px-2.5 py-1", view === "board" ? "bg-paper font-medium shadow-sm" : "text-muted")}>
-              {t("viewBoard")}
-            </Link>
+            <div className="flex gap-1 rounded-lg bg-surface p-1 text-xs">
+              <Link href={href(sp, { view: "", task: "" })} className={cn("rounded-md px-2.5 py-1", view === "list" ? "bg-paper font-medium shadow-sm" : "text-muted")}>
+                {t("viewList")}
+              </Link>
+              <Link href={href(sp, { view: "board", task: "" })} className={cn("rounded-md px-2.5 py-1", view === "board" ? "bg-paper font-medium shadow-sm" : "text-muted")}>
+                {t("viewBoard")}
+              </Link>
+            </div>
           </div>
         }
       >
-        <FilterBar current={sp as Record<string, string>} defs={FILTERS.map((f) => ({ key: f, label: t(f), options: OPTIONS[f] }))} epics={epics.map((e) => ({ key: e.key, title: e.title }))} />
+        <FilterBar
+          current={current}
+          defs={[
+            ...FILTERS.map((f) => ({ key: f, label: t(f), options: OPTIONS[f] })),
+            ...(workers.length ? [{ key: "claimedBy", label: t("filterWorker"), options: Object.fromEntries(workers.map((w) => [w, w])) }] : []),
+          ]}
+          epics={epics.map((e) => ({ key: e.key, title: e.title }))}
+        />
 
         {tasks.length === 0 && <p className="py-8 text-center text-muted">{t("empty")}</p>}
 
         {view === "board" ? (
-          <TaskBoard tasks={tasks} />
+          <TaskBoard tasks={tasks} taskHref={taskHref} />
         ) : (
           <ul className="divide-y divide-line">
             {tasks.map((task) => (
-              <li key={task.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
-                <Link href={`/admin/control/${task.key}`} className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+              <li key={task.key} className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5", task.attention && "bg-bad-50/40")}>
+                <Link href={taskHref(task.key)} scroll={false} className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono text-xs text-muted">{task.key}</span>
+                    <span className={cn("chip text-[10px]", STATUS_TONE[task.status])}>{STATUSES[task.status]}</span>
                     <span className={cn("chip text-[10px]", PRIORITY_TONE[task.priority])}>{PRIORITIES[task.priority]}</span>
-                    {task.status !== "backlog" && <span className={cn("chip text-[10px]", STATUS_TONE[task.status])}>{STATUSES[task.status]}</span>}
                     {task.epic && <span className="chip bg-brand-50 text-[10px] text-brand">{task.epic}</span>}
                   </div>
                   <div className="mt-0.5 font-medium">{task.title}</div>
@@ -144,13 +165,22 @@ export default async function ControlCenter({ params, searchParams }: { params: 
                     {task.assignee ? ` · ${task.assignee}` : ""}
                     {task.blockedReason ? ` · ${task.blockedReason}` : ""}
                   </div>
+                  <div className="mt-1">
+                    <TaskBadges task={task} />
+                  </div>
                 </Link>
-                <TaskStatus taskKey={task.key} status={task.status} />
+                {task.status === "backlog" && task.dorOk && <QuickMove taskKey={task.key} to="ready" label={`→ ${t("move.quickReady")}`} />}
               </li>
             ))}
           </ul>
         )}
       </Card>
+
+      {sp.task && (
+        <TaskDrawer closeHref={href(sp, { task: "" })} pageHref={`/admin/control/${sp.task}`}>
+          <TaskDetail taskKey={sp.task} locale={locale} taskHref={taskHref} />
+        </TaskDrawer>
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { getSettings } from "@/server/settings";
 import { generateSubscriptionVisitsSafe, resumeSubscription } from "@/server/services/booking";
+import { runWatchdog } from "@/server/services/ccWork";
 import { html, notifyTeam } from "@/server/notify";
 import { alertTech } from "@/server/alerts";
 import { ymd } from "@/lib/time";
@@ -106,6 +107,9 @@ export async function GET(req: Request) {
     cleaned = { otp: otp.count, sessions: sessions.count };
   }), undefined);
 
+  // 5а. Сторож Control Center: брошенные задачи, возврат в очередь, снятие блокировок по зависимостям (docs/DEV_SYSTEM.md)
+  const cc = await step("cc-watchdog", () => runWatchdog(now), null);
+
   // 6. Бэкапы: отметки пишет контейнер backup (Setting `_backup`)
   const b = await step("backup-state", async () => ((await db.setting.findUnique({ where: { key: "_backup" } }))?.value ?? null) as BackupState | null, null);
   if (b ? now.getTime() - time(b.lastOkAt) > 26 * HOUR : process.uptime() > 26 * 3600) {
@@ -128,5 +132,5 @@ export async function GET(req: Request) {
     console.error("[cron] disk check failed", e);
   }
 
-  return NextResponse.json({ ok: true, resumed, created, expired, unassigned, cleaned, diskFreePct });
+  return NextResponse.json({ ok: true, resumed, created, expired, unassigned, cleaned, diskFreePct, cc });
 }

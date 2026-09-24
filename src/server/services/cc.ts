@@ -4,6 +4,8 @@ import { db } from "../db";
 import { getSettings } from "../settings";
 import { BACKLOG } from "../backlog";
 import { PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
+import { OPEN_STATUSES, isReady, needsAttention, readiness, taskHealth } from "@/lib/cc-flow";
+import { closedKeys } from "./ccWork";
 import type { Prisma, Task } from "@prisma/client";
 
 export type TaskFilters = {
@@ -15,12 +17,12 @@ export type TaskFilters = {
   owner?: string;
   epic?: string;
   epicKey?: string;
+  /** Кто держит задачу (имя агента) */
+  claimedBy?: string;
   q?: string;
-  /** true — скрыть выполненные и то, что уже работает */
+  /** true — скрыть выполненные и отменённые */
   open?: boolean;
 };
-
-const OPEN_STATUSES = ["backlog", "in_progress", "review", "blocked"];
 
 function where(f: TaskFilters): Prisma.TaskWhereInput {
   const w: Prisma.TaskWhereInput = {};
@@ -33,6 +35,7 @@ function where(f: TaskFilters): Prisma.TaskWhereInput {
   if (f.owner) w.owner = f.owner;
   if (f.epic) w.epic = f.epic;
   if (f.epicKey) w.epicKey = f.epicKey === "none" ? null : f.epicKey;
+  if (f.claimedBy) w.claimedBy = f.claimedBy;
   if (f.q) {
     const q = f.q.trim();
     w.OR = [
@@ -53,27 +56,67 @@ export async function listTasks(f: TaskFilters = {}) {
   return tasks.sort((a, b) => PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority) || a.sort - b.sort);
 }
 
+/** Задача целиком: тексты, связи в обе стороны, лента, история, файлы, готовность и здоровье */
 export async function getTask(key: string) {
   const task = await db.task.findUnique({
     where: { key },
     include: {
       comments: { orderBy: { createdAt: "asc" } },
-      events: { orderBy: { createdAt: "desc" }, take: 50 },
+      events: { orderBy: { createdAt: "desc" }, take: 100 },
       attachments: { orderBy: { createdAt: "desc" } },
-      epicRef: { select: { key: true, title: true } },
+      epicRef: { select: { key: true, title: true, status: true } },
     },
   });
   if (!task) return null;
-  const related = await db.task.findMany({
-    where: { OR: [{ key: { in: task.depends } }, { depends: { has: task.key } }] },
-    select: { key: true, title: true, status: true, depends: true },
-  });
+  const [related, closed] = await Promise.all([
+    db.task.findMany({
+      where: { OR: [{ key: { in: task.depends } }, { depends: { has: task.key } }] },
+      select: { key: true, title: true, status: true, depends: true },
+    }),
+    closedKeys(),
+  ]);
+  const checks = readiness(task, closed, task.attachments.length);
   return {
     task,
     /** Задачи, которых ждёт эта */
     blockers: related.filter((r) => task.depends.includes(r.key)),
     /** Задачи, которые ждут эту */
     blocking: related.filter((r) => r.depends.includes(task.key)),
+    /** Готовность к работе: жёсткие пункты и предупреждения */
+    readiness: { items: checks, ready: isReady(checks) },
+    health: taskHealth(task, closed),
+  };
+}
+
+/** Здоровье и готовность для списка задач — чтобы показать метки «брошена», «ждёт зависимостей», «готова» */
+export async function annotate<T extends Task>(tasks: T[]) {
+  const closed = await closedKeys();
+  const now = new Date();
+  return tasks.map((t) => {
+    const health = taskHealth(t, closed, now);
+    return { ...t, health, attention: needsAttention(health), dorOk: isReady(readiness(t, closed)) };
+  });
+}
+
+/**
+ * «Нужно вам»: то, что стоит без людей. Брошенные и фантомные задачи, очередь деплоера,
+ * блокировки на владельце и продукте, готовые к работе задачи без исполнителей.
+ */
+export async function attention() {
+  const tasks = await db.task.findMany({
+    where: { status: { in: ["in_progress", "review", "blocked", "ready"] } },
+    select: { key: true, title: true, status: true, claimedBy: true, claimUntil: true, heartbeatAt: true, assignee: true, staleAt: true, updatedAt: true, blockedOn: true, blockedReason: true, depends: true, rework: true, reclaims: true, branch: true },
+    orderBy: [{ priority: "asc" }, { sort: "asc" }],
+  });
+  const closed = await closedKeys();
+  const now = new Date();
+  const withHealth = tasks.map((t) => ({ ...t, health: taskHealth(t, closed, now) }));
+  return {
+    stale: withHealth.filter((t) => t.health.stale || t.health.phantom),
+    review: withHealth.filter((t) => t.status === "review"),
+    owner: withHealth.filter((t) => t.health.needsOwner),
+    working: withHealth.filter((t) => t.status === "in_progress" && !t.health.stale && !t.health.phantom),
+    readyCount: withHealth.filter((t) => t.status === "ready").length,
   };
 }
 
@@ -81,7 +124,8 @@ export async function getTask(key: string) {
 export async function taskStats() {
   const rows = await db.task.groupBy({ by: ["stage", "status"], _count: true });
   const byStage = Object.keys(STAGES).map((stage) => {
-    const forStage = rows.filter((r) => r.stage === stage);
+    // Отменённые не считаются ни сделанными, ни оставшимися
+    const forStage = rows.filter((r) => r.stage === stage && r.status !== "cancelled");
     const total = forStage.reduce((s, r) => s + r._count, 0);
     const done = forStage.filter((r) => r.status === "done").reduce((s, r) => s + r._count, 0);
     const inWork = forStage.filter((r) => ["in_progress", "review"].includes(r.status)).reduce((s, r) => s + r._count, 0);
@@ -104,27 +148,17 @@ export async function taskStats() {
   };
 }
 
-const TRACKED = ["status", "owner", "assignee", "priority", "stage", "blockedReason"] as const;
+const TRACKED = ["owner", "assignee", "priority", "stage"] as const;
 export type TaskPatch = Partial<Pick<Task, (typeof TRACKED)[number]>>;
 
-/** Изменение задачи с записью в историю. Возвращает обновлённую задачу */
+/**
+ * Изменение атрибутов задачи (кто делает, исполнитель-человек, приоритет, этап) с записью в историю.
+ * Статус здесь не меняется: только через transition() в ccWork.ts — там права и гейты
+ */
 export async function updateTask(key: string, patch: TaskPatch, actor: string) {
   const before = await db.task.findUnique({ where: { key } });
   if (!before) throw new Error("not_found");
-  const data: Prisma.TaskUpdateInput = { ...patch };
-  if (patch.status && patch.status !== before.status) {
-    if (patch.status === "done") data.doneAt = new Date();
-    if (patch.status === "review") {
-      data.claimedBy = null;
-      data.claimUntil = null;
-    }
-    if (patch.status === "in_progress" && !before.startedAt) data.startedAt = new Date();
-    if (patch.status !== "blocked") data.blockedReason = null;
-    if (["done", "backlog"].includes(patch.status)) {
-      data.claimedBy = null;
-      data.claimUntil = null;
-    }
-  }
+  const data: Prisma.TaskUpdateInput = Object.fromEntries(TRACKED.filter((f) => patch[f] !== undefined).map((f) => [f, patch[f]]));
   const task = await db.task.update({ where: { key }, data });
   const events = TRACKED.filter((f) => patch[f] !== undefined && String(patch[f] ?? "") !== String(before[f] ?? "")).map((f) => ({
     taskId: task.id,
@@ -157,13 +191,15 @@ export interface TaskContent {
   stage: string;
   owner: string;
   estimate?: string | null;
+  /** Файлы и папки, которые задача затрагивает */
+  scope?: string[];
 }
 
 /**
- * Создание или изменение задачи из админки. Такая задача помечается source="ui",
- * и деплой больше не перезаписывает её тексты из репозитория.
+ * Создание или изменение задачи из админки (source="ui") или рабочей сессией через API (source="api").
+ * Деплой больше не перезаписывает тексты такой задачи из репозитория.
  */
-export async function saveTask(content: TaskContent, actor: string, isNew: boolean) {
+export async function saveTask(content: TaskContent, actor: string, isNew: boolean, source: "ui" | "api" = "ui") {
   const key = content.key.trim().toUpperCase();
   if (!/^[A-Z][A-Z0-9-]{2,29}$/.test(key)) throw new Error("bad_key");
   const deps = [...new Set(content.depends.map((d) => d.trim().toUpperCase()).filter(Boolean))].filter((d) => d !== key);
@@ -198,7 +234,8 @@ export async function saveTask(content: TaskContent, actor: string, isNew: boole
     stage: content.stage,
     owner: content.owner,
     estimate: content.estimate || null,
-    source: "ui",
+    scope: [...new Set((content.scope ?? []).map((p) => p.trim().replace(/^\.\//, "")).filter(Boolean))].slice(0, 30),
+    source,
   };
   const existing = await db.task.findUnique({ where: { key } });
   if (isNew && existing) throw new Error("key_exists");
@@ -226,45 +263,6 @@ export async function addComment(key: string, text: string, author: string, kind
   const task = await db.task.findUnique({ where: { key }, select: { id: true } });
   if (!task) throw new Error("not_found");
   return db.taskComment.create({ data: { taskId: task.id, text: text.trim().slice(0, 5000), author, kind } });
-}
-
-/* ───────────── API для агентов ───────────── */
-
-/** Берёт следующую задачу в работу: только «бэклог», с учётом фильтров и незакрытых зависимостей */
-export async function claimNext(agent: string, filter: { area?: string; layer?: string; priority?: string } = {}, leaseMin = 60) {
-  const candidates = await db.task.findMany({
-    where: {
-      // «в работе» с истёкшей арендой тоже свободна: агент мог упасть
-      OR: [{ status: "backlog" }, { status: "in_progress", claimUntil: { lt: new Date() } }],
-      ...(filter.area ? { area: filter.area } : {}),
-      ...(filter.layer ? { layer: filter.layer } : {}),
-      ...(filter.priority ? { priority: filter.priority } : {}),
-    },
-    orderBy: [{ priority: "asc" }, { sort: "asc" }],
-    take: 25,
-  });
-  const doneKeys = new Set((await db.task.findMany({ where: { status: "done" }, select: { key: true } })).map((t) => t.key));
-  const ready = candidates.find((t) => t.depends.every((d) => doneKeys.has(d)));
-  if (!ready) return null;
-  const claimed = await db.task.updateMany({
-    where: { id: ready.id, status: ready.status, OR: [{ claimUntil: null }, { claimUntil: { lt: new Date() } }] },
-    data: { status: "in_progress", claimedBy: agent, claimUntil: new Date(Date.now() + leaseMin * 60_000), startedAt: ready.startedAt ?? new Date() },
-  });
-  if (!claimed.count) return null;
-  await db.taskEvent.create({ data: { taskId: ready.id, actor: agent, field: "status", from: ready.status, to: "in_progress" } });
-  return db.task.findUnique({ where: { id: ready.id } });
-}
-
-export async function heartbeat(key: string, agent: string, leaseMin = 60) {
-  const r = await db.task.updateMany({ where: { key, claimedBy: agent }, data: { claimUntil: new Date(Date.now() + leaseMin * 60_000) } });
-  return r.count > 0;
-}
-
-export async function releaseTask(key: string, agent: string, status: "backlog" | "review" | "blocked", note?: string) {
-  const task = await db.task.findFirst({ where: { key, claimedBy: agent } });
-  if (!task) return null;
-  if (note) await addComment(key, note, agent, "report");
-  return updateTask(key, { status, ...(status === "blocked" && note ? { blockedReason: note.slice(0, 200) } : {}) }, agent);
 }
 
 /* ───────────── Состояние системы ───────────── */

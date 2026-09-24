@@ -6,3 +6,5 @@ backups
 shots
 *.log
 next-env.d.ts
+# Рабочие копии задач (git worktree, scripts/cc.mjs) — у каждой задачи своя, в репозиторий не попадают
+.claude/worktrees/

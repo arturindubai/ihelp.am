@@ -1,0 +1,165 @@
+import { describe, expect, it } from "vitest";
+import {
+  canTransition,
+  doneGate,
+  isReady,
+  needsReason,
+  nextStatuses,
+  pickNext,
+  readiness,
+  reviewGate,
+  roleOf,
+  scopeOverlap,
+  taskHealth,
+  watchdogPlan,
+  LEASE_MIN,
+  RETURN_AFTER_STALE_MIN,
+  type HealthTask,
+} from "./cc-flow";
+
+const now = new Date("2026-09-24T12:00:00Z");
+const min = (m: number) => new Date(now.getTime() + m * 60_000);
+
+const task = (patch: Partial<HealthTask> = {}): HealthTask => ({
+  key: "T-1",
+  status: "in_progress",
+  claimedBy: "dev-1",
+  claimUntil: min(30),
+  heartbeatAt: min(-5),
+  assignee: null,
+  staleAt: null,
+  updatedAt: min(-10),
+  blockedOn: null,
+  depends: [],
+  rework: 0,
+  reclaims: 0,
+  ...patch,
+});
+
+describe("роли", () => {
+  it("роль берётся из префикса имени агента", () => {
+    expect(roleOf("dev-2")).toBe("dev");
+    expect(roleOf("deployer")).toBe("deployer");
+    expect(roleOf("cto")).toBe("cto");
+    expect(roleOf("Product-1")).toBe("product");
+  });
+  it("незнакомое имя и попытка назваться сторожем получают права разработчика", () => {
+    expect(roleOf("claude-code")).toBe("dev");
+    expect(roleOf("watchdog")).toBe("dev");
+  });
+});
+
+describe("переходы", () => {
+  it("разработчик не может закрыть задачу и не может сам объявить её готовой к работе", () => {
+    expect(canTransition("review", "done", "dev")).toBe(false);
+    expect(canTransition("backlog", "ready", "dev")).toBe(false);
+    expect(canTransition("in_progress", "review", "dev")).toBe(true);
+  });
+  it("закрывает только деплоер или владелец", () => {
+    expect(canTransition("review", "done", "deployer")).toBe(true);
+    expect(canTransition("review", "done", "owner")).toBe(true);
+    expect(canTransition("review", "done", "cto")).toBe(false);
+  });
+  it("из бэклога нельзя сразу в работу: сначала готовность", () => {
+    expect(canTransition("backlog", "in_progress", "owner")).toBe(false);
+    expect(nextStatuses("backlog", "cto")).toEqual(["ready", "blocked", "cancelled"]);
+  });
+  it("возврат на доработку и отмена требуют причины", () => {
+    expect(needsReason("review", "ready")).toBe(true);
+    expect(needsReason("ready", "cancelled")).toBe(true);
+    expect(needsReason("backlog", "ready")).toBe(false);
+  });
+});
+
+describe("готовность к работе", () => {
+  const base = { summary: "Зачем: клиенты не могут войти без кода", requirements: ["Код приходит в Telegram", "Ошибки видны в логах"], needs: [], depends: [], layer: "back", estimate: "M", scope: ["src/server/otp.ts"] };
+
+  it("полная задача готова, мягких предупреждений нет", () => {
+    const items = readiness(base, new Set());
+    expect(isReady(items)).toBe(true);
+    expect(items.filter((i) => !i.ok)).toEqual([]);
+  });
+  it("без критериев приёмки задача не готова", () => {
+    expect(isReady(readiness({ ...base, requirements: [] }, new Set()))).toBe(false);
+  });
+  it("незакрытые зависимости и вопросы к продукту — предупреждения, а не запрет", () => {
+    const items = readiness({ ...base, depends: ["X-1"], needs: ["Ключ API"] }, new Set());
+    expect(isReady(items)).toBe(true);
+    expect(items.filter((i) => !i.ok).map((i) => i.key)).toEqual(["needs", "deps"]);
+  });
+  it("интерфейсной задаче нужен дизайн — текстом или файлом", () => {
+    const ui = { ...base, layer: "front" };
+    expect(readiness(ui, new Set()).find((i) => i.key === "design")?.ok).toBe(false);
+    expect(readiness(ui, new Set(), 1).find((i) => i.key === "design")?.ok).toBe(true);
+  });
+});
+
+describe("гейты сдачи", () => {
+  it("на проверку код-задача уходит только с веткой и отчётом", () => {
+    const report = "Сделано: вход через бота. Проверено: tsc, vitest, стенд 8082.";
+    expect(reviewGate({ layer: "back", branch: null }, report)).toBe("branch_required");
+    expect(reviewGate({ layer: "back", branch: "task/AUTH-1" }, "готово")).toBe("report_required");
+    expect(reviewGate({ layer: "back", branch: "task/AUTH-1" }, report)).toBeNull();
+    expect(reviewGate({ layer: "none", branch: null }, report)).toBeNull();
+  });
+  it("«Готово» у код-задачи — только с коммитом и доказательством", () => {
+    expect(doneGate({ layer: "back" }, { text: "smoke OK, вход проверен в проде" })).toBe("sha_required");
+    expect(doneGate({ layer: "back" }, { sha: "d149ace", text: "" })).toBe("proof_required");
+    expect(doneGate({ layer: "back" }, { sha: "d149ace", text: "smoke OK, вход проверен в проде" })).toBeNull();
+  });
+  it("не-код задачу закрывает доказательство словами или файлом", () => {
+    expect(doneGate({ layer: "none" }, { text: "" })).toBe("proof_required");
+    expect(doneGate({ layer: "none" }, { text: "", attachments: 1 })).toBeNull();
+  });
+});
+
+describe("параллельная работа", () => {
+  it("папка и файл внутри неё пересекаются, соседние файлы — нет", () => {
+    expect(scopeOverlap(["src/server/services/"], ["src/server/services/cc.ts"])).toEqual(["src/server/services"]);
+    expect(scopeOverlap(["src/lib/pricing.ts"], ["src/lib/slots.ts"])).toEqual([]);
+    expect(scopeOverlap(["./messages/ru.json"], ["messages/ru.json"])).toEqual(["messages/ru.json"]);
+  });
+  it("следующей берётся возвращённая на доработку, затем по приоритету, пропуская занятый код и незакрытые зависимости", () => {
+    const c = (key: string, patch: Partial<{ priority: string; sort: number; rework: number; depends: string[]; scope: string[] }> = {}) => ({
+      key,
+      priority: "p1",
+      sort: 0,
+      rework: 0,
+      depends: [],
+      scope: [],
+      ...patch,
+    });
+    const list = [c("A", { priority: "p0", scope: ["src/lib/pricing.ts"] }), c("B", { priority: "p0", depends: ["Z"] }), c("C", { priority: "p1", rework: 1 }), c("D", { priority: "p0", sort: 5 })];
+    expect(pickNext(list, new Set(), [])?.key).toBe("C");
+    const rest = list.filter((t) => t.key !== "C");
+    expect(pickNext(rest, new Set(), [["src/lib"]])?.key).toBe("D");
+    expect(pickNext(rest, new Set(["Z"]), [["src/lib"]])?.key).toBe("B");
+  });
+});
+
+describe("здоровье и сторож", () => {
+  it("живая аренда — всё в порядке", () => {
+    const h = taskHealth(task(), new Set(), now);
+    expect(h.stale || h.phantom).toBe(false);
+    expect(h.silentMin).toBe(5);
+  });
+  it("истёкшая аренда — задача брошена, «в работе» без исполнителя — фантом", () => {
+    expect(taskHealth(task({ claimUntil: min(-1) }), new Set(), now).stale).toBe(true);
+    expect(taskHealth(task({ claimedBy: null, claimUntil: null }), new Set(), now).phantom).toBe(true);
+    expect(taskHealth(task({ claimedBy: null, claimUntil: null, assignee: "Артур" }), new Set(), now).phantom).toBe(false);
+  });
+  it("сторож сначала отмечает брошенную, возвращает только после паузы и оживляет, если пульс вернулся", () => {
+    const fresh = task({ key: "S1", claimUntil: min(-1) });
+    const old = task({ key: "S2", claimUntil: min(-LEASE_MIN - RETURN_AFTER_STALE_MIN), staleAt: min(-RETURN_AFTER_STALE_MIN - 1) });
+    const alive = task({ key: "S3", staleAt: min(-10) });
+    const plan = watchdogPlan([fresh, old, alive], new Set(), now);
+    expect(plan.markStale).toEqual(["S1"]);
+    expect(plan.autoReturn).toEqual(["S2"]);
+    expect(plan.revive).toEqual(["S3"]);
+  });
+  it("задача, заблокированная только зависимостями, разблокируется, когда они закрылись", () => {
+    const b = task({ key: "B1", status: "blocked", blockedOn: "deps", depends: ["X"], claimedBy: null, claimUntil: null });
+    expect(watchdogPlan([b], new Set(), now).unblock).toEqual([]);
+    expect(watchdogPlan([b], new Set(["X"]), now).unblock).toEqual(["B1"]);
+  });
+});

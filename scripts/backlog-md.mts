@@ -7,12 +7,11 @@ import { AREAS, LAYERS, OWNERS, PRIORITIES, STAGES, STATUSES } from "../src/lib/
 const esc = (s: string) => s.replace(/\|/g, "\\|");
 const byStage = Object.keys(STAGES);
 const done = BACKLOG.filter((t) => t.status === "done").length;
-const partial = BACKLOG.filter((t) => t.status === "in_progress").length;
 
 const out: string[] = [
   "# Бэклог продукта iHelp",
   "",
-  `Всего задач: ${BACKLOG.length} · выполнено: ${done} · в работе: ${partial}. Статусы ведутся в Control Center (Админка → Control Center), этот файл генерируется из кода: \`npx tsx scripts/backlog-md.mts > docs/BACKLOG.md\`.`,
+  `Всего задач: ${BACKLOG.length} · работало ещё до Control Center: ${done}. Текущие статусы, исполнители и ход работы — только в Control Center (Админка → Control Center, правила — docs/DEV_SYSTEM.md); этот файл генерируется из кода: \`npx tsx scripts/backlog-md.mts > docs/BACKLOG.md\`.`,
   "",
   "**Приоритеты:** " + Object.entries(PRIORITIES).map(([k, v]) => `\`${k}\` — ${v}`).join(" · "),
   "",
@@ -25,7 +24,7 @@ for (const stage of byStage) {
   if (!tasks.length) continue;
   out.push(`## ${STAGES[stage]} — ${tasks.length}`, "");
   for (const t of tasks) {
-    const status = t.status && t.status !== "backlog" ? ` · **${STATUSES[t.status]}**` : "";
+    const status = t.status === "done" ? ` · **${STATUSES.done}**` : "";
     out.push(`### ${t.key} — ${t.title}${status}`, "");
     out.push(`${t.summary}`, "");
     if (t.details) out.push(`> ${t.details}`, "");
