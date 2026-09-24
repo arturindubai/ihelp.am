@@ -49,7 +49,10 @@ async function call<T = unknown>(token: string, method: string, payload: object)
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(10_000),
     });
-    return ((await r.json().catch(() => null)) as { ok: boolean; result?: T; description?: string }) ?? { ok: false };
+    const j = ((await r.json().catch(() => null)) as { ok: boolean; result?: T; description?: string }) ?? { ok: false };
+    // Отказ Telegram (человек заблокировал бота, неверный токен) — в лог, его видно в Control Center → «Логи». Токена в строке нет
+    if (!j.ok) console.warn(`[team-bot] ${method}: ${j.description ?? `HTTP ${r.status}`}`);
+    return j;
   } catch (e) {
     console.error(`[team-bot] ${method}`, (e as Error).message);
     return { ok: false, description: "unreachable" };
