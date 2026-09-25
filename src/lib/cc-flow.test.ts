@@ -39,6 +39,14 @@ const task = (patch: Partial<HealthTask> = {}): HealthTask => ({
   ...patch,
 });
 
+describe("дизайнер", () => {
+  it("сдаёт и передаёт свою задачу, но не закрывает", () => {
+    expect(canTransition("in_progress", "review", "designer")).toBe(true);
+    expect(canTransition("in_progress", "ready", "designer")).toBe(true);
+    expect(canTransition("review", "done", "designer")).toBe(false);
+  });
+});
+
 describe("разблокировка", () => {
   it("возвращает задачу туда, откуда заблокирована", () => {
     expect(unblockTarget("review", "owner")).toBe("review");
@@ -114,6 +122,33 @@ describe("готовность к работе", () => {
     const ui = { ...base, layer: "front" };
     expect(readiness(ui, new Set()).find((i) => i.key === "design")?.ok).toBe(false);
     expect(readiness(ui, new Set(), 1).find((i) => i.key === "design")?.ok).toBe(true);
+  });
+});
+
+describe("гейт макета", () => {
+  const base = { summary: "Зачем: клиенты не могут войти без кода", requirements: ["Код приходит в Telegram", "Ошибки видны в логах"], needs: [], depends: [], layer: "front", estimate: "M", scope: ["src/app/login/"], design: "есть дизайн" };
+
+  it("без флага mockupRequired задача готова как обычно", () => {
+    expect(isReady(readiness(base, new Set()))).toBe(true);
+    expect(readiness(base, new Set()).find((i) => i.key === "mockup")?.ok).toBe(true);
+  });
+  it("с флагом mockupRequired без утверждения — жёсткий блокер", () => {
+    const items = readiness({ ...base, mockupRequired: true }, new Set());
+    expect(isReady(items)).toBe(false);
+    const mockupItem = items.find((i) => i.key === "mockup");
+    expect(mockupItem?.ok).toBe(false);
+    expect(mockupItem?.hard).toBe(true);
+  });
+  it("с флагом mockupRequired и утверждением — гейт снят", () => {
+    const items = readiness({ ...base, mockupRequired: true, mockupApprovedBy: "Артур" }, new Set());
+    expect(isReady(items)).toBe(true);
+    expect(items.find((i) => i.key === "mockup")?.ok).toBe(true);
+  });
+  it("mockup_required — только для задач с флагом; остальные не затронуты", () => {
+    const noneLayer = { ...base, layer: "none" };
+    expect(isReady(readiness(noneLayer, new Set()))).toBe(true);
+    expect(isReady(readiness({ ...noneLayer, mockupRequired: true }, new Set()))).toBe(false);
+    expect(isReady(readiness({ ...noneLayer, mockupRequired: true, mockupApprovedBy: "cto" }, new Set()))).toBe(true);
   });
 });
 

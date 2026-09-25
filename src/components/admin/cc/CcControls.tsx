@@ -5,6 +5,8 @@ import { Mic, MicOff, Paperclip, Play, Sparkles, Square, X } from "lucide-react"
 import { Link, useRouter } from "@/i18n/navigation";
 import {
   ccApproveManyAction,
+  ccApproveMockupAction,
+  ccReturnDesignAction,
   ccIntakeAction,
   ccMessageToIntakeAction,
   ccReadMessageAction,
@@ -283,6 +285,71 @@ export function ApproveAllButton({ keys, label }: { keys: string[]; label: strin
       </button>
       {result && <span className="text-xs text-warn">{result}</span>}
     </span>
+  );
+}
+
+/* ───────────── Макет ───────────── */
+
+/** Утвердить макет задачи: кнопка доступна владельцу, пишет в ленту, снимает гейт «нужен макет» */
+export function MockupApproveButton({ taskKey }: { taskKey: string }) {
+  const t = useTranslations("admin.cc.mockup");
+  const { pending, error, done, run } = useAct();
+  const [showComment, setShowComment] = useState(false);
+  const [comment, setComment] = useState("");
+  if (done) return <p className="text-xs text-ok">{t("approved")}</p>;
+  return (
+    <div className="flex flex-col items-end gap-1">
+      {!showComment ? (
+        <button className="btn-primary btn-sm" disabled={pending} onClick={() => setShowComment(true)}>
+          {t("approve")}
+        </button>
+      ) : (
+        <form
+          className="flex w-full max-w-sm flex-col gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(() => ccApproveMockupAction(taskKey, comment), () => (setShowComment(false), setComment("")));
+          }}
+        >
+          <input className="input h-9 w-full py-1 text-sm" value={comment} onChange={(e) => setComment(e.target.value)} placeholder={t("commentPh")} autoFocus />
+          <div className="flex gap-1.5">
+            <button className="btn-primary btn-sm" disabled={pending}>{t("confirm")}</button>
+            <button type="button" className="btn-ghost btn-sm" onClick={() => setShowComment(false)}>{t("cancel")}</button>
+          </div>
+        </form>
+      )}
+      {error && <span className="text-xs text-bad">{t("failed", { error })}</span>}
+    </div>
+  );
+}
+
+/** Вернуть дизайн дизайнеру с причиной: задача уходит в блокировку «на дизайне» */
+export function DesignReturnButton({ taskKey }: { taskKey: string }) {
+  const t = useTranslations("admin.cc.mockup");
+  const { pending, error, done, run } = useAct();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  if (done) return <p className="text-xs text-warn">{t("returned")}</p>;
+  return (
+    <div className="flex flex-col items-end gap-1">
+      {!open ? (
+        <button className="btn-outline btn-sm" disabled={pending} onClick={() => setOpen(true)}>
+          {t("return")}
+        </button>
+      ) : (
+        <form
+          className="flex w-full max-w-sm gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(() => ccReturnDesignAction(taskKey, reason), () => setOpen(false));
+          }}
+        >
+          <input className="input h-9 flex-1 py-1 text-sm" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("returnPh")} autoFocus />
+          <button className="btn-dark btn-sm" disabled={pending || reason.trim().length < 5}>{t("confirm")}</button>
+        </form>
+      )}
+      {error && <span className="text-xs text-bad">{t("failed", { error })}</span>}
+    </div>
   );
 }
 
