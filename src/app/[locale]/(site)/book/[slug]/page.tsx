@@ -4,7 +4,7 @@ import { Link, redirect } from "@/i18n/navigation";
 import { db } from "@/server/db";
 import { getCurrentUser } from "@/server/auth";
 import { getSettings } from "@/server/settings";
-import { availableChannels } from "@/server/otp";
+import { loginMethods } from "@/server/otp";
 import { getMastersForService, loadServiceRaw, localizeService, resolveSelection } from "@/server/services/catalog";
 import { isFirstOrder } from "@/server/services/booking";
 import { tr } from "@/i18n/locales";
@@ -32,12 +32,13 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   );
 
   if (!user) {
+    const methods = await loginMethods(settings);
     return (
       <div className="container-m">
         {header}
         <div className="card mt-4 p-4">
           <h2 className="h3 mb-3">{t("loginToContinue")}</h2>
-          <InlineLogin channels={await availableChannels(settings)} />
+          <InlineLogin channels={methods.channels} emailEnabled={methods.email} telegramBot={settings.notify.telegramBotUsername || null} />
         </div>
       </div>
     );

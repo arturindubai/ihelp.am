@@ -23,7 +23,7 @@ const DRY = process.argv.includes("--dry-run");
 fs.mkdirSync(DATA, { recursive: true });
 
 /** Сколько минут воркер может работать, прежде чем systemd его остановит */
-const LIMIT_MIN = { triage: 45, dev: 100, nocode: 60, tester: 60, deployer: 75 };
+const LIMIT_MIN = { triage: 45, product: 60, designer: 60, dev: 100, nocode: 60, tester: 60, deployer: 75 };
 
 function envValue(name) {
   if (process.env[name]) return process.env[name];
@@ -120,7 +120,7 @@ function resetAt(result) {
   return new Date(Math.max(t, Date.now() + 5 * 60_000));
 }
 
-const workDir = (pool, key) => (["deployer", "triage", "nocode"].includes(pool) ? ROOT : path.join(ROOT, ".claude", "worktrees", pool === "tester" ? `test-${key}` : key));
+const workDir = (pool, key) => (["deployer", "triage", "nocode", "product", "designer"].includes(pool) ? ROOT : path.join(ROOT, ".claude", "worktrees", pool === "tester" ? `test-${key}` : key));
 
 /** Снести стенд, который воркер мог оставить поднятым */
 function standDown(dir) {
@@ -206,6 +206,22 @@ ${ask}
 Команды пиши просто: текущая папка уже нужная — scripts/check.sh, node scripts/cc.mjs … (без sudo, без docker, без чтения .env). Разрешено только то, что нужно твоей роли; отклонённую команду не обходи другими путями — запиши в ленту, чего не хватило. Субагентов не запускай.
 В самом конце ответь одной строкой: что сделано и в каком статусе задача.${notes}`;
 
+  if (pool === "designer") {
+    const role = readText(path.join(ROOT, "docs", "roles", "DESIGNER.md")) || "(нет docs/roles/DESIGNER.md)";
+    const task = extra.keys?.length
+      ? `Опиши дизайн задач по порядку: ${extra.keys.join(", ")}. Для каждой: show → поле «дизайн» через update --data (экраны, состояния, элементы и токены, тексты, телефон и компьютер, крайние случаи) → если задача была заблокирована на дизайне — unblock; вопрос бренда (цвета, логотип, стиль) — block --on owner с вариантами. Не успеваешь все — лучше меньше, но до конца.`
+      : "Интерфейсных задач без дизайна нет — сделай обзор по разделу «Обзор дизайна (по расписанию)»: проверь свежие интерфейсные задачи и записи дизайн-канона в Библиотеке, отправь короткий итог владельцу одним сообщением (msg --to owner).";
+    return `${common}\n\n${task}\n\n═══ РОЛЬ: ДИЗАЙНЕР (docs/roles/DESIGNER.md) ═══\n${role}`;
+  }
+
+  if (pool === "product") {
+    const role = readText(path.join(ROOT, "docs", "roles", "PRODUCT.md")) || "(нет docs/roles/PRODUCT.md)";
+    const task = extra.keys?.length
+      ? `Разбери задачи с вопросом к продукту по порядку: ${extra.keys.join(", ")}. Для каждой: show → ответ в ленте и дополненная карточка (update --data) → unblock; если решение за владельцем по правилам роли — block --on owner с вариантами и рекомендацией. Не успеваешь все — лучше меньше, но до конца.`
+      : "Вопросов к продукту нет — сделай обзор бэклога по разделу «Обзор требований (по расписанию)»: дополни слабые карточки, обнови продуктовый канон в Библиотеке и отправь короткий итог владельцу одним сообщением (msg --to owner).";
+    return `${common}\n\n${task}\n\n═══ РОЛЬ: ПРОДАКТ (docs/roles/PRODUCT.md) ═══\n${role}`;
+  }
+
   if (pool === "triage") {
     const role = readText(path.join(ROOT, "docs", "roles", "TRIAGE.md")) || "(нет docs/roles/TRIAGE.md)";
     const task = extra.keys?.length
@@ -221,7 +237,7 @@ ${ask}
       : pool === "dev"
       ? `Задача ${key} уже взята за тобой. Текущая папка — её рабочая копия (ветка task/${key}). Доведи задачу до review: сделано, scripts/check.sh зелёный, интерфейс — на стенде со скриншотами, коммиты «${key}: …», git push -u origin task/${key}, честный отчёт. Не успеваешь — закоммить, отправь ветку и сделай handoff с состоянием.`
       : pool === "tester"
-        ? `Задача ${key} на проверке и держится за тобой. Текущая папка — её код на коммите ${extra.sha}. Проверь по брифингу и поставь вердикт: pass или fail. Код не правь.`
+        ? `Задача ${key} на проверке и держится за тобой. Текущая папка — её код на коммите ${extra.sha}. Это копия ветки: скриптов и команд последней версии в ней может не быть, поэтому все инструменты бери из основной копии по полному пути и запускай из текущей папки: bash /opt/ihelp.am/scripts/check.sh · bash /opt/ihelp.am/scripts/stand.sh up|down · node /opt/ihelp.am/scripts/stand-shot.mjs /ru/… · node /opt/ihelp.am/scripts/cc.mjs pass|fail|block … --agent ${agent}. Проверь по брифингу и поставь вердикт: pass или fail — без вердикта проверка не засчитывается и запуск повторится. Код не правь.`
         : `Задача ${key} протестирована и держится за тобой на время выкладки. Текущая папка — основная копия /opt/ihelp.am: руками в ней ничего не меняй. Проверь карточку, ленту, отметку тестировщика и диф. Стоп-условия — ручные шаги в «Готовности к деплою», удаляющая миграция, секреты в коде, изменение цен, оплаты или прав без явного решения владельца в ленте, пустой отчёт тестировщика: тогда block --on owner или return с причиной. Иначе — одна команда: scripts/deploy-task.sh ${key}. Она сама закроет задачу или вернёт её.`;
   return `${common}\n\n${role}\n\n${brief}`;
 }
@@ -292,6 +308,10 @@ async function main() {
       } else if (a.pool === "deployer") {
         cc(["lock", a.key, "--agent", "deployer"]);
         await spawn("deployer", "deployer", a.key, pools.deployer.model, extra);
+      } else if (a.pool === "product") {
+        await spawn("product", "product", null, pools.product.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
+      } else if (a.pool === "designer") {
+        await spawn("designer", "designer", null, pools.designer.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
       } else if (a.pool === "triage") {
         await spawn("triage", "triage", null, pools.triage.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
       }

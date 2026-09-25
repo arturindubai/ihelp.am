@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { ImagePlus, X, ArrowUp, ArrowDown, Trash2 } from "lucide-react";
 import { cn } from "@/lib/format";
+import { Img } from "@/components/Img";
 
 export type I18n = { ru?: string; en?: string; am?: string };
 const LANGS = [["ru", "RU"], ["en", "ENG"], ["am", "ARM"]] as const;
@@ -68,6 +69,9 @@ export function Toggle({ label, checked, onChange, hint, disabled }: { label: st
   );
 }
 
+/** Коды ошибок /api/upload → ключи текстов admin.common */
+const UPLOAD_ERRORS = { type: "uploadErrType", size: "uploadErrSize", broken: "uploadErrBroken" } as const;
+
 export function ImageInput({ label, value, onChange }: { label?: string; value: string | null | undefined; onChange: (v: string | null) => void }) {
   const t = useTranslations("admin.common");
   const [busy, setBusy] = useState(false);
@@ -76,23 +80,31 @@ export function ImageInput({ label, value, onChange }: { label?: string; value: 
     <div>
       {label && <label className="label">{label}</label>}
       <div className="flex items-center gap-3">
-        {value ? <img src={value} alt="" className="size-20 rounded-xl border border-line object-cover" /> : <div className="grid size-20 place-items-center rounded-xl border border-dashed border-line text-muted"><ImagePlus size={22} /></div>}
+        {value ? <Img src={value} width={80} className="size-20 rounded-xl border border-line object-cover" /> : <div className="grid size-20 place-items-center rounded-xl border border-dashed border-line text-muted"><ImagePlus size={22} /></div>}
         <div className="flex flex-col gap-1.5">
           <label className="btn-outline btn-sm cursor-pointer">
             {busy ? t("uploading") : t("upload")}
-            <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-              const f = e.target.files?.[0];
+            <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={async (e) => {
+              const input = e.target;
+              const f = input.files?.[0];
               if (!f) return;
               setBusy(true); setErr(undefined);
               const fd = new FormData(); fd.append("file", f);
-              const r = await fetch("/api/upload", { method: "POST", body: fd });
-              const j = await r.json();
-              setBusy(false);
-              if (j.url) onChange(j.url); else setErr(j.error);
+              try {
+                const r = await fetch("/api/upload", { method: "POST", body: fd });
+                // 413 отвечает прокси, а не приложение: тела с кодом ошибки нет
+                const j = r.status === 413 ? { error: "size" } : await r.json();
+                if (j.url) onChange(j.url); else setErr(t(UPLOAD_ERRORS[j.error as keyof typeof UPLOAD_ERRORS] ?? "uploadErrOther"));
+              } catch {
+                setErr(t("uploadErrOther"));
+              } finally {
+                setBusy(false);
+                input.value = ""; // тот же файл можно выбрать повторно
+              }
             }} />
           </label>
           {value && <button type="button" className="btn-ghost btn-sm text-bad" onClick={() => onChange(null)}><X size={14} /> {t("removeImage")}</button>}
-          {err && <span className="text-xs text-bad">{err}</span>}
+          {err ? <span className="max-w-64 text-xs text-bad">{err}</span> : <span className="max-w-64 text-xs text-muted">{t("uploadHint")}</span>}
         </div>
       </div>
     </div>

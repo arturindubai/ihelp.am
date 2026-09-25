@@ -5,6 +5,9 @@ import { db } from "../db";
 import { getCurrentUser } from "../auth";
 import { getSettings } from "../settings";
 import { html, notifyTeam } from "../notify";
+import { headers } from "next/headers";
+import { sendOtp, verifyOtp } from "../otp";
+import { normalizeEmail } from "@/lib/email";
 import { BookingError, scheduleVisit, BUSY_STATUSES } from "../services/booking";
 import { atYerevan, ymd } from "@/lib/time";
 
@@ -16,11 +19,44 @@ async function me() {
 
 export async function updateProfileAction(input: { name: string; email: string; locale: string }) {
   const u = await me();
-  const email = input.email.trim();
-  if (email && !z.string().email().safeParse(email).success) return { ok: false };
-  await db.user.update({ where: { id: u.id }, data: { name: input.name.trim().slice(0, 80) || null, email: email || null, locale: ["ru", "en", "am"].includes(input.locale) ? input.locale : u.locale } });
+  const raw = input.email.trim();
+  if (raw && !z.string().email().safeParse(raw).success) return { ok: false };
+  const email = normalizeEmail(raw);
+  // Сменённый адрес снова неподтверждён: по нему нельзя войти, пока владелец не введёт код из письма (AUTH-14)
+  const changed = (email ?? "") !== (u.email ?? "").toLowerCase();
+  try {
+    await db.user.update({
+      where: { id: u.id },
+      data: { name: input.name.trim().slice(0, 80) || null, email, ...(changed ? { emailVerifiedAt: null } : {}), locale: ["ru", "en", "am"].includes(input.locale) ? input.locale : u.locale },
+    });
+  } catch {
+    // email уникален (AUTH-11): адрес уже у другого аккаунта
+    return { ok: false, error: "email_taken" };
+  }
   revalidatePath("/", "layout");
   return { ok: true };
+}
+
+/** Отправить код на email из профиля, чтобы подтвердить, что почта принадлежит владельцу аккаунта */
+export async function sendProfileEmailCodeAction(locale = "ru") {
+  const u = await me();
+  const email = normalizeEmail(u.email);
+  if (!email) return { ok: false as const, error: "email" };
+  if (u.emailVerifiedAt) return { ok: false as const, error: "already" };
+  const h = await headers();
+  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || undefined;
+  const r = await sendOtp(email, "EMAIL", ip, ["ru", "en", "am"].includes(locale) ? locale : "ru");
+  return r.ok ? { ok: true as const, resendIn: r.resendIn, codeLength: r.codeLength, devCode: r.devCode } : r;
+}
+
+export async function confirmProfileEmailAction(code: string) {
+  const u = await me();
+  const email = normalizeEmail(u.email);
+  if (!email || !/^\d{4,6}$/.test(code.trim())) return { ok: false as const, error: "code" };
+  if (!(await verifyOtp(email, code))) return { ok: false as const, error: "code" };
+  await db.user.update({ where: { id: u.id }, data: { emailVerifiedAt: new Date() } });
+  revalidatePath("/", "layout");
+  return { ok: true as const };
 }
 
 async function ownVisit(visitId: string) {

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { requireSection } from "../../admin";
 import { audit } from "../../audit";
 import { addComment, saveTask, updateTask, type TaskContent } from "../../services/cc";
-import { CcError, retriage, transition } from "../../services/ccWork";
+import { CcError, approveMockup, retriage, returnDesign, transition } from "../../services/ccWork";
 import { saveEpic, type EpicContent } from "../../services/epics";
 import { deleteAttachment } from "../../services/attachments";
 import { EPIC_STATUSES, OWNERS, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
@@ -101,6 +101,32 @@ export async function ccCommentAction(key: string, text: string) {
   await audit(u.id, "cc.comment", "Task", key);
   rAll();
   return { ok: true as const };
+}
+
+/** Утверждение макета задачи владельцем в интерфейсе — снимает гейт mockup_required */
+/** «Вернуть дизайнеру»: утверждение снимается, задача блокируется на дизайне с причиной */
+export async function ccReturnDesignAction(key: string, reason: string) {
+  const u = await requireSection("control");
+  try {
+    await returnDesign(key, { name: who(u), role: u.role === "OWNER" ? "owner" : "cto", via: "ui" }, reason);
+    await audit(u.id, "cc.design.return", "Task", key);
+    rAll();
+    return { ok: true as const };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof CcError ? e.code : (e as Error).message };
+  }
+}
+
+export async function ccApproveMockupAction(key: string, comment: string) {
+  const u = await requireSection("control");
+  try {
+    await approveMockup(key, who(u), comment.trim() || null);
+    await audit(u.id, "cc.mockup.approve", "Task", key);
+    rAll();
+    return { ok: true as const };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof CcError ? e.code : (e as Error).message };
+  }
 }
 
 /* ───── Эпики ───── */

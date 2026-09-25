@@ -26,6 +26,8 @@ export interface TaskFormValue {
   owner: string;
   estimate: string;
   scope: string;
+  mockupRequired: boolean;
+  mockupUrl: string;
 }
 
 export const EMPTY_TASK: TaskFormValue = {
@@ -48,6 +50,8 @@ export const EMPTY_TASK: TaskFormValue = {
   owner: "tech",
   estimate: "",
   scope: "",
+  mockupRequired: false,
+  mockupUrl: "",
 };
 
 const toLines = (v: string) => v.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -61,7 +65,8 @@ export function TaskEditorForm({ initial, isNew, epics }: { initial: TaskFormVal
   const router = useRouter();
   const set = (patch: Partial<TaskFormValue>) => setV((x) => ({ ...x, ...patch }));
 
-  const select = (field: keyof TaskFormValue, options: Record<string, string> | readonly string[], label: string) => (
+  type StringField = { [K in keyof TaskFormValue]: TaskFormValue[K] extends string ? K : never }[keyof TaskFormValue];
+  const select = (field: StringField, options: Record<string, string> | readonly string[], label: string) => (
     <div>
       <label className="label">{label}</label>
       <select className="input" value={v[field]} onChange={(e) => set({ [field]: e.target.value })}>
@@ -94,7 +99,7 @@ export function TaskEditorForm({ initial, isNew, epics }: { initial: TaskFormVal
     </div>
   );
 
-  const area = (field: keyof TaskFormValue, label: string, hint?: string, rows = 4) => (
+  const area = (field: StringField, label: string, hint?: string, rows = 4) => (
     <div>
       <label className="label">{label}</label>
       <textarea className="input py-2" style={{ minHeight: rows * 28 }} value={v[field]} onChange={(e) => set({ [field]: e.target.value })} />
@@ -126,6 +131,8 @@ export function TaskEditorForm({ initial, isNew, epics }: { initial: TaskFormVal
           owner: v.owner,
           estimate: v.estimate || null,
           scope: toLines(v.scope),
+          mockupRequired: v.mockupRequired,
+          mockupUrl: v.mockupUrl || null,
         },
         isNew,
       );
@@ -163,6 +170,15 @@ export function TaskEditorForm({ initial, isNew, epics }: { initial: TaskFormVal
         {select("owner", OWNERS, t("owner"))}
       </div>
       <TextInput label={t("form.estimate")} value={v.estimate} onChange={(x) => set({ estimate: x.toUpperCase() })} hint={t("form.estimateHint")} />
+      <div className="flex flex-col gap-2">
+        <label className="flex cursor-pointer items-center gap-2 text-sm">
+          <input type="checkbox" className="checkbox" checked={v.mockupRequired} onChange={(e) => set({ mockupRequired: e.target.checked })} />
+          {t("form.mockupRequired")}
+        </label>
+        {v.mockupRequired && (
+          <TextInput label={t("form.mockupUrl")} value={v.mockupUrl} onChange={(x) => set({ mockupUrl: x })} />
+        )}
+      </div>
 
       {error && <p className="rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad">{t.has(`form.errors.${error}`) ? t(`form.errors.${error}` as "form.errors.invalid") : error}</p>}
 

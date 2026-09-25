@@ -16,6 +16,17 @@ export const CLOSED_STATUSES: TaskStatusKey[] = ["done", "cancelled"];
 export const ROLES = ["owner", "cto", "product", "designer", "triage", "dev", "nocode", "tester", "deployer", "watchdog"] as const;
 export type Role = (typeof ROLES)[number];
 
+/** Воркеры-исполнители: не заводят задачи и входящие — бэклог остаётся чистым */
+export const WORKER_ROLES: readonly Role[] = ["dev", "nocode", "tester", "deployer"];
+
+/**
+ * Может ли роль заводить задачи (create) и входящие (intake) в бэклоге.
+ * Воркеры-исполнители не создают задачи — они сообщают о потребности через CTO.
+ */
+export function canCreateTask(role: Role): boolean {
+  return !WORKER_ROLES.includes(role);
+}
+
 /** Кто должен снять блокировку */
 export const BLOCKED_ON = ["owner", "product", "design", "tech", "external", "deps"] as const;
 export type BlockedOn = (typeof BLOCKED_ON)[number];
@@ -44,7 +55,8 @@ export function roleOf(agent: string): Role {
 const PLAN: Role[] = ["owner", "cto", "product"];
 /** Триаж решает судьбу новой карточки: в очередь, обратно в бэклог. Отменять может только входящие IN-* (проверка в сервисе) */
 const TRIAGE: Role[] = [...PLAN, "triage"];
-const WORK: Role[] = ["dev", "nocode", "cto", "owner"];
+// Дизайнер тоже сдаёт свою задачу (прототип, дизайн-исследование) и передаёт её, как не-код
+const WORK: Role[] = ["dev", "nocode", "designer", "cto", "owner"];
 const RELEASE: Role[] = ["deployer", "owner"];
 const ANY: Role[] = ["owner", "cto", "product", "designer", "triage", "dev", "nocode", "tester", "deployer", "watchdog"];
 
@@ -55,12 +67,25 @@ const ANY: Role[] = ["owner", "cto", "product", "designer", "triage", "dev", "no
 const TRANSITIONS: Record<TaskStatusKey, Partial<Record<TaskStatusKey, Role[]>>> = {
   backlog: { ready: TRIAGE, blocked: ANY, cancelled: TRIAGE },
   ready: { backlog: TRIAGE, blocked: ANY, cancelled: PLAN },
+<<<<<<< HEAD
   in_progress: { review: WORK, ready: [...WORK, ...PLAN, "watchdog"], blocked: ANY, backlog: PLAN, cancelled: PLAN },
-  review: { done: RELEASE, ready: [...RELEASE, ...PLAN, "tester"], blocked: [...RELEASE, ...PLAN, "tester"] },
-  blocked: { ready: ANY, backlog: TRIAGE, cancelled: PLAN },
+  // Сторож блокирует проверку, когда тестировщик дважды закончил без вердикта (src/server/services/workers.ts)
+  review: { done: RELEASE, ready: [...RELEASE, ...PLAN, "tester"], blocked: [...RELEASE, ...PLAN, "tester", "watchdog"] },
+  // Разблокировка ведёт туда, откуда задача была заблокирована (unblockTarget): с проверки — на проверку
+  blocked: { ready: ANY, review: ANY, backlog: TRIAGE, cancelled: PLAN },
   done: { ready: RELEASE },
   cancelled: { backlog: PLAN },
 };
+
+/**
+ * Куда возвращается задача при разблокировке: туда, откуда её заблокировали. С проверки — на проверку
+ * (ветка и отчёт целы, тестировщик проверит заново), из бэклога — в бэклог на новый разбор триажем,
+ * из работы и очереди — в очередь. Роли без права на такой переход — в очередь
+ */
+export function unblockTarget(blockedFrom: string | null | undefined, role: Role): TaskStatusKey {
+  const want: TaskStatusKey = blockedFrom === "review" ? "review" : blockedFrom === "backlog" ? "backlog" : "ready";
+  return canTransition("blocked", want, role) ? want : "ready";
+}
 
 export function canTransition(from: string, to: string, role: Role): boolean {
   return !!TRANSITIONS[from as TaskStatusKey]?.[to as TaskStatusKey]?.includes(role);
@@ -96,6 +121,8 @@ type TaskShape = {
   estimate?: string | null;
   epicKey?: string | null;
   scope?: string[];
+  mockupRequired?: boolean;
+  mockupApprovedBy?: string | null;
 };
 
 export type CheckItem = { key: string; ok: boolean; hard: boolean };
@@ -114,6 +141,7 @@ export function readiness(t: TaskShape, closedKeys: Set<string>, attachments = 0
     { key: "needs", ok: t.needs.length === 0, hard: false },
     { key: "deps", ok: t.depends.every((d) => closedKeys.has(d)), hard: false },
     { key: "design", ok: !isUi || !!t.design?.trim() || attachments > 0, hard: false },
+    { key: "mockup", ok: !t.mockupRequired || !!t.mockupApprovedBy, hard: true },
     { key: "size", ok: !!t.estimate && t.estimate !== "L", hard: false },
     { key: "scope", ok: t.layer === "none" || (t.scope?.length ?? 0) > 0, hard: false },
   ];

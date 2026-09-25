@@ -8,6 +8,7 @@ import { BacklogTab } from "@/components/admin/cc/tabs/BacklogTab";
 import { ApprovalsTab, DeployerTab, DevTab, YouTab } from "@/components/admin/cc/tabs/QueueTabs";
 import { ActivityTab, DoneTab, NotifyTab, PlansTab } from "@/components/admin/cc/tabs/FeedTabs";
 import { WorkersTab } from "@/components/admin/cc/tabs/WorkersTab";
+import { DesignTab } from "@/components/admin/cc/tabs/DesignTab";
 import { TABS, ccHref, type CcSearch, type Tab } from "@/components/admin/cc/tabs/shared";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +36,7 @@ export default async function ControlCenter({ params, searchParams }: { params: 
       {tab === "deployer" && <DeployerTab taskHref={taskHref} />}
       {tab === "plans" && <PlansTab />}
       {tab === "approvals" && <ApprovalsTab taskHref={taskHref} />}
+      {tab === "design" && <DesignTab locale={locale} taskHref={taskHref} />}
       {tab === "workers" && <WorkersTab locale={locale} taskHref={taskHref} />}
       {tab === "activity" && <ActivityTab locale={locale} taskHref={taskHref} />}
       {tab === "done" && <DoneTab locale={locale} taskHref={taskHref} />}

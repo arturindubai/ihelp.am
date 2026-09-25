@@ -1,11 +1,12 @@
 import "server-only";
 import { getSettings } from "./settings";
+import { enqueueAndSend } from "./services/notifyQueue";
 
 export { html } from "@/lib/html";
 
 /**
- * Отправка в Telegram-чат ботом. Текст — разметка HTML: значения подставлять через html`…` (экранирование).
- * Не бросает ошибок и не ждёт Telegram дольше 5 секунд — оформление заказа не должно зависеть от мессенджера.
+ * Отправка в Telegram-чат ботом через очередь с повторными попытками.
+ * Запись добавляется в NotifyQueue до первой попытки — сообщение не теряется при сбое.
  */
 async function send(chatId: string, text: string, tag: string) {
   let token = "";
@@ -19,17 +20,7 @@ async function send(chatId: string, text: string, tag: string) {
     console.log(`[notify:${tag}]`, text);
     return;
   }
-  try {
-    const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!r.ok) console.error(`[notify:${tag}] telegram ${r.status}`, (await r.text()).slice(0, 300), "|", text);
-  } catch (e) {
-    console.error(`[notify:${tag}] failed`, e, "|", text);
-  }
+  await enqueueAndSend(chatId, text, tag, token);
 }
 
 /** Уведомления команде: заказы, отмены, переносы, отзывы (бот → группа операторов) */

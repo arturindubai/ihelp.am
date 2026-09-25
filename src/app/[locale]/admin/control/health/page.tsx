@@ -1,7 +1,7 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { pageUser } from "@/server/adminPage";
-import { healthStatus } from "@/server/services/ccBoard";
+import { boardAudit, healthStatus } from "@/server/services/ccBoard";
 import { Forbidden } from "@/components/admin/ui";
 import { CcHeader } from "@/components/admin/cc/CcHeader";
 import { SystemPanel } from "@/components/admin/cc/SystemPanel";
@@ -38,7 +38,7 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
   const { locale } = await params;
   setRequestLocale(locale);
   if (!(await pageUser("control"))) return <Forbidden />;
-  const [t, th, h] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.healthPage"), healthStatus()]);
+  const [t, th, h, audit] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.healthPage"), healthStatus(), boardAudit()]);
   const uptime = h.uptimeSec >= 86400 ? th("uptimeD", { d: Math.floor(h.uptimeSec / 86400), h: Math.floor((h.uptimeSec % 86400) / 3600) }) : th("uptimeH", { h: Math.floor(h.uptimeSec / 3600), m: Math.floor((h.uptimeSec % 3600) / 60) });
   const tickTone: Tone = h.tickAgeMin == null ? "warn" : h.tickAgeMin > 3 ? "bad" : "ok";
   const workersValue = h.workers.pausedUntil ? th("workersPaused") : h.workers.enabled ? (h.workers.dryRun ? th("workersDry") : th("workersOn")) : th("workersOff");
@@ -69,6 +69,28 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
         <Metric label={th("orders")} value={`${h.orders24} / ${h.orders7}`} hint={th("ordersHint")} />
       </div>
 
+      <Card title={`${th("audit.title")} · ${audit.total}`} className="mb-4">
+        {audit.checks.length === 0 ? (
+          <p className="text-sm text-ok">{th("audit.ok")}</p>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {audit.checks.map((c) => (
+              <li key={c.id}>
+                <span className="font-medium">{th(`audit.checks.${c.id}` as "audit.checks.blocked_no_reason")}</span> <span className="chip bg-warn-50 text-[10px] text-warn">{c.keys.length}</span>
+                <span className="ml-2 font-mono text-xs text-muted">
+                  {c.keys.slice(0, 40).map((k) => (
+                    <Link key={k} href={`/admin/control?task=${k.split("→")[0]}`} scroll={false} className="mr-2 hover:underline">
+                      {k}
+                    </Link>
+                  ))}
+                  {c.keys.length > 40 && `… +${c.keys.length - 40}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-2 text-xs text-muted">{th("audit.hint")}</p>
+      </Card>
       <div className="grid gap-4 lg:grid-cols-2">
         <SystemPanel system={h.sys} />
         <Card title={th("howTo")}>

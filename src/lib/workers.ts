@@ -4,7 +4,7 @@
  * сервис решает, кого запускать. Правила словами — docs/WORKERS.md.
  */
 
-export const POOLS = ["triage", "dev", "nocode", "tester", "deployer"] as const;
+export const POOLS = ["triage", "product", "designer", "dev", "nocode", "tester", "deployer"] as const;
 export type Pool = (typeof POOLS)[number];
 
 export const MODELS = ["sonnet", "opus", "haiku"] as const;
@@ -57,9 +57,14 @@ export const DEFAULT_WORKERS: WorkersConfig = {
   enabled: false,
   dryRun: false,
   pools: {
-    triage: { enabled: true, max: 1, model: "sonnet", dailyCap: 12, mode: "auto", everyMin: 30 },
+    // Триаж: каждая входящая IN-N — отдельный запуск, пачка бэклога — ещё один; 12 в сутки не хватало и очередь вставала
+    triage: { enabled: true, max: 1, model: "sonnet", dailyCap: 40, mode: "auto", everyMin: 30 },
     dev: { enabled: true, max: 2, model: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
     nocode: { enabled: true, max: 1, model: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
+    // Продакт: отвечает на вопросы, заблокированные «на продукте», раз в сутки проходит бэклог на качество требований
+    product: { enabled: true, max: 1, model: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
+    // Дизайнер: интерфейсные задачи без описания дизайна и вопросы «на дизайне»
+    designer: { enabled: true, max: 1, model: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
     tester: { enabled: true, max: 1, model: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
     deployer: { enabled: true, max: 1, model: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
   },
@@ -118,6 +123,8 @@ export type ReviewTask = {
   /** Кто сейчас держит задачу на проверке: тестировщик или деплоер */
   claimedBy: string | null;
   claimUntil: Date | null;
+  /** Тестировщик недавно закончил без вердикта: до этого времени задачу ему снова не даём */
+  testHoldUntil?: Date | null;
 };
 
 /** Просьба человека запустить пул сейчас — кнопка «Запустить сейчас» или «▶ Запустить воркера» в шторке задачи */
@@ -141,6 +148,13 @@ export type DispatchState = {
   triageQueue: string[];
   /** Пора пересмотреть весь бэклог */
   sweepDue: boolean;
+  /** Задачи с вопросом к продукту (заблокированы на product), в порядке приоритета */
+  productQueue: string[];
+  /** Пора продакту пройти бэклог на качество требований */
+  productSweepDue: boolean;
+  /** Интерфейсные задачи без дизайна и вопросы «на дизайне» */
+  designerQueue: string[];
+  designerSweepDue: boolean;
   /** Когда пул запускался последний раз (ISO) — для режима «по расписанию» */
   lastStart: Partial<Record<Pool, string>>;
   requests: RunRequest[];
@@ -168,10 +182,13 @@ export const testedCurrent = (t: ReviewTask, heads: Record<string, string>) =>
 /** Очереди проверки: что ждёт тестировщика, что готово к выкладке, что сейчас кто-то держит */
 export function reviewQueues(review: ReviewTask[], heads: Record<string, string>, now = new Date()) {
   const onBranch = review.filter((t) => !!t.branch && !!heads[t.branch]);
+  const holding = (t: ReviewTask) => !!t.testHoldUntil && t.testHoldUntil > now;
   return {
-    test: onBranch.filter((t) => !testedCurrent(t, heads) && !leaseAlive(t, now)),
+    test: onBranch.filter((t) => !testedCurrent(t, heads) && !leaseAlive(t, now) && !holding(t)),
     deploy: onBranch.filter((t) => testedCurrent(t, heads) && !leaseAlive(t, now)),
     held: review.filter((t) => leaseAlive(t, now)),
+    /** Запуск тестировщика закончился без вердикта — пауза, чтобы не гонять одну задачу по кругу */
+    holding: onBranch.filter((t) => !testedCurrent(t, heads) && !leaseAlive(t, now) && holding(t)),
     noBranch: review.filter((t) => !t.branch || !heads[t.branch]),
   };
 }
@@ -197,6 +214,8 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
   const nextTest = () => q.test.find((t) => !taken().has(t.key));
   const nextDeploy = () => q.deploy.find((t) => !taken().has(t.key));
   const triageBatch = () => s.triageQueue.filter((k) => !taken().has(k)).slice(0, config.triageBatch);
+  const productBatch = () => (s.productQueue ?? []).filter((k) => !taken().has(k)).slice(0, config.triageBatch);
+  const designerBatch = () => (s.designerQueue ?? []).filter((k) => !taken().has(k)).slice(0, Math.min(3, config.triageBatch));
 
   for (const r of s.requests) {
     // Входящие IN-N не ждут пачку бэклога: у триажа для них второй, быстрый слот
@@ -211,6 +230,12 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
     } else if (r.pool === "deployer") {
       const t = r.key ? q.deploy.find((x) => x.key === r.key) : nextDeploy();
       if (t && !taken().has(t.key)) actions.push({ pool: "deployer", agent: "deployer", key: t.key, ...base });
+    } else if (r.pool === "product") {
+      const keys = r.key ? [r.key] : productBatch();
+      actions.push(keys.length ? { pool: "product", agent: "product", keys, ...base } : { pool: "product", agent: "product", sweep: true, ...base });
+    } else if (r.pool === "designer") {
+      const keys = r.key ? [r.key] : designerBatch();
+      actions.push(keys.length ? { pool: "designer", agent: "designer", keys, ...base } : { pool: "designer", agent: "designer", sweep: true, ...base });
     } else {
       const keys = r.key ? [r.key] : triageBatch();
       const agent = names("triage").includes("triage") ? freeName("triage", names("triage")) : "triage";
@@ -248,6 +273,19 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
     else if (s.sweepDue && config.sweepEveryH > 0) actions.push({ pool: "triage", agent: "triage", sweep: true });
   }
 
+  // Продакт — как триаж: пачка задач с вопросом к продукту, а при пустой очереди раз в сутки обзор требований бэклога
+  if (due("product")) {
+    const keys = productBatch();
+    if (keys.length) actions.push({ pool: "product", agent: "product", keys });
+    else if (s.productSweepDue && config.sweepEveryH > 0) actions.push({ pool: "product", agent: "product", sweep: true });
+  }
+  // Дизайнер — так же: до трёх интерфейсных задач за запуск, при пустой очереди раз в сутки обзор
+  if (due("designer")) {
+    const keys = designerBatch();
+    if (keys.length) actions.push({ pool: "designer", agent: "designer", keys });
+    else if (s.designerSweepDue && config.sweepEveryH > 0) actions.push({ pool: "designer", agent: "designer", sweep: true });
+  }
+
   // Разработчики и «Продукт и не-код» — по числу готовых задач своего вида; запущенные по просьбе уже заняли часть
   for (const [pool, ready] of [
     ["dev", s.readyForDev],
@@ -262,8 +300,8 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
 
 /** Первое свободное имя: dev-1, dev-2… (тестировщик: tester, tester-2…) */
 export function freeName(base: string, taken: string[]): string {
-  if (base === "tester" && !taken.includes("tester")) return "tester";
-  for (let n = base === "tester" ? 2 : 1; n < 100; n++) if (!taken.includes(`${base}-${n}`)) return `${base}-${n}`;
+  if ((base === "tester" || base === "product" || base === "designer") && !taken.includes(base)) return base;
+  for (let n = base === "tester" || base === "product" || base === "designer" ? 2 : 1; n < 100; n++) if (!taken.includes(`${base}-${n}`)) return `${base}-${n}`;
   return `${base}-x`;
 }
 
@@ -277,7 +315,20 @@ export function runOutcome(result: { is_error?: boolean; result?: string; subtyp
 }
 
 /** Какой пул подходит задаче для кнопки «▶ Запустить воркера» в шторке: по статусу и проверке */
-export function poolForTask(t: { status: string; layer: string; testedSha?: string | null }): Pool | null {
+/**
+ * Кто исполняет задачу по её слою и статусу — «привязка» карточки к воркеру, видна в бэклоге:
+ * сейчас (следующий шаг) и в итоге (кто доведёт до результата)
+ */
+export function executorOf(t: { status: string; layer: string; blockedOn?: string | null; testedSha?: string | null }): Pool | null {
+  const next = poolForTask(t);
+  if (next) return next;
+  if (t.status === "backlog" || t.status === "blocked" || t.status === "ready" || t.status === "in_progress") return t.layer === "none" ? "nocode" : "dev";
+  return null;
+}
+
+export function poolForTask(t: { status: string; layer: string; testedSha?: string | null; blockedOn?: string | null }): Pool | null {
+  if (t.status === "blocked" && t.blockedOn === "product") return "product";
+  if (t.status === "blocked" && t.blockedOn === "design") return "designer";
   if (t.status === "backlog" || t.status === "blocked") return "triage";
   if (t.status === "ready") return t.layer === "none" ? "nocode" : "dev";
   if (t.status === "review" && t.layer !== "none") return t.testedSha ? "deployer" : "tester";

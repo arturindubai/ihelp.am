@@ -21,7 +21,7 @@ export CLAUDE_CODE_OAUTH_TOKEN
 # Составная команда проходит, только если разрешена каждая её часть: cd сам по себе ничего не меняет
 common=("Bash(cd *)" "Bash(node scripts/cc.mjs *)" "Bash(node */scripts/cc.mjs *)")
 check=("Bash(scripts/check.sh*)" "Bash(bash scripts/check.sh*)" "Bash(*/scripts/check.sh*)" "Bash(bash */scripts/check.sh*)"
-  "Bash(scripts/stand.sh *)" "Bash(bash scripts/stand.sh *)" "Bash(*/scripts/stand.sh *)" "Bash(node scripts/stand-shot.mjs *)" "Bash(node */scripts/stand-shot.mjs *)")
+  "Bash(scripts/stand.sh *)" "Bash(bash scripts/stand.sh *)" "Bash(*/scripts/stand.sh *)" "Bash(bash */scripts/stand.sh *)" "Bash(node scripts/stand-shot.mjs *)" "Bash(node */scripts/stand-shot.mjs *)")
 allow=(Read Glob Grep Edit Write TodoWrite "${common[@]}" "${check[@]}"
   "Bash(git *)"
   "Bash(ls *)" "Bash(ls)" "Bash(pwd)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(jq *)"
@@ -51,6 +51,12 @@ case "$role" in
     allow=(Read Glob Grep TodoWrite "${common[@]}" "Bash(git log *)" "Bash(git show *)" "Bash(git diff *)" "Bash(git status)"
       "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(date)")
     deny+=("Edit" "Write" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(cat >*)" "Bash(cat *>*)")
+    ;;
+  product|designer)
+    # Продакт и дизайнер: читают проект, документы и Библиотеку, ищут в интернете, работают с карточками и записями Библиотеки через cc.mjs.
+    # Файлы не правит, git не пишет: требования живут в карточках и в Библиотеке
+    allow=(Read Glob Grep TodoWrite WebSearch WebFetch "${common[@]}" "Bash(git log *)" "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(date)" "Bash(mkdir *)" "Bash(cat >*)" "Bash(cat *>*)")
+    deny+=("Edit" "Write" "NotebookEdit" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(curl *)")
     ;;
   nocode)
     # «Продукт и не-код»: читает проект, ищет и читает страницы в интернете, проверяет DNS, работает с карточками.
