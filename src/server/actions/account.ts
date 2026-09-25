@@ -24,10 +24,15 @@ export async function updateProfileAction(input: { name: string; email: string; 
   const email = normalizeEmail(raw);
   // Сменённый адрес снова неподтверждён: по нему нельзя войти, пока владелец не введёт код из письма (AUTH-14)
   const changed = (email ?? "") !== (u.email ?? "").toLowerCase();
-  await db.user.update({
-    where: { id: u.id },
-    data: { name: input.name.trim().slice(0, 80) || null, email, ...(changed ? { emailVerifiedAt: null } : {}), locale: ["ru", "en", "am"].includes(input.locale) ? input.locale : u.locale },
-  });
+  try {
+    await db.user.update({
+      where: { id: u.id },
+      data: { name: input.name.trim().slice(0, 80) || null, email, ...(changed ? { emailVerifiedAt: null } : {}), locale: ["ru", "en", "am"].includes(input.locale) ? input.locale : u.locale },
+    });
+  } catch {
+    // email уникален (AUTH-11): адрес уже у другого аккаунта
+    return { ok: false, error: "email_taken" };
+  }
   revalidatePath("/", "layout");
   return { ok: true };
 }

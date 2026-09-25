@@ -5,7 +5,7 @@ import { cn } from "@/lib/format";
 /** Параметры адреса пульта: вкладка, открытая задача и фильтры вкладки */
 export type CcSearch = Partial<Record<string, string>>;
 
-export const TABS = ["backlog", "you", "dev", "deployer", "plans", "approvals", "workers", "activity", "done", "notify"] as const;
+export const TABS = ["backlog", "you", "dev", "deployer", "plans", "approvals", "design", "workers", "activity", "done", "notify"] as const;
 export type Tab = (typeof TABS)[number];
 
 export function ccHref(sp: CcSearch, patch: CcSearch) {

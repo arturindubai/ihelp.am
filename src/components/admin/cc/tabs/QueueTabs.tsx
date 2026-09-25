@@ -195,55 +195,59 @@ export async function DeployerTab({ taskHref }: { taskHref: Href }) {
   );
 }
 
-/** «Согласования»: не-код на проверке (документы, решения, контент) — принять, вернуть или отклонить; «Принять все» по дорожке */
+/** «Согласования»: не-код на проверке (документы, решения, контент) — принять, вернуть или отклонить; «Принять все» по дорожке. Макеты — на вкладке «Дизайн» */
 export async function ApprovalsTab({ taskHref }: { taskHref: Href }) {
   const [t, ta, tb, items] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.approvals"), getTranslations("admin.cc.backlog"), approvals()]);
   if (!items.length) return <Empty>{ta("empty")}</Empty>;
   return (
     <div className="space-y-4">
-      <p className="text-xs text-muted">{ta("hint")}</p>
-      {LANES.filter((l) => items.some((x) => x.lane === l)).map((l) => {
-        const list = items.filter((x) => x.lane === l);
-        return (
-          <Card
-            key={l}
-            title={
-              <span className="flex items-center gap-2">
-                <span key="dot" className={cn("size-2 rounded-full", LANE_DOT[l])} />
-                <span key="name">
-                  {tb(`lanes.${l}`)} · {list.length}
-                </span>
-              </span>
-            }
-            actions={<ApproveAllButton keys={list.map((x) => x.key)} label={ta("approveAll")} />}
-          >
-            <ul className="divide-y divide-line">
-              {list.map((x) => {
-                const report = x.comments[0];
-                return (
-                  <li key={x.key} className="flex flex-wrap items-start gap-3 py-3">
-                    <Link href={taskHref(x.key)} scroll={false} className="min-w-0 flex-1">
-                      <span className="font-mono text-xs text-muted">{x.key}</span>{" "}
-                      <span className={cn("chip text-[10px]", PRIORITY_TONE[x.priority])}>{PRIORITIES[x.priority]}</span>
-                      <span className="mt-0.5 block font-medium">{x.title}</span>
-                      {report && (
-                        <span className="mt-1 line-clamp-3 block whitespace-pre-line text-xs text-muted">
-                          {report.author}: {report.text}
-                        </span>
-                      )}
-                      <span className="block text-xs text-muted">
-                        {ago(t, x.updatedAt)}
-                        {x._count.attachments ? ` · 📎 ${x._count.attachments}` : ""}
-                      </span>
-                    </Link>
-                    <ApprovalButtons taskKey={x.key} />
-                  </li>
-                );
-              })}
-            </ul>
-          </Card>
-        );
-      })}
+      {items.length > 0 && (
+        <>
+          <p className="text-xs text-muted">{ta("hint")}</p>
+          {LANES.filter((l) => items.some((x) => x.lane === l)).map((l) => {
+            const list = items.filter((x) => x.lane === l);
+            return (
+              <Card
+                key={l}
+                title={
+                  <span className="flex items-center gap-2">
+                    <span key="dot" className={cn("size-2 rounded-full", LANE_DOT[l])} />
+                    <span key="name">
+                      {tb(`lanes.${l}`)} · {list.length}
+                    </span>
+                  </span>
+                }
+                actions={<ApproveAllButton keys={list.map((x) => x.key)} label={ta("approveAll")} />}
+              >
+                <ul className="divide-y divide-line">
+                  {list.map((x) => {
+                    const report = x.comments[0];
+                    return (
+                      <li key={x.key} className="flex flex-wrap items-start gap-3 py-3">
+                        <Link href={taskHref(x.key)} scroll={false} className="min-w-0 flex-1">
+                          <span className="font-mono text-xs text-muted">{x.key}</span>{" "}
+                          <span className={cn("chip text-[10px]", PRIORITY_TONE[x.priority])}>{PRIORITIES[x.priority]}</span>
+                          <span className="mt-0.5 block font-medium">{x.title}</span>
+                          {report && (
+                            <span className="mt-1 line-clamp-3 block whitespace-pre-line text-xs text-muted">
+                              {report.author}: {report.text}
+                            </span>
+                          )}
+                          <span className="block text-xs text-muted">
+                            {ago(t, x.updatedAt)}
+                            {x._count.attachments ? ` · 📎 ${x._count.attachments}` : ""}
+                          </span>
+                        </Link>
+                        <ApprovalButtons taskKey={x.key} />
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Card>
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }

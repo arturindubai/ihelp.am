@@ -23,6 +23,7 @@ const TAB_ICON: Record<Tab, string> = {
   deployer: "🚀",
   plans: "📐",
   approvals: "✅",
+  design: "🎨",
   workers: "🤖",
   activity: "🧾",
   done: "✓",
@@ -36,9 +37,9 @@ const TAB_ICON: Record<Tab, string> = {
 export async function CcHeader({ page, locale, tab }: { page: (typeof PAGES)[number]["id"]; locale: string; tab?: Tab }) {
   const [t, history, counts, config] = await Promise.all([getTranslations("admin.cc"), intakeHistory(12), tab ? ccCounts() : null, tab ? getWorkersConfig() : null]);
   const badge: Partial<Record<Tab, number>> = counts
-    ? { backlog: counts.backlog, you: counts.you, dev: counts.dev, deployer: counts.deployer, approvals: counts.approvals, notify: counts.notify }
+    ? { backlog: counts.backlog, you: counts.you, dev: counts.dev, deployer: counts.deployer, approvals: counts.approvals, design: counts.design, notify: counts.notify }
     : {};
-  const loud: Tab[] = ["you", "approvals", "notify"];
+  const loud: Tab[] = ["you", "approvals", "design", "notify"];
 
   return (
     <div className="mb-4">

@@ -29,7 +29,7 @@ model User {
   id          String    @id @default(cuid())
   phone       String    @unique
   name        String?
-  email       String?
+  email       String?   @unique
   /// Когда владелец подтвердил email кодом из письма. Войти по email можно только с подтверждённым адресом: иначе вписанной в профиль чужой почтой перехватывается вход её владельца
   emailVerifiedAt DateTime?
   role        Role      @default(CLIENT)
@@ -491,6 +491,8 @@ model Task {
   blockedReason String?
   /// Кто должен снять блокировку: owner | product | design | tech | external | deps
   blockedOn     String?
+  /// Статус, из которого задача заблокирована: разблокировка возвращает её туда же (проверка — на проверку)
+  blockedFrom   String?
   sort          Int       @default(0)
   /// Аренда задачи исполнителем (API /api/cc): кто держит и до какого времени. Пульс продлевает аренду
   claimedBy     String?
@@ -523,6 +525,14 @@ model Task {
   triageNote    String?
   startedAt     DateTime?
   doneAt        DateTime?
+  /// Нужен макет до начала работы: ставит триаж, владелец или техдиректор; задача не уходит в «В очереди» без утверждённого макета (гейт — src/lib/cc-flow.ts)
+  mockupRequired    Boolean   @default(false)
+  /// Ссылка на макет (Figma, страница стенда) или имя прикреплённого файла — чтобы не открывать вложения по одному
+  mockupUrl         String?
+  /// Кто утвердил макет
+  mockupApprovedBy  String?
+  /// Когда утвердили макет
+  mockupApprovedAt  DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

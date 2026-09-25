@@ -23,7 +23,7 @@ const DRY = process.argv.includes("--dry-run");
 fs.mkdirSync(DATA, { recursive: true });
 
 /** Сколько минут воркер может работать, прежде чем systemd его остановит */
-const LIMIT_MIN = { triage: 45, dev: 100, nocode: 60, tester: 60, deployer: 75 };
+const LIMIT_MIN = { triage: 45, product: 60, designer: 60, dev: 100, nocode: 60, tester: 60, deployer: 75 };
 
 function envValue(name) {
   if (process.env[name]) return process.env[name];
@@ -120,7 +120,7 @@ function resetAt(result) {
   return new Date(Math.max(t, Date.now() + 5 * 60_000));
 }
 
-const workDir = (pool, key) => (["deployer", "triage", "nocode"].includes(pool) ? ROOT : path.join(ROOT, ".claude", "worktrees", pool === "tester" ? `test-${key}` : key));
+const workDir = (pool, key) => (["deployer", "triage", "nocode", "product", "designer"].includes(pool) ? ROOT : path.join(ROOT, ".claude", "worktrees", pool === "tester" ? `test-${key}` : key));
 
 /** Снести стенд, который воркер мог оставить поднятым */
 function standDown(dir) {
@@ -205,6 +205,22 @@ ${ask}
 Сначала прочитай CLAUDE.md и docs/DEV_SYSTEM.md, затем действуй строго по брифингу ниже. Основную копию /opt/ihelp.am не переключай, секреты не выводи.
 Команды пиши просто: текущая папка уже нужная — scripts/check.sh, node scripts/cc.mjs … (без sudo, без docker, без чтения .env). Разрешено только то, что нужно твоей роли; отклонённую команду не обходи другими путями — запиши в ленту, чего не хватило. Субагентов не запускай.
 В самом конце ответь одной строкой: что сделано и в каком статусе задача.${notes}`;
+
+  if (pool === "designer") {
+    const role = readText(path.join(ROOT, "docs", "roles", "DESIGNER.md")) || "(нет docs/roles/DESIGNER.md)";
+    const task = extra.keys?.length
+      ? `Сделай дизайн задач по порядку: ${extra.keys.join(", ")}. Для каждой: show → поле «дизайн» через update --data (экраны, состояния, элементы и токены, тексты, телефон и компьютер, крайние случаи) → если у задачи новый экран или стоит «нужен макет» — макет по разделу «Макет» роли: HTML в data/mockups/КЛЮЧ/, затем node scripts/mockup-shot.mjs data/mockups/КЛЮЧ/имя.html, затем node scripts/cc.mjs attach КЛЮЧ --file data/mockups/КЛЮЧ/имя-phone.png --mockup --agent designer и attach …-desktop.png → если задача была заблокирована на дизайне — unblock; вопрос бренда (цвета, логотип, стиль) — block --on owner с вариантами. Не успеваешь все — лучше меньше, но до конца.`
+      : "Интерфейсных задач без дизайна нет — сделай обзор по разделу «Обзор дизайна (по расписанию)»: проверь свежие интерфейсные задачи и записи дизайн-канона в Библиотеке, отправь короткий итог владельцу одним сообщением (msg --to owner).";
+    return `${common}\n\n${task}\n\n═══ РОЛЬ: ДИЗАЙНЕР (docs/roles/DESIGNER.md) ═══\n${role}`;
+  }
+
+  if (pool === "product") {
+    const role = readText(path.join(ROOT, "docs", "roles", "PRODUCT.md")) || "(нет docs/roles/PRODUCT.md)";
+    const task = extra.keys?.length
+      ? `Разбери задачи с вопросом к продукту по порядку: ${extra.keys.join(", ")}. Для каждой: show → ответ в ленте и дополненная карточка (update --data) → unblock; если решение за владельцем по правилам роли — block --on owner с вариантами и рекомендацией. Не успеваешь все — лучше меньше, но до конца.`
+      : "Вопросов к продукту нет — сделай обзор бэклога по разделу «Обзор требований (по расписанию)»: дополни слабые карточки, обнови продуктовый канон в Библиотеке и отправь короткий итог владельцу одним сообщением (msg --to owner).";
+    return `${common}\n\n${task}\n\n═══ РОЛЬ: ПРОДАКТ (docs/roles/PRODUCT.md) ═══\n${role}`;
+  }
 
   if (pool === "triage") {
     const role = readText(path.join(ROOT, "docs", "roles", "TRIAGE.md")) || "(нет docs/roles/TRIAGE.md)";
@@ -292,6 +308,10 @@ async function main() {
       } else if (a.pool === "deployer") {
         cc(["lock", a.key, "--agent", "deployer"]);
         await spawn("deployer", "deployer", a.key, pools.deployer.model, extra);
+      } else if (a.pool === "product") {
+        await spawn("product", "product", null, pools.product.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
+      } else if (a.pool === "designer") {
+        await spawn("designer", "designer", null, pools.designer.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
       } else if (a.pool === "triage") {
         await spawn("triage", "triage", null, pools.triage.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
       }

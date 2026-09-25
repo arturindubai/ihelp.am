@@ -38,7 +38,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
         {header}
         <div className="card mt-4 p-4">
           <h2 className="h3 mb-3">{t("loginToContinue")}</h2>
-          <InlineLogin channels={methods.channels} emailEnabled={methods.email} />
+          <InlineLogin channels={methods.channels} emailEnabled={methods.email} telegramBot={settings.notify.telegramBotUsername || null} />
         </div>
       </div>
     );
