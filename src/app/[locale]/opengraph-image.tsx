@@ -11,10 +11,10 @@ import { tr } from "@/i18n/locales";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-const INK = "#1c1917";
-const MUTED = "#6b645e";
-const SURFACE = "#f7f4f1";
-const BRAND = "#c2521b";
+const INK = "#111114";
+const MUTED = "#5E5E69";
+const SURFACE = "#F5F5F7";
+const BRAND = "#5B3DF5";
 
 const read = (file: string) => fs.readFile(path.join(process.cwd(), "public", file));
 

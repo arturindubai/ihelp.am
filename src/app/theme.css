@@ -2,34 +2,54 @@
  * ДИЗАЙН-ТОКЕНЫ — единственное место, где задаются цвета, шрифты и скругления.
  * Компоненты используют только эти имена (bg-brand, text-ink, bg-paper…), без #hex и bg-white/text-black.
  * Смена палитры = правка значений ниже. Подробнее: DESIGN.md
+ *
+ * Палитра: «Фиалка» (утверждена владельцем 25.09.2026, DSN-2).
+ * Смена цвета кнопок — правка --color-action; смена бренда — --color-brand.
  */
 @theme {
-  /* Фирменный цвет: кнопки, акценты, выбранные карточки */
-  --color-brand: #c2521b;
-  --color-brand-600: #a8451a;
-  --color-brand-50: #fdf1ea;
-  --color-brand-100: #fadfcf;
+  /* Фирменный цвет: логотип, акценты, подложка выбранного */
+  --color-brand: #5B3DF5;
+  --color-brand-600: #4A2FD6;
+  --color-brand-50: #F1EEFF;
+  --color-brand-100: #DED7FF;
+
+  /* Цвет действия: главные кнопки, выбранный день/слот/чекбокс */
+  --color-action: #5B3DF5;
+  --color-on-action: #FFFFFF;
+
+  /* Цвет ссылок и активных элементов навигации */
+  --color-brand-text: #4A2FD6;
+
+  /* Текст на тёмной CTA-кнопке */
+  --color-on-cta: #FFFFFF;
+
+  /* Бейджи «Скоро», «Популярно», тёмная кнопка «Применить» */
+  --color-badge: #111114;
+  --color-on-badge: #FFFFFF;
+
+  /* Рамка радио и чекбокса */
+  --color-line-strong: #B6B6C2;
 
   /* Текст и фоны */
-  --color-ink: #1c1917; /* основной текст, тёмные кнопки и бейджи */
-  --color-ink-strong: #000000; /* hover тёмной кнопки */
-  --color-muted: #6b645e; /* второстепенный текст */
-  --color-line: #ebe6e1; /* границы и разделители */
-  --color-surface: #f7f4f1; /* подложки секций, футер */
-  --color-paper: #ffffff; /* фон страницы, карточек, шапки */
-  --color-inverse: #ffffff; /* текст на тёмном/фирменном фоне */
-  --color-overlay: #000000; /* затемнение под шторками (с прозрачностью /40, /50) */
-  --color-cta: #0f3d2e; /* блок «Напишите нам» на главной */
+  --color-ink: #111114;
+  --color-ink-strong: #000000;
+  --color-muted: #5E5E69;
+  --color-line: #E7E7EC;
+  --color-surface: #F5F5F7;
+  --color-paper: #FFFFFF;
+  --color-inverse: #FFFFFF;
+  --color-overlay: #000000;
+  --color-cta: #111114;
 
   /* Статусы */
-  --color-ok: #1f7a4d;
-  --color-ok-50: #e8f5ee;
-  --color-warn: #a15c07;
-  --color-warn-50: #fdf3e2;
-  --color-bad: #b42318;
-  --color-bad-50: #fdeceb;
+  --color-ok: #0E7A45;
+  --color-ok-50: #E6F5EC;
+  --color-warn: #955800;
+  --color-warn-50: #FFF3DE;
+  --color-bad: #C0261A;
+  --color-bad-50: #FDECEA;
 
   /* Типографика и формы */
-  --font-sans: var(--font-noto), var(--font-noto-arm), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Google Sans", system-ui, sans-serif;
   --radius-card: 14px;
 }
