@@ -52,6 +52,12 @@ case "$role" in
       "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(date)")
     deny+=("Edit" "Write" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(cat >*)" "Bash(cat *>*)")
     ;;
+  product|designer)
+    # Продакт и дизайнер: читают проект, документы и Библиотеку, ищут в интернете, работают с карточками и записями Библиотеки через cc.mjs.
+    # Файлы не правит, git не пишет: требования живут в карточках и в Библиотеке
+    allow=(Read Glob Grep TodoWrite WebSearch WebFetch "${common[@]}" "Bash(git log *)" "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(date)" "Bash(mkdir *)" "Bash(cat >*)" "Bash(cat *>*)")
+    deny+=("Edit" "Write" "NotebookEdit" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(curl *)")
+    ;;
   nocode)
     # «Продукт и не-код»: читает проект, ищет и читает страницы в интернете, проверяет DNS, работает с карточками.
     # Файлы не правит, git не пишет: результат — в карточке. Аккаунты, оплату и пароли делает человек

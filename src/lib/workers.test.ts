@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_WORKERS, freeName, normalizeWorkers, planDispatch, poolForTask, reviewQueues, runOutcome, testedCurrent, type DispatchState, type ReviewTask } from "./workers";
+import { DEFAULT_WORKERS, executorOf, freeName, normalizeWorkers, planDispatch, poolForTask, reviewQueues, runOutcome, testedCurrent, type DispatchState, type ReviewTask } from "./workers";
 
 // 12:00 по Еревану — внутри окна выкладки 10–20
 const noon = new Date("2026-09-24T08:00:00Z");
@@ -10,7 +10,11 @@ const review = (key: string, patch: Partial<ReviewTask> = {}): ReviewTask => ({ 
 const state = (patch: Partial<DispatchState> = {}): DispatchState => ({
   config: on,
   running: [],
-  today: { triage: 0, dev: 0, nocode: 0, tester: 0, deployer: 0 },
+  today: { triage: 0, product: 0, designer: 0, dev: 0, nocode: 0, tester: 0, deployer: 0 },
+  productQueue: [],
+  productSweepDue: false,
+  designerQueue: [],
+  designerSweepDue: false,
   review: [],
   readyForDev: 0,
   readyForNocode: 0,
@@ -65,7 +69,7 @@ describe("план диспетчера", () => {
     expect(planDispatch(state({ readyForDev: 1 }), noon)).toEqual([{ pool: "dev", agent: "dev-1" }]);
   });
   it("дневной лимит пула останавливает запуски", () => {
-    expect(planDispatch(state({ readyForDev: 5, today: { triage: 0, dev: 16, nocode: 0, tester: 0, deployer: 0 } }), noon)).toEqual([]);
+    expect(planDispatch(state({ readyForDev: 5, today: { triage: 0, product: 0, designer: 0, dev: 16, nocode: 0, tester: 0, deployer: 0 } }), noon)).toEqual([]);
   });
   it("тестировщик берёт непроверенную задачу, деплоер — проверенную на текущем коммите", () => {
     const heads = { "task/A": "aaa111", "task/B": "bbb222" };
@@ -190,6 +194,13 @@ describe("очереди и выбор пула", () => {
     expect(poolForTask({ status: "backlog", layer: "back" })).toBe("triage");
     expect(poolForTask({ status: "ready", layer: "back" })).toBe("dev");
     expect(poolForTask({ status: "ready", layer: "none" })).toBe("nocode");
+    expect(poolForTask({ status: "blocked", layer: "none", blockedOn: "product" })).toBe("product");
+    expect(poolForTask({ status: "blocked", layer: "back", blockedOn: "owner" })).toBe("triage");
+    expect(poolForTask({ status: "blocked", layer: "front", blockedOn: "design" })).toBe("designer");
+    expect(executorOf({ status: "backlog", layer: "front" })).toBe("triage");
+    expect(executorOf({ status: "ready", layer: "back" })).toBe("dev");
+    expect(executorOf({ status: "ready", layer: "none" })).toBe("nocode");
+    expect(executorOf({ status: "done", layer: "back" })).toBe(null);
     expect(poolForTask({ status: "review", layer: "front" })).toBe("tester");
     expect(poolForTask({ status: "review", layer: "front", testedSha: "abc" })).toBe("deployer");
     expect(poolForTask({ status: "review", layer: "none" })).toBe(null);
@@ -200,6 +211,10 @@ describe("очереди и выбор пула", () => {
 describe("«Продукт и не-код»", () => {
   it("готовые задачи без кода получает свой пул, не разработчики", () => {
     expect(planDispatch(state({ readyForNocode: 2 }), noon)).toEqual([{ pool: "nocode", agent: "nocode-1" }]);
+    expect(planDispatch(state({ productQueue: ["AUD-4", "DSN-2"] }), noon)).toEqual([{ pool: "product", agent: "product", keys: ["AUD-4", "DSN-2"] }]);
+    expect(planDispatch(state({ productSweepDue: true }), noon)).toEqual([{ pool: "product", agent: "product", sweep: true }]);
+    expect(planDispatch(state({ productSweepDue: false }), noon)).toEqual([]);
+    expect(planDispatch(state({ designerQueue: ["DSN-3", "STAFF-1", "X-1", "X-2"] }), noon)).toEqual([{ pool: "designer", agent: "designer", keys: ["DSN-3", "STAFF-1", "X-1"] }]);
     expect(planDispatch(state({ readyForDev: 1, readyForNocode: 1 }), noon)).toEqual([
       { pool: "dev", agent: "dev-1" },
       { pool: "nocode", agent: "nocode-1" },
@@ -208,7 +223,7 @@ describe("«Продукт и не-код»", () => {
   it("выключенный пул и дневной лимит соблюдаются, «Запустить сейчас» на задачу — работает", () => {
     const off = { ...on, pools: { ...on.pools, nocode: { ...on.pools.nocode, enabled: false } } };
     expect(planDispatch(state({ config: off, readyForNocode: 3 }), noon)).toEqual([]);
-    expect(planDispatch(state({ readyForNocode: 3, today: { triage: 0, dev: 0, nocode: 8, tester: 0, deployer: 0 } }), noon)).toEqual([]);
+    expect(planDispatch(state({ readyForNocode: 3, today: { triage: 0, product: 0, designer: 0, dev: 0, nocode: 8, tester: 0, deployer: 0 } }), noon)).toEqual([]);
     const at = "2026-09-24T07:59:00Z";
     expect(planDispatch(state({ config: DEFAULT_WORKERS, requests: [{ pool: "nocode", key: "TEAM-9", at, by: "owner" }] }), noon)).toEqual([
       { pool: "nocode", agent: "nocode-1", key: "TEAM-9", requestAt: at },

@@ -48,6 +48,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
   lib [--kind knowledge|rules|role|process|decision|spec] [--q слово]   список документов
   lib <slug>                                    текущий текст документа (slug — путь в репозитории или note-…)
   lib add --title "…" --kind knowledge --file запись.md   новая запись команды (виды: rules role process decision spec knowledge)
+  lib update <slug> --file запись.md [--title "…"] [--note "что изменили"]   новая версия записи команды (note-…)
 
 Сообщения:
   msg "текст" --to owner|cto|workers|triage|dev|tester|deployer [--key КЛЮЧ]
@@ -593,6 +594,16 @@ async function main() {
     }
     case "lib": {
       const base = URL_BASE.replace(/\/api\/cc\/?$/, "/api/cc/library");
+      if (pos[0] === "update") {
+        const slug = pos[1];
+        const file = typeof flags.file === "string" ? flags.file : null;
+        if (!slug || !file || !fs.existsSync(file)) die("нужны slug записи и файл с текстом: lib update note-… --file запись.md");
+        const body = { slug, title: typeof flags.title === "string" ? flags.title : undefined, note: typeof flags.note === "string" ? flags.note : undefined, content: fs.readFileSync(file, "utf8"), agent: typeof flags.agent === "string" ? flags.agent : "cto" };
+        const res = await fetch(base, { method: "PUT", headers: { "x-cc-key": KEY, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) die(d.error ?? res.status);
+        return console.log(d.changed ? `✓ ${slug}: новая версия ${d.version}` : `· ${slug}: текст не изменился, версия та же`);
+      }
       if (pos[0] === "add") {
         const file = typeof flags.file === "string" ? flags.file : null;
         if (!file || !fs.existsSync(file)) die("нужен файл с текстом: --file запись.md");
