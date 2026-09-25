@@ -16,6 +16,17 @@ export const CLOSED_STATUSES: TaskStatusKey[] = ["done", "cancelled"];
 export const ROLES = ["owner", "cto", "product", "designer", "triage", "dev", "nocode", "tester", "deployer", "watchdog"] as const;
 export type Role = (typeof ROLES)[number];
 
+/** Воркеры-исполнители: не заводят задачи и входящие — бэклог остаётся чистым */
+export const WORKER_ROLES: readonly Role[] = ["dev", "nocode", "tester", "deployer"];
+
+/**
+ * Может ли роль заводить задачи (create) и входящие (intake) в бэклоге.
+ * Воркеры-исполнители не создают задачи — они сообщают о потребности через CTO.
+ */
+export function canCreateTask(role: Role): boolean {
+  return !WORKER_ROLES.includes(role);
+}
+
 /** Кто должен снять блокировку */
 export const BLOCKED_ON = ["owner", "product", "design", "tech", "external", "deps"] as const;
 export type BlockedOn = (typeof BLOCKED_ON)[number];

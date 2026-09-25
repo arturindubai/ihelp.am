@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canCreateTask,
   canTransition,
   doneGate,
   isReady,
@@ -14,6 +15,7 @@ import {
   watchdogPlan,
   LEASE_MIN,
   RETURN_AFTER_STALE_MIN,
+  WORKER_ROLES,
   type HealthTask,
 } from "./cc-flow";
 
@@ -174,6 +176,38 @@ describe("здоровье и сторож", () => {
     const b = task({ key: "B1", status: "blocked", blockedOn: "deps", depends: ["X"], claimedBy: null, claimUntil: null });
     expect(watchdogPlan([b], new Set(), now).unblock).toEqual([]);
     expect(watchdogPlan([b], new Set(["X"]), now).unblock).toEqual(["B1"]);
+  });
+});
+
+describe("запрет воркерам заводить задачи и входящие", () => {
+  it("WORKER_ROLES содержит всех воркеров-исполнителей", () => {
+    expect(WORKER_ROLES).toContain("dev");
+    expect(WORKER_ROLES).toContain("nocode");
+    expect(WORKER_ROLES).toContain("tester");
+    expect(WORKER_ROLES).toContain("deployer");
+    expect(WORKER_ROLES).not.toContain("cto");
+    expect(WORKER_ROLES).not.toContain("owner");
+    expect(WORKER_ROLES).not.toContain("triage");
+    expect(WORKER_ROLES).not.toContain("product");
+  });
+  it("воркеры-исполнители не могут создавать задачи и входящие", () => {
+    for (const role of WORKER_ROLES) {
+      expect(canCreateTask(role), `роль ${role} должна быть запрещена`).toBe(false);
+    }
+  });
+  it("триаж, техдиректор, продакт и владелец могут создавать задачи", () => {
+    expect(canCreateTask("cto")).toBe(true);
+    expect(canCreateTask("product")).toBe(true);
+    expect(canCreateTask("owner")).toBe(true);
+    expect(canCreateTask("triage")).toBe(true);
+  });
+  it("dev-1, nocode-2 и tester из имён агентов блокируются через roleOf", () => {
+    expect(canCreateTask(roleOf("dev-1"))).toBe(false);
+    expect(canCreateTask(roleOf("nocode-2"))).toBe(false);
+    expect(canCreateTask(roleOf("tester"))).toBe(false);
+    expect(canCreateTask(roleOf("deployer"))).toBe(false);
+    expect(canCreateTask(roleOf("cto"))).toBe(true);
+    expect(canCreateTask(roleOf("triage"))).toBe(true);
   });
 });
 
