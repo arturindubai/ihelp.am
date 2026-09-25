@@ -757,3 +757,22 @@ model NotifyQueue {
   @@index([status, nextAttemptAt])
   @@index([createdAt])
 }
+
+/// Журнал тех-алертов: каждая уникальная ошибка с счётчиком повторений и ссылкой на задачу-баг
+model AppError {
+  id          String    @id @default(cuid())
+  /// Ключ дедупликации (из alertTech)
+  key         String    @unique
+  /// Маршрут, компонент или источник ошибки
+  source      String
+  /// Текст ошибки (до 500 символов)
+  message     String
+  /// Количество повторений
+  count       Int       @default(1)
+  firstSeenAt DateTime  @default(now())
+  lastSeenAt  DateTime  @default(now())
+  /// Ключ задачи-бага, если создана
+  taskKey     String?
+
+  @@index([lastSeenAt])
+}

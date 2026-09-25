@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSection } from "../../admin";
 import { audit } from "../../audit";
-import { addComment, saveTask, updateTask, type TaskContent } from "../../services/cc";
+import { addComment, linkErrorToTask, saveTask, updateTask, type TaskContent } from "../../services/cc";
 import { CcError, approveMockup, retriage, returnDesign, transition } from "../../services/ccWork";
 import { saveEpic, type EpicContent } from "../../services/epics";
 import { deleteAttachment } from "../../services/attachments";
@@ -90,7 +90,6 @@ export async function ccSaveTaskAction(content: unknown, isNew: boolean) {
   }
 }
 
-
 export async function ccCommentAction(key: string, text: string) {
   const u = await requireSection("control");
   const t = text.trim();
@@ -158,7 +157,6 @@ export async function ccSaveEpicAction(content: unknown, isNew: boolean) {
     return { ok: false as const, error: (e as Error).message };
   }
 }
-
 
 export async function ccDeleteAttachmentAction(id: string) {
   const u = await requireSection("control");
@@ -442,5 +440,60 @@ export async function ccLibraryArchiveAction(slug: string, archived: boolean) {
   } catch (e) {
     return { ok: false as const, error: e instanceof LibraryError ? e.message : "error" };
   }
+}
+
+/* ───── Журнал ошибок ───── */
+
+/** Создать задачу-баг из записи журнала ошибок */
+export async function ccCreateBugFromErrorAction(errorId: string) {
+  const u = await requireSection("control");
+  const err = await db.appError.findUnique({ where: { id: errorId } });
+  if (!err) return { ok: false as const, error: "not_found" };
+  if (err.taskKey) return { ok: false as const, error: "already_exists", taskKey: err.taskKey };
+
+  // Генерируем ключ BUG-N
+  const existing = await db.task.findMany({ where: { key: { startsWith: "BUG-" } }, select: { key: true } });
+  const nums = existing.map((t) => parseInt(t.key.replace("BUG-", ""), 10)).filter((n) => !isNaN(n));
+  const next = (nums.length ? Math.max(...nums) : 0) + 1;
+  const key = `BUG-${next}`;
+
+  const title = `Ошибка: ${err.source.length > 80 ? err.source.slice(0, 80) + "…" : err.source}`;
+  const summary = err.message.slice(0, 500);
+  const details = [
+    `**Источник:** ${err.source}`,
+    `**Первый раз:** ${err.firstSeenAt.toISOString()}`,
+    `**Последний раз:** ${err.lastSeenAt.toISOString()}`,
+    `**Повторений:** ${err.count}`,
+    `**Запись журнала:** ${err.id}`,
+    "",
+    "```",
+    err.message.slice(0, 1000),
+    "```",
+  ].join("\n");
+
+  await saveTask(
+    {
+      key,
+      title,
+      summary,
+      details,
+      requirements: [`Исправить ошибку: ${err.source}`],
+      area: "dev",
+      layer: "fullstack",
+      priority: "p1",
+      stage: "public",
+      owner: "tech",
+      needs: [],
+      depends: [],
+      docs: [],
+    },
+    who(u),
+    true,
+    "ui",
+  );
+  await linkErrorToTask(errorId, key);
+  await audit(u.id, "error.bug_created", "AppError", errorId, { key });
+  rAll();
+  return { ok: true as const, taskKey: key };
 }
 
