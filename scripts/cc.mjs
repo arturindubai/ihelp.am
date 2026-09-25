@@ -30,6 +30,9 @@ const HELP = `cc — Control Center из командной строки (docs/D
   unblock КЛЮЧ "что изменилось"
 
   brief КЛЮЧ [--role dev|tester|deployer|nocode]   брифинг: правила роли, карточка, что сдать
+                                                  При сдаче (review) обязательны:
+                                                    --release "Теперь X работает так-то"  (что изменилось для людей)
+                                                    --summary "Сделано: …; Проверить: …; Риск: …"  (резюме для владельца)
 
 Тестировщик (--agent tester):
   test КЛЮЧ                                     взять на проверку + рабочая копия на коммите ветки
@@ -304,7 +307,13 @@ function finishSteps(role, t, agent, dir) {
 2. Непонятно зачем или критерии не проверяемы — не угадывай: node scripts/cc.mjs block ${k} "вопрос, варианты, предложение" --on product|owner|design|tech --agent ${agent}
 3. Проверка: scripts/check.sh; интерфейс — scripts/stand.sh up и node scripts/stand-shot.mjs /ru/… (потом scripts/stand.sh down).
 4. Коммиты «${k}: что сделано», git push -u origin task/${k}.
-5. Сдать: node scripts/cc.mjs review ${k} "Сделано: … Проверено: … Проверить: … Миграции: … Риски и что не сделано: …" --agent ${agent}
+5. Сдать — оба поля обязательны:
+   node scripts/cc.mjs review ${k} "Сделано: … Проверено: … Проверить: … Миграции: … Риски и что не сделано: …" \\
+     --release "Что изменилось для людей: 1–2 предложения простым языком" \\
+     --summary "Сделано: …; Проверить самому: …; Риск: …" \\
+     --agent ${agent}
+   --release — строка для Release Notes: что видит клиент или команда, простыми словами.
+   --summary — до трёх строк для владельца: что сделано, что проверить самому, риск.
    Ход работы — note ${k} "…"; ошибка — note ${k} "…" --error; не успеваешь — handoff ${k} "что сделано, что осталось".
 Не мёрджить, не выкладывать, не ставить «Сделано».`;
 }
@@ -525,9 +534,23 @@ async function main() {
     case "review": {
       const k = needKey();
       if (text().length < 40) die("отчёт от 40 символов: что сделано, как проверено (tsc, vitest, стенд), как проверить деплоеру, риски");
+      const releaseNote = typeof flags.release === "string" ? flags.release.trim() : "";
+      const ownerSummary = typeof flags.summary === "string" ? flags.summary.trim() : "";
+      if (!releaseNote)
+        die(
+          `Укажите «что изменилось для людей» (--release "…"):\n` +
+          `  Пример: --release "Теперь клиент видит статус заказа прямо в личном кабинете"\n` +
+          `  1–2 предложения простыми словами: что видит клиент или команда после этого изменения.`,
+        );
+      if (!ownerSummary)
+        die(
+          `Укажите резюме для владельца (--summary "…"):\n` +
+          `  Пример: --summary "Сделано: добавлен статус заказа; Проверить: личный кабинет → мои заказы; Риск: нет"\n` +
+          `  До трёх строк: что сделано, что проверить самому, риск.`,
+        );
       // Задача без кода сдаётся отчётом: ветки и коммитов нет, принимает владелец в «Согласованиях»
       if ((await api("GET", { key: k })).task.layer === "none") {
-        await api("POST", null, { action: "review", agent: agentFor(k), key: k, text: text() });
+        await api("POST", null, { action: "review", agent: agentFor(k), key: k, text: text(), releaseNote, ownerSummary });
         dropState(k);
         console.log(`✓ ${k} на проверке: задача без кода — её примет владелец в «Согласованиях».`);
         return;
@@ -535,7 +558,7 @@ async function main() {
       const st = readState(k);
       const branch = flags.branch || st?.branch || `task/${k}`;
       const report = text() + branchFacts(branch);
-      await api("POST", null, { action: "review", agent: agentFor(k), key: k, text: report, branch });
+      await api("POST", null, { action: "review", agent: agentFor(k), key: k, text: report, branch, releaseNote, ownerSummary });
       dropState(k);
       console.log(`✓ ${k} на проверке: сначала тестировщик, затем деплоер. Ветка ${branch}. Рабочую копию оставьте — её уберёт gc после выкладки.`);
       return;

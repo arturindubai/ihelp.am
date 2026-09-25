@@ -535,6 +535,10 @@ model Task {
   mockupApprovedBy  String?
   /// Когда утвердили макет
   mockupApprovedAt  DateTime?
+  /// «Что изменилось для людей» — 1–2 предложения простым языком для Release Notes
+  releaseNote   String?
+  /// Резюме для владельца: что сделано, что проверить, риск — до трёх строк
+  ownerSummary  String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
