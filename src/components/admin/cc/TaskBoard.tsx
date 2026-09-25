@@ -29,7 +29,7 @@ export async function TaskBoard({ tasks, taskHref }: { tasks: AnnotatedTask[]; t
             </div>
             <div className="space-y-2">
               {items.map((task) => (
-                <div key={task.key} className={cn("card space-y-1.5 p-2.5", task.attention && "ring-1 ring-bad")}>
+                <div key={task.key} className={cn("card space-y-1.5 p-2.5", task.attention && "ring-1 ring-bad", task.status === "cancelled" && "opacity-50")}>
                   <Link href={taskHref(task.key)} scroll={false} className="block">
                     <div className="flex items-center gap-1.5">
                       <span className="font-mono text-[10px] text-muted">{task.key}</span>

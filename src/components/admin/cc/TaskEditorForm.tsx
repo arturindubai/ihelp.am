@@ -2,7 +2,7 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
-import { ccDeleteTaskAction, ccSaveTaskAction } from "@/server/actions/admin/cc";
+import { ccSaveTaskAction } from "@/server/actions/admin/cc";
 import { AREAS, LAYERS, OWNERS, PRIORITIES, STAGES } from "@/lib/backlog-labels";
 import { TextInput } from "@/components/admin/fields";
 
@@ -53,7 +53,7 @@ export const EMPTY_TASK: TaskFormValue = {
 const toLines = (v: string) => v.split("\n").map((l) => l.trim()).filter(Boolean);
 
 /** Форма задачи: создание новой и правка существующей. Правка переводит задачу на ручное ведение */
-export function TaskEditorForm({ initial, isNew, canDelete, epics }: { initial: TaskFormValue; isNew: boolean; canDelete?: boolean; epics: { key: string; title: string }[] }) {
+export function TaskEditorForm({ initial, isNew, epics }: { initial: TaskFormValue; isNew: boolean; epics: { key: string; title: string }[] }) {
   const t = useTranslations("admin.cc");
   const [v, setV] = useState(initial);
   const [error, setError] = useState<string | null>(null);
@@ -170,23 +170,6 @@ export function TaskEditorForm({ initial, isNew, canDelete, epics }: { initial: 
         <button className="btn-primary btn-sm" disabled={pending} onClick={save}>
           {t("save")}
         </button>
-        {canDelete && (
-          <button
-            className="btn-danger btn-sm"
-            disabled={pending}
-            onClick={() =>
-              start(async () => {
-                if (!confirm(t("form.deleteConfirm"))) return;
-                const r = await ccDeleteTaskAction(v.key);
-                if (!r.ok) return setError(r.error);
-                router.push("/admin/control");
-                router.refresh();
-              })
-            }
-          >
-            {t("form.delete")}
-          </button>
-        )}
       </div>
       <p className="text-xs text-muted">{t("form.sourceNote")}</p>
     </div>

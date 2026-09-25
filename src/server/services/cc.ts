@@ -248,16 +248,6 @@ export async function saveTask(content: TaskContent, actor: string, isNew: boole
   return task;
 }
 
-/** Удалить можно только задачу, созданную в админке: задачу из репозитория деплой создаст заново */
-export async function deleteTask(key: string, actor: string) {
-  const task = await db.task.findUnique({ where: { key } });
-  if (!task) throw new Error("not_found");
-  if (task.source !== "ui") throw new Error("code_task");
-  const blocking = await db.task.findMany({ where: { depends: { has: key } }, select: { key: true } });
-  if (blocking.length) throw new Error(`blocking:${blocking.map((b) => b.key).join(",")}`);
-  await db.task.delete({ where: { key } });
-  console.log(`[cc] задача ${key} удалена (${actor})`);
-}
 
 export async function addComment(key: string, text: string, author: string, kind: "note" | "report" = "note") {
   const task = await db.task.findUnique({ where: { key }, select: { id: true } });
