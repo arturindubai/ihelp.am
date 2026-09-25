@@ -164,11 +164,12 @@ export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardInte
         </button>
       </Section>
 
-      <Section k="notify" title={t("notify")} value={s.notify}>
+      <Section k="notify" title={t("notify")} value={s.notify} hint={t("notifyHint")}>
         <div className="grid gap-3 md:grid-cols-2">
-          <TextInput label={t("botToken")} hint={t("secretHint")} value={s.notify.telegramBotToken} onChange={(v) => set("notify", { telegramBotToken: v })} />
-          <TextInput label={t("chatId")} value={s.notify.telegramChatId} onChange={(v) => set("notify", { telegramChatId: v })} />
+          <TextInput label={t("teamChatId")} hint={t("teamChatHint")} value={s.notify.teamChatId} onChange={(v) => set("notify", { teamChatId: v })} />
           <TextInput label={t("techChatId")} hint={t("techChatHint")} value={s.notify.techChatId} onChange={(v) => set("notify", { techChatId: v })} />
+          <TextInput label={t("botToken")} hint={t("secretHint")} value={s.notify.telegramBotToken} onChange={(v) => set("notify", { telegramBotToken: v })} />
+          <TextInput label={t("chatId")} hint={t("chatIdHint")} value={s.notify.telegramChatId} onChange={(v) => set("notify", { telegramChatId: v })} />
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button className="btn-outline btn-sm" onClick={async () => { await testNotifyAction(); setSent(true); }}>{sent ? t("testSent") : t("testNotify")}</button>

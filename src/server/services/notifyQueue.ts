@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "../db";
-import { getSettings } from "../settings";
+import { getSettings, type Settings } from "../settings";
 import { notifyBackoffMs, NOTIFY_MAX_ATTEMPTS } from "@/lib/notifyBackoff";
 
 async function sendTelegramRaw(token: string, chatId: string, text: string): Promise<void> {
@@ -13,13 +13,24 @@ async function sendTelegramRaw(token: string, chatId: string, text: string): Pro
   if (!r.ok) throw new Error(`telegram ${r.status}: ${(await r.text()).slice(0, 200)}`);
 }
 
+/** Разрешить токен по пути вида «section.field» из объекта настроек */
+function resolveToken(s: Settings, tokenPath: string): string {
+  const [section, field] = tokenPath.split(".");
+  const sec = s[section as keyof Settings];
+  if (sec && typeof sec === "object" && !Array.isArray(sec)) {
+    return ((sec as Record<string, unknown>)[field] as string) ?? "";
+  }
+  return "";
+}
+
 /**
  * Поставить сообщение в очередь и сразу попробовать отправить.
  * При сбое запись остаётся в статусе pending — её заберёт cron на следующем проходе.
+ * tokenPath: путь к токену в настройках, например «team.botToken» или «notify.telegramBotToken»
  */
-export async function enqueueAndSend(chatId: string, text: string, tag: string, token: string): Promise<void> {
+export async function enqueueAndSend(chatId: string, text: string, tag: string, token: string, tokenPath = "notify.telegramBotToken"): Promise<void> {
   const msg = await db.notifyQueue.create({
-    data: { chatId, text, tag },
+    data: { chatId, text, tag, tokenPath },
     select: { id: true },
   });
   try {
@@ -43,24 +54,37 @@ export async function enqueueAndSend(chatId: string, text: string, tag: string, 
  * Вызывается из cron каждые 15 минут.
  */
 export async function processQueue(): Promise<{ sent: number; failed: number }> {
-  let token = "";
-  try {
-    token = (await getSettings()).notify.telegramBotToken;
-  } catch (e) {
-    console.error("[notifyQueue] настройки недоступны", e);
-    return { sent: 0, failed: 0 };
-  }
-  if (!token) return { sent: 0, failed: 0 };
-
   const pending = await db.notifyQueue.findMany({
     where: { status: "pending", nextAttemptAt: { lte: new Date() } },
     orderBy: { createdAt: "asc" },
     take: 20,
   });
+  if (!pending.length) return { sent: 0, failed: 0 };
+
+  let s: Settings | null = null;
+  try {
+    s = await getSettings();
+  } catch (e) {
+    console.error("[notifyQueue] настройки недоступны", e);
+    return { sent: 0, failed: 0 };
+  }
+
+  const tokenCache = new Map<string, string>();
+  const getToken = (tokenPath: string): string => {
+    if (tokenCache.has(tokenPath)) return tokenCache.get(tokenPath)!;
+    const token = resolveToken(s!, tokenPath);
+    tokenCache.set(tokenPath, token);
+    return token;
+  };
 
   let sent = 0;
   let failed = 0;
   for (const msg of pending) {
+    const token = getToken(msg.tokenPath);
+    if (!token) {
+      console.error(`[notifyQueue:${msg.tag}] токен по пути «${msg.tokenPath}» не задан, пропускаем`);
+      continue;
+    }
     const attempts = msg.attempts + 1;
     try {
       await sendTelegramRaw(token, msg.chatId, msg.text);
