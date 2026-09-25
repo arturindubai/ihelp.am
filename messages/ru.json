@@ -611,7 +611,11 @@
       "searchPh": "Телефон или имя",
       "role": "Роль",
       "consentAt": "согласие на обработку данных: {date}",
-      "noConsent": "нет согласия на обработку данных"
+      "noConsent": "нет согласия на обработку данных",
+      "firstDiscount": "Скидка на первый заказ",
+      "firstDiscountAvailable": "Доступна: заказов ещё не было",
+      "firstDiscountUsed": "Использована",
+      "firstDiscountCancelled": "заказ отменён, скидка не возвращается"
     },
     "reviews": {
       "title": "Отзывы",

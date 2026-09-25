@@ -4,6 +4,7 @@ import { db } from "../db";
 import { getSettings } from "../settings";
 import { html, notifyTeam } from "../notify";
 import { calculatePrice } from "@/lib/pricing";
+import { firstOrderUsedBy } from "@/lib/firstOrder";
 import { computeSlots, isMasterFree, type MasterAvailability } from "@/lib/slots";
 import { recurrenceDates, type Recurrence } from "@/lib/recurrence";
 import { addDays, atYerevan, hm, isoWeekday, ymd } from "@/lib/time";
@@ -16,9 +17,10 @@ export const BUSY_STATUSES: VisitStatus[] = ["SCHEDULED", "CONFIRMED", "ON_WAY",
 
 type Tx = Prisma.TransactionClient | typeof db;
 
+/** Скидка на первый заказ доступна, если ни один заказ клиента её не потратил — в том числе отменённый (src/lib/firstOrder.ts) */
 export async function isFirstOrder(userId?: string | null) {
   if (!userId) return true;
-  return (await db.order.count({ where: { userId, status: { not: "CANCELLED" } } })) === 0;
+  return firstOrderUsedBy(await db.order.findMany({ where: { userId }, select: { number: true, status: true, config: true } })) === null;
 }
 
 export async function loadAvailability(opts: { serviceId: string; from: Date; to: Date; masterIds?: string[]; excludeVisitId?: string; tx?: Tx }): Promise<MasterAvailability[]> {
