@@ -3,10 +3,64 @@
  * Yerevan_Cleaning_Unit_Economics_2026.xlsx (лист Tariffs), категории, демо-мастера, настройки.
  * Скрипт идемпотентный: существующие записи не перезаписываются.
  */
+import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 import { PrismaClient } from "@prisma/client";
 import { BACKLOG } from "../src/server/backlog";
 import { EPIC_SEED } from "../src/server/epics";
+import { REPO_DOC_ROOTS, kindOfPath, titleOf } from "../src/lib/library";
 const db = new PrismaClient();
+
+/**
+ * Библиотека (Control Center → «Библиотека», как Canon в LIA): при каждой выкладке снимаем документы репозитория.
+ * Новый документ — версия 1, изменившийся — новая версия, неизменный — ничего. Старые версии не трогаем: это бэкап
+ * инструкций, решений и знаний на каждую выкладку. Удалённый из репозитория документ остаётся в Библиотеке с пометкой
+ */
+function repoDocFiles(): string[] {
+  const out: string[] = [];
+  const walk = (rel: string) => {
+    const abs = path.join(process.cwd(), rel);
+    if (!fs.existsSync(abs)) return;
+    const st = fs.statSync(abs);
+    if (st.isDirectory()) for (const name of fs.readdirSync(abs).sort()) walk(path.posix.join(rel, name));
+    else if (rel.endsWith(".md")) out.push(rel);
+  };
+  for (const r of REPO_DOC_ROOTS) walk(r);
+  return out;
+}
+
+async function syncLibrary() {
+  const files = repoDocFiles();
+  if (!files.length) {
+    console.log("Library: документы репозитория не найдены (запуск не из корня репозитория?) — пропускаю");
+    return;
+  }
+  let created = 0;
+  let versioned = 0;
+  for (const rel of files) {
+    const content = fs.readFileSync(path.join(process.cwd(), rel), "utf8");
+    const hash = crypto.createHash("sha256").update(content).digest("hex");
+    const title = titleOf(content, path.basename(rel));
+    const doc = await db.libraryDoc.findUnique({ where: { slug: rel }, include: { versions: { orderBy: { n: "desc" }, take: 1 } } });
+    if (!doc) {
+      const d = await db.libraryDoc.create({ data: { slug: rel, title, kind: kindOfPath(rel), source: "repo", path: rel, createdBy: "выкладка", version: 1 } });
+      await db.libraryVersion.create({ data: { docId: d.id, n: 1, title, content, hash, author: "выкладка", note: "первый снимок" } });
+      created++;
+      continue;
+    }
+    if (doc.versions[0]?.hash === hash && !doc.archived) continue;
+    if (doc.versions[0]?.hash !== hash) {
+      const n = doc.version + 1;
+      await db.libraryVersion.create({ data: { docId: doc.id, n, title, content, hash, author: "выкладка", note: process.env.GIT_SHA ? `коммит ${process.env.GIT_SHA.slice(0, 10)}` : null } });
+      versioned++;
+      await db.libraryDoc.update({ where: { id: doc.id }, data: { version: n, title, archived: false } });
+    } else await db.libraryDoc.update({ where: { id: doc.id }, data: { archived: false } });
+  }
+  // Документ исчез из репозитория — не удаляем: помечаем архивным, история остаётся
+  const gone = await db.libraryDoc.updateMany({ where: { source: "repo", archived: false, slug: { notIn: files } }, data: { archived: true } });
+  console.log(`Library: документов ${files.length}, новых ${created}, новых версий ${versioned}, ушли в архив ${gone.count}`);
+}
 
 /**
  * Эпики Control Center: та же логика, что и у бэклога ниже — правки в админке (source="ui") не перезаписываются.
@@ -66,6 +120,7 @@ async function syncBacklog() {
       stage: t.stage,
       owner: t.owner,
       estimate: t.estimate ?? null,
+      scope: t.scope ?? [],
       sort: i,
     };
     const existing = await db.task.findUnique({ where: { key: t.key }, select: { id: true, source: true } });
@@ -75,7 +130,12 @@ async function syncBacklog() {
     }
     else {
       created++;
-      await db.task.create({ data: { key: t.key, ...content, status: t.status ?? "backlog", doneAt: t.status === "done" ? new Date() : null } });
+      // Из кода берём только «Готово» и «На проверке» (задача пришла вместе со своим кодом): «В работе» и прочее
+      // ведёт Control Center — иначе на доске появляются задачи «в работе», над которыми никто не работает
+      const status = t.status === "done" || t.status === "review" ? t.status : "backlog";
+      await db.task.create({
+        data: { key: t.key, ...content, status, doneAt: status === "done" ? new Date() : null, branch: status === "review" ? `task/${t.key}` : null },
+      });
     }
   }
   const extra = await db.task.findMany({ where: { key: { notIn: BACKLOG.map((t) => t.key) } }, select: { key: true } });
@@ -107,6 +167,7 @@ async function main() {
   // удалённые в админке демо-мастера, баннер, категории и страницы возвращались бы после обновления.
   await syncEpics();
   await syncBacklog();
+  await syncLibrary().catch((e) => console.error("Library: снимок документов не удался —", (e as Error).message));
 
   const SEED_FLAG = "_seed";
   if ((await db.setting.findUnique({ where: { key: SEED_FLAG } })) || (await db.service.count())) {

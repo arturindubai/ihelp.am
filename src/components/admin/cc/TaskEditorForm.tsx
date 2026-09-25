@@ -25,6 +25,7 @@ export interface TaskFormValue {
   stage: string;
   owner: string;
   estimate: string;
+  scope: string;
 }
 
 export const EMPTY_TASK: TaskFormValue = {
@@ -46,6 +47,7 @@ export const EMPTY_TASK: TaskFormValue = {
   stage: "public",
   owner: "tech",
   estimate: "",
+  scope: "",
 };
 
 const toLines = (v: string) => v.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -123,6 +125,7 @@ export function TaskEditorForm({ initial, isNew, canDelete, epics }: { initial: 
           stage: v.stage,
           owner: v.owner,
           estimate: v.estimate || null,
+          scope: toLines(v.scope),
         },
         isNew,
       );
@@ -146,9 +149,10 @@ export function TaskEditorForm({ initial, isNew, canDelete, epics }: { initial: 
         {area("deployNotes", t("form.deployNotes"), t("form.deployNotesHint"), 3)}
       </div>
       {area("needs", t("form.needs"), t("form.perLine"), 3)}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-3">
         {area("depends", t("form.depends"), t("form.dependsHint"), 2)}
         {area("docs", t("form.docs"), t("form.perLine"), 2)}
+        {area("scope", t("form.scope"), t("form.scopeHint"), 2)}
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         {epicSelect}

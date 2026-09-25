@@ -6,3 +6,4 @@ backups
 .env
 *.log
 e2e
+.claude

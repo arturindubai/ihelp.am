@@ -47,9 +47,38 @@ export const AREAS: Record<string, string> = {
 export const LAYERS: Record<string, string> = { back: "Бэк", front: "Фронт", fullstack: "Бэк+Фронт", infra: "Инфра", none: "Не код" };
 export const PRIORITIES: Record<string, string> = { p0: "До первых клиентов", p1: "До запуска", p2: "После запуска", p3: "К сведению" };
 export const STAGES: Record<string, string> = { baseline: "Уже работает", launch: "1. Первые клиенты", public: "2. Публичный запуск", growth: "3. Рост", later: "4. Позже" };
-export const STATUSES: Record<string, string> = { backlog: "Бэклог", in_progress: "В работе", review: "На проверке", blocked: "Заблокирована", done: "Готово" };
+/** Статусы задачи. Что каждый значит и кто его ставит — docs/DEV_SYSTEM.md, переходы — src/lib/cc-flow.ts */
+export const STATUSES: Record<string, string> = {
+  backlog: "Бэклог",
+  ready: "В очереди",
+  in_progress: "В работе",
+  review: "На проверке",
+  blocked: "Заблокирована",
+  done: "Сделано",
+  cancelled: "Отменена",
+};
+/** Кто должен снять блокировку */
+export const BLOCKED_ON_LABELS: Record<string, string> = {
+  owner: "Владелец",
+  product: "Продукт",
+  design: "Дизайн",
+  tech: "Техника",
+  external: "Внешний сервис",
+  deps: "Зависимости",
+};
+/** Виды записей в ленте задачи */
+export const COMMENT_KIND_LABELS: Record<string, string> = {
+  note: "Комментарий",
+  progress: "Ход работы",
+  report: "Отчёт о сдаче",
+  handoff: "Передача",
+  review: "Замечания проверки",
+  error: "Ошибка",
+  system: "Система",
+  triage: "Триаж",
+};
 export const OWNERS: Record<string, string> = { product: "Продукт", tech: "Техника", both: "Продукт + техника" };
-export const EPIC_STATUSES: Record<string, string> = { planned: "Задуман", in_progress: "В работе", testing: "Проверяется", ready: "Готов к деплою", done: "Готово" };
+export const EPIC_STATUSES: Record<string, string> = { planned: "Задуман", in_progress: "В работе", testing: "Проверяется", ready: "Готов к деплою", done: "Сделано" };
 
 export interface TaskSeed {
   key: string;
@@ -78,6 +107,13 @@ export interface TaskSeed {
   stage: keyof typeof STAGES;
   owner: keyof typeof OWNERS;
   estimate?: "S" | "M" | "L";
+  /** Файлы и папки, которые задача затрагивает: по ним параллельные исполнители не сталкиваются */
+  scope?: string[];
+  /**
+   * Статус при первом появлении задачи в базе. Учитываются только два: "done" — уже работает,
+   * и "review" — задача заведена в той же ветке, что и её код, и сразу приходит на проверку.
+   * Остальные игнорируются: «В очереди» ставит техдиректор, «В работе» — только аренда исполнителя.
+   */
   status?: keyof typeof STATUSES;
 }
 

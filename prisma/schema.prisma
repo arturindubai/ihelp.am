@@ -440,7 +440,7 @@ model UiString {
   @@unique([locale, key])
 }
 
-/// Control Center: задача бэклога (источник — prisma/backlog.ts, статусы ведутся в интерфейсе)
+/// Control Center: задача бэклога (тексты — src/server/backlog.ts, статусы и работа — в Control Center; правила — docs/DEV_SYSTEM.md)
 model Task {
   id            String    @id @default(cuid())
   key           String    @unique
@@ -473,21 +473,51 @@ model Task {
   priority      String
   /// launch | public | growth | later | baseline
   stage         String
-  /// backlog | in_progress | review | blocked | done
+  /// backlog | ready | in_progress | review | blocked | done | cancelled — переходы и гейты: src/lib/cc-flow.ts
   status        String    @default("backlog")
   /// product | tech | both
   owner         String    @default("tech")
   estimate      String?
   /// code — тексты задачи приходят из src/server/backlog.ts и обновляются при деплое
   /// ui   — задачу создали или отредактировали в админке, деплой её не трогает
+  /// api  — задачу завела рабочая сессия через API, деплой её тоже не трогает
+  /// intake — свободный текст из Intake (карточка IN-N), его разбирает триаж
   source        String    @default("code")
   createdBy     String?
   assignee      String?
   blockedReason String?
+  /// Кто должен снять блокировку: owner | product | design | tech | external | deps
+  blockedOn     String?
   sort          Int       @default(0)
-  /// Аренда задачи агентом (API /api/cc)
+  /// Аренда задачи исполнителем (API /api/cc): кто держит и до какого времени. Пульс продлевает аренду
   claimedBy     String?
   claimUntil    DateTime?
+  /// Последний признак жизни исполнителя: пульс из хука Claude Code или команды scripts/cc.mjs
+  heartbeatAt   DateTime?
+  /// Когда сторож заметил истёкшую аренду без пульса. Пусто — с задачей всё в порядке
+  staleAt       DateTime?
+  /// Чат исполнителя (id сессии Claude Code), чтобы найти, кто держит задачу
+  session       String?
+  /// Ветка git с работой по задаче, обычно task/<КЛЮЧ>. Остаётся после возврата — следующий продолжает с неё
+  branch        String?
+  /// Файлы и папки, которые задача затрагивает: параллельные исполнители не берут пересекающиеся задачи
+  scope         String[]  @default([])
+  /// Сколько раз задачу возвращали в очередь брошенной
+  reclaims      Int       @default(0)
+  /// Сколько раз проверка возвращала задачу на доработку
+  rework        Int       @default(0)
+  /// Коммит в main, с которым задача выложена, — доказательство готовности код-задачи
+  deployedSha   String?
+  /// Что проверено после выкладки: smoke, живая проверка, ссылка или скриншот
+  proof         String?
+  /// Проверка тестировщика: какой коммит ветки проверен, кем и когда. Новый коммит в ветке требует новой проверки
+  testedSha     String?
+  testedBy      String?
+  testedAt      DateTime?
+  /// Триаж: когда и кем карточка разобрана и вердикт. Пусто у бэклога — карточка ждёт триажа (docs/roles/TRIAGE.md)
+  triagedAt     DateTime?
+  triagedBy     String?
+  triageNote    String?
   startedAt     DateTime?
   doneAt        DateTime?
   createdAt     DateTime  @default(now())
@@ -563,13 +593,106 @@ model TaskComment {
   id        String   @id @default(cuid())
   taskId    String
   task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  /// note — заметка человека, report — отчёт агента
+  /// note — заметка человека, progress — ход работы, report — отчёт о сдаче, handoff — передача задачи,
+  /// review — замечания проверки, error — ошибка (тест, сборка, выкладка), system — запись сторожа или системы
   kind      String   @default("note")
   author    String
   text      String
   createdAt DateTime @default(now())
 
   @@index([taskId, createdAt])
+}
+
+/// Запуск воркера (claude -p на сервере): кто, с какой задачей, чем кончилось. Пишет диспетчер через /api/cc
+model WorkerRun {
+  id         String    @id @default(cuid())
+  /// triage | dev | tester | deployer
+  pool       String
+  agent      String
+  taskKey    String?
+  /// Карточки запуска триажа; пусто у триажа — обзор всего бэклога
+  keys       String[]  @default([])
+  /// Имя юнита systemd, в котором идёт запуск
+  unit       String
+  model      String
+  /// running | done | failed | timeout | limit | stopped
+  status     String    @default("running")
+  summary    String?
+  turns      Int?
+  /// Хвост вывода запуска: ответ claude -p и ошибки — вкладка «Воркеры» → журнал
+  log        String?
+  tokensIn   Int?
+  tokensOut  Int?
+  /// Условная стоимость по расчёту claude -p; под подпиской деньги не списываются, это мера расхода лимита
+  costUsd    Float?
+  /// Человек нажал «Остановить»: диспетчер остановит юнит на следующем проходе
+  stopRequested Boolean @default(false)
+  /// Кто попросил запуск кнопкой «Запустить сейчас»; пусто — запуск по очереди
+  requestedBy String?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([status])
+  @@index([startedAt])
+}
+
+/// Библиотека знаний и инструкций (как Canon в админке LIA): документы из репозитория — снимок при каждой выкладке —
+/// и записи, которые ведут люди в Control Center. Каждая правка — новая версия, прошлые версии не удаляются (это и бэкап)
+model LibraryDoc {
+  id        String   @id @default(cuid())
+  /// Для документа из репозитория — его путь (docs/WORKERS.md), для записи из админки — note-<случайный хвост>
+  slug      String   @unique
+  title     String
+  /// rules | role | process | decision | spec | knowledge
+  kind      String
+  /// repo — документ репозитория, меняется только через код; admin — запись владельца или команды
+  source    String
+  /// Путь в репозитории (для source=repo)
+  path      String?
+  /// Номер текущей версии
+  version   Int      @default(1)
+  archived  Boolean  @default(false)
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions  LibraryVersion[]
+
+  @@index([kind])
+}
+
+model LibraryVersion {
+  id        String     @id @default(cuid())
+  docId     String
+  doc       LibraryDoc @relation(fields: [docId], references: [id], onDelete: Cascade)
+  n         Int
+  title     String
+  content   String
+  /// sha256 содержимого: снимок при выкладке пишет новую версию, только если текст изменился
+  hash      String
+  author    String
+  note      String?
+  createdAt DateTime   @default(now())
+
+  @@unique([docId, n])
+  @@index([docId, createdAt])
+}
+
+/// Сообщение в Control Center (вкладка «Сообщения»): владелец пишет роли или воркерам, воркеры — владельцу.
+/// Воркер получает непрочитанные сообщения своей роли в брифинге при запуске
+model CcMessage {
+  id        String    @id @default(cuid())
+  /// owner | cto | triage | dev | tester | deployer | workers (все воркеры)
+  toRole    String
+  fromAgent String
+  text      String
+  taskKey   String?
+  readAt    DateTime?
+  readBy    String?
+  createdAt DateTime  @default(now())
+
+  @@index([toRole, readAt])
+  @@index([createdAt])
 }
 
 /// История изменений задачи
