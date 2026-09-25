@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "../db";
 import { annotate, attention, systemStatus } from "./cc";
-import { getTick, getWorkersConfig } from "./workers";
+import { getTick, getWorkersConfig, requestRun } from "./workers";
 import { unreadForOwner } from "./ccMessages";
 import { recentErrors } from "../logbuffer";
 import { flowOf, intakeTitle, laneOf, nextIntakeKey, sizeOf, weekStart } from "@/lib/cc-lanes";
@@ -26,7 +26,7 @@ export async function boardTasks(opts: { closed?: boolean } = {}) {
   return (await annotate(tasks)).map((t) => ({
     ...t,
     lane: laneOf(t),
-    flow: flowOf(t, t.status === "review" && knowHeads ? testedCurrent(t, heads) : undefined),
+    flow: flowOf(t, t.status === "review" && knowHeads ? testedCurrent({ ...t, branch: t.branch || `task/${t.key}` }, heads) : undefined),
     size: sizeOf(t.estimate),
   }));
 }
@@ -169,6 +169,8 @@ export async function intakeCreate(text: string, by: string) {
         },
       });
       await db.taskEvent.create({ data: { taskId: task.id, actor: by, field: "created", from: null, to: key } });
+      // Входящие не ждут очереди бэклога: триаж возьмёт карточку на ближайшем проходе диспетчера (быстрый слот)
+      await requestRun("triage", key, by).catch(() => null);
       return task;
     } catch (e) {
       // Два Intake в одну секунду получили один номер — берём следующий
@@ -182,14 +184,19 @@ export async function intakeCreate(text: string, by: string) {
   throw new Error("key_busy");
 }
 
-/** Очередь и история Intake: последние входящие и что с ними сделал триаж */
+/** Очередь и история Intake: последние входящие, что с ними сделал триаж и какие он разбирает прямо сейчас */
 export async function intakeHistory(take = 12) {
-  return db.task.findMany({
-    where: { source: "intake" },
-    orderBy: { createdAt: "desc" },
-    take,
-    select: { key: true, title: true, status: true, triagedAt: true, triageNote: true, createdAt: true, createdBy: true },
-  });
+  const [items, running] = await Promise.all([
+    db.task.findMany({
+      where: { source: "intake" },
+      orderBy: { createdAt: "desc" },
+      take,
+      select: { key: true, title: true, status: true, triagedAt: true, triageNote: true, createdAt: true, createdBy: true },
+    }),
+    db.workerRun.findMany({ where: { status: "running", pool: "triage" }, select: { keys: true } }),
+  ]);
+  const inWork = new Set(running.flatMap((r) => r.keys));
+  return items.map((i) => ({ ...i, inWork: inWork.has(i.key) }));
 }
 
 /* ───────────── Здоровье ───────────── */

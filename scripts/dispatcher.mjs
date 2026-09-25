@@ -23,7 +23,7 @@ const DRY = process.argv.includes("--dry-run");
 fs.mkdirSync(DATA, { recursive: true });
 
 /** Сколько минут воркер может работать, прежде чем systemd его остановит */
-const LIMIT_MIN = { triage: 45, dev: 100, tester: 60, deployer: 75 };
+const LIMIT_MIN = { triage: 45, dev: 100, nocode: 60, tester: 60, deployer: 75 };
 
 function envValue(name) {
   if (process.env[name]) return process.env[name];
@@ -120,7 +120,7 @@ function resetAt(result) {
   return new Date(Math.max(t, Date.now() + 5 * 60_000));
 }
 
-const workDir = (pool, key) => (pool === "deployer" || pool === "triage" ? ROOT : path.join(ROOT, ".claude", "worktrees", pool === "tester" ? `test-${key}` : key));
+const workDir = (pool, key) => (["deployer", "triage", "nocode"].includes(pool) ? ROOT : path.join(ROOT, ".claude", "worktrees", pool === "tester" ? `test-${key}` : key));
 
 /** Снести стенд, который воркер мог оставить поднятым */
 function standDown(dir) {
@@ -175,11 +175,12 @@ async function reconcile(running, stopAll) {
       await api({ action: "workers-pause", until: new Date(Date.now() + 6 * 3600_000).toISOString(), text: "Воркеры не вошли в Claude. Войти: scripts/claude-login.sh на сервере, затем «Снять паузу» в Control Center → Воркеры." });
     }
     if (!run.taskKey) continue;
-    standDown(workDir(run.pool, run.taskKey));
+    // Стенд поднимают только разработчик и тестировщик — в своей рабочей копии
+    if (run.pool === "dev" || run.pool === "tester") standDown(workDir(run.pool, run.taskKey));
 
     // Воркер закончил, а задача всё ещё за ним — не ждём сторожа пять часов: возвращаем сразу, ветка сохраняется
     const why = `Запуск воркера ${run.agent} закончился (${status}), задача не сдана. ${result?.result ? `Последнее: ${String(result.result).slice(0, 600)}` : ""}`;
-    if (run.pool === "dev") {
+    if (run.pool === "dev" || run.pool === "nocode") {
       const r = await asAgent(run.agent, { action: "handoff", key: run.taskKey, text: why });
       if (r.ok) log(`↩ ${run.taskKey} возвращена в очередь`);
     } else {
@@ -202,6 +203,7 @@ async function prompt(pool, agent, key, extra) {
   const common = `Ты — автономный воркер iHelp, агент ${agent}, тебя запустил диспетчер. Людей рядом нет: вопросов в чат не задавай.
 ${ask}
 Сначала прочитай CLAUDE.md и docs/DEV_SYSTEM.md, затем действуй строго по брифингу ниже. Основную копию /opt/ihelp.am не переключай, секреты не выводи.
+Команды пиши просто: текущая папка уже нужная — scripts/check.sh, node scripts/cc.mjs … (без sudo, без docker, без чтения .env). Разрешено только то, что нужно твоей роли; отклонённую команду не обходи другими путями — запиши в ленту, чего не хватило. Субагентов не запускай.
 В самом конце ответь одной строкой: что сделано и в каком статусе задача.${notes}`;
 
   if (pool === "triage") {
@@ -214,7 +216,9 @@ ${ask}
 
   const brief = cc(["brief", key, "--role", pool === "dev" ? (extra.role ?? "dev") : pool, "--agent", agent]);
   const role =
-    pool === "dev"
+    pool === "nocode"
+      ? `Задача ${key} без кода уже взята за тобой. Работаешь из основной копии /opt/ihelp.am только на чтение: файлы не правишь, коммитов нет — результат целиком в карточке. Сделай то, что просит задача (исследование, расчёт, тексты, инструкции, проверка настроек), и сдай отчётом: node scripts/cc.mjs review ${key} "…" --agent ${agent} — он попадёт владельцу в «Согласования». Шаги, которые может сделать только человек (завести аккаунт, оплатить, ввести пароль, добавить записи DNS у регистратора), не делай и не обходи: блокируй задачу на владельце с пошаговой инструкцией (block ${key} "…" --on owner). После его ответа задача вернётся к тебе. Не успеваешь — handoff с тем, что уже готово.`
+      : pool === "dev"
       ? `Задача ${key} уже взята за тобой. Текущая папка — её рабочая копия (ветка task/${key}). Доведи задачу до review: сделано, scripts/check.sh зелёный, интерфейс — на стенде со скриншотами, коммиты «${key}: …», git push -u origin task/${key}, честный отчёт. Не успеваешь — закоммить, отправь ветку и сделай handoff с состоянием.`
       : pool === "tester"
         ? `Задача ${key} на проверке и держится за тобой. Текущая папка — её код на коммите ${extra.sha}. Проверь по брифингу и поставь вердикт: pass или fail. Код не правь.`
@@ -275,6 +279,13 @@ async function main() {
           continue;
         }
         await spawn("dev", a.agent, out.task, pools.dev.model, { ...extra, dir: out.dir, role: out.role });
+      } else if (a.pool === "nocode") {
+        const out = JSON.parse(cc(a.key ? ["take", a.key, "--agent", a.agent, "--json"] : ["next", "--agent", a.agent, "--json"]));
+        if (!out.task) {
+          log(`${a.agent}: подходящей задачи без кода нет`);
+          continue;
+        }
+        await spawn("nocode", a.agent, out.task, pools.nocode.model, { ...extra, dir: out.dir, role: "nocode" });
       } else if (a.pool === "tester") {
         const out = JSON.parse(cc(["test", a.key, "--agent", a.agent, "--json"]));
         await spawn("tester", a.agent, a.key, pools.tester.model, { ...extra, dir: out.dir, sha: out.sha });

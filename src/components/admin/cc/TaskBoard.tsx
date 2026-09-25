@@ -1,7 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { PRIORITIES, STATUSES } from "@/lib/backlog-labels";
-import { QuickMove } from "@/components/admin/cc/TaskControls";
 import { TaskBadges, type AnnotatedTask } from "@/components/admin/cc/TaskBadges";
 import { cn } from "@/lib/format";
 
@@ -9,8 +8,8 @@ const PRIORITY_TONE: Record<string, string> = { p0: "bg-bad-50 text-bad", p1: "b
 const COLUMN_ORDER = ["backlog", "ready", "in_progress", "review", "blocked", "done", "cancelled"] as const;
 
 /**
- * Канбан по статусам. «Готово» и «Отменена» показываются, только если такие задачи есть в выборке (обычно — при «Все»).
- * Клик по карточке открывает шторку со всем по задаче; у готовой по чек-листу задачи в бэклоге — кнопка «Готова»
+ * Канбан по статусам. «Сделано» и «Отменена» показываются, только если такие задачи есть в выборке (обычно — при «Все»).
+ * Клик по карточке открывает шторку со всем по задаче; у готовой по чек-листу задачи в бэклоге — кнопка «В очереди»
  */
 export async function TaskBoard({ tasks, taskHref }: { tasks: AnnotatedTask[]; taskHref: (key: string) => string }) {
   const t = await getTranslations("admin.cc");
@@ -40,7 +39,6 @@ export async function TaskBoard({ tasks, taskHref }: { tasks: AnnotatedTask[]; t
                     {task.epic && <div className="mt-1 truncate text-[11px] text-brand">{task.epic}</div>}
                   </Link>
                   <TaskBadges task={task} />
-                  {task.status === "backlog" && task.dorOk && <QuickMove taskKey={task.key} to="ready" label={`→ ${t("move.quickReady")}`} className="w-full" />}
                 </div>
               ))}
               {items.length === 0 && <p className="px-1 py-4 text-center text-xs text-muted">—</p>}

@@ -19,6 +19,8 @@ export async function sendMessage(m: { to: string; from: string; text: string; t
   // Владельцу — сразу в тех-чат, чтобы вопрос воркера не ждал, пока кто-то откроет админку
   if (m.to === "owner") {
     await alertTech(`cc:msg:${msg.id}`, html`✉️ <b>${m.from}</b>${m.taskKey ? ` · ${m.taskKey}` : ""}\n${text.slice(0, 600)}`, 1).catch(() => null);
+    const { notifyMembers } = await import("./teamBot");
+    await notifyMembers(html`✉️ <b>${m.from}</b>${m.taskKey ? ` · ${m.taskKey}` : ""}\n${text.slice(0, 1500)}`).catch(() => null);
   }
   return msg;
 }

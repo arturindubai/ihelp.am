@@ -82,7 +82,7 @@ export async function saveEpic(content: EpicContent, actor: string, isNew: boole
   const existing = await db.epic.findUnique({ where: { key } });
   if (isNew && existing) throw new Error("key_exists");
   if (!isNew && !existing) throw new Error("not_found");
-  // Эпик готов, только когда закрыты все его задачи: иначе «Готово» у эпика ничего не значит
+  // Эпик готов, только когда закрыты все его задачи: иначе «Сделано» у эпика ничего не значит
   if (content.status === "done") {
     const open = await db.task.count({ where: { epicKey: key, status: { notIn: CLOSED_STATUSES } } });
     if (open) throw new Error("children_open");

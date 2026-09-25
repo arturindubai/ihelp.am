@@ -88,7 +88,7 @@ export async function ActivityTab({ locale, taskHref }: { locale: string; taskHr
   );
 }
 
-/** «Готово»: закрытое за две недели по дням — с коммитом и тем, что проверено после выкладки */
+/** «Сделано»: закрытое за две недели по дням — с коммитом и тем, что проверено после выкладки */
 export async function DoneTab({ locale, taskHref }: { locale: string; taskHref: Href }) {
   const [td, data] = await Promise.all([getTranslations("admin.cc.doneTab"), doneFeed(14)]);
   return (

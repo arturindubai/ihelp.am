@@ -10,10 +10,11 @@
 | Дизайнер | `designer` | [DESIGNER.md](DESIGNER.md) | [KICKOFF.md](KICKOFF.md#дизайнер) |
 | Триаж | `triage` | [TRIAGE.md](TRIAGE.md) | запускает диспетчер; вручную — «Запустить сейчас» во вкладке «Воркеры» |
 | Разработчик | `dev-N` | [DEVELOPER.md](DEVELOPER.md) | [KICKOFF.md](KICKOFF.md#разработчик) |
+| Продукт и не-код | `nocode-N` | [NOCODE.md](NOCODE.md) | запускает диспетчер; вручную — «▶ Запустить воркера» в шторке задачи |
 | Тестировщик | `tester` | [TESTER.md](TESTER.md) | [KICKOFF.md](KICKOFF.md#тестировщик) |
 | Деплоер | `deployer` | [../DEPLOYER_GUIDE.md](../DEPLOYER_GUIDE.md) | [KICKOFF.md](KICKOFF.md#деплоер) |
 | Сторож | автомат | [../DEV_SYSTEM.md](../DEV_SYSTEM.md#6-аренда-пульс-и-сторож) | — |
-| Воркеры | автомат: триаж, разработчики, тестировщик, деплоер | [../WORKERS.md](../WORKERS.md) | запускает диспетчер |
+| Воркеры | автомат: триаж, разработчики, «Продукт и не-код», тестировщик, деплоер | [../WORKERS.md](../WORKERS.md) | запускает диспетчер |
 
 Требования ко всем, кроме владельца:
 

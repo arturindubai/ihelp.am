@@ -10,9 +10,10 @@ const review = (key: string, patch: Partial<ReviewTask> = {}): ReviewTask => ({ 
 const state = (patch: Partial<DispatchState> = {}): DispatchState => ({
   config: on,
   running: [],
-  today: { triage: 0, dev: 0, tester: 0, deployer: 0 },
+  today: { triage: 0, dev: 0, nocode: 0, tester: 0, deployer: 0 },
   review: [],
   readyForDev: 0,
+  readyForNocode: 0,
   heads: {},
   triageQueue: [],
   sweepDue: false,
@@ -64,7 +65,7 @@ describe("план диспетчера", () => {
     expect(planDispatch(state({ readyForDev: 1 }), noon)).toEqual([{ pool: "dev", agent: "dev-1" }]);
   });
   it("дневной лимит пула останавливает запуски", () => {
-    expect(planDispatch(state({ readyForDev: 5, today: { triage: 0, dev: 16, tester: 0, deployer: 0 } }), noon)).toEqual([]);
+    expect(planDispatch(state({ readyForDev: 5, today: { triage: 0, dev: 16, nocode: 0, tester: 0, deployer: 0 } }), noon)).toEqual([]);
   });
   it("тестировщик берёт непроверенную задачу, деплоер — проверенную на текущем коммите", () => {
     const heads = { "task/A": "aaa111", "task/B": "bbb222" };
@@ -182,10 +183,43 @@ describe("очереди и выбор пула", () => {
   it("кнопка в шторке зовёт пул по статусу задачи", () => {
     expect(poolForTask({ status: "backlog", layer: "back" })).toBe("triage");
     expect(poolForTask({ status: "ready", layer: "back" })).toBe("dev");
-    expect(poolForTask({ status: "ready", layer: "none" })).toBe("triage");
+    expect(poolForTask({ status: "ready", layer: "none" })).toBe("nocode");
     expect(poolForTask({ status: "review", layer: "front" })).toBe("tester");
     expect(poolForTask({ status: "review", layer: "front", testedSha: "abc" })).toBe("deployer");
     expect(poolForTask({ status: "review", layer: "none" })).toBe(null);
     expect(poolForTask({ status: "done", layer: "back" })).toBe(null);
   });
 });
+
+describe("«Продукт и не-код»", () => {
+  it("готовые задачи без кода получает свой пул, не разработчики", () => {
+    expect(planDispatch(state({ readyForNocode: 2 }), noon)).toEqual([{ pool: "nocode", agent: "nocode-1" }]);
+    expect(planDispatch(state({ readyForDev: 1, readyForNocode: 1 }), noon)).toEqual([
+      { pool: "dev", agent: "dev-1" },
+      { pool: "nocode", agent: "nocode-1" },
+    ]);
+  });
+  it("выключенный пул и дневной лимит соблюдаются, «Запустить сейчас» на задачу — работает", () => {
+    const off = { ...on, pools: { ...on.pools, nocode: { ...on.pools.nocode, enabled: false } } };
+    expect(planDispatch(state({ config: off, readyForNocode: 3 }), noon)).toEqual([]);
+    expect(planDispatch(state({ readyForNocode: 3, today: { triage: 0, dev: 0, nocode: 8, tester: 0, deployer: 0 } }), noon)).toEqual([]);
+    const at = "2026-09-24T07:59:00Z";
+    expect(planDispatch(state({ config: DEFAULT_WORKERS, requests: [{ pool: "nocode", key: "TEAM-9", at, by: "owner" }] }), noon)).toEqual([
+      { pool: "nocode", agent: "nocode-1", key: "TEAM-9", requestAt: at },
+    ]);
+  });
+});
+
+describe("быстрый слот триажа для входящих", () => {
+  const at = "2026-09-24T07:59:00Z";
+  it("входящая IN-N по просьбе запускается, даже когда триаж занят пачкой бэклога", () => {
+    const s = state({ requests: [{ pool: "triage", key: "IN-7", at, by: "telegram" }], running: [{ pool: "triage", agent: "triage" }] });
+    expect(planDispatch(s, noon)).toEqual([{ pool: "triage", agent: "triage-1", keys: ["IN-7"], requestAt: at }]);
+  });
+  it("обычная карточка по просьбе ждёт свободного слота; третьего триажа не бывает", () => {
+    expect(planDispatch(state({ requests: [{ pool: "triage", key: "AUTH-1", at, by: "owner" }], running: [{ pool: "triage", agent: "triage" }] }), noon)).toEqual([]);
+    const busy = [{ pool: "triage" as const, agent: "triage" }, { pool: "triage" as const, agent: "triage-1" }];
+    expect(planDispatch(state({ requests: [{ pool: "triage", key: "IN-8", at, by: "owner" }], running: busy }), noon)).toEqual([]);
+  });
+});
+

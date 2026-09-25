@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { pageUser } from "@/server/adminPage";
-import { getSettings, mask, CARD_PAYMENTS_INTEGRATED } from "@/server/settings";
+import { getSettings, maskedSettings, CARD_PAYMENTS_INTEGRATED } from "@/server/settings";
 import { lockedContacts } from "@/server/contacts";
 import { googleRedirectUri, appleRedirectUri } from "@/server/services/oauth";
 import { PageHead, Forbidden } from "@/components/admin/ui";
@@ -9,14 +9,8 @@ import { SettingsEditor } from "@/components/admin/SettingsEditor";
 export default async function AdminSettings() {
   if (!(await pageUser("settings"))) return <Forbidden />;
   const t = await getTranslations("admin");
-  const s = structuredClone(await getSettings());
-  s.otp.sms.authToken = mask(s.otp.sms.authToken);
-  s.otp.whatsapp.accessToken = mask(s.otp.whatsapp.accessToken);
-  s.otp.telegram.gatewayToken = mask(s.otp.telegram.gatewayToken);
-  s.notify.telegramBotToken = mask(s.notify.telegramBotToken);
-  s.google.clientSecret = mask(s.google.clientSecret);
-  s.apple.privateKey = mask(s.apple.privateKey);
-  s.mail.apiKey = mask(s.mail.apiKey);
+  // Все ключи из реестра маскируются разом — и токен бота команды, которого в этом редакторе нет
+  const s = maskedSettings(await getSettings());
   return (
     <div className="max-w-3xl">
       <PageHead title={t("settings.title")} />

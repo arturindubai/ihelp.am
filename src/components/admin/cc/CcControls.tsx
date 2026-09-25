@@ -37,7 +37,7 @@ function useAct() {
 
 /* ───────────── Intake ───────────── */
 
-type IntakeItem = { key: string; title: string; status: string; triagedAt: string | Date | null; triageNote: string | null; createdAt: string | Date };
+type IntakeItem = { key: string; title: string; status: string; triagedAt: string | Date | null; triageNote: string | null; createdAt: string | Date; inWork?: boolean };
 
 type SpeechRec = { lang: string; continuous: boolean; interimResults: boolean; start(): void; stop(): void; onresult: ((e: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null; onend: (() => void) | null };
 
@@ -101,7 +101,7 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
       router.refresh();
     });
 
-  const stateOf = (i: IntakeItem) => (i.status === "cancelled" ? "converted" : i.triagedAt ? "triaged" : "queued");
+  const stateOf = (i: IntakeItem) => (i.status === "cancelled" ? "converted" : i.triagedAt ? "triaged" : i.inWork ? "inWork" : "queued");
 
   return (
     <>
@@ -163,7 +163,7 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
                     <Link href={`/admin/control?task=${i.key}`} className="flex items-baseline gap-2 hover:underline" onClick={() => setOpen(false)}>
                       <span className="font-mono text-xs text-muted">{i.key}</span>
                       <span className="min-w-0 flex-1 truncate">{i.title}</span>
-                      <span className={cn("chip shrink-0 text-[10px]", stateOf(i) === "queued" ? "bg-brand-50 text-brand" : "bg-ok-50 text-ok")}>{t(`states.${stateOf(i)}`)}</span>
+                      <span className={cn("chip shrink-0 text-[10px]", stateOf(i) === "queued" ? "bg-warn-50 text-warn" : stateOf(i) === "inWork" ? "bg-brand-50 text-brand" : "bg-ok-50 text-ok")}>{t(`states.${stateOf(i)}`)}</span>
                     </Link>
                     {i.triageNote && <p className="ml-14 line-clamp-2 text-xs text-muted">{i.triageNote}</p>}
                   </li>

@@ -42,6 +42,8 @@ describe("роли", () => {
     expect(roleOf("deployer")).toBe("deployer");
     expect(roleOf("cto")).toBe("cto");
     expect(roleOf("Product-1")).toBe("product");
+    expect(roleOf("nocode-2")).toBe("nocode");
+    expect(roleOf("triage")).toBe("triage");
   });
   it("незнакомое имя и попытка назваться сторожем получают права разработчика", () => {
     expect(roleOf("claude-code")).toBe("dev");
@@ -172,5 +174,20 @@ describe("здоровье и сторож", () => {
     const b = task({ key: "B1", status: "blocked", blockedOn: "deps", depends: ["X"], claimedBy: null, claimUntil: null });
     expect(watchdogPlan([b], new Set(), now).unblock).toEqual([]);
     expect(watchdogPlan([b], new Set(["X"]), now).unblock).toEqual(["B1"]);
+  });
+});
+
+describe("роли воркеров триажа и «Продукт и не-код»", () => {
+  it("не-код сдаёт свою задачу на проверку и передаёт её, но не переводит чужие в очередь и не закрывает", () => {
+    expect(canTransition("in_progress", "review", "nocode")).toBe(true);
+    expect(canTransition("in_progress", "ready", "nocode")).toBe(true);
+    expect(canTransition("backlog", "ready", "nocode")).toBe(false);
+    expect(canTransition("review", "done", "nocode")).toBe(false);
+  });
+  it("триаж переводит в очередь и блокирует, но не закрывает и не сдаёт", () => {
+    expect(canTransition("backlog", "ready", "triage")).toBe(true);
+    expect(canTransition("backlog", "blocked", "triage")).toBe(true);
+    expect(canTransition("review", "done", "triage")).toBe(false);
+    expect(canTransition("in_progress", "review", "triage")).toBe(false);
   });
 });

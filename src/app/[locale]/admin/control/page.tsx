@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Control Center — пульт проекта по образцу Command Center LIA: вкладки Бэклог, Нужен ты, В разработке, Деплоер,
- * Планы, Согласования, Воркеры, Активность, Готово, Сообщения. Клик по задаче открывает шторку со всем по ней
+ * Планы, Согласования, Воркеры, Активность, Сделано, Сообщения. Клик по задаче открывает шторку со всем по ней
  * (?task=КЛЮЧ), фильтры и вкладка остаются в адресе — ссылку можно переслать
  */
 export default async function ControlCenter({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<CcSearch> }) {

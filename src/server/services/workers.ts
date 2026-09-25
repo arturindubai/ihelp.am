@@ -116,42 +116,58 @@ export async function triageQueue() {
 export type DevQueueItem = { key: string; title: string; priority: string; reason: "next" | "ok" | "deps" | "scope" | "needs" | "people"; detail?: string };
 
 /**
- * Очередь разработчиков: все «Готова к работе» в порядке выбора и почему задача не уйдёт воркеру —
- * не код или продуктовая (людям), открытые вопросы, незакрытые зависимости, пересечение по файлам с работой
+ * Очередь «В очереди» для воркеров одного вида: code — разработчики, nocode — «Продукт и не-код».
+ * Задачи в порядке выбора и почему задача не уйдёт воркеру: продуктовая код-задача (людям), открытые вопросы,
+ * незакрытые зависимости, пересечение по файлам с задачей в работе
  */
-export async function devQueue(): Promise<DevQueueItem[]> {
+export async function readyQueue(kind: "code" | "nocode"): Promise<DevQueueItem[]> {
   const [ready, closedRows, busy] = await Promise.all([
-    db.task.findMany({ where: { status: "ready" }, select: { key: true, title: true, priority: true, sort: true, rework: true, depends: true, scope: true, needs: true, layer: true, owner: true } }),
+    db.task.findMany({
+      where: { status: "ready", layer: kind === "code" ? { not: "none" } : "none" },
+      select: { key: true, title: true, priority: true, sort: true, rework: true, depends: true, scope: true, needs: true, layer: true, owner: true },
+    }),
     db.task.findMany({ where: { status: { in: CLOSED_STATUSES } }, select: { key: true } }),
     db.task.findMany({ where: { status: "in_progress" }, select: { key: true, scope: true } }),
   ]);
   const closed = new Set(closedRows.map((t) => t.key));
-  const auto = ready.filter((t) => t.layer !== "none" && t.owner !== "product" && t.needs.length === 0);
-  const next = pickNext(auto, closed, busy.map((b) => b.scope));
+  // Код-задачу продукта (owner=product) воркеру не отдаём; задачи без кода — все, кроме тех, где есть вопросы
+  const auto = ready.filter((t) => (kind === "nocode" || t.owner !== "product") && t.needs.length === 0);
+  const next = pickNext(auto, closed, kind === "code" ? busy.map((b) => b.scope) : []);
   const order = [...ready].sort((a, b) => Number(b.rework > 0) - Number(a.rework > 0) || PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority) || a.sort - b.sort);
   return order.map((t) => {
     const base = { key: t.key, title: t.title, priority: t.priority };
-    if (t.layer === "none" || t.owner === "product") return { ...base, reason: "people" };
+    if (kind === "code" && t.owner === "product") return { ...base, reason: "people" };
     if (t.needs.length) return { ...base, reason: "needs", detail: t.needs[0] };
     const open = t.depends.filter((d) => !closed.has(d));
     if (open.length) return { ...base, reason: "deps", detail: open.join(", ") };
-    const clash = busy.find((b) => scopeOverlap(t.scope, b.scope).length > 0);
+    const clash = kind === "code" ? busy.find((b) => scopeOverlap(t.scope, b.scope).length > 0) : undefined;
     if (clash) return { ...base, reason: "scope", detail: clash.key };
     return { ...base, reason: next?.key === t.key ? "next" : "ok" };
   });
 }
 
+export const devQueue = () => readyQueue("code");
+
+const takeable = (q: DevQueueItem[]) => q.filter((t) => t.reason === "next" || t.reason === "ok").length;
+
 /** Сколько задач можно отдать автономному разработчику прямо сейчас */
 export async function readyForAutoDev() {
-  return (await devQueue()).filter((t) => t.reason === "next" || t.reason === "ok").length;
+  return takeable(await readyQueue("code"));
 }
 
+/** Сколько готовых задач без кода может взять воркер «Продукт и не-код» */
+export async function readyForAutoNocode() {
+  return takeable(await readyQueue("nocode"));
+}
+
+/** Код-задачи «На проверке». Старые карточки сданы без записи ветки — по правилам проекта она task/<КЛЮЧ> */
 async function reviewTasks() {
-  return db.task.findMany({
+  const rows = await db.task.findMany({
     where: { status: "review", layer: { not: "none" } },
     select: { key: true, title: true, branch: true, testedSha: true, testedBy: true, claimedBy: true, claimUntil: true, priority: true },
     orderBy: [{ priority: "asc" }, { sort: "asc" }],
   });
+  return rows.map((t) => ({ ...t, branch: t.branch || `task/${t.key}` }));
 }
 
 /** Когда пора пересмотреть весь бэклог: с прошлого обзора прошло sweepEveryH часов */
@@ -173,11 +189,12 @@ async function todayCounts() {
 
 export async function dispatchState(heads: Record<string, string>): Promise<DispatchState> {
   const config = await getWorkersConfig();
-  const [running, today, review, readyForDev, triage, sweep, lastStart, requests] = await Promise.all([
+  const [running, today, review, readyForDev, readyForNocode, triage, sweep, lastStart, requests] = await Promise.all([
     db.workerRun.findMany({ where: { status: "running" }, select: { pool: true, agent: true } }),
     todayCounts(),
     reviewTasks(),
     readyForAutoDev(),
+    readyForAutoNocode(),
     triageQueue(),
     sweepDue(config),
     lastStarts(),
@@ -189,6 +206,7 @@ export async function dispatchState(heads: Record<string, string>): Promise<Disp
     today,
     review,
     readyForDev,
+    readyForNocode,
     heads,
     triageQueue: triage.map((t) => t.key),
     sweepDue: sweep,
@@ -289,14 +307,15 @@ export async function listRuns(take = 40) {
 /** Всё для вкладки «Воркеры»: настройки, очереди каждого пула с причинами, работающие, журнал, диспетчер */
 export async function workersOverview() {
   const config = await getWorkersConfig();
-  const [runs, running, today, tick, requests, triage, dev, review, lastStart] = await Promise.all([
+  const [runs, running, today, tick, requests, triage, dev, nocode, review, lastStart] = await Promise.all([
     listRuns(60),
     db.workerRun.findMany({ where: { status: "running" }, orderBy: { startedAt: "asc" } }),
     todayCounts(),
     getTick(),
     getRequests(),
     triageQueue(),
-    devQueue(),
+    readyQueue("code"),
+    readyQueue("nocode"),
     reviewTasks(),
     lastStarts(),
   ]);
@@ -316,6 +335,7 @@ export async function workersOverview() {
     queues: {
       triage: triage.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, intake: t.source === "intake" })),
       dev,
+      nocode,
       tester: [
         ...q.held.filter((t) => t.claimedBy !== "deployer").map((t) => item(t.key, "held", t.claimedBy ?? "")),
         ...q.test.map((t) => item(t.key, t.testedSha ? "retest" : "test")),
@@ -324,7 +344,8 @@ export async function workersOverview() {
       deployer: [...q.held.filter((t) => t.claimedBy === "deployer").map((t) => item(t.key, "held", "deployer")), ...q.deploy.map((t) => item(t.key, "deploy", byKey.get(t.key)?.testedBy ?? ""))],
     },
     deployWindowOpen: hour >= config.deployWindow[0] && hour < config.deployWindow[1],
-    readyDev: dev.filter((t) => t.reason === "next" || t.reason === "ok").length,
+    readyDev: takeable(dev),
+    readyNocode: takeable(nocode),
   };
 }
 

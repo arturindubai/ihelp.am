@@ -12,7 +12,8 @@ export const OPEN_STATUSES: TaskStatusKey[] = ["backlog", "ready", "in_progress"
 /** Закрытые: зависимость от такой задачи считается снятой (отменённая больше никого не держит) */
 export const CLOSED_STATUSES: TaskStatusKey[] = ["done", "cancelled"];
 
-export const ROLES = ["owner", "cto", "product", "designer", "triage", "dev", "tester", "deployer", "watchdog"] as const;
+/** nocode — воркер «Продукт и не-код»: права разработчика, но только на задачи без кода (проверка — в сервисе) */
+export const ROLES = ["owner", "cto", "product", "designer", "triage", "dev", "nocode", "tester", "deployer", "watchdog"] as const;
 export type Role = (typeof ROLES)[number];
 
 /** Кто должен снять блокировку */
@@ -43,9 +44,9 @@ export function roleOf(agent: string): Role {
 const PLAN: Role[] = ["owner", "cto", "product"];
 /** Триаж решает судьбу новой карточки: в очередь, обратно в бэклог. Отменять может только входящие IN-* (проверка в сервисе) */
 const TRIAGE: Role[] = [...PLAN, "triage"];
-const WORK: Role[] = ["dev", "cto", "owner"];
+const WORK: Role[] = ["dev", "nocode", "cto", "owner"];
 const RELEASE: Role[] = ["deployer", "owner"];
-const ANY: Role[] = ["owner", "cto", "product", "designer", "triage", "dev", "tester", "deployer", "watchdog"];
+const ANY: Role[] = ["owner", "cto", "product", "designer", "triage", "dev", "nocode", "tester", "deployer", "watchdog"];
 
 /**
  * Разрешённые переходы: из какого статуса, в какой и кому.
@@ -100,7 +101,7 @@ type TaskShape = {
 export type CheckItem = { key: string; ok: boolean; hard: boolean };
 
 /**
- * Готовность к работе (Definition of Ready). Жёсткие пункты не пускают задачу в «Готова к работе»,
+ * Готовность к работе (Definition of Ready). Жёсткие пункты не пускают задачу в «В очереди»,
  * мягкие — предупреждения, которые видит техдиректор, прежде чем отдать задачу разработчику.
  */
 export function readiness(t: TaskShape, closedKeys: Set<string>, attachments = 0): CheckItem[] {
@@ -132,7 +133,7 @@ export function reviewGate(t: { layer: string; branch?: string | null }, report:
 
 export const SHA_RE = /^[0-9a-f]{7,40}$/i;
 
-/** Гейт «Готово»: код-задача — коммит в main и что проверено после выкладки; прочие — доказательство словами или файлом */
+/** Гейт «Сделано»: код-задача — коммит в main и что проверено после выкладки; прочие — доказательство словами или файлом */
 export function doneGate(t: { layer: string }, proof: { sha?: string | null; text?: string | null; attachments?: number }): string | null {
   if (isCodeTask(t.layer) && !SHA_RE.test(proof.sha?.trim() ?? "")) return "sha_required";
   if ((proof.text?.trim().length ?? 0) < 10 && !(proof.attachments && !isCodeTask(t.layer))) return "proof_required";

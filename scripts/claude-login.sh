@@ -6,7 +6,9 @@
 #   scripts/claude-login.sh remove   — удалить токен (воркеры перестанут запускаться)
 # Токен сохраняется в /opt/ihelp.am/.env (CLAUDE_CODE_OAUTH_TOKEN) и нигде не печатается.
 set -uo pipefail
-root=$(cd "$(dirname "$0")/.." && pwd)
+# Токен всегда в .env основной копии (/opt/ihelp.am), даже если скрипт запущен из рабочей копии задачи
+root=$(cd "$(dirname "$0")/.." && git rev-parse --path-format=absolute --git-common-dir 2> /dev/null | xargs -r dirname)
+[ -n "$root" ] || root=$(cd "$(dirname "$0")/.." && pwd)
 env="$root/.env"
 
 save() {
@@ -23,9 +25,11 @@ check() {
   local tok
   tok=$(grep -E '^CLAUDE_CODE_OAUTH_TOKEN=' "$env" | tail -n 1 | cut -d= -f2-)
   [ -n "$tok" ] || { echo "✗ Токена нет: scripts/claude-login.sh"; return 1; }
-  local out
+  local out code
   out=$(cd /tmp && env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN="$tok" timeout 120 claude -p "Ответь одним словом: работает" --model haiku --output-format text --strict-mcp-config 2>&1)
-  if grep -qi "работает" <<< "$out"; then
+  code=$?
+  # Модель может ответить своими словами («Готов», «Работает!») — важно лишь, что ответила без отказа входа
+  if [ "$code" -eq 0 ] && [ -n "$out" ] && ! grep -qiE "not logged in|/login|failed to authenticate|authentication_error|invalid.*token|\b401\b" <<< "$out"; then
     echo "✓ Вход работает: воркеры будут тратить лимит подписки Claude"
   else
     echo "✗ Вход не работает: ${out:0:200}"
@@ -45,7 +49,27 @@ log=$(mktemp)
 chmod 600 "$log"
 # script сохраняет ввод и вывод, чтобы забрать токен без ручного копирования
 script -q -c "claude setup-token" "$log"
-tok=$(grep -aoE 'sk-ant-oat[0-9A-Za-z_-]+' "$log" | tail -n 1)
+# Длинный токен терминал переносит на несколько строк: убираем оформление и склеиваем продолжение
+tok=$(python3 - "$log" << 'PY'
+import re, sys
+t = open(sys.argv[1], encoding="utf-8", errors="ignore").read()
+t = re.sub(r"\x1b\[[0-9;?]*[ -/]*[@-~]", "", t)
+t = re.sub(r"\x1b\][^\x07]*\x07", "", t).replace("\r", "")
+i = t.rfind("sk-ant-oat")
+if i < 0:
+    sys.exit(0)
+tok = ""
+for line in t[i:].split("\n"):
+    part = re.sub(r"^[^A-Za-z0-9_-]+|[^A-Za-z0-9_-]+$", "", line)
+    if part and re.fullmatch(r"[A-Za-z0-9_-]+", part):
+        tok += part
+    elif not part and not tok:
+        continue
+    else:
+        break
+print(tok)
+PY
+)
 shred -u "$log" 2> /dev/null || rm -f "$log"
 if [ -z "$tok" ]; then
   echo
@@ -53,6 +77,8 @@ if [ -z "$tok" ]; then
   read -rs tok
 fi
 [[ "$tok" == sk-ant-* ]] || { echo "✗ Это не похоже на токен Claude. Попробуйте ещё раз: scripts/claude-login.sh"; exit 1; }
+# Настоящий токен подписки длиннее 90 символов: короче — значит, обрезан при переносе строки
+[ "${#tok}" -ge 90 ] || { echo "✗ Токен обрезан (${#tok} символов). Растяните окно терминала шире и запустите снова: scripts/claude-login.sh"; exit 1; }
 save "$tok"
 echo
 echo "Шаг 2 из 2. Проверяю вход…"
