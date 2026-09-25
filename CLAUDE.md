@@ -55,7 +55,7 @@ iHelp — сервис бытовых услуг в Ереване.
 4. Проверь в своей рабочей копии, не трогая прод:
    ```bash
    docker run --rm -v $PWD/src:/app/src -v $PWD/prisma:/app/prisma -v $PWD/messages:/app/messages \
-     -w /app --entrypoint sh homecare-migrate -c 'npx prisma generate >/dev/null 2>&1; npx tsc --noEmit -p .; npx vitest run'
+     -w /app --entrypoint sh homecare-migrate -c 'npx prisma generate >/dev/null 2>&1; rm -rf .next; npx tsc --noEmit -p .; npx vitest run'
    ```
 5. Коммиты «<КЛЮЧ>: что сделано», `git push -u origin task/<КЛЮЧ>`, затем `node scripts/cc.mjs review <КЛЮЧ> "Сделано … Проверено … Проверить … Риски …"` — задача уходит в очередь деплоера «На проверке». Мёрдж, выкладку и «Сделано» делает деплоер по `docs/DEPLOYER_GUIDE.md`.
 

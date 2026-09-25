@@ -357,11 +357,11 @@ export async function reviewTake(key: string, agent: string) {
   const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, branch: true, claimedBy: true, claimUntil: true, testedSha: true } });
   if (!t) throw new CcError("not_found");
   if (t.status !== "review") throw new CcError("wrong_status", t.status);
-  if (!t.branch) throw new CcError("branch_required");
   if (t.claimedBy && t.claimedBy !== agent && t.claimUntil && t.claimUntil > now) throw new CcError("claimed", t.claimedBy);
+  // Старые карточки сданы без записи ветки — по правилам проекта она task/<КЛЮЧ>; есть ли она в репозитории, проверит cc.mjs
   const r = await db.task.updateMany({
     where: { id: t.id, status: "review", OR: [{ claimedBy: null }, { claimedBy: agent }, { claimUntil: null }, { claimUntil: { lt: now } }] },
-    data: { claimedBy: agent, claimUntil: new Date(now.getTime() + LEASE_MS), heartbeatAt: now },
+    data: { claimedBy: agent, claimUntil: new Date(now.getTime() + LEASE_MS), heartbeatAt: now, ...(t.branch ? {} : { branch: `task/${key}` }) },
   });
   if (!r.count) throw new CcError("conflict");
   if (t.claimedBy !== agent) await log(t.id, agent, "claimedBy", t.claimedBy, agent);

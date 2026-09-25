@@ -36,6 +36,13 @@ const task = (patch: Partial<HealthTask> = {}): HealthTask => ({
   ...patch,
 });
 
+describe("сторож и проверка", () => {
+  it("сторож может заблокировать задачу на проверке, но не закрыть её", () => {
+    expect(canTransition("review", "blocked", "watchdog")).toBe(true);
+    expect(canTransition("review", "done", "watchdog")).toBe(false);
+  });
+});
+
 describe("роли", () => {
   it("роль берётся из префикса имени агента", () => {
     expect(roleOf("dev-2")).toBe("dev");

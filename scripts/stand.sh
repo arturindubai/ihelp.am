@@ -7,7 +7,9 @@
 #   scripts/stand.sh down        — снести стенд вместе с базой
 # Скриншоты: node scripts/stand-shot.mjs <путь> [путь…]  (вход владельцем — сам)
 set -uo pipefail
-root=$(cd "$(dirname "$0")/.." && pwd)
+# Корень — текущая папка, если это рабочая копия (так тестировщик поднимает стенд старой ветки по абсолютному пути)
+root=$(pwd -P)
+[ -f "$root/package.json" ] && [ -d "$root/prisma" ] || root=$(cd "$(dirname "$0")/.." && pwd)
 name="ihelp-stand-$(basename "$root" | tr 'A-Z_' 'a-z-' | tr -cd 'a-z0-9-')"
 common=$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)
 info="$common/cc/stands/$name.json"

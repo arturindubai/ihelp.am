@@ -21,7 +21,7 @@ export CLAUDE_CODE_OAUTH_TOKEN
 # Составная команда проходит, только если разрешена каждая её часть: cd сам по себе ничего не меняет
 common=("Bash(cd *)" "Bash(node scripts/cc.mjs *)" "Bash(node */scripts/cc.mjs *)")
 check=("Bash(scripts/check.sh*)" "Bash(bash scripts/check.sh*)" "Bash(*/scripts/check.sh*)" "Bash(bash */scripts/check.sh*)"
-  "Bash(scripts/stand.sh *)" "Bash(bash scripts/stand.sh *)" "Bash(*/scripts/stand.sh *)" "Bash(node scripts/stand-shot.mjs *)" "Bash(node */scripts/stand-shot.mjs *)")
+  "Bash(scripts/stand.sh *)" "Bash(bash scripts/stand.sh *)" "Bash(*/scripts/stand.sh *)" "Bash(bash */scripts/stand.sh *)" "Bash(node scripts/stand-shot.mjs *)" "Bash(node */scripts/stand-shot.mjs *)")
 allow=(Read Glob Grep Edit Write TodoWrite "${common[@]}" "${check[@]}"
   "Bash(git *)"
   "Bash(ls *)" "Bash(ls)" "Bash(pwd)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(jq *)"
