@@ -22,7 +22,7 @@ export async function getDailyMetrics(from: string, to: string): Promise<DailyRo
     }),
     db.visit.findMany({
       where: { scheduledAt: { gte: fromDt, lt: toDt }, status: { in: COUNTED } },
-      select: { scheduledAt: true, durationMin: true, index: true },
+      select: { scheduledAt: true, durationMin: true, index: true, order: { select: { config: true } } },
     }),
     db.visit.findMany({
       where: { status: "DONE", finishedAt: { gte: fromDt, lt: toDt } },
@@ -60,7 +60,7 @@ export async function getDailyMetrics(from: string, to: string): Promise<DailyRo
     const d = ymd(v.scheduledAt);
     if (!visitsByDate[d]) visitsByDate[d] = { total: 0, first: 0, busyMin: 0 };
     visitsByDate[d].total++;
-    if (v.index === 1) visitsByDate[d].first++;
+    if (v.index === 1 && (v.order.config as Record<string, unknown>)?.firstOrder === true) visitsByDate[d].first++;
     visitsByDate[d].busyMin += v.durationMin;
   }
 
