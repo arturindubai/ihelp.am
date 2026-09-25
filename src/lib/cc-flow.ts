@@ -55,7 +55,8 @@ export function roleOf(agent: string): Role {
 const PLAN: Role[] = ["owner", "cto", "product"];
 /** Триаж решает судьбу новой карточки: в очередь, обратно в бэклог. Отменять может только входящие IN-* (проверка в сервисе) */
 const TRIAGE: Role[] = [...PLAN, "triage"];
-const WORK: Role[] = ["dev", "nocode", "cto", "owner"];
+// Дизайнер тоже сдаёт свою задачу (прототип, дизайн-исследование) и передаёт её, как не-код
+const WORK: Role[] = ["dev", "nocode", "designer", "cto", "owner"];
 const RELEASE: Role[] = ["deployer", "owner"];
 const ANY: Role[] = ["owner", "cto", "product", "designer", "triage", "dev", "nocode", "tester", "deployer", "watchdog"];
 

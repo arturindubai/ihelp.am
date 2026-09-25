@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "../db";
+import { upsertNote } from "./library";
 import { alertTech } from "../alerts";
 import { html } from "../notify";
 import { BLOCKED_ON_LABELS, STATUSES } from "@/lib/backlog-labels";
@@ -497,15 +498,52 @@ export async function taskReadiness(key: string) {
  * После утверждения гейт mockup_required снимается и задачу можно переводить в «В очереди».
  * Запись о решении попадает в ленту с именем утверждающего
  */
+/**
+ * Утвердить дизайн задачи: снимает гейт «нужен макет» и кладёт дизайн в Библиотеку записью «Дизайн: КЛЮЧ — …» —
+ * это канон, от него строят разработчики. Утвердить можно любую задачу с описанием дизайна, макетом или файлами;
+ * повторное утверждение после правок — новая версия той же записи
+ */
 export async function approveMockup(key: string, actor: string, comment: string | null) {
-  const t = await db.task.findUnique({ where: { key }, select: { id: true, mockupRequired: true, mockupApprovedBy: true } });
+  const t = await db.task.findUnique({ where: { key }, include: { attachments: { select: { fileName: true, url: true } } } });
   if (!t) throw new CcError("not_found");
-  if (!t.mockupRequired) throw new CcError("mockup_not_required");
-  if (t.mockupApprovedBy) throw new CcError("already_approved");
+  if (!t.design?.trim() && !t.mockupUrl && !t.attachments.length) throw new CcError("no_design");
   const now = new Date();
+  const canon = await designToCanon(t, actor, comment);
   await db.task.update({ where: { key }, data: { mockupApprovedBy: actor, mockupApprovedAt: now } });
-  await log(t.id, actor, "mockupApprovedBy", null, actor);
-  const text = comment ? `Макет утверждён: ${comment.trim().slice(0, 500)}` : "Макет утверждён.";
+  await log(t.id, actor, "mockupApprovedBy", t.mockupApprovedBy, actor);
+  const text = `${comment ? `Дизайн утверждён: ${comment.trim().slice(0, 500)}` : "Дизайн утверждён."}\nВ Библиотеке: ${canon.slug} (версия ${canon.version}).`;
   await say(t.id, actor, "note", text);
+  return db.task.findUniqueOrThrow({ where: { key } });
+}
+
+/** Утверждённый дизайн — запись Библиотеки вида «спецификация» с постоянным slug design-<ключ> */
+async function designToCanon(t: { key: string; title: string; design: string | null; mockupUrl: string | null; summary: string; attachments: { fileName: string; url: string }[] }, actor: string, comment: string | null) {
+  const when = new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Yerevan", day: "numeric", month: "long", year: "numeric" }).format(new Date());
+  const lines = [
+    `# Дизайн: ${t.key} — ${t.title}`,
+    "",
+    `Утвердил ${actor}, ${when}.${comment ? ` ${comment.trim()}` : ""} Задача: ${t.key}.`,
+    "",
+    "## Зачем",
+    "",
+    t.summary.trim(),
+    "",
+    "## Дизайн",
+    "",
+    t.design?.trim() || "_Описания в карточке нет — смотрите макет и файлы._",
+  ];
+  if (t.mockupUrl) lines.push("", "## Макет", "", t.mockupUrl);
+  if (t.attachments.length) lines.push("", "## Файлы", "", ...t.attachments.map((a) => `- [${a.fileName}](${a.url})`));
+  return upsertNote(`design-${t.key.toLowerCase()}`, { title: `Дизайн: ${t.key} — ${t.title}`, kind: "spec", content: lines.join("\n"), note: comment?.trim() || "утверждение дизайна" }, actor);
+}
+
+/** Вернуть дизайн дизайнеру: задача блокируется на дизайне с причиной, утверждение снимается */
+export async function returnDesign(key: string, actor: Actor, reason: string) {
+  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true } });
+  if (!t) throw new CcError("not_found");
+  if (reason.trim().length < 5) throw new CcError("reason_required");
+  await db.task.update({ where: { key }, data: { mockupApprovedBy: null, mockupApprovedAt: null } });
+  if (t.status !== "blocked") return transition(key, { to: "blocked", blockedOn: "design", text: `Дизайн возвращён: ${reason.trim()}` }, actor);
+  await say(t.id, actor.name, "note", `Дизайн возвращён: ${reason.trim()}`);
   return db.task.findUniqueOrThrow({ where: { key } });
 }

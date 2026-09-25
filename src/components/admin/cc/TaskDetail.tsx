@@ -334,15 +334,18 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
             </Card>
           )}
 
-          {task.mockupRequired && (
+          {(task.mockupRequired || task.mockupUrl || task.design?.trim()) && (
             <Card title={t("mockup.title")}>
               {task.mockupApprovedBy ? (
                 <p className="text-xs text-ok">
-                  ✓ {t("mockup.approvedBy", { who: task.mockupApprovedBy, date: when(task.mockupApprovedAt!) })}
+                  ✓ {t("mockup.approvedBy", { who: task.mockupApprovedBy, date: when(task.mockupApprovedAt!) })}{" "}
+                  <Link href={`/admin/control/library?doc=design-${task.key.toLowerCase()}`} className="text-brand hover:underline">
+                    {t("mockup.canon")}
+                  </Link>
                 </p>
               ) : (
                 <>
-                  <p className="mb-2 text-xs text-bad">{t("mockup.pending")}</p>
+                  <p className="mb-2 text-xs text-bad">{task.mockupRequired ? t("mockup.pending") : t("mockup.pendingSoft")}</p>
                   {task.mockupUrl && (
                     <a href={task.mockupUrl} target="_blank" rel="noreferrer" className="mb-2 flex items-center gap-1 text-xs text-brand hover:underline">
                       <ExternalLink size={11} /> {t("mockup.link")}

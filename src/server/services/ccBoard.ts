@@ -44,7 +44,7 @@ export async function ccCounts() {
     db.workerRun.count({ where: { status: "running" } }),
     attention(),
     db.workerRun.count({ where: { status: { in: ["failed", "timeout"] }, startedAt: { gte: new Date(Date.now() - 24 * 3600_000) } } }),
-    db.task.count({ where: { mockupRequired: true, mockupApprovedBy: null, status: { notIn: ["done", "cancelled"] } } }),
+    db.task.count({ where: DESIGN_PENDING }),
   ]);
   const n = (s: string) => byStatus.find((r) => r.status === s)?._count ?? 0;
   return {
@@ -52,7 +52,8 @@ export async function ccCounts() {
     you: ownerBlocked + attn.stale.length + attn.review.filter((r) => r.health.stuckReview).length + failed,
     dev: n("in_progress"),
     deployer: reviewCode,
-    approvals: reviewNoCode + mockupPending,
+    approvals: reviewNoCode,
+    design: mockupPending,
     notify: unread,
     running,
     byStatus: Object.fromEntries(byStatus.map((r) => [r.status, r._count])) as Record<string, number>,
@@ -81,11 +82,27 @@ export async function needsYou() {
 }
 
 /** Задачи с макетом, ожидающие утверждения владельцем: любой статус кроме завершённых */
+/** Дизайн ждёт утверждения владельцем: есть описание дизайна, макет или файлы, а утверждения нет */
+const DESIGN_PENDING: Prisma.TaskWhereInput = {
+  status: { notIn: ["done", "cancelled"] },
+  mockupApprovedBy: null,
+  OR: [{ mockupRequired: true }, { mockupUrl: { not: null } }, { AND: [{ design: { not: null } }, { design: { not: "" } }] }, { attachments: { some: {} } }],
+};
+
 export async function mockupPendingApprovals() {
   return db.task.findMany({
-    where: { mockupRequired: true, mockupApprovedBy: null, status: { notIn: ["done", "cancelled"] } },
-    orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
-    select: { key: true, title: true, priority: true, status: true, updatedAt: true, mockupUrl: true },
+    where: DESIGN_PENDING,
+    orderBy: [{ mockupRequired: "desc" }, { priority: "asc" }, { updatedAt: "asc" }],
+    select: { key: true, title: true, priority: true, status: true, layer: true, updatedAt: true, mockupUrl: true, mockupRequired: true, design: true, _count: { select: { attachments: true } } },
+  });
+}
+
+/** Утверждённые дизайны за две недели — со ссылкой на запись канона в Библиотеке */
+export async function designApproved(days = 14) {
+  return db.task.findMany({
+    where: { mockupApprovedAt: { gte: new Date(Date.now() - days * 86400_000) } },
+    orderBy: { mockupApprovedAt: "desc" },
+    select: { key: true, title: true, status: true, mockupApprovedAt: true, mockupApprovedBy: true },
   });
 }
 

@@ -61,6 +61,26 @@ async function addVersion(docId: string, n: number, title: string, content: stri
   ]);
 }
 
+/**
+ * Запись с постоянным slug (например, design-dsn-5): нет — создаётся, есть — новая версия, если текст изменился.
+ * Так утверждённый дизайн задачи живёт одной записью с историей утверждений
+ */
+export async function upsertNote(slug: string, input: { title: string; kind: string; content: string; note?: string }, author: string) {
+  if (!(LIBRARY_KINDS as readonly string[]).includes(input.kind)) throw new LibraryError("bad_kind");
+  const title = input.title.trim().slice(0, 200) || titleOf(input.content, "Запись");
+  const existing = await db.libraryDoc.findUnique({ where: { slug }, include: { versions: { orderBy: { n: "desc" }, take: 1 } } });
+  if (!existing) {
+    const doc = await db.libraryDoc.create({ data: { slug, title, kind: input.kind, source: "admin", createdBy: author, version: 1 } });
+    await db.libraryVersion.create({ data: { docId: doc.id, n: 1, title, content: input.content, hash: contentHash(input.content), author, note: input.note?.slice(0, 300) || "создано" } });
+    return { slug, version: 1, changed: true };
+  }
+  const last = existing.versions[0];
+  if (last && last.hash === contentHash(input.content) && last.title === title) return { slug, version: existing.version, changed: false };
+  await addVersion(existing.id, existing.version + 1, title, input.content, author, input.note);
+  if (existing.archived) await db.libraryDoc.update({ where: { id: existing.id }, data: { archived: false } });
+  return { slug, version: existing.version + 1, changed: true };
+}
+
 export async function createNote(input: { title: string; kind: string; content: string }, author: string) {
   if (!(LIBRARY_KINDS as readonly string[]).includes(input.kind)) throw new LibraryError("bad_kind");
   const title = input.title.trim().slice(0, 200) || titleOf(input.content, "Запись");

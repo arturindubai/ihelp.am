@@ -39,6 +39,14 @@ const task = (patch: Partial<HealthTask> = {}): HealthTask => ({
   ...patch,
 });
 
+describe("дизайнер", () => {
+  it("сдаёт и передаёт свою задачу, но не закрывает", () => {
+    expect(canTransition("in_progress", "review", "designer")).toBe(true);
+    expect(canTransition("in_progress", "ready", "designer")).toBe(true);
+    expect(canTransition("review", "done", "designer")).toBe(false);
+  });
+});
+
 describe("разблокировка", () => {
   it("возвращает задачу туда, откуда заблокирована", () => {
     expect(unblockTarget("review", "owner")).toBe("review");
