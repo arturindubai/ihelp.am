@@ -4,7 +4,7 @@ import { alertTech } from "../alerts";
 import { html } from "../notify";
 import { CLOSED_STATUSES, pickNext, scopeOverlap } from "@/lib/cc-flow";
 import { transition, WATCHDOG } from "./ccWork";
-import { normalizeWorkers, planDispatch, POOLS, reviewQueues, yerevanHour, type DispatchAction, type DispatchState, type Pool, type RunRequest, type WorkersConfig } from "@/lib/workers";
+import { controlPatch, normalizeWorkers, planDispatch, POOLS, reviewQueues, yerevanHour, type DispatchAction, type DispatchState, type Pool, type RunRequest, type WorkersCommand, type WorkersConfig } from "@/lib/workers";
 
 /**
  * Воркеры: настройки пулов (Setting cc.workers), просьбы «Запустить сейчас» (cc.workers.requests),
@@ -311,7 +311,7 @@ export async function dispatchPlan(heads: Record<string, string>) {
     running,
     unmet: unmet
       .filter((r) => !waiting.has(`${r.pool}|${r.at}`))
-      .map((r) => `${r.pool}${r.key ? ` ${r.key}` : ""}: ${state.config.stopRunning ? "идёт остановка" : state.config.pausedUntil && Date.parse(state.config.pausedUntil) > Date.now() ? "воркеры на паузе (лимит подписки или вход)" : "нет подходящей работы (задача не в нужном статусе или без отправленной ветки)"}`),
+      .map((r) => `${r.pool}${r.key ? ` ${r.key}` : ""}: ${state.config.stopRunning ? "идёт остановка" : state.config.pausedUntil && Date.parse(state.config.pausedUntil) > Date.now() ? `воркеры на паузе (${state.config.pausedReason ?? "лимит подписки или вход"})` : "нет подходящей работы (задача не в нужном статусе или без отправленной ветки)"}`),
   };
 }
 
@@ -363,9 +363,28 @@ export async function runFinish(id: string, r: RunFinish) {
 export async function pauseWorkers(until: Date, reason: string) {
   const current = await getWorkersConfig();
   if (current.pausedUntil && Date.parse(current.pausedUntil) >= until.getTime()) return current;
-  const next = await saveWorkersConfig({ pausedUntil: until.toISOString(), pausedReason: reason.slice(0, 300) }, "dispatcher");
-  const clock = new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Yerevan", hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }).format(until);
-  await alertTech("workers:limit", html`⛔ <b>Воркеры на паузе до ${clock}</b>\n${reason.slice(0, 300)}\nЛимит подписки Claude общий с вашими чатами.`, 60);
+  const next = await saveWorkersConfig({ pausedUntil: until.toISOString(), pausedReason: reason.slice(0, 300), plannedStart: false }, "dispatcher");
+  await alertTech("workers:limit", html`⛔ <b>Воркеры на паузе до ${yerevanClock(until)}</b>\n${reason.slice(0, 300)}\nЛимит подписки Claude общий с вашими чатами.`, 60);
+  return next;
+}
+
+/** «25 сент., 14:30» по Еревану — для сообщений в тех-чат */
+const yerevanClock = (d: Date) => new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Yerevan", hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }).format(d);
+
+/**
+ * Кнопки владельца на вкладке «Воркеры»: Пауза, Стоп, Старт, План старт (docs/WORKERS.md, «Управление»).
+ * Меняет настройки одним патчем (controlPatch) и коротко сообщает в тех-чат; кто нажал — в журнале действий (audit)
+ */
+export async function workersControl(command: WorkersCommand, at: Date | null, by: string) {
+  const next = await saveWorkersConfig(controlPatch(command, new Date(), at), by);
+  const text = {
+    pause: html`⏸ <b>Воркеры на паузе</b> — ${by}. Текущие запуски доработают, новые не начнутся.`,
+    stop: html`⏹ <b>Воркеры остановлены</b> — ${by}. Диспетчер прервёт работающих на ближайшем проходе, задачи вернутся в очередь.`,
+    start: html`▶ <b>Воркеры запущены</b> — ${by}. Все пулы включены в режиме «Авто».`,
+    plan: html`⏰ <b>Старт воркеров запланирован на ${yerevanClock(at ?? new Date())}</b> — ${by}. До этого времени пауза, дальше диспетчер запустит всех сам.`,
+  }[command];
+  await alertTech(`workers:control:${command}`, text, 0);
+  console.log(`[workers] ${by}: ${command}${at ? ` в ${at.toISOString()}` : ""}`);
   return next;
 }
 

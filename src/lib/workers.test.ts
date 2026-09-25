@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_WORKERS, executorOf, freeName, normalizeWorkers, planDispatch, poolForTask, reviewQueues, runOutcome, testedCurrent, type DispatchState, type ReviewTask } from "./workers";
+import { controlPatch, DEFAULT_WORKERS, executorOf, freeName, normalizeWorkers, planDispatch, poolForTask, reviewQueues, runOutcome, testedCurrent, workersState, type DispatchState, type ReviewTask, type WorkersConfig } from "./workers";
 
 // 12:00 по Еревану — внутри окна выкладки 10–20
 const noon = new Date("2026-09-24T08:00:00Z");
@@ -40,6 +40,12 @@ describe("настройки воркеров", () => {
     expect(c.pools.triage.mode).toBe("auto");
     expect(c.pools.triage.everyMin).toBe(30);
     expect(c.pools.dev.model).toBe("sonnet");
+  });
+  it("«План старт» держится только вместе со временем: без pausedUntil флаг сбрасывается", () => {
+    expect(normalizeWorkers({ enabled: true }).plannedStart).toBe(false);
+    expect(normalizeWorkers({ enabled: true, plannedStart: true }).plannedStart).toBe(false);
+    expect(normalizeWorkers({ enabled: true, plannedStart: true, pausedUntil: "2026-09-24T10:00:00Z" }).plannedStart).toBe(true);
+    expect(normalizeWorkers({ enabled: true, plannedStart: "да", pausedUntil: "2026-09-24T10:00:00Z" }).plannedStart).toBe(false);
   });
   it("старые настройки без триажа и режимов получают значения по умолчанию", () => {
     const c = normalizeWorkers({ enabled: true, pools: { dev: { enabled: true, max: 2, model: "opus", dailyCap: 5 } } });
@@ -244,3 +250,71 @@ describe("быстрый слот триажа для входящих", () => {
   });
 });
 
+
+describe("кнопки владельца: Пауза, Стоп, Старт, План старт", () => {
+  const busy = { readyForDev: 3, triageQueue: ["IN-1"], heads: { "task/B": "bbb" }, review: [review("B", { testedSha: "bbb" })] };
+  // Как сервис: патч кнопки поверх текущих настроек, пулы сливаются по одному
+  const apply = (c: WorkersConfig, patch: ReturnType<typeof controlPatch>): WorkersConfig => {
+    const pools = { ...c.pools };
+    for (const p of Object.keys(patch.pools ?? {}) as (keyof typeof pools)[]) pools[p] = { ...pools[p], ...patch.pools![p] };
+    return normalizeWorkers({ ...c, ...patch, pools });
+  };
+  const manualOff = { ...on, pools: { ...on.pools, dev: { ...on.pools.dev, mode: "manual" as const }, triage: { ...on.pools.triage, enabled: false } } };
+
+  it("Пауза: новые запуски не начинаются, текущие не трогаются, пауза «до отмены»", () => {
+    const c = apply(on, controlPatch("pause", noon));
+    expect(workersState(c, noon)).toBe("paused");
+    expect(c.stopRunning).toBe(false);
+    expect(c.plannedStart).toBe(false);
+    expect(Date.parse(c.pausedUntil!) - noon.getTime()).toBeGreaterThan(9 * 365 * 86400_000);
+    expect(planDispatch(state({ ...busy, config: c }), noon)).toEqual([]);
+    expect(planDispatch(state({ ...busy, config: c, running: [{ pool: "dev", agent: "dev-1" }] }), noon)).toEqual([]);
+  });
+  it("Стоп: пауза плюс остановка работающих; «Снять остановку» оставляет паузу", () => {
+    const c = apply(on, controlPatch("stop", noon));
+    expect(workersState(c, noon)).toBe("stopped");
+    expect(c.stopRunning).toBe(true);
+    expect(planDispatch(state({ ...busy, config: c }), noon)).toEqual([]);
+    const released = normalizeWorkers({ ...c, stopRunning: false });
+    expect(workersState(released, noon)).toBe("paused");
+    expect(planDispatch(state({ ...busy, config: released }), noon)).toEqual([]);
+  });
+  it("Старт: снимает паузу и остановку, включает выключатель, все пулы — «Вкл.» и «Авто»", () => {
+    const stopped = apply({ ...manualOff, enabled: false }, controlPatch("stop", noon));
+    const c = apply(stopped, controlPatch("start", noon));
+    expect(workersState(c, noon)).toBe("running");
+    expect(c).toMatchObject({ enabled: true, stopRunning: false, pausedUntil: null, pausedReason: null, plannedStart: false });
+    for (const p of Object.values(c.pools)) expect(p).toMatchObject({ enabled: true, mode: "auto" });
+    // Модель, слоты и дневной лимит не сбрасываются
+    expect(c.pools.dev.max).toBe(on.pools.dev.max);
+    expect(planDispatch(state({ ...busy, config: c }), noon)).toEqual([
+      { pool: "deployer", agent: "deployer", key: "B" },
+      { pool: "triage", agent: "triage", keys: ["IN-1"] },
+      { pool: "dev", agent: "dev-1" },
+      { pool: "dev", agent: "dev-2" },
+    ]);
+  });
+  it("План старт: до назначенного времени — пауза «старт по плану», после — запуски идут сами", () => {
+    const at = new Date(noon.getTime() + 2 * 3600_000);
+    const c = apply({ ...manualOff, enabled: false }, controlPatch("plan", noon, at));
+    expect(workersState(c, noon)).toBe("planned");
+    expect(c).toMatchObject({ enabled: true, plannedStart: true, pausedUntil: at.toISOString(), pausedReason: "Старт по плану" });
+    expect(planDispatch(state({ ...busy, config: c }), noon)).toEqual([]);
+    expect(planDispatch(state({ ...busy, config: c }), new Date(at.getTime() - 60_000))).toEqual([]);
+    const later = new Date(at.getTime() + 60_000);
+    expect(workersState(c, later)).toBe("running");
+    expect(planDispatch(state({ ...busy, config: c }), later).length).toBeGreaterThan(0);
+  });
+  it("План старт в прошлом или без времени не принимается; Пауза и Старт отменяют план", () => {
+    expect(() => controlPatch("plan", noon, new Date(noon.getTime() - 1))).toThrow("plan_time_past");
+    expect(() => controlPatch("plan", noon, null)).toThrow("plan_time_past");
+    const planned = apply(on, controlPatch("plan", noon, new Date(noon.getTime() + 3600_000)));
+    expect(workersState(apply(planned, controlPatch("pause", noon)), noon)).toBe("paused");
+    expect(workersState(apply(planned, controlPatch("start", noon)), noon)).toBe("running");
+  });
+  it("состояние словами: выключены, лимит подписки — пауза без плана", () => {
+    expect(workersState(DEFAULT_WORKERS, noon)).toBe("off");
+    expect(workersState({ ...on, pausedUntil: "2026-09-24T09:00:00Z", pausedReason: "лимит" }, noon)).toBe("paused");
+    expect(workersState({ ...on, pausedUntil: "2026-09-24T07:00:00Z", plannedStart: true }, noon)).toBe("running");
+  });
+});
