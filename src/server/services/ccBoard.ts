@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "../db";
-import { annotate, attention, systemStatus } from "./cc";
+import { annotate, attention, getAppErrors, systemStatus } from "./cc";
 import { getTick, getWorkersConfig, requestRun } from "./workers";
 import { unreadForOwner } from "./ccMessages";
 import { recentErrors } from "../logbuffer";
@@ -212,7 +212,7 @@ export async function healthStatus() {
     dbMs = null;
   }
   const day = new Date(Date.now() - 24 * 3600_000);
-  const [sys, tick, config, lastDeploy, orders24, orders7, runs24, running] = await Promise.all([
+  const [sys, tick, config, lastDeploy, orders24, orders7, runs24, running, errors] = await Promise.all([
     systemStatus(),
     getTick(),
     getWorkersConfig(),
@@ -221,6 +221,7 @@ export async function healthStatus() {
     db.order.count({ where: { createdAt: { gte: new Date(Date.now() - 7 * 24 * 3600_000) } } }),
     db.workerRun.groupBy({ by: ["status"], where: { startedAt: { gte: day } }, _count: true }),
     db.workerRun.count({ where: { status: "running" } }),
+    getAppErrors(50),
   ]);
   const mem = process.memoryUsage();
   return {
@@ -237,5 +238,6 @@ export async function healthStatus() {
     orders24,
     orders7,
     errorsHour: recentErrors(60),
+    errors,
   };
 }

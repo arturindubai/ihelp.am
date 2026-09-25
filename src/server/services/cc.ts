@@ -265,6 +265,28 @@ export async function addComment(key: string, text: string, author: string, kind
   return db.taskComment.create({ data: { taskId: task.id, text: text.trim().slice(0, 5000), author, kind } });
 }
 
+/* ───────────── Журнал ошибок ───────────── */
+
+const ERROR_TTL_DAYS = parseInt(process.env.APP_ERROR_TTL_DAYS ?? "30", 10);
+
+/** Список ошибок из журнала. Старше TTL удаляются. Новые сверху. */
+export async function getAppErrors(limit = 100) {
+  const since = new Date(Date.now() - ERROR_TTL_DAYS * 24 * 3600_000);
+  await db.appError.deleteMany({ where: { lastSeenAt: { lt: since } } });
+  return db.appError.findMany({
+    where: { lastSeenAt: { gte: since } },
+    orderBy: { lastSeenAt: "desc" },
+    take: limit,
+  });
+}
+
+export type AppErrorItem = Awaited<ReturnType<typeof getAppErrors>>[number];
+
+/** Пометить ошибку как превращённую в задачу-баг */
+export async function linkErrorToTask(errorId: string, taskKey: string) {
+  await db.appError.update({ where: { id: errorId }, data: { taskKey } });
+}
+
 /* ───────────── Состояние системы ───────────── */
 
 type Mark = { lastOkAt?: string; lastErrorAt?: string; restoreOkAt?: string; restoreErrorAt?: string };

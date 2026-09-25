@@ -5,6 +5,7 @@ import { healthStatus } from "@/server/services/ccBoard";
 import { Forbidden } from "@/components/admin/ui";
 import { CcHeader } from "@/components/admin/cc/CcHeader";
 import { SystemPanel } from "@/components/admin/cc/SystemPanel";
+import { ErrorLogPanel } from "@/components/admin/cc/ErrorLogPanel";
 import { Card } from "@/components/admin/fields";
 import { ago } from "@/components/admin/cc/tabs/shared";
 import { cn, dateLabel } from "@/lib/format";
@@ -69,7 +70,7 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
         <Metric label={th("orders")} value={`${h.orders24} / ${h.orders7}`} hint={th("ordersHint")} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="mb-4 grid gap-4 lg:grid-cols-2">
         <SystemPanel system={h.sys} />
         <Card title={th("howTo")}>
           <ul className="list-inside list-disc space-y-1.5 text-sm text-muted">
@@ -80,6 +81,8 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
           </ul>
         </Card>
       </div>
+
+      <ErrorLogPanel errors={h.errors} />
     </div>
   );
 }
