@@ -61,15 +61,30 @@ backup_db_retry() {
   mark lastOkAt
 }
 
-# Разворачивает дамп во временную базу и сверяет число таблиц с рабочей
+# Разворачивает дамп во временную базу, сверяет структуру и число строк в ключевых таблицах.
+# BACKUP_ROW_DIFF — допустимое расхождение числа строк (по умолчанию 10).
 restore_check() {
+  threshold="${BACKUP_ROW_DIFF:-10}"
   $PSQL -d postgres -c "DROP DATABASE IF EXISTS restore_check" -c "CREATE DATABASE restore_check" > /dev/null &&
     gzip -dc "$1" | $PSQL -d restore_check > /dev/null &&
-    prod=$($PSQL -d homeservices -tAc "select count(*) from information_schema.tables where table_schema = 'public'") &&
-    restored=$($PSQL -d restore_check -tAc "select count(*) from information_schema.tables where table_schema = 'public'") &&
+    prod_t=$($PSQL -d homeservices -tAc "select count(*) from information_schema.tables where table_schema = 'public'") &&
+    rest_t=$($PSQL -d restore_check -tAc "select count(*) from information_schema.tables where table_schema = 'public'") &&
     migrations=$($PSQL -d restore_check -tAc 'select count(*) from _prisma_migrations') &&
-    [ "$prod" = "$restored" ] && [ "$migrations" -gt 0 ]
+    [ "$prod_t" = "$rest_t" ] && [ "$migrations" -gt 0 ]
   rc=$?
+  if [ "$rc" = "0" ]; then
+    for tbl in '"Order"' '"User"' '"Service"'; do
+      prod_cnt=$($PSQL -d homeservices -tAc "SELECT count(*) FROM $tbl" 2>/dev/null) || continue
+      rest_cnt=$($PSQL -d restore_check -tAc "SELECT count(*) FROM $tbl" 2>/dev/null) || { rc=1; continue; }
+      diff=$((prod_cnt - rest_cnt))
+      [ "$diff" -lt 0 ] && diff=$((-diff))
+      log "строки $tbl: prod=$prod_cnt restored=$rest_cnt расхождение=$diff"
+      if [ "$diff" -gt "$threshold" ]; then
+        log "ERROR: расхождение в $tbl превышает порог $threshold" >&2
+        rc=1
+      fi
+    done
+  fi
   $PSQL -d postgres -c "DROP DATABASE IF EXISTS restore_check" > /dev/null 2>&1
   return $rc
 }

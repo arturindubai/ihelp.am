@@ -5,6 +5,7 @@ import { tr } from "@/i18n/locales";
 import { dateLabel } from "@/lib/format";
 import { Link } from "@/i18n/navigation";
 import { StarRow } from "@/components/Stars";
+import { Img } from "@/components/Img";
 
 export default async function MasterPage({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;
@@ -19,7 +20,7 @@ export default async function MasterPage({ params }: { params: Promise<{ locale:
   return (
     <div className="container-m pt-6">
       <div className="flex items-center gap-4">
-        <img src={m.photo || "/img/master-1.svg"} alt="" className="size-24 rounded-full object-cover" />
+        <Img src={m.photo || "/img/master-1.svg"} width={96} className="size-24 rounded-full object-cover" />
         <div>
           <h1 className="h1">{tr(m.name, locale)}</h1>
           {m.reviewsCount ? (

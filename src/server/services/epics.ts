@@ -92,12 +92,3 @@ export async function saveEpic(content: EpicContent, actor: string, isNew: boole
   return epic;
 }
 
-/** Удалить можно только эпик, созданный в админке и без привязанных задач */
-export async function deleteEpic(key: string) {
-  const epic = await db.epic.findUnique({ where: { key } });
-  if (!epic) throw new Error("not_found");
-  if (epic.source !== "ui") throw new Error("code_epic");
-  const linked = await db.task.count({ where: { epicKey: key } });
-  if (linked) throw new Error(`linked_tasks:${linked}`);
-  await db.epic.delete({ where: { key } });
-}

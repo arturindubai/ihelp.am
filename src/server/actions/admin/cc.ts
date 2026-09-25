@@ -3,15 +3,15 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSection } from "../../admin";
 import { audit } from "../../audit";
-import { addComment, deleteTask, saveTask, updateTask, type TaskContent } from "../../services/cc";
-import { CcError, retriage, transition } from "../../services/ccWork";
-import { saveEpic, deleteEpic, type EpicContent } from "../../services/epics";
+import { addComment, linkErrorToTask, saveTask, updateTask, type TaskContent } from "../../services/cc";
+import { CcError, approveMockup, retriage, returnDesign, transition } from "../../services/ccWork";
+import { saveEpic, type EpicContent } from "../../services/epics";
 import { deleteAttachment } from "../../services/attachments";
 import { EPIC_STATUSES, OWNERS, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { BLOCKED_ON, type TaskStatusKey } from "@/lib/cc-flow";
 import { taskContentSchema } from "@/lib/cc-schema";
-import { EVERY_MIN, MODELS, MODES, POOLS, type Pool } from "@/lib/workers";
-import { requestRun, requestStop, saveWorkersConfig } from "../../services/workers";
+import { EVERY_MIN, MODELS, MODES, POOLS, WORKERS_COMMANDS, type Pool } from "@/lib/workers";
+import { requestRun, requestStop, saveWorkersConfig, workersControl } from "../../services/workers";
 import { intakeCreate } from "../../services/ccBoard";
 import { MESSAGE_ROLES, markRead, sendMessage } from "../../services/ccMessages";
 import { db } from "../../db";
@@ -90,18 +90,6 @@ export async function ccSaveTaskAction(content: unknown, isNew: boolean) {
   }
 }
 
-export async function ccDeleteTaskAction(key: string) {
-  const u = await requireSection("control");
-  try {
-    await deleteTask(key, who(u));
-    await audit(u.id, "cc.task.delete", "Task", key);
-    rAll();
-    return { ok: true as const };
-  } catch (e) {
-    return { ok: false as const, error: (e as Error).message };
-  }
-}
-
 export async function ccCommentAction(key: string, text: string) {
   const u = await requireSection("control");
   const t = text.trim();
@@ -112,6 +100,32 @@ export async function ccCommentAction(key: string, text: string) {
   await audit(u.id, "cc.comment", "Task", key);
   rAll();
   return { ok: true as const };
+}
+
+/** Утверждение макета задачи владельцем в интерфейсе — снимает гейт mockup_required */
+/** «Вернуть дизайнеру»: утверждение снимается, задача блокируется на дизайне с причиной */
+export async function ccReturnDesignAction(key: string, reason: string) {
+  const u = await requireSection("control");
+  try {
+    await returnDesign(key, { name: who(u), role: u.role === "OWNER" ? "owner" : "cto", via: "ui" }, reason);
+    await audit(u.id, "cc.design.return", "Task", key);
+    rAll();
+    return { ok: true as const };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof CcError ? e.code : (e as Error).message };
+  }
+}
+
+export async function ccApproveMockupAction(key: string, comment: string) {
+  const u = await requireSection("control");
+  try {
+    await approveMockup(key, who(u), comment.trim() || null);
+    await audit(u.id, "cc.mockup.approve", "Task", key);
+    rAll();
+    return { ok: true as const };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof CcError ? e.code : (e as Error).message };
+  }
 }
 
 /* ───── Эпики ───── */
@@ -139,18 +153,6 @@ export async function ccSaveEpicAction(content: unknown, isNew: boolean) {
     await audit(u.id, isNew ? "cc.epic.create" : "cc.epic.edit", "Epic", epic.key);
     rAll();
     return { ok: true as const, key: epic.key };
-  } catch (e) {
-    return { ok: false as const, error: (e as Error).message };
-  }
-}
-
-export async function ccDeleteEpicAction(key: string) {
-  const u = await requireSection("control");
-  try {
-    await deleteEpic(key);
-    await audit(u.id, "cc.epic.delete", "Epic", key);
-    rAll();
-    return { ok: true as const };
   } catch (e) {
     return { ok: false as const, error: (e as Error).message };
   }
@@ -200,6 +202,25 @@ export async function ccSaveWorkersAction(patch: z.infer<typeof workersSchema>) 
   await audit(u.id, "cc.workers", "Setting", "cc.workers", parsed.data);
   rAll();
   return { ok: true as const };
+}
+
+const controlSchema = z.object({ command: z.enum(WORKERS_COMMANDS), at: z.string().datetime({ offset: true }).optional() });
+
+/**
+ * Кнопки владельца: Пауза (новые не берутся, текущие доработают), Стоп (плюс остановка текущих),
+ * Старт (всё включено в «Авто»), План старт (пауза до времени по Еревану, потом диспетчер запускает сам).
+ * Отменить план — «Старт» или «Пауза». Возвращает новые настройки, чтобы пульт обновился без перезагрузки
+ */
+export async function ccWorkersControlAction(command: string, at?: string) {
+  const u = await requireSection("control");
+  const parsed = controlSchema.safeParse({ command, at });
+  if (!parsed.success) return { ok: false as const, error: "invalid" };
+  const when = parsed.data.at ? new Date(parsed.data.at) : null;
+  if (parsed.data.command === "plan" && (!when || when.getTime() <= Date.now())) return { ok: false as const, error: "past" };
+  const config = await workersControl(parsed.data.command, when, who(u));
+  await audit(u.id, `cc.workers.${parsed.data.command}`, "Setting", "cc.workers", { at: when?.toISOString() ?? null });
+  rAll();
+  return { ok: true as const, config };
 }
 
 /** «Запустить сейчас»: пул (и задача) — диспетчер запустит на ближайшем проходе, не дожидаясь очереди и расписания */
@@ -419,5 +440,60 @@ export async function ccLibraryArchiveAction(slug: string, archived: boolean) {
   } catch (e) {
     return { ok: false as const, error: e instanceof LibraryError ? e.message : "error" };
   }
+}
+
+/* ───── Журнал ошибок ───── */
+
+/** Создать задачу-баг из записи журнала ошибок */
+export async function ccCreateBugFromErrorAction(errorId: string) {
+  const u = await requireSection("control");
+  const err = await db.appError.findUnique({ where: { id: errorId } });
+  if (!err) return { ok: false as const, error: "not_found" };
+  if (err.taskKey) return { ok: false as const, error: "already_exists", taskKey: err.taskKey };
+
+  // Генерируем ключ BUG-N
+  const existing = await db.task.findMany({ where: { key: { startsWith: "BUG-" } }, select: { key: true } });
+  const nums = existing.map((t) => parseInt(t.key.replace("BUG-", ""), 10)).filter((n) => !isNaN(n));
+  const next = (nums.length ? Math.max(...nums) : 0) + 1;
+  const key = `BUG-${next}`;
+
+  const title = `Ошибка: ${err.source.length > 80 ? err.source.slice(0, 80) + "…" : err.source}`;
+  const summary = err.message.slice(0, 500);
+  const details = [
+    `**Источник:** ${err.source}`,
+    `**Первый раз:** ${err.firstSeenAt.toISOString()}`,
+    `**Последний раз:** ${err.lastSeenAt.toISOString()}`,
+    `**Повторений:** ${err.count}`,
+    `**Запись журнала:** ${err.id}`,
+    "",
+    "```",
+    err.message.slice(0, 1000),
+    "```",
+  ].join("\n");
+
+  await saveTask(
+    {
+      key,
+      title,
+      summary,
+      details,
+      requirements: [`Исправить ошибку: ${err.source}`],
+      area: "dev",
+      layer: "fullstack",
+      priority: "p1",
+      stage: "public",
+      owner: "tech",
+      needs: [],
+      depends: [],
+      docs: [],
+    },
+    who(u),
+    true,
+    "ui",
+  );
+  await linkErrorToTask(errorId, key);
+  await audit(u.id, "error.bug_created", "AppError", errorId, { key });
+  rAll();
+  return { ok: true as const, taskKey: key };
 }
 

@@ -22,6 +22,10 @@ const QUEUE_TONE: Record<string, string> = {
   needs: "bg-warn-50 text-warn",
   people: "bg-surface text-muted",
   nobranch: "bg-bad-50 text-bad",
+  holding: "bg-warn-50 text-warn",
+  question: "bg-brand-50 text-brand",
+  nodesign: "bg-warn-50 text-warn",
+  mockup: "bg-bad-50 text-bad",
 };
 
 const SHOW = 8;
@@ -63,6 +67,8 @@ export async function WorkersTab({ locale, taskHref }: { locale: string; taskHre
           const pc = data.config.pools[p];
           const queue = queueOf(p);
           const running = data.running.filter((r) => r.pool === p);
+          const capOut = data.today[p] >= pc.dailyCap;
+          const paused = !!data.config.pausedUntil && Date.parse(data.config.pausedUntil) > Date.now();
           const takeable = p === "dev" ? data.readyDev : p === "nocode" ? data.readyNocode : p === "tester" ? queue.filter((q) => q.reason === "test" || q.reason === "retest").length : p === "deployer" ? queue.filter((q) => q.reason === "deploy").length : queue.length;
           return (
             <Card
@@ -73,8 +79,8 @@ export async function WorkersTab({ locale, taskHref }: { locale: string; taskHre
                   <span key="model" className="chip bg-surface text-[10px] text-muted">
                     {pc.model}
                   </span>
-                  <span key="state" className={cn("chip text-[10px]", running.length ? "bg-brand-50 text-brand" : !pc.enabled || pc.mode === "manual" ? "bg-surface text-muted" : "bg-ok-50 text-ok")}>
-                    {running.length ? tw("poolRunning", { n: running.length }) : !pc.enabled ? tw("poolOff") : pc.mode === "manual" ? tw("modes.manual") : tw("poolIdle")}
+                  <span key="state" className={cn("chip text-[10px]", running.length ? "bg-brand-50 text-brand" : !pc.enabled || pc.mode === "manual" ? "bg-surface text-muted" : paused || capOut ? "bg-warn-50 text-warn" : "bg-ok-50 text-ok")}>
+                    {running.length ? tw("poolRunning", { n: running.length }) : !pc.enabled ? tw("poolOff") : pc.mode === "manual" ? tw("modes.manual") : paused ? tw("poolPaused") : capOut ? tw("poolCapOut", { n: data.today[p], cap: pc.dailyCap }) : tw("poolIdle")}
                   </span>
                 </span>
               }

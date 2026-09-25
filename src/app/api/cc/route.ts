@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { attention, getTask, listTasks, annotate, saveTask } from "@/server/services/cc";
-import { CcError, agentActor, agentNote, claim, heartbeat, markTriaged, reviewRelease, reviewTake, testPass, transition, type TransitionInput } from "@/server/services/ccWork";
+import { CcError, agentActor, agentNote, claim, heartbeat, markTriaged, reviewRelease, reviewTake, testPass, transition, approveMockup, type TransitionInput } from "@/server/services/ccWork";
 import { dispatchPlan, pauseWorkers, runFinish, runStart, tickLog, triageQueue, workersOverview } from "@/server/services/workers";
 import { sendMessage, takeInbox } from "@/server/services/ccMessages";
-import { intakeCreate } from "@/server/services/ccBoard";
+import { intakeCreate, boardAudit } from "@/server/services/ccBoard";
 import { listEpics, getEpic } from "@/server/services/epics";
 import { DESIGNER_FIELDS, taskContentSchema } from "@/lib/cc-schema";
-import { roleOf, type TaskStatusKey } from "@/lib/cc-flow";
+import { canCreateTask, roleOf, type TaskStatusKey } from "@/lib/cc-flow";
 import type { Task } from "@prisma/client";
 
 /**
@@ -91,6 +91,10 @@ const full = (t: Task) => ({
   testedSha: t.testedSha,
   testedBy: t.testedBy,
   testedAt: t.testedAt,
+  mockupRequired: t.mockupRequired,
+  mockupUrl: t.mockupUrl,
+  mockupApprovedBy: t.mockupApprovedBy,
+  mockupApprovedAt: t.mockupApprovedAt,
 });
 
 export async function GET(req: Request) {
@@ -112,6 +116,7 @@ export async function GET(req: Request) {
     if (p.get("resource") === "attention") return json(await attention());
     if (p.get("resource") === "workers") return json(await workersOverview());
     if (p.get("resource") === "triage") return json({ tasks: await triageQueue() });
+    if (p.get("resource") === "audit") return json(await boardAudit());
     if (p.get("resource") === "inbox") {
       const agent = (p.get("agent") ?? "").trim().slice(0, 60);
       if (!agent) return json({ error: "agent_required" }, 400);
@@ -232,14 +237,25 @@ export async function POST(req: Request) {
         const until = new Date(str(body.until) ?? Date.now() + 3600_000);
         return json({ ok: true, config: await pauseWorkers(Number.isNaN(until.getTime()) ? new Date(Date.now() + 3600_000) : until, text || "лимит подписки") });
       }
+      // Утверждение макета: только владелец, техдиректор и продукт; пишет в ленту с автором
+      case "approve-mockup": {
+        if (!key) return json({ error: "key_required" }, 400);
+        const role = roleOf(agent);
+        if (!["owner", "cto", "product"].includes(role)) return json({ error: "forbidden_role", detail: role }, 403);
+        const task = await approveMockup(key, agent, text || null);
+        return json({ ok: true, task: brief(task) });
+      }
       // Триаж: отметка «карточка разобрана» с вердиктом в ленте
       case "triaged": {
         if (!key) return json({ error: "key_required" }, 400);
         await markTriaged(key, agent, text);
         return json({ ok: true });
       }
-      // Чат получил от человека новую работу: не исполняет сам, а кладёт в очередь триажа
+      // Чат получил от человека новую работу: не исполняет сам, а кладёт в очередь триажа.
+      // Воркеры-исполнители (dev, nocode, tester, deployer) создавать входящие не могут:
+      // они сообщают о потребности через msg --to cto или запись в ленте своей задачи.
       case "intake": {
+        if (!canCreateTask(roleOf(agent))) return json({ error: "forbidden_role", detail: roleOf(agent) }, 403);
         try {
           const task = await intakeCreate(text, agent);
           return json({ ok: true, key: task.key });

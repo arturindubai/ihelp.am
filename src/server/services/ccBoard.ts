@@ -1,12 +1,12 @@
 import "server-only";
 import { db } from "../db";
-import { annotate, attention, systemStatus } from "./cc";
+import { annotate, attention, getAppErrors, systemStatus } from "./cc";
 import { getTick, getWorkersConfig, requestRun } from "./workers";
 import { unreadForOwner } from "./ccMessages";
 import { recentErrors } from "../logbuffer";
 import { flowOf, intakeTitle, laneOf, nextIntakeKey, sizeOf, weekStart } from "@/lib/cc-lanes";
-import { OPEN_STATUSES } from "@/lib/cc-flow";
-import { testedCurrent } from "@/lib/workers";
+import { CLOSED_STATUSES, OPEN_STATUSES } from "@/lib/cc-flow";
+import { testedCurrent, workersState } from "@/lib/workers";
 import { Prisma } from "@prisma/client";
 
 /**
@@ -35,7 +35,7 @@ export type BoardTask = Awaited<ReturnType<typeof boardTasks>>[number];
 
 /** Счётчики вкладок */
 export async function ccCounts() {
-  const [byStatus, reviewCode, reviewNoCode, ownerBlocked, unread, running, attn, failed] = await Promise.all([
+  const [byStatus, reviewCode, reviewNoCode, ownerBlocked, unread, running, attn, failed, mockupPending] = await Promise.all([
     db.task.groupBy({ by: ["status"], _count: true }),
     db.task.count({ where: { status: "review", layer: { not: "none" } } }),
     db.task.count({ where: { status: "review", layer: "none" } }),
@@ -44,6 +44,7 @@ export async function ccCounts() {
     db.workerRun.count({ where: { status: "running" } }),
     attention(),
     db.workerRun.count({ where: { status: { in: ["failed", "timeout"] }, startedAt: { gte: new Date(Date.now() - 24 * 3600_000) } } }),
+    db.task.count({ where: DESIGN_PENDING }),
   ]);
   const n = (s: string) => byStatus.find((r) => r.status === s)?._count ?? 0;
   return {
@@ -52,11 +53,14 @@ export async function ccCounts() {
     dev: n("in_progress"),
     deployer: reviewCode,
     approvals: reviewNoCode,
+    design: mockupPending,
     notify: unread,
     running,
     byStatus: Object.fromEntries(byStatus.map((r) => [r.status, r._count])) as Record<string, number>,
   };
 }
+
+const AGENT_PREFIXES = ["system", "triage", "nocode", "dev-", "deployer", "tester"];
 
 /** «Нужен ты»: блокировки на владельце и продукте, брошенные задачи, застрявшая проверка, упавшие запуски, пауза воркеров */
 export async function needsYou() {
@@ -71,12 +75,43 @@ export async function needsYou() {
     getWorkersConfig(),
   ]);
   return {
-    owner,
+    owner: owner.map((x) => ({
+      ...x,
+      ownerAnswered: x.comments[0] ? !AGENT_PREFIXES.some((p) => x.comments[0].author.startsWith(p)) : false,
+    })),
     stale: attn.stale,
     stuckReview: attn.review.filter((r) => r.health.stuckReview),
     failedRuns,
     pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null,
   };
+}
+
+/** Задачи с макетом, ожидающие утверждения владельцем: любой статус кроме завершённых */
+/**
+ * Дизайн ждёт утверждения владельцем: есть настоящий макет — картинка во вложениях или ссылка (mockupUrl) —
+ * либо стоит флаг «нужен макет». Текстовое описание дизайна само по себе на согласование не выносится
+ */
+const DESIGN_PENDING: Prisma.TaskWhereInput = {
+  status: { notIn: ["done", "cancelled"] },
+  mockupApprovedBy: null,
+  OR: [{ mockupRequired: true }, { mockupUrl: { not: null } }, { attachments: { some: { mime: { startsWith: "image/" } } } }],
+};
+
+export async function mockupPendingApprovals() {
+  return db.task.findMany({
+    where: DESIGN_PENDING,
+    orderBy: [{ mockupRequired: "desc" }, { priority: "asc" }, { updatedAt: "asc" }],
+    select: { key: true, title: true, priority: true, status: true, layer: true, updatedAt: true, mockupUrl: true, mockupRequired: true, design: true, _count: { select: { attachments: true } } },
+  });
+}
+
+/** Утверждённые дизайны за две недели — со ссылкой на запись канона в Библиотеке */
+export async function designApproved(days = 14) {
+  return db.task.findMany({
+    where: { mockupApprovedAt: { gte: new Date(Date.now() - days * 86400_000) } },
+    orderBy: { mockupApprovedAt: "desc" },
+    select: { key: true, title: true, status: true, mockupApprovedAt: true, mockupApprovedBy: true },
+  });
 }
 
 /** Согласования: не-код на проверке — принимает человек. С последним отчётом, чтобы решать, не открывая карточку */
@@ -202,6 +237,52 @@ export async function intakeHistory(take = 12) {
 /* ───────────── Здоровье ───────────── */
 
 /** Страница «Здоровье»: сервер, база, память, бэкапы, фоновые задачи, диспетчер и воркеры, каналы, последняя выкладка */
+/** Инварианты доски из канона (docs/canon/PROCESS.md): что потеряно или зависло. Ничего не меняет — только отчёт */
+export async function boardAudit() {
+  const AGENT = /^(triage|dev|nocode|tester|deployer|watchdog|dispatcher|cto|system)/i;
+  const [tasks, tick] = await Promise.all([
+    db.task.findMany({
+      select: {
+        key: true, status: true, layer: true, source: true, depends: true, branch: true, blockedOn: true, blockedReason: true, claimedBy: true, heartbeatAt: true, triagedAt: true,
+        comments: { orderBy: { createdAt: "desc" }, take: 1, select: { author: true, createdAt: true } },
+        events: { where: { field: "status" }, orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+      },
+    }),
+    getTick(),
+  ]);
+  const heads = tick?.heads ?? {};
+  const by = new Map(tasks.map((t) => [t.key, t]));
+  const closed = (k: string) => !by.has(k) || (CLOSED_STATUSES as readonly string[]).includes(by.get(k)!.status);
+  const found: Record<string, string[]> = {};
+  const add = (check: string, key: string) => (found[check] ??= []).push(key);
+  const hourAgo = Date.now() - 3600_000;
+  for (const t of tasks) {
+    const open = t.depends.filter((d) => !closed(d));
+    for (const d of t.depends) if (!by.has(d)) add("deps_unknown", `${t.key}→${d}`);
+    if (t.status === "blocked") {
+      if (!t.blockedOn || !t.blockedReason?.trim()) add("blocked_no_reason", t.key);
+      const last = t.comments[0];
+      const since = t.events[0]?.createdAt;
+      if (last && since && last.createdAt > since && !AGENT.test(last.author)) add("blocked_answered", t.key);
+      if (t.blockedOn === "deps" && !open.length) add("blocked_deps_closed", t.key);
+    }
+    if (t.status === "backlog" && !t.triagedAt) add("backlog_untriaged", t.key);
+    if (t.status === "ready" && open.length) add("ready_open_deps", t.key);
+    if (t.status === "review") {
+      const br = t.branch || `task/${t.key}`;
+      if (t.layer !== "none" && Object.keys(heads).length && !heads[br]) add("review_no_branch", t.key);
+      if (open.length) add("review_open_deps", t.key);
+    }
+    if (t.status === "in_progress") {
+      if (!t.claimedBy) add("in_progress_unclaimed", t.key);
+      else if (!t.heartbeatAt || t.heartbeatAt.getTime() < hourAgo) add("in_progress_stale", t.key);
+    }
+    if (t.key.startsWith("IN-") && !(CLOSED_STATUSES as readonly string[]).includes(t.status) && t.status !== "blocked") add("intake_open", t.key);
+  }
+  const checks = Object.entries(found).map(([id, keys]) => ({ id, keys })).sort((a, b) => b.keys.length - a.keys.length);
+  return { total: tasks.length, byStatus: Object.fromEntries(Object.entries(tasks.reduce<Record<string, number>>((m, t) => ((m[t.status] = (m[t.status] ?? 0) + 1), m), {}))), checks, at: new Date().toISOString() };
+}
+
 export async function healthStatus() {
   const t0 = Date.now();
   let dbMs: number | null = null;
@@ -212,7 +293,7 @@ export async function healthStatus() {
     dbMs = null;
   }
   const day = new Date(Date.now() - 24 * 3600_000);
-  const [sys, tick, config, lastDeploy, orders24, orders7, runs24, running] = await Promise.all([
+  const [sys, tick, config, lastDeploy, orders24, orders7, runs24, running, errors] = await Promise.all([
     systemStatus(),
     getTick(),
     getWorkersConfig(),
@@ -221,6 +302,7 @@ export async function healthStatus() {
     db.order.count({ where: { createdAt: { gte: new Date(Date.now() - 7 * 24 * 3600_000) } } }),
     db.workerRun.groupBy({ by: ["status"], where: { startedAt: { gte: day } }, _count: true }),
     db.workerRun.count({ where: { status: "running" } }),
+    getAppErrors(50),
   ]);
   const mem = process.memoryUsage();
   return {
@@ -231,11 +313,12 @@ export async function healthStatus() {
     heapMb: Math.round(mem.heapUsed / 1048576),
     node: process.version,
     tickAgeMin: tick ? (Date.now() - Date.parse(tick.at)) / 60_000 : null,
-    workers: { enabled: config.enabled, dryRun: config.dryRun, pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null, running },
+    workers: { enabled: config.enabled, dryRun: config.dryRun, pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null, state: workersState(config), running },
     runs24: Object.fromEntries(runs24.map((r) => [r.status, r._count])) as Record<string, number>,
     lastDeploy,
     orders24,
     orders7,
     errorsHour: recentErrors(60),
+    errors,
   };
 }

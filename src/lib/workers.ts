@@ -4,7 +4,7 @@
  * сервис решает, кого запускать. Правила словами — docs/WORKERS.md.
  */
 
-export const POOLS = ["triage", "dev", "nocode", "tester", "deployer"] as const;
+export const POOLS = ["triage", "product", "designer", "dev", "nocode", "tester", "deployer"] as const;
 export type Pool = (typeof POOLS)[number];
 
 export const MODELS = ["sonnet", "opus", "haiku"] as const;
@@ -51,15 +51,22 @@ export type WorkersConfig = {
   pausedReason: string | null;
   /** Остановить уже работающих воркеров на следующем проходе диспетчера */
   stopRunning: boolean;
+  /** pausedUntil — это «План старт» владельца, а не пауза: в назначенное время диспетчер запускает всех сам */
+  plannedStart: boolean;
 };
 
 export const DEFAULT_WORKERS: WorkersConfig = {
   enabled: false,
   dryRun: false,
   pools: {
-    triage: { enabled: true, max: 1, model: "sonnet", dailyCap: 12, mode: "auto", everyMin: 30 },
+    // Триаж: каждая входящая IN-N — отдельный запуск, пачка бэклога — ещё один; 12 в сутки не хватало и очередь вставала
+    triage: { enabled: true, max: 1, model: "sonnet", dailyCap: 40, mode: "auto", everyMin: 30 },
     dev: { enabled: true, max: 2, model: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
     nocode: { enabled: true, max: 1, model: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
+    // Продакт: отвечает на вопросы, заблокированные «на продукте», раз в сутки проходит бэклог на качество требований
+    product: { enabled: true, max: 1, model: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
+    // Дизайнер: интерфейсные задачи без описания дизайна и вопросы «на дизайне»
+    designer: { enabled: true, max: 1, model: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
     tester: { enabled: true, max: 1, model: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
     deployer: { enabled: true, max: 1, model: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
   },
@@ -69,6 +76,7 @@ export const DEFAULT_WORKERS: WorkersConfig = {
   pausedUntil: null,
   pausedReason: null,
   stopRunning: false,
+  plannedStart: false,
 };
 
 const clamp = (v: unknown, min: number, max: number, fallback: number) => {
@@ -105,7 +113,58 @@ export function normalizeWorkers(raw: unknown): WorkersConfig {
     pausedUntil: typeof r.pausedUntil === "string" ? r.pausedUntil : null,
     pausedReason: typeof r.pausedReason === "string" ? r.pausedReason.slice(0, 300) : null,
     stopRunning: r.stopRunning === true,
+    // Запланированный старт без времени бессмыслен: без pausedUntil — обычная работа
+    plannedStart: r.plannedStart === true && typeof r.pausedUntil === "string",
   };
+}
+
+/* ───────────── Кнопки владельца: Пауза, Стоп, Старт, План старт ───────────── */
+
+export const WORKERS_COMMANDS = ["pause", "stop", "start", "plan"] as const;
+export type WorkersCommand = (typeof WORKERS_COMMANDS)[number];
+
+/** Пауза владельца «до отмены»: далёкое будущее, снимается только кнопкой «Старт» или «План старт» */
+export const OWNER_PAUSE_YEARS = 10;
+
+export const PAUSE_REASONS = { owner: "Пауза владельца", stop: "Остановлены владельцем", planned: "Старт по плану" } as const;
+
+/** Пауза действует: pausedUntil в будущем */
+export const isPaused = (c: WorkersConfig, now = new Date()) => !!c.pausedUntil && Date.parse(c.pausedUntil) > now.getTime();
+
+/**
+ * Состояние воркеров словами для вкладки «Воркеры» и «Здоровья»:
+ * stopped — идёт остановка всех; planned — ждут запланированного старта; paused — на паузе, текущие доработают;
+ * off — общий выключатель снят; running — работают
+ */
+export type WorkersState = "running" | "paused" | "stopped" | "planned" | "off";
+export function workersState(c: WorkersConfig, now = new Date()): WorkersState {
+  if (c.stopRunning) return "stopped";
+  if (isPaused(c, now)) return c.plannedStart ? "planned" : "paused";
+  return c.enabled ? "running" : "off";
+}
+
+export type WorkersControlPatch = Partial<Omit<WorkersConfig, "pools">> & { pools?: Partial<Record<Pool, Partial<PoolConfig>>> };
+
+/**
+ * Что меняет каждая кнопка владельца — чистая функция, чтобы проверять тестами:
+ * pause — новые запуски не начинаются, текущие доработают; stop — то же плюс остановка текущих на ближайшем проходе;
+ * start — снять паузу и остановку, включить всё в режиме «Авто»; plan — как start, но с паузой до назначенного времени,
+ * после которого диспетчер стартует сам. Для plan обязательно время в будущем
+ */
+export function controlPatch(command: WorkersCommand, now: Date, at?: Date | null): WorkersControlPatch {
+  const allAuto = Object.fromEntries(POOLS.map((p) => [p, { enabled: true, mode: "auto" as Mode }])) as Record<Pool, Partial<PoolConfig>>;
+  switch (command) {
+    case "pause":
+      return { pausedUntil: new Date(now.getTime() + OWNER_PAUSE_YEARS * 365 * 86400_000).toISOString(), pausedReason: PAUSE_REASONS.owner, plannedStart: false, stopRunning: false };
+    case "stop":
+      return { pausedUntil: new Date(now.getTime() + OWNER_PAUSE_YEARS * 365 * 86400_000).toISOString(), pausedReason: PAUSE_REASONS.stop, plannedStart: false, stopRunning: true };
+    case "start":
+      return { pausedUntil: null, pausedReason: null, plannedStart: false, stopRunning: false, enabled: true, pools: allAuto };
+    case "plan": {
+      if (!at || !Number.isFinite(at.getTime()) || at.getTime() <= now.getTime()) throw new Error("plan_time_past");
+      return { pausedUntil: at.toISOString(), pausedReason: PAUSE_REASONS.planned, plannedStart: true, stopRunning: false, enabled: true, pools: allAuto };
+    }
+  }
 }
 
 /** Час по Еревану (UTC+4, без перехода на летнее время) */
@@ -118,6 +177,8 @@ export type ReviewTask = {
   /** Кто сейчас держит задачу на проверке: тестировщик или деплоер */
   claimedBy: string | null;
   claimUntil: Date | null;
+  /** Тестировщик недавно закончил без вердикта: до этого времени задачу ему снова не даём */
+  testHoldUntil?: Date | null;
 };
 
 /** Просьба человека запустить пул сейчас — кнопка «Запустить сейчас» или «▶ Запустить воркера» в шторке задачи */
@@ -141,6 +202,13 @@ export type DispatchState = {
   triageQueue: string[];
   /** Пора пересмотреть весь бэклог */
   sweepDue: boolean;
+  /** Задачи с вопросом к продукту (заблокированы на product), в порядке приоритета */
+  productQueue: string[];
+  /** Пора продакту пройти бэклог на качество требований */
+  productSweepDue: boolean;
+  /** Интерфейсные задачи без дизайна и вопросы «на дизайне» */
+  designerQueue: string[];
+  designerSweepDue: boolean;
   /** Когда пул запускался последний раз (ISO) — для режима «по расписанию» */
   lastStart: Partial<Record<Pool, string>>;
   requests: RunRequest[];
@@ -168,10 +236,13 @@ export const testedCurrent = (t: ReviewTask, heads: Record<string, string>) =>
 /** Очереди проверки: что ждёт тестировщика, что готово к выкладке, что сейчас кто-то держит */
 export function reviewQueues(review: ReviewTask[], heads: Record<string, string>, now = new Date()) {
   const onBranch = review.filter((t) => !!t.branch && !!heads[t.branch]);
+  const holding = (t: ReviewTask) => !!t.testHoldUntil && t.testHoldUntil > now;
   return {
-    test: onBranch.filter((t) => !testedCurrent(t, heads) && !leaseAlive(t, now)),
+    test: onBranch.filter((t) => !testedCurrent(t, heads) && !leaseAlive(t, now) && !holding(t)),
     deploy: onBranch.filter((t) => testedCurrent(t, heads) && !leaseAlive(t, now)),
     held: review.filter((t) => leaseAlive(t, now)),
+    /** Запуск тестировщика закончился без вердикта — пауза, чтобы не гонять одну задачу по кругу */
+    holding: onBranch.filter((t) => !testedCurrent(t, heads) && !leaseAlive(t, now) && holding(t)),
     noBranch: review.filter((t) => !t.branch || !heads[t.branch]),
   };
 }
@@ -197,6 +268,8 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
   const nextTest = () => q.test.find((t) => !taken().has(t.key));
   const nextDeploy = () => q.deploy.find((t) => !taken().has(t.key));
   const triageBatch = () => s.triageQueue.filter((k) => !taken().has(k)).slice(0, config.triageBatch);
+  const productBatch = () => (s.productQueue ?? []).filter((k) => !taken().has(k)).slice(0, config.triageBatch);
+  const designerBatch = () => (s.designerQueue ?? []).filter((k) => !taken().has(k)).slice(0, Math.min(3, config.triageBatch));
 
   for (const r of s.requests) {
     // Входящие IN-N не ждут пачку бэклога: у триажа для них второй, быстрый слот
@@ -211,6 +284,12 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
     } else if (r.pool === "deployer") {
       const t = r.key ? q.deploy.find((x) => x.key === r.key) : nextDeploy();
       if (t && !taken().has(t.key)) actions.push({ pool: "deployer", agent: "deployer", key: t.key, ...base });
+    } else if (r.pool === "product") {
+      const keys = r.key ? [r.key] : productBatch();
+      actions.push(keys.length ? { pool: "product", agent: "product", keys, ...base } : { pool: "product", agent: "product", sweep: true, ...base });
+    } else if (r.pool === "designer") {
+      const keys = r.key ? [r.key] : designerBatch();
+      actions.push(keys.length ? { pool: "designer", agent: "designer", keys, ...base } : { pool: "designer", agent: "designer", sweep: true, ...base });
     } else {
       const keys = r.key ? [r.key] : triageBatch();
       const agent = names("triage").includes("triage") ? freeName("triage", names("triage")) : "triage";
@@ -256,6 +335,19 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
     }
   }
 
+  // Продакт — как триаж: пачка задач с вопросом к продукту, а при пустой очереди раз в сутки обзор требований бэклога
+  if (due("product")) {
+    const keys = productBatch();
+    if (keys.length) actions.push({ pool: "product", agent: "product", keys });
+    else if (s.productSweepDue && config.sweepEveryH > 0) actions.push({ pool: "product", agent: "product", sweep: true });
+  }
+  // Дизайнер — так же: до трёх интерфейсных задач за запуск, при пустой очереди раз в сутки обзор
+  if (due("designer")) {
+    const keys = designerBatch();
+    if (keys.length) actions.push({ pool: "designer", agent: "designer", keys });
+    else if (s.designerSweepDue && config.sweepEveryH > 0) actions.push({ pool: "designer", agent: "designer", sweep: true });
+  }
+
   // Разработчики и «Продукт и не-код» — по числу готовых задач своего вида; запущенные по просьбе уже заняли часть
   for (const [pool, ready] of [
     ["dev", s.readyForDev],
@@ -270,8 +362,8 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
 
 /** Первое свободное имя: dev-1, dev-2… (тестировщик: tester, tester-2…) */
 export function freeName(base: string, taken: string[]): string {
-  if (base === "tester" && !taken.includes("tester")) return "tester";
-  for (let n = base === "tester" ? 2 : 1; n < 100; n++) if (!taken.includes(`${base}-${n}`)) return `${base}-${n}`;
+  if ((base === "tester" || base === "product" || base === "designer") && !taken.includes(base)) return base;
+  for (let n = base === "tester" || base === "product" || base === "designer" ? 2 : 1; n < 100; n++) if (!taken.includes(`${base}-${n}`)) return `${base}-${n}`;
   return `${base}-x`;
 }
 
@@ -285,8 +377,23 @@ export function runOutcome(result: { is_error?: boolean; result?: string; subtyp
 }
 
 /** Какой пул подходит задаче для кнопки «▶ Запустить воркера» в шторке: по статусу и проверке */
-export function poolForTask(t: { status: string; layer: string; testedSha?: string | null }): Pool | null {
+/**
+ * Кто исполняет задачу по её слою и статусу — «привязка» карточки к воркеру, видна в бэклоге:
+ * сейчас (следующий шаг) и в итоге (кто доведёт до результата)
+ */
+export function executorOf(t: { status: string; layer: string; blockedOn?: string | null; testedSha?: string | null }): Pool | null {
+  const next = poolForTask(t);
+  if (next) return next;
+  if (t.status === "backlog" || t.status === "blocked" || t.status === "ready" || t.status === "in_progress") return t.layer === "none" ? "nocode" : "dev";
+  return null;
+}
+
+export function poolForTask(t: { status: string; layer: string; testedSha?: string | null; blockedOn?: string | null; mockupRequired?: boolean | null; mockupApprovedBy?: string | null }): Pool | null {
+  if (t.status === "blocked" && t.blockedOn === "product") return "product";
+  if (t.status === "blocked" && t.blockedOn === "design") return "designer";
   if (t.status === "backlog" || t.status === "blocked") return "triage";
+  // Задачи с флагом «нужен макет» без утверждения — к дизайнеру, пока макет не утверждён
+  if (t.mockupRequired && !t.mockupApprovedBy) return "designer";
   if (t.status === "ready") return t.layer === "none" ? "nocode" : "dev";
   if (t.status === "review" && t.layer !== "none") return t.testedSha ? "deployer" : "tester";
   return null;

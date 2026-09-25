@@ -2,7 +2,7 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
-import { ccDeleteEpicAction, ccSaveEpicAction } from "@/server/actions/admin/cc";
+import { ccSaveEpicAction } from "@/server/actions/admin/cc";
 import { EPIC_STATUSES } from "@/lib/backlog-labels";
 import { TextInput } from "@/components/admin/fields";
 
@@ -37,7 +37,7 @@ export const EMPTY_EPIC: EpicFormValue = {
 const toLines = (v: string) => v.split("\n").map((l) => l.trim()).filter(Boolean);
 
 /** Форма эпика: создание нового и правка существующего. Правка переводит эпик на ручное ведение */
-export function EpicEditorForm({ initial, isNew, canDelete }: { initial: EpicFormValue; isNew: boolean; canDelete?: boolean }) {
+export function EpicEditorForm({ initial, isNew }: { initial: EpicFormValue; isNew: boolean }) {
   const t = useTranslations("admin.cc");
   const [v, setV] = useState(initial);
   const [error, setError] = useState<string | null>(null);
@@ -112,23 +112,6 @@ export function EpicEditorForm({ initial, isNew, canDelete }: { initial: EpicFor
         <button className="btn-primary btn-sm" disabled={pending} onClick={save}>
           {t("save")}
         </button>
-        {canDelete && (
-          <button
-            className="btn-danger btn-sm"
-            disabled={pending}
-            onClick={() =>
-              start(async () => {
-                if (!confirm(t("form.deleteConfirm"))) return;
-                const r = await ccDeleteEpicAction(v.key);
-                if (!r.ok) return setError(r.error);
-                router.push("/admin/control/epics");
-                router.refresh();
-              })
-            }
-          >
-            {t("form.delete")}
-          </button>
-        )}
       </div>
       <p className="text-xs text-muted">{t("form.sourceNote")}</p>
     </div>

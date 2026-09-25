@@ -21,12 +21,15 @@ export function Attachments({ subject, items }: { subject: { taskKey?: string; e
   const t = useTranslations("admin.cc");
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [multiFileSkipped, setMultiFileSkipped] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   const upload = (file: File) =>
     start(async () => {
       setError(null);
+      setMultiFileSkipped(false);
       const form = new FormData();
       form.set("file", file);
       if (subject.taskKey) form.set("taskKey", subject.taskKey);
@@ -40,6 +43,15 @@ export function Attachments({ subject, items }: { subject: { taskKey?: string; e
       if (inputRef.current) inputRef.current.value = "";
       router.refresh();
     });
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragOver(false);
+    const { files } = e.dataTransfer;
+    if (!files.length) return;
+    if (files.length > 1) setMultiFileSkipped(true);
+    upload(files[0]);
+  };
 
   return (
     <div>
@@ -68,19 +80,33 @@ export function Attachments({ subject, items }: { subject: { taskKey?: string; e
           </li>
         ))}
       </ul>
-      <div className="mt-3 flex items-center gap-2">
-        <input
-          ref={inputRef}
-          type="file"
-          className="text-sm"
-          disabled={pending}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) upload(file);
-          }}
-        />
+      <div
+        className={[
+          "mt-3 rounded-lg border border-dashed p-3 transition-colors",
+          dragOver ? "border-brand bg-brand-50" : "border-line",
+        ].join(" ")}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={inputRef}
+            type="file"
+            className="text-sm"
+            disabled={pending}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) upload(file);
+            }}
+          />
+          <span className="text-sm text-muted">
+            {dragOver ? t("form.dropActive") : t("form.dropHint")}
+          </span>
+        </div>
       </div>
       {error && <p className="mt-2 text-xs text-bad">{error}</p>}
+      {multiFileSkipped && !error && <p className="mt-2 text-xs text-warn">{t("form.multiFileSkipped")}</p>}
       <p className="mt-1 text-xs text-muted">{t("form.uploadHint")}</p>
     </div>
   );
