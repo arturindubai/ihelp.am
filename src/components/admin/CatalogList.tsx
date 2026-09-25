@@ -7,6 +7,7 @@ import { createServiceAction, deleteCategoryAction, deleteServiceAction, duplica
 import { tr } from "@/i18n/locales";
 import { Sheet } from "@/components/ui/Sheet";
 import { I18nInput, ImageInput, NumInput, TextInput, Toggle, type I18n } from "./fields";
+import { Img } from "@/components/Img";
 
 type Cat = { id?: string; slug: string; title: I18n; description: I18n | null; image: string | null; sort: number; active: boolean; comingSoon: boolean; services?: Svc[] };
 type Svc = { id: string; slug: string; title: string; image: string | null; active: boolean; orders: number; rating: number; reviews: number };
@@ -37,7 +38,7 @@ export function CatalogList({ categories }: { categories: Cat[] }) {
       {categories.map((c) => (
         <section key={c.id} className="card">
           <div className="flex items-center gap-3 border-b border-line p-3">
-            <img src={c.image || "/img/cat-cleaning.svg"} alt="" className="size-10 rounded-lg" />
+            <Img src={c.image || "/img/cat-cleaning.svg"} width={40} className="size-10 rounded-lg object-cover" />
             <div className="min-w-0 flex-1">
               <div className="font-semibold">{tr(c.title, locale)} <span className="text-xs font-normal text-muted">/{c.slug}</span></div>
               <div className="flex flex-wrap gap-1.5 text-xs whitespace-nowrap">
@@ -52,7 +53,7 @@ export function CatalogList({ categories }: { categories: Cat[] }) {
             {c.services?.map((s) => (
               <li key={s.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:gap-3">
                 <Link href={`/admin/services/${s.id}`} className="flex min-w-0 flex-1 items-center gap-3">
-                  <img src={s.image || "/img/svc-regular.svg"} alt="" className="size-10 shrink-0 rounded-lg object-cover" />
+                  <Img src={s.image || "/img/svc-regular.svg"} width={40} className="size-10 shrink-0 rounded-lg object-cover" />
                   <span className="min-w-0">
                     <span className="block font-medium">{s.title}</span>
                     <span className="block truncate text-xs text-muted">/{s.slug} · {t("services.bookings")}: {s.orders}{s.reviews ? ` · ★ ${s.rating.toFixed(1)}` : ""}</span>

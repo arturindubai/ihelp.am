@@ -8,6 +8,7 @@ import { amd, cn, dateLabel, durationLabel } from "@/lib/format";
 import { formatPhone } from "@/lib/phone";
 import { StatusBadge } from "@/components/account/StatusBadge";
 import { ProVisitActions } from "./ProVisitActions";
+import { Img } from "@/components/Img";
 
 export default async function ProPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { locale } = await params;
@@ -35,7 +36,7 @@ export default async function ProPage({ params, searchParams }: { params: Promis
   return (
     <div className="container-m pt-4 pb-10">
       <div className="card flex items-center gap-3 p-3">
-        <img src={master.photo || "/img/master-1.svg"} alt="" className="size-12 rounded-full" />
+        <Img src={master.photo || "/img/master-1.svg"} width={48} className="size-12 rounded-full object-cover" />
         <div className="flex-1">
           <div className="font-semibold">{tr(master.name, locale)}</div>
           <div className="text-xs text-muted">{master.reviewsCount ? `★ ${master.rating.toFixed(1)} · ${tc("reviews", { count: master.reviewsCount })}` : tc("new")} · {tc("jobs", { count: master.jobsCount })}</div>

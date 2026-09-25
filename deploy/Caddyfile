@@ -3,9 +3,6 @@
 # (только если Caddy владеет портами 80/443 хоста; на общем сервере с nginx см. README → «Подключение домена»).
 {$SITE_ADDRESS} {
 	encode gzip zstd
-	request_body {
-		max_size 10MB
-	}
 	header {
 		# ROBOTS_TAG в .env: "noindex, nofollow" до запуска, "all" — разрешить индексацию
 		X-Robots-Tag "{$ROBOTS_TAG}"
@@ -15,5 +12,18 @@
 		-Server
 		-X-Powered-By
 	}
-	reverse_proxy app:3000
+	# Размер тела запроса: везде 10 МБ, а на загрузку картинок в админке — 16 МБ
+	# (файл до 12 МБ, MAX_UPLOAD_BYTES в src/lib/images.ts, плюс служебные байты multipart)
+	handle /api/upload {
+		request_body {
+			max_size 16MB
+		}
+		reverse_proxy app:3000
+	}
+	handle {
+		request_body {
+			max_size 10MB
+		}
+		reverse_proxy app:3000
+	}
 }
