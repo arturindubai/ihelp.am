@@ -6,7 +6,7 @@ import { unreadForOwner } from "./ccMessages";
 import { recentErrors } from "../logbuffer";
 import { flowOf, intakeTitle, laneOf, nextIntakeKey, sizeOf, weekStart } from "@/lib/cc-lanes";
 import { CLOSED_STATUSES, OPEN_STATUSES } from "@/lib/cc-flow";
-import { testedCurrent } from "@/lib/workers";
+import { testedCurrent, workersState } from "@/lib/workers";
 import { Prisma } from "@prisma/client";
 
 /**
@@ -304,7 +304,7 @@ export async function healthStatus() {
     heapMb: Math.round(mem.heapUsed / 1048576),
     node: process.version,
     tickAgeMin: tick ? (Date.now() - Date.parse(tick.at)) / 60_000 : null,
-    workers: { enabled: config.enabled, dryRun: config.dryRun, pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null, running },
+    workers: { enabled: config.enabled, dryRun: config.dryRun, pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null, state: workersState(config), running },
     runs24: Object.fromEntries(runs24.map((r) => [r.status, r._count])) as Record<string, number>,
     lastDeploy,
     orders24,

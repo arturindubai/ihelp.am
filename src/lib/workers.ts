@@ -51,6 +51,8 @@ export type WorkersConfig = {
   pausedReason: string | null;
   /** Остановить уже работающих воркеров на следующем проходе диспетчера */
   stopRunning: boolean;
+  /** pausedUntil — это «План старт» владельца, а не пауза: в назначенное время диспетчер запускает всех сам */
+  plannedStart: boolean;
 };
 
 export const DEFAULT_WORKERS: WorkersConfig = {
@@ -74,6 +76,7 @@ export const DEFAULT_WORKERS: WorkersConfig = {
   pausedUntil: null,
   pausedReason: null,
   stopRunning: false,
+  plannedStart: false,
 };
 
 const clamp = (v: unknown, min: number, max: number, fallback: number) => {
@@ -110,7 +113,58 @@ export function normalizeWorkers(raw: unknown): WorkersConfig {
     pausedUntil: typeof r.pausedUntil === "string" ? r.pausedUntil : null,
     pausedReason: typeof r.pausedReason === "string" ? r.pausedReason.slice(0, 300) : null,
     stopRunning: r.stopRunning === true,
+    // Запланированный старт без времени бессмыслен: без pausedUntil — обычная работа
+    plannedStart: r.plannedStart === true && typeof r.pausedUntil === "string",
   };
+}
+
+/* ───────────── Кнопки владельца: Пауза, Стоп, Старт, План старт ───────────── */
+
+export const WORKERS_COMMANDS = ["pause", "stop", "start", "plan"] as const;
+export type WorkersCommand = (typeof WORKERS_COMMANDS)[number];
+
+/** Пауза владельца «до отмены»: далёкое будущее, снимается только кнопкой «Старт» или «План старт» */
+export const OWNER_PAUSE_YEARS = 10;
+
+export const PAUSE_REASONS = { owner: "Пауза владельца", stop: "Остановлены владельцем", planned: "Старт по плану" } as const;
+
+/** Пауза действует: pausedUntil в будущем */
+export const isPaused = (c: WorkersConfig, now = new Date()) => !!c.pausedUntil && Date.parse(c.pausedUntil) > now.getTime();
+
+/**
+ * Состояние воркеров словами для вкладки «Воркеры» и «Здоровья»:
+ * stopped — идёт остановка всех; planned — ждут запланированного старта; paused — на паузе, текущие доработают;
+ * off — общий выключатель снят; running — работают
+ */
+export type WorkersState = "running" | "paused" | "stopped" | "planned" | "off";
+export function workersState(c: WorkersConfig, now = new Date()): WorkersState {
+  if (c.stopRunning) return "stopped";
+  if (isPaused(c, now)) return c.plannedStart ? "planned" : "paused";
+  return c.enabled ? "running" : "off";
+}
+
+export type WorkersControlPatch = Partial<Omit<WorkersConfig, "pools">> & { pools?: Partial<Record<Pool, Partial<PoolConfig>>> };
+
+/**
+ * Что меняет каждая кнопка владельца — чистая функция, чтобы проверять тестами:
+ * pause — новые запуски не начинаются, текущие доработают; stop — то же плюс остановка текущих на ближайшем проходе;
+ * start — снять паузу и остановку, включить всё в режиме «Авто»; plan — как start, но с паузой до назначенного времени,
+ * после которого диспетчер стартует сам. Для plan обязательно время в будущем
+ */
+export function controlPatch(command: WorkersCommand, now: Date, at?: Date | null): WorkersControlPatch {
+  const allAuto = Object.fromEntries(POOLS.map((p) => [p, { enabled: true, mode: "auto" as Mode }])) as Record<Pool, Partial<PoolConfig>>;
+  switch (command) {
+    case "pause":
+      return { pausedUntil: new Date(now.getTime() + OWNER_PAUSE_YEARS * 365 * 86400_000).toISOString(), pausedReason: PAUSE_REASONS.owner, plannedStart: false, stopRunning: false };
+    case "stop":
+      return { pausedUntil: new Date(now.getTime() + OWNER_PAUSE_YEARS * 365 * 86400_000).toISOString(), pausedReason: PAUSE_REASONS.stop, plannedStart: false, stopRunning: true };
+    case "start":
+      return { pausedUntil: null, pausedReason: null, plannedStart: false, stopRunning: false, enabled: true, pools: allAuto };
+    case "plan": {
+      if (!at || !Number.isFinite(at.getTime()) || at.getTime() <= now.getTime()) throw new Error("plan_time_past");
+      return { pausedUntil: at.toISOString(), pausedReason: PAUSE_REASONS.planned, plannedStart: true, stopRunning: false, enabled: true, pools: allAuto };
+    }
+  }
 }
 
 /** Час по Еревану (UTC+4, без перехода на летнее время) */
