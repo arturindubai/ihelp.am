@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { normalizePhone } from "@/lib/phone";
-import { verifyTelegramWebhookSecret } from "@/lib/telegramAuth";
+import { ownPhoneFromContact, verifyTelegramWebhookSecret, type TelegramContactMessage } from "@/lib/telegramAuth";
 import { signState } from "@/server/services/oauth";
 import { sendChatMessage } from "@/server/services/telegramBot";
 
@@ -9,15 +9,12 @@ import { sendChatMessage } from "@/server/services/telegramBot";
  * Вебхук Telegram-бота — вход через бота (задача AUTH-10). Сотрудник или клиент открывает бота,
  * жмёт «Поделиться номером»; телефон уже подтверждён Telegram, поэтому бот сразу присылает
  * одноразовую ссылку входа (10 минут, /api/auth/telegram/callback).
- * X-Telegram-Bot-Api-Secret-Token обязателен: без него любой мог бы прислать чужой номер
- * телефона напрямую в этот роут и получить ссылку входа в свой чат.
+ * Два условия безопасности: X-Telegram-Bot-Api-Secret-Token обязателен (без него любой прислал бы
+ * чужой номер прямо в этот роут), а контакт должен быть собственным контактом отправителя
+ * (ownPhoneFromContact, AUTH-13) — иначе чужой контакт из адресной книги даёт вход в чужой аккаунт.
  */
 interface TelegramUpdate {
-  message?: {
-    chat: { id: number };
-    text?: string;
-    contact?: { phone_number: string };
-  };
+  message?: TelegramContactMessage & { text?: string };
 }
 
 const CONTACT_KEYBOARD = { keyboard: [[{ text: "📱 Поделиться номером", request_contact: true }]], resize_keyboard: true, one_time_keyboard: true };
@@ -30,8 +27,13 @@ export async function POST(req: Request) {
   const msg = update?.message;
   if (!msg) return NextResponse.json({ ok: true });
 
-  if (msg.contact?.phone_number) {
-    const phone = normalizePhone(msg.contact.phone_number);
+  if (msg.contact) {
+    const raw = ownPhoneFromContact(msg);
+    if (!raw) {
+      await sendChatMessage(msg.chat.id, "Отправьте свой номер кнопкой «📱 Поделиться номером» под этим сообщением — так Telegram подтверждает, что номер ваш. Чужие и пересланные контакты не подходят.", CONTACT_KEYBOARD);
+      return NextResponse.json({ ok: true });
+    }
+    const phone = normalizePhone(raw);
     const user = phone ? await db.user.findUnique({ where: { phone } }) : null;
     if (!user || user.blocked) {
       await sendChatMessage(msg.chat.id, "Этот номер не найден в iHelp. Сначала войдите на сайте по коду с этим номером, затем возвращайтесь сюда.");
