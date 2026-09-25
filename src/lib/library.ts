@@ -14,7 +14,7 @@ const PROCESS_DOCS = ["DEV_SYSTEM.md", "WORKERS.md", "CONTROL_CENTER.md", "DEPLO
 /** Вид документа репозитория по его пути */
 export function kindOfPath(path: string): LibraryKind {
   const p = path.replace(/^\.\//, "");
-  if (p === "CLAUDE.md") return "rules";
+  if (p === "CLAUDE.md" || p.startsWith("docs/canon/")) return "rules";
   if (p.startsWith("docs/roles/")) return "role";
   if (p.startsWith("docs/specs/") || p === "DESIGN.md") return "spec";
   if (p === "docs/DECISIONS.md") return "decision";

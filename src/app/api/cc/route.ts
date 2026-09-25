@@ -3,7 +3,7 @@ import { attention, getTask, listTasks, annotate, saveTask } from "@/server/serv
 import { CcError, agentActor, agentNote, claim, heartbeat, markTriaged, reviewRelease, reviewTake, testPass, transition, type TransitionInput } from "@/server/services/ccWork";
 import { dispatchPlan, pauseWorkers, runFinish, runStart, tickLog, triageQueue, workersOverview } from "@/server/services/workers";
 import { sendMessage, takeInbox } from "@/server/services/ccMessages";
-import { intakeCreate } from "@/server/services/ccBoard";
+import { intakeCreate, boardAudit } from "@/server/services/ccBoard";
 import { listEpics, getEpic } from "@/server/services/epics";
 import { DESIGNER_FIELDS, taskContentSchema } from "@/lib/cc-schema";
 import { roleOf, type TaskStatusKey } from "@/lib/cc-flow";
@@ -112,6 +112,7 @@ export async function GET(req: Request) {
     if (p.get("resource") === "attention") return json(await attention());
     if (p.get("resource") === "workers") return json(await workersOverview());
     if (p.get("resource") === "triage") return json({ tasks: await triageQueue() });
+    if (p.get("resource") === "audit") return json(await boardAudit());
     if (p.get("resource") === "inbox") {
       const agent = (p.get("agent") ?? "").trim().slice(0, 60);
       if (!agent) return json({ error: "agent_required" }, 400);

@@ -491,6 +491,8 @@ model Task {
   blockedReason String?
   /// Кто должен снять блокировку: owner | product | design | tech | external | deps
   blockedOn     String?
+  /// Статус, из которого задача заблокирована: разблокировка возвращает её туда же (проверка — на проверку)
+  blockedFrom   String?
   sort          Int       @default(0)
   /// Аренда задачи исполнителем (API /api/cc): кто держит и до какого времени. Пульс продлевает аренду
   claimedBy     String?

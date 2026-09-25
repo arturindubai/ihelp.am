@@ -57,7 +57,8 @@ export const DEFAULT_WORKERS: WorkersConfig = {
   enabled: false,
   dryRun: false,
   pools: {
-    triage: { enabled: true, max: 1, model: "sonnet", dailyCap: 12, mode: "auto", everyMin: 30 },
+    // Триаж: каждая входящая IN-N — отдельный запуск, пачка бэклога — ещё один; 12 в сутки не хватало и очередь вставала
+    triage: { enabled: true, max: 1, model: "sonnet", dailyCap: 40, mode: "auto", everyMin: 30 },
     dev: { enabled: true, max: 2, model: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
     nocode: { enabled: true, max: 1, model: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
     tester: { enabled: true, max: 1, model: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },

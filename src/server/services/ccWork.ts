@@ -3,26 +3,7 @@ import { db } from "../db";
 import { alertTech } from "../alerts";
 import { html } from "../notify";
 import { BLOCKED_ON_LABELS, STATUSES } from "@/lib/backlog-labels";
-import {
-  BLOCKED_ON,
-  CLOSED_STATUSES,
-  LEASE_MIN,
-  RETURN_AFTER_STALE_MIN,
-  canTransition,
-  doneGate,
-  isReady,
-  needsReason,
-  pickNext,
-  readiness,
-  reviewGate,
-  roleOf,
-  scopeOverlap,
-  SHA_RE,
-  watchdogPlan,
-  type CommentKind,
-  type Role,
-  type TaskStatusKey,
-} from "@/lib/cc-flow";
+import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, doneGate, isReady, needsReason, pickNext, readiness, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
 import type { Prisma, Task } from "@prisma/client";
 
 /**
@@ -89,12 +70,13 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   const task = await db.task.findUnique({ where: { key }, include: { _count: { select: { attachments: true } } } });
   if (!task) throw new CcError("not_found");
   const from = task.status;
-  const to = input.to;
   const text = input.text?.trim() ?? "";
+  const force = !!input.force && (actor.role === "owner" || actor.role === "cto");
+  // «Разблокировать» возвращает задачу туда, откуда её заблокировали; явный целевой статус — только с force
+  const to = from === "blocked" && input.to === "ready" && !force ? unblockTarget(task.blockedFrom, actor.role) : input.to;
   if (from === to) throw new CcError("same_status");
   if (to === "in_progress") throw new CcError("use_claim");
   if (!(STATUSES as Record<string, string>)[to]) throw new CcError("bad_status");
-  const force = !!input.force && (actor.role === "owner" || actor.role === "cto");
   if (!canTransition(from, to, actor.role) && !force) throw new CcError("forbidden_transition", `${from}→${to}`);
   // Триаж отменяет только входящие карточки IN-*, разобранные в настоящие задачи; остальное отменяет человек
   if (actor.role === "triage" && to === "cancelled" && !key.startsWith("IN-")) throw new CcError("forbidden_transition", "triage: cancel IN-* only");
@@ -112,10 +94,13 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   }
   if (to === "review") {
     const branch = input.branch?.trim() || task.branch;
-    const gate = reviewGate({ layer: task.layer, branch }, text);
+    // Возврат на проверку после блокировки: отчёт уже в ленте, нужна только ветка
+    const gate = from === "blocked" ? (isCodeTask(task.layer) && !branch?.trim() ? "branch_required" : null) : reviewGate({ layer: task.layer, branch }, text);
     if (gate && !force) throw new CcError(gate);
     if (branch) data.branch = branch;
   }
+  // Из блокировки обратно в бэклог — на новый разбор триажем: ответ человека мог всё изменить
+  if (from === "blocked" && to === "backlog") Object.assign(data, { triagedAt: null, triagedBy: null });
   if (to === "done") {
     const gate = doneGate({ layer: task.layer }, { sha: input.sha, text, attachments: task._count.attachments });
     if (gate && !force) throw new CcError(gate);
@@ -128,6 +113,7 @@ export async function transition(key: string, input: TransitionInput, actor: Act
     if (!(BLOCKED_ON as readonly string[]).includes(on)) throw new CcError("bad_blocked_on");
     data.blockedOn = on;
     data.blockedReason = text.slice(0, 200) || null;
+    data.blockedFrom = from;
   } else {
     data.blockedOn = null;
     data.blockedReason = null;

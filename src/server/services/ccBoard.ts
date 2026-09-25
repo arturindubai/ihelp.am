@@ -5,7 +5,7 @@ import { getTick, getWorkersConfig, requestRun } from "./workers";
 import { unreadForOwner } from "./ccMessages";
 import { recentErrors } from "../logbuffer";
 import { flowOf, intakeTitle, laneOf, nextIntakeKey, sizeOf, weekStart } from "@/lib/cc-lanes";
-import { OPEN_STATUSES } from "@/lib/cc-flow";
+import { CLOSED_STATUSES, OPEN_STATUSES } from "@/lib/cc-flow";
 import { testedCurrent } from "@/lib/workers";
 import { Prisma } from "@prisma/client";
 
@@ -202,6 +202,52 @@ export async function intakeHistory(take = 12) {
 /* ───────────── Здоровье ───────────── */
 
 /** Страница «Здоровье»: сервер, база, память, бэкапы, фоновые задачи, диспетчер и воркеры, каналы, последняя выкладка */
+/** Инварианты доски из канона (docs/canon/PROCESS.md): что потеряно или зависло. Ничего не меняет — только отчёт */
+export async function boardAudit() {
+  const AGENT = /^(triage|dev|nocode|tester|deployer|watchdog|dispatcher|cto|system)/i;
+  const [tasks, tick] = await Promise.all([
+    db.task.findMany({
+      select: {
+        key: true, status: true, layer: true, source: true, depends: true, branch: true, blockedOn: true, blockedReason: true, claimedBy: true, heartbeatAt: true, triagedAt: true,
+        comments: { orderBy: { createdAt: "desc" }, take: 1, select: { author: true, createdAt: true } },
+        events: { where: { field: "status" }, orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+      },
+    }),
+    getTick(),
+  ]);
+  const heads = tick?.heads ?? {};
+  const by = new Map(tasks.map((t) => [t.key, t]));
+  const closed = (k: string) => !by.has(k) || (CLOSED_STATUSES as readonly string[]).includes(by.get(k)!.status);
+  const found: Record<string, string[]> = {};
+  const add = (check: string, key: string) => (found[check] ??= []).push(key);
+  const hourAgo = Date.now() - 3600_000;
+  for (const t of tasks) {
+    const open = t.depends.filter((d) => !closed(d));
+    for (const d of t.depends) if (!by.has(d)) add("deps_unknown", `${t.key}→${d}`);
+    if (t.status === "blocked") {
+      if (!t.blockedOn || !t.blockedReason?.trim()) add("blocked_no_reason", t.key);
+      const last = t.comments[0];
+      const since = t.events[0]?.createdAt;
+      if (last && since && last.createdAt > since && !AGENT.test(last.author)) add("blocked_answered", t.key);
+      if (t.blockedOn === "deps" && !open.length) add("blocked_deps_closed", t.key);
+    }
+    if (t.status === "backlog" && !t.triagedAt) add("backlog_untriaged", t.key);
+    if (t.status === "ready" && open.length) add("ready_open_deps", t.key);
+    if (t.status === "review") {
+      const br = t.branch || `task/${t.key}`;
+      if (t.layer !== "none" && Object.keys(heads).length && !heads[br]) add("review_no_branch", t.key);
+      if (open.length) add("review_open_deps", t.key);
+    }
+    if (t.status === "in_progress") {
+      if (!t.claimedBy) add("in_progress_unclaimed", t.key);
+      else if (!t.heartbeatAt || t.heartbeatAt.getTime() < hourAgo) add("in_progress_stale", t.key);
+    }
+    if (t.key.startsWith("IN-") && !(CLOSED_STATUSES as readonly string[]).includes(t.status) && t.status !== "blocked") add("intake_open", t.key);
+  }
+  const checks = Object.entries(found).map(([id, keys]) => ({ id, keys })).sort((a, b) => b.keys.length - a.keys.length);
+  return { total: tasks.length, byStatus: Object.fromEntries(Object.entries(tasks.reduce<Record<string, number>>((m, t) => ((m[t.status] = (m[t.status] ?? 0) + 1), m), {}))), checks, at: new Date().toISOString() };
+}
+
 export async function healthStatus() {
   const t0 = Date.now();
   let dbMs: number | null = null;

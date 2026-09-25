@@ -3,6 +3,13 @@ import { diffHunks, diffLines, diffStat, kindOfPath, titleOf } from "./library";
 import { parseInline, parseMarkdown } from "./markdown";
 import { KEYS, cleanKeyValue, isTelegramBotToken } from "./keys";
 
+describe("канон", () => {
+  it("документы docs/canon — правила", () => {
+    expect(kindOfPath("docs/canon/PROCESS.md")).toBe("rules");
+    expect(kindOfPath("docs/canon/TECH.md")).toBe("rules");
+  });
+});
+
 describe("Библиотека: вид и заголовок документа", () => {
   it("вид по пути: правила, роли, процесс, решения, спецификации, знания", () => {
     expect(kindOfPath("CLAUDE.md")).toBe("rules");

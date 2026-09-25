@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canTransition,
+  unblockTarget,
   doneGate,
   isReady,
   needsReason,
@@ -34,6 +35,17 @@ const task = (patch: Partial<HealthTask> = {}): HealthTask => ({
   rework: 0,
   reclaims: 0,
   ...patch,
+});
+
+describe("разблокировка", () => {
+  it("возвращает задачу туда, откуда заблокирована", () => {
+    expect(unblockTarget("review", "owner")).toBe("review");
+    expect(unblockTarget("review", "dev")).toBe("review");
+    expect(unblockTarget("backlog", "triage")).toBe("backlog");
+    expect(unblockTarget("backlog", "dev")).toBe("ready");
+    expect(unblockTarget("in_progress", "owner")).toBe("ready");
+    expect(unblockTarget(null, "owner")).toBe("ready");
+  });
 });
 
 describe("сторож и проверка", () => {
