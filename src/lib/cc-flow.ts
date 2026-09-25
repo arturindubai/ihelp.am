@@ -55,7 +55,8 @@ export function roleOf(agent: string): Role {
 const PLAN: Role[] = ["owner", "cto", "product"];
 /** Триаж решает судьбу новой карточки: в очередь, обратно в бэклог. Отменять может только входящие IN-* (проверка в сервисе) */
 const TRIAGE: Role[] = [...PLAN, "triage"];
-const WORK: Role[] = ["dev", "nocode", "cto", "owner"];
+// Дизайнер тоже сдаёт свою задачу (прототип, дизайн-исследование) и передаёт её, как не-код
+const WORK: Role[] = ["dev", "nocode", "designer", "cto", "owner"];
 const RELEASE: Role[] = ["deployer", "owner"];
 const ANY: Role[] = ["owner", "cto", "product", "designer", "triage", "dev", "nocode", "tester", "deployer", "watchdog"];
 
@@ -119,6 +120,8 @@ type TaskShape = {
   estimate?: string | null;
   epicKey?: string | null;
   scope?: string[];
+  mockupRequired?: boolean;
+  mockupApprovedBy?: string | null;
 };
 
 export type CheckItem = { key: string; ok: boolean; hard: boolean };
@@ -137,6 +140,7 @@ export function readiness(t: TaskShape, closedKeys: Set<string>, attachments = 0
     { key: "needs", ok: t.needs.length === 0, hard: false },
     { key: "deps", ok: t.depends.every((d) => closedKeys.has(d)), hard: false },
     { key: "design", ok: !isUi || !!t.design?.trim() || attachments > 0, hard: false },
+    { key: "mockup", ok: !t.mockupRequired || !!t.mockupApprovedBy, hard: true },
     { key: "size", ok: !!t.estimate && t.estimate !== "L", hard: false },
     { key: "scope", ok: t.layer === "none" || (t.scope?.length ?? 0) > 0, hard: false },
   ];
