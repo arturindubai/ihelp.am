@@ -334,6 +334,7 @@ model Visit {
   price           Int
   cashCollected   Boolean     @default(false)
   cashCollectedAt DateTime?
+  departedAt      DateTime?
   startedAt       DateTime?
   finishedAt      DateTime?
   remindedAt      DateTime?
