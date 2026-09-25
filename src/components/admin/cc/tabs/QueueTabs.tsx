@@ -9,7 +9,7 @@ import { LANES } from "@/lib/cc-lanes";
 import { Card } from "@/components/admin/fields";
 import { QuickMove } from "@/components/admin/cc/TaskControls";
 import { silentLabel } from "@/components/admin/cc/TaskBadges";
-import { ApprovalButtons, ApproveAllButton, RunWorkerButton } from "@/components/admin/cc/CcControls";
+import { ApprovalButtons, ApproveAllButton, CommentButton, RejectAllButton, ReturnAllButton, RunWorkerButton } from "@/components/admin/cc/CcControls";
 import { Empty, LANE_DOT, PRIORITY_TONE, RUN_TONE, TaskLine, ago } from "./shared";
 import { cn } from "@/lib/format";
 
@@ -215,7 +215,13 @@ export async function ApprovalsTab({ taskHref }: { taskHref: Href }) {
                 </span>
               </span>
             }
-            actions={<ApproveAllButton keys={list.map((x) => x.key)} label={ta("approveAll")} />}
+            actions={
+              <span className="flex flex-wrap items-center gap-1.5">
+                <ApproveAllButton keys={list.map((x) => x.key)} label={ta("approveAll")} />
+                <ReturnAllButton keys={list.map((x) => x.key)} label={ta("returnAll")} />
+                <RejectAllButton keys={list.map((x) => x.key)} label={ta("rejectAll")} />
+              </span>
+            }
           >
             <ul className="divide-y divide-line">
               {list.map((x) => {
@@ -236,7 +242,10 @@ export async function ApprovalsTab({ taskHref }: { taskHref: Href }) {
                         {x._count.attachments ? ` · 📎 ${x._count.attachments}` : ""}
                       </span>
                     </Link>
-                    <ApprovalButtons taskKey={x.key} />
+                    <div className="flex flex-col items-end gap-1">
+                      <ApprovalButtons taskKey={x.key} />
+                      <CommentButton taskKey={x.key} />
+                    </div>
                   </li>
                 );
               })}

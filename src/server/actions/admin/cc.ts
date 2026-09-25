@@ -290,6 +290,48 @@ export async function ccApproveManyAction(keys: string[]) {
   return { ok: true as const, done, failed };
 }
 
+/** «Вернуть все» в Согласованиях: массовый возврат задач дорожки на доработку с причиной */
+export async function ccReturnManyAction(keys: string[], text: string) {
+  const u = await requireSection("control");
+  const list = z.array(z.string().max(30)).max(50).safeParse(keys);
+  const reason = z.string().trim().min(5).max(5000).safeParse(text);
+  if (!list.success || !reason.success) return { ok: false as const, error: "invalid" };
+  const done: string[] = [];
+  const failed: string[] = [];
+  for (const key of list.data) {
+    try {
+      await transition(key, { to: "ready", text: reason.data }, { name: who(u), role: "owner", via: "ui" });
+      done.push(key);
+    } catch {
+      failed.push(key);
+    }
+  }
+  await audit(u.id, "cc.return_many", "Task", done.join(","), { failed });
+  rAll();
+  return { ok: true as const, done, failed };
+}
+
+/** «Отклонить все» в Согласованиях: массовое отклонение задач дорожки с причиной */
+export async function ccRejectManyAction(keys: string[], text: string) {
+  const u = await requireSection("control");
+  const list = z.array(z.string().max(30)).max(50).safeParse(keys);
+  const reason = z.string().trim().min(5).max(5000).safeParse(text);
+  if (!list.success || !reason.success) return { ok: false as const, error: "invalid" };
+  const done: string[] = [];
+  const failed: string[] = [];
+  for (const key of list.data) {
+    try {
+      await transition(key, { to: "cancelled", text: reason.data }, { name: who(u), role: "owner", via: "ui" });
+      done.push(key);
+    } catch {
+      failed.push(key);
+    }
+  }
+  await audit(u.id, "cc.reject_many", "Task", done.join(","), { failed });
+  rAll();
+  return { ok: true as const, done, failed };
+}
+
 /* ───── Ключи (как Secrets в LIA) ───── */
 
 const keyPath = z.string().max(80);
