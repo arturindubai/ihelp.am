@@ -271,11 +271,12 @@ const roleForTask = (t) => (t.layer === "none" ? "nocode" : "dev");
 function finishSteps(role, t, agent, dir) {
   const k = t.key;
   if (role === "tester")
-    return `1. Проверь по docs/roles/TESTER.md: scripts/check.sh, критерии приёмки, соглашения, стенд для интерфейса и денег.
-2. Прошло — node scripts/cc.mjs pass ${k} "Проверено: … Как: … Скриншоты: …" --agent ${agent}
-3. Не прошло — node scripts/cc.mjs fail ${k} "Что не так: … Как воспроизвести: … Что ожидалось: …" --agent ${agent}
-4. Нужен человек — node scripts/cc.mjs block ${k} "вопрос" --on owner|product|tech --agent ${agent}
-5. Стенд, если поднимал, — scripts/stand.sh down. Код не чинить, не мёрджить, не выкладывать.`;
+    return `Рабочая копия — коммит ветки, скриптов последней версии в ней может не быть: инструменты бери из /opt/ihelp.am по полному пути, запускай из текущей папки.
+1. Проверь по /opt/ihelp.am/docs/roles/TESTER.md: bash /opt/ihelp.am/scripts/check.sh, критерии приёмки, соглашения, стенд для интерфейса и денег (bash /opt/ihelp.am/scripts/stand.sh up, node /opt/ihelp.am/scripts/stand-shot.mjs /ru/…).
+2. Прошло — node /opt/ihelp.am/scripts/cc.mjs pass ${k} "Проверено: … Как: … Скриншоты: …" --agent ${agent}
+3. Не прошло — node /opt/ihelp.am/scripts/cc.mjs fail ${k} "Что не так: … Как воспроизвести: … Что ожидалось: …" --agent ${agent}
+4. Нужен человек — node /opt/ihelp.am/scripts/cc.mjs block ${k} "вопрос" --on owner|product|tech --agent ${agent}
+5. Стенд, если поднимал, — bash /opt/ihelp.am/scripts/stand.sh down. Код не чинить, не мёрджить, не выкладывать. Без pass/fail проверка не засчитывается.`;
   if (role === "nocode")
     return `1. Результат — в карточке: файлы проекта не правь, ветку не создавай. Материал (инструкция, тексты, расчёт, таблица, ссылки на источники) — в отчёте сдачи.
 2. Шаги, которые может сделать только человек (аккаунт, оплата, пароль, DNS у регистратора), не делай: node scripts/cc.mjs block ${k} "Что сделать: 1) … 2) … Зачем: …" --on owner --agent ${agent}. После ответа задача вернётся в очередь.

@@ -9,7 +9,9 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+// Корень — текущая папка, если это рабочая копия: тот же выбор, что у scripts/stand.sh
+const here = process.cwd();
+const root = fs.existsSync(path.join(here, "package.json")) && fs.existsSync(path.join(here, "prisma")) ? here : path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const common = execFileSync("git", ["-C", root, "rev-parse", "--path-format=absolute", "--git-common-dir"], { encoding: "utf8" }).trim();
 const name = `ihelp-stand-${path.basename(root).toLowerCase().replace(/[^a-z0-9-]/g, "-")}`;
 const infoPath = path.join(common, "cc", "stands", `${name}.json`);

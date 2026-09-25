@@ -22,6 +22,7 @@ const QUEUE_TONE: Record<string, string> = {
   needs: "bg-warn-50 text-warn",
   people: "bg-surface text-muted",
   nobranch: "bg-bad-50 text-bad",
+  holding: "bg-warn-50 text-warn",
 };
 
 const SHOW = 8;

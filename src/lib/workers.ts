@@ -118,6 +118,8 @@ export type ReviewTask = {
   /** Кто сейчас держит задачу на проверке: тестировщик или деплоер */
   claimedBy: string | null;
   claimUntil: Date | null;
+  /** Тестировщик недавно закончил без вердикта: до этого времени задачу ему снова не даём */
+  testHoldUntil?: Date | null;
 };
 
 /** Просьба человека запустить пул сейчас — кнопка «Запустить сейчас» или «▶ Запустить воркера» в шторке задачи */
@@ -168,10 +170,13 @@ export const testedCurrent = (t: ReviewTask, heads: Record<string, string>) =>
 /** Очереди проверки: что ждёт тестировщика, что готово к выкладке, что сейчас кто-то держит */
 export function reviewQueues(review: ReviewTask[], heads: Record<string, string>, now = new Date()) {
   const onBranch = review.filter((t) => !!t.branch && !!heads[t.branch]);
+  const holding = (t: ReviewTask) => !!t.testHoldUntil && t.testHoldUntil > now;
   return {
-    test: onBranch.filter((t) => !testedCurrent(t, heads) && !leaseAlive(t, now)),
+    test: onBranch.filter((t) => !testedCurrent(t, heads) && !leaseAlive(t, now) && !holding(t)),
     deploy: onBranch.filter((t) => testedCurrent(t, heads) && !leaseAlive(t, now)),
     held: review.filter((t) => leaseAlive(t, now)),
+    /** Запуск тестировщика закончился без вердикта — пауза, чтобы не гонять одну задачу по кругу */
+    holding: onBranch.filter((t) => !testedCurrent(t, heads) && !leaseAlive(t, now) && holding(t)),
     noBranch: review.filter((t) => !t.branch || !heads[t.branch]),
   };
 }

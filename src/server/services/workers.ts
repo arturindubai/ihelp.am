@@ -3,6 +3,7 @@ import { db } from "../db";
 import { alertTech } from "../alerts";
 import { html } from "../notify";
 import { CLOSED_STATUSES, pickNext, scopeOverlap } from "@/lib/cc-flow";
+import { transition, WATCHDOG } from "./ccWork";
 import { normalizeWorkers, planDispatch, POOLS, reviewQueues, yerevanHour, type DispatchAction, type DispatchState, type Pool, type RunRequest, type WorkersConfig } from "@/lib/workers";
 
 /**
@@ -160,14 +161,45 @@ export async function readyForAutoNocode() {
   return takeable(await readyQueue("nocode"));
 }
 
-/** Код-задачи «На проверке». Старые карточки сданы без записи ветки — по правилам проекта она task/<КЛЮЧ> */
+/** Запуск тестировщика без вердикта — задачу ему снова не даём столько минут */
+const TEST_HOLD_MIN = 60;
+
+/**
+ * Код-задачи «На проверке». Старые карточки сданы без записи ветки — по правилам проекта она task/<КЛЮЧ>.
+ * Если тестировщик недавно закончил на задаче без pass/fail, ей ставится пауза — иначе он гоняет её по кругу
+ */
 async function reviewTasks() {
-  const rows = await db.task.findMany({
-    where: { status: "review", layer: { not: "none" } },
-    select: { key: true, title: true, branch: true, testedSha: true, testedBy: true, claimedBy: true, claimUntil: true, priority: true },
-    orderBy: [{ priority: "asc" }, { sort: "asc" }],
+  const since = new Date(Date.now() - TEST_HOLD_MIN * 60_000);
+  const [rows, recent] = await Promise.all([
+    db.task.findMany({
+      where: { status: "review", layer: { not: "none" } },
+      select: { key: true, title: true, branch: true, testedSha: true, testedAt: true, testedBy: true, claimedBy: true, claimUntil: true, priority: true },
+      orderBy: [{ priority: "asc" }, { sort: "asc" }],
+    }),
+    db.workerRun.findMany({ where: { pool: "tester", status: { not: "running" }, finishedAt: { gte: since }, taskKey: { not: null } }, select: { taskKey: true, finishedAt: true }, orderBy: { finishedAt: "desc" } }),
+  ]);
+  const lastRun = new Map<string, Date>();
+  for (const r of recent) if (r.taskKey && r.finishedAt && !lastRun.has(r.taskKey)) lastRun.set(r.taskKey, r.finishedAt);
+  return rows.map((t) => {
+    const ended = lastRun.get(t.key);
+    const noVerdict = !!ended && (!t.testedAt || t.testedAt < ended);
+    return { ...t, branch: t.branch || `task/${t.key}`, testHoldUntil: noVerdict ? new Date(ended.getTime() + TEST_HOLD_MIN * 60_000) : null };
   });
-  return rows.map((t) => ({ ...t, branch: t.branch || `task/${t.key}` }));
+}
+
+/**
+ * Тестировщик закончил, а вердикта нет. Один раз — пауза (reviewTasks); второй раз на том же коммите —
+ * задача блокируется на техдиректоре с последним отчётом: значит, воркеру что-то мешает, крутить дальше бессмысленно
+ */
+async function testerWithoutVerdict(run: { taskKey: string | null; startedAt: Date; summary: string | null }) {
+  if (!run.taskKey) return;
+  const t = await db.task.findUnique({ where: { key: run.taskKey }, select: { status: true, testedAt: true } });
+  if (!t || t.status !== "review" || (t.testedAt && t.testedAt >= run.startedAt)) return;
+  const lastVerdict = await db.taskEvent.findFirst({ where: { task: { key: run.taskKey }, field: { in: ["tested", "status"] } }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
+  const runs = await db.workerRun.count({ where: { pool: "tester", taskKey: run.taskKey, status: { not: "running" }, startedAt: { gte: lastVerdict?.createdAt ?? new Date(0) } } });
+  if (runs < 2) return;
+  const why = `Тестировщик дважды закончил без вердикта (pass/fail): что-то мешает проверке — команды, стенд или сама задача. Последний отчёт: ${(run.summary ?? "").slice(0, 500)}`;
+  await transition(run.taskKey, { to: "blocked", blockedOn: "tech", text: why }, WATCHDOG).catch((e) => console.warn(`[workers] ${run.taskKey}: не удалось заблокировать — ${(e as Error).message}`));
 }
 
 /** Когда пора пересмотреть весь бэклог: с прошлого обзора прошло sweepEveryH часов */
@@ -283,6 +315,7 @@ export async function runFinish(id: string, r: RunFinish) {
       finishedAt: new Date(),
     },
   });
+  if (run.pool === "tester") await testerWithoutVerdict(run);
   // Неудачный запуск — сигнал в тех-чат: воркер мог оставить задачу на полпути
   if (status === "failed" || status === "timeout") {
     await alertTech(`workers:${run.pool}:${status}`, html`${OUTCOME_ICON[status]} <b>Воркер ${run.agent}</b> ${status === "timeout" ? "не уложился во время" : "завершился с ошибкой"}${run.taskKey ? ` · ${run.taskKey}` : ""}\n${(r.summary ?? "").slice(0, 300)}`, 30);
@@ -339,6 +372,7 @@ export async function workersOverview() {
       tester: [
         ...q.held.filter((t) => t.claimedBy !== "deployer").map((t) => item(t.key, "held", t.claimedBy ?? "")),
         ...q.test.map((t) => item(t.key, t.testedSha ? "retest" : "test")),
+        ...q.holding.map((t) => item(t.key, "holding", new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Yerevan", hour: "2-digit", minute: "2-digit" }).format(t.testHoldUntil!))),
         ...q.noBranch.filter((t) => !q.held.includes(t)).map((t) => item(t.key, "nobranch")),
       ],
       deployer: [...q.held.filter((t) => t.claimedBy === "deployer").map((t) => item(t.key, "held", "deployer")), ...q.deploy.map((t) => item(t.key, "deploy", byKey.get(t.key)?.testedBy ?? ""))],

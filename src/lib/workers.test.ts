@@ -170,6 +170,12 @@ describe("«Запустить сейчас»", () => {
 
 describe("очереди и выбор пула", () => {
   it("очереди проверки делятся на тест, выкладку, занятые и без ветки", () => {
+    const q0 = reviewQueues(
+      [review("H", { testHoldUntil: new Date(Date.now() + 3600_000) }), review("P", { testHoldUntil: new Date(Date.now() - 1) })],
+      { "task/H": "aaa", "task/P": "bbb" },
+    );
+    expect(q0.test.map((t) => t.key)).toEqual(["P"]);
+    expect(q0.holding.map((t) => t.key)).toEqual(["H"]);
     const q = reviewQueues(
       [review("A"), review("B", { testedSha: "bbb" }), review("C", { claimedBy: "tester", claimUntil: new Date(noon.getTime() + 1000) }), review("D", { branch: null })],
       { "task/A": "aaa", "task/B": "bbb", "task/C": "ccc" },
