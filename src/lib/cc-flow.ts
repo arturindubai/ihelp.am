@@ -96,6 +96,8 @@ type TaskShape = {
   estimate?: string | null;
   epicKey?: string | null;
   scope?: string[];
+  mockupRequired?: boolean;
+  mockupApprovedBy?: string | null;
 };
 
 export type CheckItem = { key: string; ok: boolean; hard: boolean };
@@ -114,6 +116,7 @@ export function readiness(t: TaskShape, closedKeys: Set<string>, attachments = 0
     { key: "needs", ok: t.needs.length === 0, hard: false },
     { key: "deps", ok: t.depends.every((d) => closedKeys.has(d)), hard: false },
     { key: "design", ok: !isUi || !!t.design?.trim() || attachments > 0, hard: false },
+    { key: "mockup", ok: !t.mockupRequired || !!t.mockupApprovedBy, hard: true },
     { key: "size", ok: !!t.estimate && t.estimate !== "L", hard: false },
     { key: "scope", ok: t.layer === "none" || (t.scope?.length ?? 0) > 0, hard: false },
   ];

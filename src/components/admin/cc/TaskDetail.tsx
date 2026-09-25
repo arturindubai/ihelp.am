@@ -7,6 +7,7 @@ import { AREAS, BLOCKED_ON_LABELS, COMMENT_KIND_LABELS, LAYERS, OWNERS, PRIORITI
 import { nextStatuses } from "@/lib/cc-flow";
 import { Card } from "@/components/admin/fields";
 import { CommentForm, QuickMove, STATUS_TONE, TaskEditor, TransitionPanel } from "@/components/admin/cc/TaskControls";
+import { MockupApproveButton } from "@/components/admin/cc/CcControls";
 import { TaskEditorForm } from "@/components/admin/cc/TaskEditorForm";
 import { Attachments } from "@/components/admin/cc/Attachments";
 import { Collapsible } from "@/components/admin/cc/Collapsible";
@@ -244,6 +245,8 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
                   owner: task.owner,
                   estimate: task.estimate ?? "",
                   scope: task.scope.join("\n"),
+                  mockupRequired: task.mockupRequired,
+                  mockupUrl: task.mockupUrl ?? "",
                 }}
               />
             </Card>
@@ -327,6 +330,26 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
                 </>
               ) : (
                 <p className="text-xs text-brand">{t("triage.waiting")}</p>
+              )}
+            </Card>
+          )}
+
+          {task.mockupRequired && (
+            <Card title={t("mockup.title")}>
+              {task.mockupApprovedBy ? (
+                <p className="text-xs text-ok">
+                  ✓ {t("mockup.approvedBy", { who: task.mockupApprovedBy, date: when(task.mockupApprovedAt!) })}
+                </p>
+              ) : (
+                <>
+                  <p className="mb-2 text-xs text-bad">{t("mockup.pending")}</p>
+                  {task.mockupUrl && (
+                    <a href={task.mockupUrl} target="_blank" rel="noreferrer" className="mb-2 flex items-center gap-1 text-xs text-brand hover:underline">
+                      <ExternalLink size={11} /> {t("mockup.link")}
+                    </a>
+                  )}
+                  <MockupApproveButton taskKey={task.key} />
+                </>
               )}
             </Card>
           )}

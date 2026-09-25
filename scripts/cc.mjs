@@ -64,6 +64,9 @@ const HELP = `cc — Control Center из командной строки (docs/D
   lock КЛЮЧ / unlock КЛЮЧ                        держать задачу на время выкладки / отпустить
   (выкладка одной задачи целиком — scripts/deploy-task.sh КЛЮЧ)
 
+Гейт макета (--agent owner|cto|product):
+  mockup КЛЮЧ ["комментарий"]                    утвердить макет задачи; снимает гейт «нужен макет»
+
 Уборка:
   gc                                            убрать worktree закрытых задач (только чистые и влитые)
 
@@ -210,6 +213,10 @@ function printTask(d) {
   if (d.blocking?.length) out.push(`Ждут её: ${d.blocking.map((b) => b.key).join(", ")}`);
   if (t.docs?.length) out.push(`Документы: ${t.docs.join(", ")}`);
   if (d.attachments?.length) out.push(`Файлы: ${d.attachments.map((a) => a.fileName).join(", ")} (смотреть в Control Center)`);
+  if (t.mockupRequired) {
+    const mStatus = t.mockupApprovedBy ? `✓ утверждён (${t.mockupApprovedBy})` : "✗ НЕ утверждён — задачу нельзя взять в работу";
+    out.push("", `Макет: ${mStatus}${t.mockupUrl ? ` · ${t.mockupUrl}` : ""}`);
+  }
   if (t.claimedBy) out.push("", `Держит: ${t.claimedBy} до ${new Date(t.claimUntil).toLocaleString("ru-RU", { timeZone: "Asia/Yerevan" })}${d.health?.stale ? " — аренда истекла" : ""}`);
   if (t.branch) out.push(`Ветка: ${t.branch}`);
   if (t.blockedReason) out.push(`Блокировка (${t.blockedOn ?? "?"}): ${t.blockedReason}`);
@@ -587,6 +594,12 @@ async function main() {
       if (text().length < 10) die("нужен вердикт словами: что проверено и что решено (в очередь, вопрос, отложено, разбито на …)");
       await api("POST", null, { action: "triaged", agent: agentFor(k), key: k, text: text() });
       console.log(`✓ ${k} разобрана триажем`);
+      return;
+    }
+    case "mockup": {
+      const k = needKey();
+      await api("POST", null, { action: "approve-mockup", agent: agentFor(k), key: k, text: text() });
+      console.log(`✓ ${k}: макет утверждён`);
       return;
     }
     case "lib": {

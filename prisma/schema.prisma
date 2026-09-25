@@ -520,6 +520,14 @@ model Task {
   triageNote    String?
   startedAt     DateTime?
   doneAt        DateTime?
+  /// Нужен макет до начала работы: ставит триаж, владелец или техдиректор; задача не уходит в «В очереди» без утверждённого макета (гейт — src/lib/cc-flow.ts)
+  mockupRequired    Boolean   @default(false)
+  /// Ссылка на макет (Figma, страница стенда) или имя прикреплённого файла — чтобы не открывать вложения по одному
+  mockupUrl         String?
+  /// Кто утвердил макет
+  mockupApprovedBy  String?
+  /// Когда утвердили макет
+  mockupApprovedAt  DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

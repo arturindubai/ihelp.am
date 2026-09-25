@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { attention, getTask, listTasks, annotate, saveTask } from "@/server/services/cc";
-import { CcError, agentActor, agentNote, claim, heartbeat, markTriaged, reviewRelease, reviewTake, testPass, transition, type TransitionInput } from "@/server/services/ccWork";
+import { CcError, agentActor, agentNote, claim, heartbeat, markTriaged, reviewRelease, reviewTake, testPass, transition, approveMockup, type TransitionInput } from "@/server/services/ccWork";
 import { dispatchPlan, pauseWorkers, runFinish, runStart, tickLog, triageQueue, workersOverview } from "@/server/services/workers";
 import { sendMessage, takeInbox } from "@/server/services/ccMessages";
 import { intakeCreate } from "@/server/services/ccBoard";
@@ -91,6 +91,10 @@ const full = (t: Task) => ({
   testedSha: t.testedSha,
   testedBy: t.testedBy,
   testedAt: t.testedAt,
+  mockupRequired: t.mockupRequired,
+  mockupUrl: t.mockupUrl,
+  mockupApprovedBy: t.mockupApprovedBy,
+  mockupApprovedAt: t.mockupApprovedAt,
 });
 
 export async function GET(req: Request) {
@@ -231,6 +235,14 @@ export async function POST(req: Request) {
         }
         const until = new Date(str(body.until) ?? Date.now() + 3600_000);
         return json({ ok: true, config: await pauseWorkers(Number.isNaN(until.getTime()) ? new Date(Date.now() + 3600_000) : until, text || "лимит подписки") });
+      }
+      // Утверждение макета: только владелец, техдиректор и продукт; пишет в ленту с автором
+      case "approve-mockup": {
+        if (!key) return json({ error: "key_required" }, 400);
+        const role = roleOf(agent);
+        if (!["owner", "cto", "product"].includes(role)) return json({ error: "forbidden_role", detail: role }, 403);
+        const task = await approveMockup(key, agent, text || null);
+        return json({ ok: true, task: brief(task) });
       }
       // Триаж: отметка «карточка разобрана» с вердиктом в ленте
       case "triaged": {
