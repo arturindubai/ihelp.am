@@ -374,6 +374,7 @@
       "banners": "Баннеры",
       "pages": "Страницы",
       "translations": "Тексты и переводы",
+      "analytics": "Аналитика",
       "settings": "Настройки",
       "staff": "Сотрудники",
       "log": "Журнал",
@@ -454,6 +455,16 @@
       "cashPending": "Наличные к сдаче",
       "upcoming": "Ближайшие визиты",
       "recentOrders": "Последние заказы"
+    },
+    "analytics": {
+      "title": "Аналитика",
+      "sub": "Выгрузка метрик юнит-экономики",
+      "hint": "Выберите диапазон дат и скачайте CSV для расчётов в Excel или Google Sheets.",
+      "from": "Начало периода",
+      "to": "Конец периода",
+      "download": "Скачать CSV",
+      "loading": "Формируется…",
+      "columns": "Столбцы: date, orders_count, revenue_amd, master_utilization_pct, first_visit_ratio_pct — одна строка на день."
     },
     "orders": {
       "title": "Заказы",
