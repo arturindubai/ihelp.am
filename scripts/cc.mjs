@@ -47,6 +47,9 @@ const HELP = `cc — Control Center из командной строки (docs/D
 Библиотека (знания, инструкции, решения — Control Center → «Библиотека»):
   lib [--kind knowledge|rules|role|process|decision|spec] [--q слово]   список документов
   lib <slug>                                    текущий текст документа (slug — путь в репозитории или note-…)
+  lib add --title "…" --kind knowledge --file запись.md   новая запись команды (виды: rules role process decision spec knowledge)
+  lib update <slug> --file запись.md [--title "…"] [--note "что изменили"]   новая версия записи команды (note-…)
+  attach КЛЮЧ --file макет.png [--mockup]     приложить файл к задаче (PNG, JPG, PDF…); --mockup — записать ссылку в mockupUrl
 
 Сообщения:
   msg "текст" --to owner|cto|workers|triage|dev|tester|deployer [--key КЛЮЧ]
@@ -63,6 +66,9 @@ const HELP = `cc — Control Center из командной строки (docs/D
   done КЛЮЧ --sha КОММИТ "что проверено после выкладки"
   lock КЛЮЧ / unlock КЛЮЧ                        держать задачу на время выкладки / отпустить
   (выкладка одной задачи целиком — scripts/deploy-task.sh КЛЮЧ)
+
+Гейт макета (--agent owner|cto|product):
+  mockup КЛЮЧ ["комментарий"]                    утвердить макет задачи; снимает гейт «нужен макет»
 
 Уборка:
   gc                                            убрать worktree закрытых задач (только чистые и влитые)
@@ -180,6 +186,7 @@ function hint(code) {
     branch_required: "\n  Отправьте ветку: git push -u origin task/<КЛЮЧ>.",
     report_required: "\n  Отчёт от 40 символов: что сделано, как проверено, как проверить деплоеру.",
     not_ready: "\n  Не выполнены обязательные пункты готовности — см. show КЛЮЧ.",
+    mockup_required: "\n  Макет не утверждён — утвердите в Control Center (Согласования) командой: node scripts/cc.mjs mockup КЛЮЧ.",
     sha_required: "\n  Нужен коммит в main: --sha <коммит>.",
     reason_required: "\n  Этот переход требует причину словами.",
     forbidden_transition: "\n  Этой роли такой переход не разрешён (docs/DEV_SYSTEM.md, раздел «Статусы»).",
@@ -210,6 +217,10 @@ function printTask(d) {
   if (d.blocking?.length) out.push(`Ждут её: ${d.blocking.map((b) => b.key).join(", ")}`);
   if (t.docs?.length) out.push(`Документы: ${t.docs.join(", ")}`);
   if (d.attachments?.length) out.push(`Файлы: ${d.attachments.map((a) => a.fileName).join(", ")} (смотреть в Control Center)`);
+  if (t.mockupRequired) {
+    const mStatus = t.mockupApprovedBy ? `✓ утверждён (${t.mockupApprovedBy})` : "✗ НЕ утверждён — задачу нельзя взять в работу";
+    out.push("", `Макет: ${mStatus}${t.mockupUrl ? ` · ${t.mockupUrl}` : ""}`);
+  }
   if (t.claimedBy) out.push("", `Держит: ${t.claimedBy} до ${new Date(t.claimUntil).toLocaleString("ru-RU", { timeZone: "Asia/Yerevan" })}${d.health?.stale ? " — аренда истекла" : ""}`);
   if (t.branch) out.push(`Ветка: ${t.branch}`);
   if (t.blockedReason) out.push(`Блокировка (${t.blockedOn ?? "?"}): ${t.blockedReason}`);
@@ -590,8 +601,55 @@ async function main() {
       console.log(`✓ ${k} разобрана триажем`);
       return;
     }
+    case "mockup": {
+      const k = needKey();
+      await api("POST", null, { action: "approve-mockup", agent: agentFor(k), key: k, text: text() });
+      console.log(`✓ ${k}: макет утверждён`);
+      return;
+    }
+    case "attach": {
+      const k = needKey();
+      const file = typeof flags.file === "string" ? flags.file : null;
+      if (!file || !fs.existsSync(file)) die("нужен файл: attach КЛЮЧ --file макет.png");
+      const MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif", svg: "image/svg+xml", pdf: "application/pdf", txt: "text/plain", md: "text/markdown", zip: "application/zip" };
+      const ext = path.extname(file).slice(1).toLowerCase();
+      if (!MIME[ext]) die(`тип файла .${ext} не принимается: ${Object.keys(MIME).join(", ")}`);
+      const form = new FormData();
+      form.set("file", new Blob([fs.readFileSync(file)], { type: MIME[ext] }), path.basename(file));
+      form.set("taskKey", k);
+      form.set("agent", agentFor(k));
+      const base = URL_BASE.replace(/\/api\/cc\/?$/, "/api/cc/upload");
+      const res = await fetch(base, { method: "POST", headers: { "x-cc-key": KEY }, body: form, signal: AbortSignal.timeout(60000) }).catch((e) => die(`загрузка не удалась: ${e.message}`));
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) die(d.error ?? res.status);
+      console.log(`✓ ${k}: приложен ${d.attachment.fileName} → ${d.attachment.url}`);
+      if (flags.mockup) {
+        await api("POST", null, { action: "update", agent: agentFor(k), key: k, task: { mockupUrl: d.attachment.url } });
+        console.log(`✓ ${k}: ссылка на макет записана`);
+      }
+      return;
+    }
     case "lib": {
       const base = URL_BASE.replace(/\/api\/cc\/?$/, "/api/cc/library");
+      if (pos[0] === "update") {
+        const slug = pos[1];
+        const file = typeof flags.file === "string" ? flags.file : null;
+        if (!slug || !file || !fs.existsSync(file)) die("нужны slug записи и файл с текстом: lib update note-… --file запись.md");
+        const body = { slug, title: typeof flags.title === "string" ? flags.title : undefined, note: typeof flags.note === "string" ? flags.note : undefined, content: fs.readFileSync(file, "utf8"), agent: typeof flags.agent === "string" ? flags.agent : "cto" };
+        const res = await fetch(base, { method: "PUT", headers: { "x-cc-key": KEY, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) die(d.error ?? res.status);
+        return console.log(d.changed ? `✓ ${slug}: новая версия ${d.version}` : `· ${slug}: текст не изменился, версия та же`);
+      }
+      if (pos[0] === "add") {
+        const file = typeof flags.file === "string" ? flags.file : null;
+        if (!file || !fs.existsSync(file)) die("нужен файл с текстом: --file запись.md");
+        const body = { title: typeof flags.title === "string" ? flags.title : "", kind: typeof flags.kind === "string" ? flags.kind : "knowledge", content: fs.readFileSync(file, "utf8"), agent: typeof flags.agent === "string" ? flags.agent : "cto" };
+        const res = await fetch(base, { method: "POST", headers: { "x-cc-key": KEY, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) die(d.error ?? res.status);
+        return console.log(`✓ запись ${d.slug} · ${d.kind} · ${d.title}`);
+      }
       const slug = pos[0];
       const query = new URLSearchParams(slug ? { slug } : { ...(typeof flags.kind === "string" ? { kind: flags.kind } : {}), ...(typeof flags.q === "string" ? { q: flags.q } : {}) });
       const res = await fetch(`${base}?${query}`, { headers: { "x-cc-key": KEY }, signal: AbortSignal.timeout(15000) }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));

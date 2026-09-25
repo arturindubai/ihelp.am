@@ -4,7 +4,7 @@ import { alertTech } from "../alerts";
 import { html } from "../notify";
 import { CLOSED_STATUSES, pickNext, scopeOverlap } from "@/lib/cc-flow";
 import { transition, WATCHDOG } from "./ccWork";
-import { normalizeWorkers, planDispatch, POOLS, reviewQueues, yerevanHour, type DispatchAction, type DispatchState, type Pool, type RunRequest, type WorkersConfig } from "@/lib/workers";
+import { controlPatch, normalizeWorkers, planDispatch, POOLS, reviewQueues, yerevanHour, type DispatchAction, type DispatchState, type Pool, type RunRequest, type WorkersCommand, type WorkersConfig } from "@/lib/workers";
 
 /**
  * Воркеры: настройки пулов (Setting cc.workers), просьбы «Запустить сейчас» (cc.workers.requests),
@@ -202,11 +202,39 @@ async function testerWithoutVerdict(run: { taskKey: string | null; startedAt: Da
   await transition(run.taskKey, { to: "blocked", blockedOn: "tech", text: why }, WATCHDOG).catch((e) => console.warn(`[workers] ${run.taskKey}: не удалось заблокировать — ${(e as Error).message}`));
 }
 
-/** Когда пора пересмотреть весь бэклог: с прошлого обзора прошло sweepEveryH часов */
-async function sweepDue(config: WorkersConfig) {
+/** Когда пора пересмотреть весь бэклог: с прошлого обзора этого пула прошло sweepEveryH часов */
+async function sweepDue(config: WorkersConfig, pool: "triage" | "product" | "designer" = "triage") {
   if (config.sweepEveryH <= 0) return false;
-  const last = await db.workerRun.findFirst({ where: { pool: "triage", taskKey: null, keys: { isEmpty: true } }, orderBy: { startedAt: "desc" }, select: { startedAt: true } });
+  const last = await db.workerRun.findFirst({ where: { pool, taskKey: null, keys: { isEmpty: true } }, orderBy: { startedAt: "desc" }, select: { startedAt: true } });
   return !last || Date.now() - last.startedAt.getTime() >= config.sweepEveryH * 3600_000;
+}
+
+/**
+ * Очередь дизайнера: вопросы «на дизайне»; задачи с флагом «нужен макет» без макета; задачи слоя «Фронт»
+ * в бэклоге и очереди без описания дизайна. Бэк, инфра и не-код сюда не попадают — там нечего рисовать
+ */
+export async function designerQueue() {
+  const open = { in: ["backlog", "ready", "in_progress"] };
+  const rows = await db.task.findMany({
+    where: {
+      OR: [
+        { status: "blocked", blockedOn: "design" },
+        { status: open, mockupRequired: true, mockupApprovedBy: null, mockupUrl: null, attachments: { none: { mime: { startsWith: "image/" } } } },
+        { status: { in: ["backlog", "ready"] }, layer: "front", OR: [{ design: null }, { design: "" }], attachments: { none: {} } },
+      ],
+    },
+    select: { key: true, title: true, priority: true, stage: true, status: true, sort: true, source: true, blockedOn: true, blockedReason: true, mockupRequired: true },
+  });
+  return rows.sort((a, b) => Number(b.status === "blocked") - Number(a.status === "blocked") || PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority) || STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage) || a.sort - b.sort);
+}
+
+/** Очередь продакта: задачи с вопросом к продукту, важные первыми */
+export async function productQueue() {
+  const rows = await db.task.findMany({
+    where: { status: "blocked", blockedOn: "product" },
+    select: { key: true, title: true, priority: true, stage: true, status: true, sort: true, source: true, blockedReason: true },
+  });
+  return rows.sort((a, b) => PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority) || STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage) || a.sort - b.sort);
 }
 
 async function lastStarts() {
@@ -221,7 +249,7 @@ async function todayCounts() {
 
 export async function dispatchState(heads: Record<string, string>): Promise<DispatchState> {
   const config = await getWorkersConfig();
-  const [running, today, review, readyForDev, readyForNocode, triage, sweep, lastStart, requests] = await Promise.all([
+  const [running, today, review, readyForDev, readyForNocode, triage, sweep, lastStart, requests, product, productSweep, designer, designerSweep] = await Promise.all([
     db.workerRun.findMany({ where: { status: "running" }, select: { pool: true, agent: true } }),
     todayCounts(),
     reviewTasks(),
@@ -231,6 +259,10 @@ export async function dispatchState(heads: Record<string, string>): Promise<Disp
     sweepDue(config),
     lastStarts(),
     getRequests(),
+    productQueue(),
+    sweepDue(config, "product"),
+    designerQueue(),
+    sweepDue(config, "designer"),
   ]);
   return {
     config,
@@ -242,6 +274,10 @@ export async function dispatchState(heads: Record<string, string>): Promise<Disp
     heads,
     triageQueue: triage.map((t) => t.key),
     sweepDue: sweep,
+    productQueue: product.map((t) => t.key),
+    productSweepDue: productSweep,
+    designerQueue: designer.map((t) => t.key),
+    designerSweepDue: designerSweep,
     lastStart,
     requests: requests.filter((r) => Date.now() - Date.parse(r.at) < 30 * 60_000),
   };
@@ -275,7 +311,7 @@ export async function dispatchPlan(heads: Record<string, string>) {
     running,
     unmet: unmet
       .filter((r) => !waiting.has(`${r.pool}|${r.at}`))
-      .map((r) => `${r.pool}${r.key ? ` ${r.key}` : ""}: ${state.config.stopRunning ? "идёт остановка" : state.config.pausedUntil && Date.parse(state.config.pausedUntil) > Date.now() ? "воркеры на паузе (лимит подписки или вход)" : "нет подходящей работы (задача не в нужном статусе или без отправленной ветки)"}`),
+      .map((r) => `${r.pool}${r.key ? ` ${r.key}` : ""}: ${state.config.stopRunning ? "идёт остановка" : state.config.pausedUntil && Date.parse(state.config.pausedUntil) > Date.now() ? `воркеры на паузе (${state.config.pausedReason ?? "лимит подписки или вход"})` : "нет подходящей работы (задача не в нужном статусе или без отправленной ветки)"}`),
   };
 }
 
@@ -327,9 +363,28 @@ export async function runFinish(id: string, r: RunFinish) {
 export async function pauseWorkers(until: Date, reason: string) {
   const current = await getWorkersConfig();
   if (current.pausedUntil && Date.parse(current.pausedUntil) >= until.getTime()) return current;
-  const next = await saveWorkersConfig({ pausedUntil: until.toISOString(), pausedReason: reason.slice(0, 300) }, "dispatcher");
-  const clock = new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Yerevan", hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }).format(until);
-  await alertTech("workers:limit", html`⛔ <b>Воркеры на паузе до ${clock}</b>\n${reason.slice(0, 300)}\nЛимит подписки Claude общий с вашими чатами.`, 60);
+  const next = await saveWorkersConfig({ pausedUntil: until.toISOString(), pausedReason: reason.slice(0, 300), plannedStart: false }, "dispatcher");
+  await alertTech("workers:limit", html`⛔ <b>Воркеры на паузе до ${yerevanClock(until)}</b>\n${reason.slice(0, 300)}\nЛимит подписки Claude общий с вашими чатами.`, 60);
+  return next;
+}
+
+/** «25 сент., 14:30» по Еревану — для сообщений в тех-чат */
+const yerevanClock = (d: Date) => new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Yerevan", hour: "2-digit", minute: "2-digit", day: "numeric", month: "short" }).format(d);
+
+/**
+ * Кнопки владельца на вкладке «Воркеры»: Пауза, Стоп, Старт, План старт (docs/WORKERS.md, «Управление»).
+ * Меняет настройки одним патчем (controlPatch) и коротко сообщает в тех-чат; кто нажал — в журнале действий (audit)
+ */
+export async function workersControl(command: WorkersCommand, at: Date | null, by: string) {
+  const next = await saveWorkersConfig(controlPatch(command, new Date(), at), by);
+  const text = {
+    pause: html`⏸ <b>Воркеры на паузе</b> — ${by}. Текущие запуски доработают, новые не начнутся.`,
+    stop: html`⏹ <b>Воркеры остановлены</b> — ${by}. Диспетчер прервёт работающих на ближайшем проходе, задачи вернутся в очередь.`,
+    start: html`▶ <b>Воркеры запущены</b> — ${by}. Все пулы включены в режиме «Авто».`,
+    plan: html`⏰ <b>Старт воркеров запланирован на ${yerevanClock(at ?? new Date())}</b> — ${by}. До этого времени пауза, дальше диспетчер запустит всех сам.`,
+  }[command];
+  await alertTech(`workers:control:${command}`, text, 0);
+  console.log(`[workers] ${by}: ${command}${at ? ` в ${at.toISOString()}` : ""}`);
   return next;
 }
 
@@ -340,7 +395,7 @@ export async function listRuns(take = 40) {
 /** Всё для вкладки «Воркеры»: настройки, очереди каждого пула с причинами, работающие, журнал, диспетчер */
 export async function workersOverview() {
   const config = await getWorkersConfig();
-  const [runs, running, today, tick, requests, triage, dev, nocode, review, lastStart] = await Promise.all([
+  const [runs, running, today, tick, requests, triage, dev, nocode, review, lastStart, product, designer] = await Promise.all([
     listRuns(60),
     db.workerRun.findMany({ where: { status: "running" }, orderBy: { startedAt: "asc" } }),
     todayCounts(),
@@ -351,6 +406,8 @@ export async function workersOverview() {
     readyQueue("nocode"),
     reviewTasks(),
     lastStarts(),
+    productQueue(),
+    designerQueue(),
   ]);
   const heads = tick?.heads ?? {};
   const q = reviewQueues(review, heads);
@@ -367,6 +424,8 @@ export async function workersOverview() {
     lastStart,
     queues: {
       triage: triage.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, intake: t.source === "intake" })),
+      product: product.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, reason: "question", detail: (t.blockedReason ?? "").slice(0, 80) })),
+      designer: designer.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, reason: t.status === "blocked" ? "question" : t.mockupRequired ? "mockup" : "nodesign", detail: (t.blockedReason ?? "").slice(0, 80) })),
       dev,
       nocode,
       tester: [

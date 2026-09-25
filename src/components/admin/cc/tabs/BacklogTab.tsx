@@ -6,6 +6,7 @@ import { listEpics } from "@/server/services/epics";
 import { db } from "@/server/db";
 import { AREAS, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { FLOWS, LANES, SIZES, countBy } from "@/lib/cc-lanes";
+import { executorOf } from "@/lib/workers";
 import { TaskBadges } from "@/components/admin/cc/TaskBadges";
 import { FilterBar } from "@/components/admin/cc/FilterBar";
 import { TaskBoard } from "@/components/admin/cc/TaskBoard";
@@ -43,6 +44,8 @@ export async function BacklogTab({ sp, taskHref }: { sp: CcSearch; taskHref: (ke
   const open = all.filter((x) => !["done", "cancelled"].includes(x.status));
   const byStatus = countBy(open, (x) => x.status);
   const stale = open.filter((x) => x.health.stale || x.health.phantom).length;
+  // Привязка к исполнителю: какой воркер делает следующий шаг по задаче
+  const tw = await getTranslations("admin.cc.workers");
   const blocked = open.filter((x) => x.status === "blocked").length;
   const here = (patch: CcSearch) => ccHref({ ...sp, task: "" }, patch);
   const flows = FLOWS.filter((f) => sp.closed || !["done", "cancelled"].includes(f));
@@ -147,7 +150,7 @@ export async function BacklogTab({ sp, taskHref }: { sp: CcSearch; taskHref: (ke
               )}
               <ul className="divide-y divide-line">
                 {g.items.map((task) => (
-                  <li key={task.key} className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5", task.attention && "bg-bad-50/40")}>
+                  <li key={task.key} className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5", task.attention && "bg-bad-50/40", task.status === "cancelled" && "opacity-50")}>
                     <Link href={taskHref(task.key)} scroll={false} className="flex min-w-0 flex-1 gap-3">
                       <span className="w-24 shrink-0 pt-0.5 font-mono text-xs text-muted">{task.key}</span>
                       <span className="min-w-0 flex-1">
@@ -168,6 +171,11 @@ export async function BacklogTab({ sp, taskHref }: { sp: CcSearch; taskHref: (ke
                         {task.priority.toUpperCase()}
                       </span>
                       {task.size !== "none" && <span className="chip bg-surface text-[10px] text-muted">{task.size}</span>}
+                      {executorOf(task) && (
+                        <span className="chip bg-surface text-[10px] text-muted" title={tb("executor")}>
+                          → {tw(`pools.${executorOf(task)!}`)}
+                        </span>
+                      )}
                       {view !== "lanes" && <span className={cn("size-2 rounded-full", LANE_DOT[task.lane])} title={tb(`lanes.${task.lane}`)} />}
                     </span>
                   </li>

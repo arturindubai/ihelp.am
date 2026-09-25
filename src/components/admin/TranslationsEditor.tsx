@@ -6,6 +6,7 @@ import { cn } from "@/lib/format";
 
 type Row = { key: string; def: Record<"ru" | "en" | "am", string>; ov: Record<"ru" | "en" | "am", string> };
 const L = [["ru", "RU"], ["en", "ENG"], ["am", "ARM"]] as const;
+const PAGE_SIZE = 20;
 
 export function TranslationsEditor({ rows: initial }: { rows: Row[] }) {
   const t = useTranslations("admin");
@@ -14,7 +15,7 @@ export function TranslationsEditor({ rows: initial }: { rows: Row[] }) {
   const [section, setSection] = useState("");
   const [missing, setMissing] = useState<"" | "en" | "am">("");
   const [savedKey, setSavedKey] = useState("");
-  const [limit, setLimit] = useState(80);
+  const [page, setPage] = useState(1);
   const sections = useMemo(() => [...new Set(initial.map((r) => r.key.split(".").slice(0, r.key.startsWith("admin.") ? 2 : 1).join(".")))], [initial]);
   const filtered = rows.filter((r) => {
     if (section && !r.key.startsWith(section + ".")) return false;
@@ -22,6 +23,13 @@ export function TranslationsEditor({ rows: initial }: { rows: Row[] }) {
     if (q) { const s = q.toLowerCase(); return r.key.toLowerCase().includes(s) || Object.values(r.def).some((v) => v.toLowerCase().includes(s)) || Object.values(r.ov).some((v) => v.toLowerCase().includes(s)); }
     return true;
   });
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  function resetPage<T>(setter: React.Dispatch<React.SetStateAction<T>>) {
+    return (v: T) => { setter(v); setPage(1); };
+  }
 
   async function save(key: string, lang: "ru" | "en" | "am", value: string) {
     const row = rows.find((r) => r.key === key)!;
@@ -36,13 +44,13 @@ export function TranslationsEditor({ rows: initial }: { rows: Row[] }) {
   return (
     <div>
       <div className="mb-3 flex flex-wrap gap-2">
-        <input className="input max-w-xs flex-1" placeholder={t("common.search")} value={q} onChange={(e) => setQ(e.target.value)} />
-        <select className="input w-auto" value={section} onChange={(e) => setSection(e.target.value)}><option value="">{t("translations.section")}: {t("common.all")}</option>{sections.map((s) => <option key={s}>{s}</option>)}</select>
-        <select className="input w-auto" value={missing} onChange={(e) => setMissing(e.target.value as "")}><option value="">—</option><option value="en">{t("translations.onlyMissing")} ENG</option><option value="am">{t("translations.onlyMissing")} ARM</option></select>
+        <input className="input max-w-xs flex-1" placeholder={t("common.search")} value={q} onChange={(e) => resetPage(setQ)(e.target.value)} />
+        <select className="input w-auto" value={section} onChange={(e) => resetPage(setSection)(e.target.value)}><option value="">{t("translations.section")}: {t("common.all")}</option>{sections.map((s) => <option key={s}>{s}</option>)}</select>
+        <select className="input w-auto" value={missing} onChange={(e) => resetPage(setMissing)(e.target.value as "")}><option value="">—</option><option value="en">{t("translations.onlyMissing")} ENG</option><option value="am">{t("translations.onlyMissing")} ARM</option></select>
       </div>
       <p className="mb-2 text-xs text-muted">{filtered.length}</p>
       <div className="space-y-2">
-        {filtered.slice(0, limit).map((r) => (
+        {pageRows.map((r) => (
           <div key={r.key} className="card p-3">
             <div className="mb-2 font-mono text-[11px] text-muted">{r.key}</div>
             <div className="grid gap-2 md:grid-cols-3">
@@ -66,7 +74,13 @@ export function TranslationsEditor({ rows: initial }: { rows: Row[] }) {
           </div>
         ))}
       </div>
-      {filtered.length > limit && <button className="btn-outline mt-3 w-full" onClick={() => setLimit((l) => l + 100)}>+100</button>}
+      {totalPages > 1 && (
+        <div className="mt-3 flex items-center justify-center gap-2 text-sm">
+          <button className="btn-outline btn-sm" disabled={safePage <= 1} onClick={() => setPage((p) => p - 1)}>{t("common.prev")}</button>
+          <span className="text-muted">{t("common.page", { n: safePage })} / {totalPages}</span>
+          <button className="btn-outline btn-sm" disabled={safePage >= totalPages} onClick={() => setPage((p) => p + 1)}>{t("common.next")}</button>
+        </div>
+      )}
     </div>
   );
 }

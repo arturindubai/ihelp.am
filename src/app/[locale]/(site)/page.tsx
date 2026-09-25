@@ -7,6 +7,7 @@ import { contactLink } from "@/lib/contacts";
 import { getCurrentUser } from "@/server/auth";
 import { tr } from "@/i18n/locales";
 import { ServiceCard } from "@/components/ServiceCard";
+import { Img } from "@/components/Img";
 
 export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
@@ -24,7 +25,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
             {data.banners.map((b) => {
               const inner = (
                 <div className="relative flex h-40 w-[86vw] max-w-[440px] shrink-0 snap-start flex-col justify-end overflow-hidden rounded-2xl p-4 text-inverse" style={{ background: b.bg || "var(--color-ink)" }}>
-                  {b.image && <img src={b.image} alt="" className="absolute inset-0 size-full object-cover opacity-60" />}
+                  {b.image && <Img src={b.image} fill sizes="(max-width: 512px) 86vw, 440px" className="object-cover opacity-60" />}
                   <div className="relative">
                     <div className="text-2xl leading-tight font-bold">{b.title}</div>
                     {b.subtitle && <div className="mt-1 text-sm opacity-85">{b.subtitle}</div>}
@@ -44,7 +45,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
               const tile = (
                 <div className={`flex flex-col items-center gap-1.5 text-center ${c.comingSoon ? "opacity-60" : ""}`}>
                   <div className="relative">
-                    <img src={c.image || "/img/cat-cleaning.svg"} alt="" className="size-[76px] rounded-2xl" />
+                    <Img src={c.image || "/img/cat-cleaning.svg"} width={76} className="size-[76px] rounded-2xl" />
                     {c.comingSoon && <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 rounded-full bg-ink px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap text-inverse">{tc("comingSoon")}</span>}
                   </div>
                   <span className="text-[13px] leading-tight font-medium">{c.title}</span>

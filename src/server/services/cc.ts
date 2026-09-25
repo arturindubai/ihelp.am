@@ -193,6 +193,10 @@ export interface TaskContent {
   estimate?: string | null;
   /** Файлы и папки, которые задача затрагивает */
   scope?: string[];
+  /** Нужен утверждённый макет до начала работы */
+  mockupRequired?: boolean;
+  /** Ссылка на макет (Figma, стенд, картинка) */
+  mockupUrl?: string | null;
 }
 
 /**
@@ -235,6 +239,8 @@ export async function saveTask(content: TaskContent, actor: string, isNew: boole
     owner: content.owner,
     estimate: content.estimate || null,
     scope: [...new Set((content.scope ?? []).map((p) => p.trim().replace(/^\.\//, "")).filter(Boolean))].slice(0, 30),
+    mockupRequired: content.mockupRequired ?? false,
+    mockupUrl: content.mockupUrl?.trim().slice(0, 500) || null,
     source,
   };
   const existing = await db.task.findUnique({ where: { key } });
@@ -248,21 +254,33 @@ export async function saveTask(content: TaskContent, actor: string, isNew: boole
   return task;
 }
 
-/** Удалить можно только задачу, созданную в админке: задачу из репозитория деплой создаст заново */
-export async function deleteTask(key: string, actor: string) {
-  const task = await db.task.findUnique({ where: { key } });
-  if (!task) throw new Error("not_found");
-  if (task.source !== "ui") throw new Error("code_task");
-  const blocking = await db.task.findMany({ where: { depends: { has: key } }, select: { key: true } });
-  if (blocking.length) throw new Error(`blocking:${blocking.map((b) => b.key).join(",")}`);
-  await db.task.delete({ where: { key } });
-  console.log(`[cc] задача ${key} удалена (${actor})`);
-}
 
 export async function addComment(key: string, text: string, author: string, kind: "note" | "report" = "note") {
   const task = await db.task.findUnique({ where: { key }, select: { id: true } });
   if (!task) throw new Error("not_found");
   return db.taskComment.create({ data: { taskId: task.id, text: text.trim().slice(0, 5000), author, kind } });
+}
+
+/* ───────────── Журнал ошибок ───────────── */
+
+const ERROR_TTL_DAYS = parseInt(process.env.APP_ERROR_TTL_DAYS ?? "30", 10);
+
+/** Список ошибок из журнала. Старше TTL удаляются. Новые сверху. */
+export async function getAppErrors(limit = 100) {
+  const since = new Date(Date.now() - ERROR_TTL_DAYS * 24 * 3600_000);
+  await db.appError.deleteMany({ where: { lastSeenAt: { lt: since } } });
+  return db.appError.findMany({
+    where: { lastSeenAt: { gte: since } },
+    orderBy: { lastSeenAt: "desc" },
+    take: limit,
+  });
+}
+
+export type AppErrorItem = Awaited<ReturnType<typeof getAppErrors>>[number];
+
+/** Пометить ошибку как превращённую в задачу-баг */
+export async function linkErrorToTask(errorId: string, taskKey: string) {
+  await db.appError.update({ where: { id: errorId }, data: { taskKey } });
 }
 
 /* ───────────── Состояние системы ───────────── */

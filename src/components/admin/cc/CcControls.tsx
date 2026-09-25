@@ -5,7 +5,9 @@ import { Mic, MicOff, Paperclip, Play, Sparkles, Square, X } from "lucide-react"
 import { Link, useRouter } from "@/i18n/navigation";
 import {
   ccApproveManyAction,
+  ccApproveMockupAction,
   ccCommentAction,
+  ccReturnDesignAction,
   ccIntakeAction,
   ccMessageToIntakeAction,
   ccReadMessageAction,
@@ -20,6 +22,29 @@ import { cn } from "@/lib/format";
 
 /** Кнопки и формы пульта Control Center: Intake, запуск и остановка воркеров, согласования, сообщения */
 
+/** Ошибка вызова серверного действия: после выкладки — «сайт обновился», иначе текст ошибки */
+function staleOrError(e: unknown): string {
+  const msg = String((e as Error)?.message ?? e);
+  return /server action|Failed to find|not found|failed to fetch|NetworkError|Load failed/i.test(msg) ? "stale" : msg.slice(0, 120);
+}
+
+const DRAFT_KEY = "cc-intake-draft";
+const readDraft = () => {
+  try {
+    return localStorage.getItem(DRAFT_KEY) ?? "";
+  } catch {
+    return "";
+  }
+};
+const writeDraft = (v: string) => {
+  try {
+    if (v.trim()) localStorage.setItem(DRAFT_KEY, v);
+    else localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* приватный режим — без черновика */
+  }
+};
+
 function useAct() {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -28,7 +53,8 @@ function useAct() {
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>, after?: () => void) =>
     start(async () => {
       setError(null);
-      const r = await fn();
+      // Серверное действие может упасть целиком (после выкладки старая страница его не найдёт) — не роняем страницу
+      const r = await fn().catch((e: unknown) => ({ ok: false, error: staleOrError(e) }));
       if (!r.ok) return setError(r.error ?? "error");
       setDone(true);
       setTimeout(() => setDone(false), 2500);
@@ -42,7 +68,16 @@ function useAct() {
 
 type IntakeItem = { key: string; title: string; status: string; triagedAt: string | Date | null; triageNote: string | null; createdAt: string | Date; inWork?: boolean };
 
-type SpeechRec = { lang: string; continuous: boolean; interimResults: boolean; start(): void; stop(): void; onresult: ((e: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null; onend: (() => void) | null };
+type SpeechRec = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start(): void;
+  stop(): void;
+  onresult: ((e: { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((e: { error?: string }) => void) | null;
+};
 
 /**
  * Intake, как в LIA: описать работу свободным текстом (или голосом, с файлами) — карточка IN-N уходит в очередь триажа.
@@ -54,8 +89,12 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [listening, setListening] = useState(false);
+  const [interim, setInterim] = useState("");
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Черновик живёт в браузере: выкладка, случайное закрытие окна или ошибка не стирают набранное
+  const wantStop = useRef(false);
   const [pending, start] = useTransition();
   const rec = useRef<SpeechRec | null>(null);
   const router = useRouter();
@@ -64,41 +103,89 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
   useEffect(() => {
     const w = window as unknown as { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec };
     setSpeech(!!(w.SpeechRecognition || w.webkitSpeechRecognition));
+    const draft = readDraft();
+    if (draft) setText(draft);
   }, []);
+  const edit = (v: string) => {
+    setText(v);
+    writeDraft(v);
+  };
 
   const toggleVoice = () => {
-    if (listening) return rec.current?.stop();
+    if (listening) {
+      wantStop.current = true;
+      return rec.current?.stop();
+    }
     const w = window as unknown as { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec };
     const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!Ctor) return;
+    if (!Ctor) return setVoiceError(t("voiceErrors.unsupported"));
+    setVoiceError(null);
+    wantStop.current = false;
     const r = new Ctor();
     r.lang = document.documentElement.lang === "en" ? "en-US" : "ru-RU";
     r.continuous = true;
-    r.interimResults = false;
+    // Промежуточный текст виден сразу — понятно, что микрофон слышит
+    r.interimResults = true;
     r.onresult = (e) => {
-      let chunk = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) chunk += e.results[i][0].transcript;
-      if (chunk) setText((prev) => `${prev}${prev && !prev.endsWith(" ") ? " " : ""}${chunk.trim()}`);
+      let finalChunk = "";
+      let live = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) finalChunk += e.results[i][0].transcript;
+        else live += e.results[i][0].transcript;
+      }
+      setInterim(live);
+      if (finalChunk)
+        setText((prev) => {
+          const next = `${prev}${prev && !prev.endsWith(" ") ? " " : ""}${finalChunk.trim()}`;
+          writeDraft(next);
+          return next;
+        });
     };
-    r.onend = () => setListening(false);
+    r.onerror = (e) => {
+      const code = e.error ?? "unknown";
+      // «no-speech» и «aborted» — не ошибки: просто тишина или остановка
+      if (code === "no-speech" || code === "aborted") return;
+      wantStop.current = true;
+      setVoiceError(t(code === "not-allowed" || code === "service-not-allowed" ? "voiceErrors.notAllowed" : code === "network" ? "voiceErrors.network" : "voiceErrors.other", { code }));
+    };
+    // Браузер сам обрывает распознавание через несколько секунд тишины — продолжаем, пока человек не нажал «Остановить»
+    r.onend = () => {
+      setInterim("");
+      if (!wantStop.current) {
+        try {
+          r.start();
+          return;
+        } catch {
+          /* не удалось продолжить — остановимся */
+        }
+      }
+      setListening(false);
+    };
     rec.current = r;
-    r.start();
-    setListening(true);
+    try {
+      r.start();
+      setListening(true);
+    } catch {
+      setVoiceError(t("voiceErrors.other", { code: "start" }));
+    }
   };
 
   const send = () =>
     start(async () => {
       setError(null);
-      const r = await ccIntakeAction(text);
-      if (!r.ok) return setError(t(r.error === "too_short" ? "tooShort" : "error"));
+      // Действие может не найтись после выкладки — окно и текст остаются, показываем причину
+      const r = await ccIntakeAction(text).catch((e: unknown) => ({ ok: false as const, error: staleOrError(e) }));
+      if (!r.ok) return setError(t(r.error === "too_short" ? "tooShort" : r.error === "stale" ? "stale" : "error"));
       for (const f of files) {
         const form = new FormData();
         form.set("file", f);
         form.set("taskKey", r.key);
         await fetch("/api/cc/upload", { method: "POST", body: form }).catch(() => null);
       }
+      wantStop.current = true;
       rec.current?.stop();
       setText("");
+      writeDraft("");
       setFiles([]);
       setSent(r.key);
       router.refresh();
@@ -124,7 +211,9 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
                 <X size={18} />
               </button>
             </div>
-            <textarea className="input min-h-40 w-full" value={text} onChange={(e) => setText(e.target.value)} placeholder={t("placeholder")} autoFocus />
+            <textarea className="input min-h-40 w-full" value={text} onChange={(e) => edit(e.target.value)} placeholder={t("placeholder")} autoFocus />
+            {listening && <p className="mt-1 text-xs text-muted">🎙 {interim || t("listening")}</p>}
+            {voiceError && <p className="mt-1 rounded-lg bg-warn-50 px-3 py-1.5 text-xs text-warn">{voiceError}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {speech && (
                 <button type="button" className={cn("btn-sm gap-1.5", listening ? "btn-danger" : "btn-outline")} onClick={toggleVoice}>
@@ -319,6 +408,41 @@ export function CommentButton({ taskKey }: { taskKey: string }) {
   );
 }
 
+/* ───────────── Макет ───────────── */
+
+/** Утвердить макет задачи: кнопка доступна владельцу, пишет в ленту, снимает гейт «нужен макет» */
+export function MockupApproveButton({ taskKey }: { taskKey: string }) {
+  const t = useTranslations("admin.cc.mockup");
+  const { pending, error, done, run } = useAct();
+  const [showComment, setShowComment] = useState(false);
+  const [comment, setComment] = useState("");
+  if (done) return <p className="text-xs text-ok">{t("approved")}</p>;
+  return (
+    <div className="flex flex-col items-end gap-1">
+      {!showComment ? (
+        <button className="btn-primary btn-sm" disabled={pending} onClick={() => setShowComment(true)}>
+          {t("approve")}
+        </button>
+      ) : (
+        <form
+          className="flex w-full max-w-sm flex-col gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(() => ccApproveMockupAction(taskKey, comment), () => (setShowComment(false), setComment("")));
+          }}
+        >
+          <input className="input h-9 w-full py-1 text-sm" value={comment} onChange={(e) => setComment(e.target.value)} placeholder={t("commentPh")} autoFocus />
+          <div className="flex gap-1.5">
+            <button className="btn-primary btn-sm" disabled={pending}>{t("confirm")}</button>
+            <button type="button" className="btn-ghost btn-sm" onClick={() => setShowComment(false)}>{t("cancel")}</button>
+          </div>
+        </form>
+      )}
+      {error && <span className="text-xs text-bad">{t("failed", { error })}</span>}
+    </div>
+  );
+}
+
 /** «Вернуть все» по дорожке: запрашивает причину через inline-форму, затем возвращает каждую задачу */
 export function ReturnAllButton({ keys, label }: { keys: string[]; label: string }) {
   const t = useTranslations("admin.cc.approvals");
@@ -392,6 +516,36 @@ export function RejectAllButton({ keys, label }: { keys: string[]; label: string
       )}
       {result && <span className="text-xs text-warn">{result}</span>}
     </span>
+  );
+}
+
+/** Вернуть дизайн дизайнеру с причиной: задача уходит в блокировку «на дизайне» */
+export function DesignReturnButton({ taskKey }: { taskKey: string }) {
+  const t = useTranslations("admin.cc.mockup");
+  const { pending, error, done, run } = useAct();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  if (done) return <p className="text-xs text-warn">{t("returned")}</p>;
+  return (
+    <div className="flex flex-col items-end gap-1">
+      {!open ? (
+        <button className="btn-outline btn-sm" disabled={pending} onClick={() => setOpen(true)}>
+          {t("return")}
+        </button>
+      ) : (
+        <form
+          className="flex w-full max-w-sm gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(() => ccReturnDesignAction(taskKey, reason), () => setOpen(false));
+          }}
+        >
+          <input className="input h-9 flex-1 py-1 text-sm" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("returnPh")} autoFocus />
+          <button className="btn-dark btn-sm" disabled={pending || reason.trim().length < 5}>{t("confirm")}</button>
+        </form>
+      )}
+      {error && <span className="text-xs text-bad">{t("failed", { error })}</span>}
+    </div>
   );
 }
 
