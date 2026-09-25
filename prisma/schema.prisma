@@ -684,3 +684,21 @@ model AuditLog {
 
   @@index([entity, entityId])
 }
+
+/// Надёжная доставка уведомлений: очередь с повторными попытками при сбое канала
+model NotifyQueue {
+  id            String    @id @default(cuid())
+  channel       String    @default("telegram")
+  chatId        String
+  text          String
+  tag           String
+  status        String    @default("pending")
+  attempts      Int       @default(0)
+  lastError     String?
+  nextAttemptAt DateTime  @default(now())
+  sentAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([status, nextAttemptAt])
+  @@index([createdAt])
+}
