@@ -29,7 +29,7 @@ export interface Settings {
     whatsapp: { enabled: boolean; phoneNumberId: string; accessToken: string; templateName: string; templateLang: string };
     telegram: { enabled: boolean; gatewayToken: string };
   };
-  notify: { telegramBotToken: string; telegramChatId: string; techChatId: string };
+  notify: { telegramBotToken: string; telegramChatId: string; techChatId: string; teamChatId: string };
   /** Вход через Google (OAuth). Адрес возврата: <APP_URL>/api/auth/google/callback — работает только по https */
   google: { enabled: boolean; clientId: string; clientSecret: string };
   /** Вход через Apple (Sign in with Apple). Адрес возврата: <APP_URL>/api/auth/apple/callback — работает только по https.
@@ -85,7 +85,7 @@ export const DEFAULT_SETTINGS: Settings = {
     whatsapp: { enabled: false, phoneNumberId: "", accessToken: "", templateName: "", templateLang: "ru" },
     telegram: { enabled: false, gatewayToken: "" },
   },
-  notify: { telegramBotToken: "", telegramChatId: "", techChatId: "" },
+  notify: { telegramBotToken: "", telegramChatId: "", techChatId: "", teamChatId: "" },
   google: { enabled: false, clientId: "", clientSecret: "" },
   apple: { enabled: false, teamId: "", keyId: "", clientId: "", privateKey: "" },
   mail: { enabled: false, apiKey: "", from: "", replyTo: "" },
