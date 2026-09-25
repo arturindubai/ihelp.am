@@ -9,7 +9,7 @@ import { LANES } from "@/lib/cc-lanes";
 import { Card } from "@/components/admin/fields";
 import { QuickMove } from "@/components/admin/cc/TaskControls";
 import { silentLabel } from "@/components/admin/cc/TaskBadges";
-import { ApprovalButtons, ApproveAllButton, RunWorkerButton } from "@/components/admin/cc/CcControls";
+import { ApprovalButtons, ApproveAllButton, OwnerQuestionCard, RunWorkerButton } from "@/components/admin/cc/CcControls";
 import { Empty, LANE_DOT, PRIORITY_TONE, RUN_TONE, TaskLine, ago } from "./shared";
 import { cn } from "@/lib/format";
 
@@ -39,34 +39,16 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
           <>
             {needsAnswer.length > 0 && (
               <Card title={`✋ ${ty("ownerNeedAnswer")} · ${needsAnswer.length}`}>
-                <p className="mb-2 text-xs text-muted">{ty("ownerHint")}</p>
                 <ul className="divide-y divide-line">
-                  {needsAnswer.map((x) => {
-                    const last = x.comments[0];
-                    return (
-                      <TaskLine
-                        key={x.key}
-                        k={x.key}
-                        title={x.title}
-                        priority={x.priority}
-                        href={taskHref(x.key)}
-                        sub={
-                          <>
-                            <span className="text-warn">
-                              {BLOCKED_ON_LABELS[x.blockedOn ?? ""] ?? x.blockedOn}: {x.blockedReason}
-                            </span>
-                            {last && (
-                              <span className="mt-0.5 line-clamp-2 block">
-                                {last.author}: {last.text}
-                              </span>
-                            )}
-                            <span className="block">{ty("since", { ago: ago(t, x.updatedAt) })}</span>
-                          </>
-                        }
-                        right={<span className="text-xs text-brand">{ty("answer")} →</span>}
-                      />
-                    );
-                  })}
+                  {needsAnswer.map((x) => (
+                    <OwnerQuestionCard
+                      key={x.key}
+                      taskKey={x.key}
+                      title={x.title}
+                      blockedReason={x.blockedReason}
+                      taskHref={taskHref(x.key)}
+                    />
+                  ))}
                 </ul>
               </Card>
             )}
