@@ -49,6 +49,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
   lib <slug>                                    текущий текст документа (slug — путь в репозитории или note-…)
   lib add --title "…" --kind knowledge --file запись.md   новая запись команды (виды: rules role process decision spec knowledge)
   lib update <slug> --file запись.md [--title "…"] [--note "что изменили"]   новая версия записи команды (note-…)
+  attach КЛЮЧ --file макет.png [--mockup]     приложить файл к задаче (PNG, JPG, PDF…); --mockup — записать ссылку в mockupUrl
 
 Сообщения:
   msg "текст" --to owner|cto|workers|triage|dev|tester|deployer [--key КЛЮЧ]
@@ -604,6 +605,28 @@ async function main() {
       const k = needKey();
       await api("POST", null, { action: "approve-mockup", agent: agentFor(k), key: k, text: text() });
       console.log(`✓ ${k}: макет утверждён`);
+      return;
+    }
+    case "attach": {
+      const k = needKey();
+      const file = typeof flags.file === "string" ? flags.file : null;
+      if (!file || !fs.existsSync(file)) die("нужен файл: attach КЛЮЧ --file макет.png");
+      const MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif", svg: "image/svg+xml", pdf: "application/pdf", txt: "text/plain", md: "text/markdown", zip: "application/zip" };
+      const ext = path.extname(file).slice(1).toLowerCase();
+      if (!MIME[ext]) die(`тип файла .${ext} не принимается: ${Object.keys(MIME).join(", ")}`);
+      const form = new FormData();
+      form.set("file", new Blob([fs.readFileSync(file)], { type: MIME[ext] }), path.basename(file));
+      form.set("taskKey", k);
+      form.set("agent", agentFor(k));
+      const base = URL_BASE.replace(/\/api\/cc\/?$/, "/api/cc/upload");
+      const res = await fetch(base, { method: "POST", headers: { "x-cc-key": KEY }, body: form, signal: AbortSignal.timeout(60000) }).catch((e) => die(`загрузка не удалась: ${e.message}`));
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) die(d.error ?? res.status);
+      console.log(`✓ ${k}: приложен ${d.attachment.fileName} → ${d.attachment.url}`);
+      if (flags.mockup) {
+        await api("POST", null, { action: "update", agent: agentFor(k), key: k, task: { mockupUrl: d.attachment.url } });
+        console.log(`✓ ${k}: ссылка на макет записана`);
+      }
       return;
     }
     case "lib": {

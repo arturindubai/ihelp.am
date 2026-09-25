@@ -7,7 +7,7 @@ import { CcHeader } from "@/components/admin/cc/CcHeader";
 import { SystemPanel } from "@/components/admin/cc/SystemPanel";
 import { Card } from "@/components/admin/fields";
 import { ago } from "@/components/admin/cc/tabs/shared";
-import { cn, dateLabel } from "@/lib/format";
+import { cn, dateLabel, timeLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +41,7 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
   const [t, th, h, audit] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.healthPage"), healthStatus(), boardAudit()]);
   const uptime = h.uptimeSec >= 86400 ? th("uptimeD", { d: Math.floor(h.uptimeSec / 86400), h: Math.floor((h.uptimeSec % 86400) / 3600) }) : th("uptimeH", { h: Math.floor(h.uptimeSec / 3600), m: Math.floor((h.uptimeSec % 3600) / 60) });
   const tickTone: Tone = h.tickAgeMin == null ? "warn" : h.tickAgeMin > 3 ? "bad" : "ok";
-  const workersValue = h.workers.pausedUntil ? th("workersPaused") : h.workers.enabled ? (h.workers.dryRun ? th("workersDry") : th("workersOn")) : th("workersOff");
+  const workersValue = h.workers.state === "stopped" ? th("workersStopped") : h.workers.state === "planned" ? th("workersPlanned", { when: `${dateLabel(new Date(h.workers.pausedUntil!), locale, { day: "numeric", month: "short" })}, ${timeLabel(new Date(h.workers.pausedUntil!))}` }) : h.workers.state === "paused" ? th("workersPaused") : h.workers.enabled ? (h.workers.dryRun ? th("workersDry") : th("workersOn")) : th("workersOff");
   const failed = (h.runs24.failed ?? 0) + (h.runs24.timeout ?? 0);
 
   return (
@@ -64,7 +64,7 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
       </div>
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Metric label={th("dispatcher")} value={h.tickAgeMin == null ? th("dispatcherNever") : ago(t, new Date(Date.now() - h.tickAgeMin * 60_000))} hint={th("dispatcherHint")} tone={tickTone} href="/admin/control?tab=workers" />
-        <Metric label={th("workers")} value={workersValue} hint={th("workersRunning", { n: h.workers.running })} tone={h.workers.pausedUntil ? "warn" : "ok"} href="/admin/control?tab=workers" />
+        <Metric label={th("workers")} value={workersValue} hint={th("workersRunning", { n: h.workers.running })} tone={h.workers.state === "stopped" ? "bad" : h.workers.pausedUntil ? "warn" : "ok"} href="/admin/control?tab=workers" />
         <Metric label={th("runs24")} value={Object.values(h.runs24).reduce((a, b) => a + b, 0)} hint={th("runs24Hint", { failed, limit: h.runs24.limit ?? 0 })} tone={failed ? "warn" : "ok"} />
         <Metric label={th("orders")} value={`${h.orders24} / ${h.orders7}`} hint={th("ordersHint")} />
       </div>

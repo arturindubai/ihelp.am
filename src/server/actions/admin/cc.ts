@@ -10,8 +10,8 @@ import { deleteAttachment } from "../../services/attachments";
 import { EPIC_STATUSES, OWNERS, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { BLOCKED_ON, type TaskStatusKey } from "@/lib/cc-flow";
 import { taskContentSchema } from "@/lib/cc-schema";
-import { EVERY_MIN, MODELS, MODES, POOLS, type Pool } from "@/lib/workers";
-import { requestRun, requestStop, saveWorkersConfig } from "../../services/workers";
+import { EVERY_MIN, MODELS, MODES, POOLS, WORKERS_COMMANDS, type Pool } from "@/lib/workers";
+import { requestRun, requestStop, saveWorkersConfig, workersControl } from "../../services/workers";
 import { intakeCreate } from "../../services/ccBoard";
 import { MESSAGE_ROLES, markRead, sendMessage } from "../../services/ccMessages";
 import { db } from "../../db";
@@ -226,6 +226,25 @@ export async function ccSaveWorkersAction(patch: z.infer<typeof workersSchema>) 
   await audit(u.id, "cc.workers", "Setting", "cc.workers", parsed.data);
   rAll();
   return { ok: true as const };
+}
+
+const controlSchema = z.object({ command: z.enum(WORKERS_COMMANDS), at: z.string().datetime({ offset: true }).optional() });
+
+/**
+ * Кнопки владельца: Пауза (новые не берутся, текущие доработают), Стоп (плюс остановка текущих),
+ * Старт (всё включено в «Авто»), План старт (пауза до времени по Еревану, потом диспетчер запускает сам).
+ * Отменить план — «Старт» или «Пауза». Возвращает новые настройки, чтобы пульт обновился без перезагрузки
+ */
+export async function ccWorkersControlAction(command: string, at?: string) {
+  const u = await requireSection("control");
+  const parsed = controlSchema.safeParse({ command, at });
+  if (!parsed.success) return { ok: false as const, error: "invalid" };
+  const when = parsed.data.at ? new Date(parsed.data.at) : null;
+  if (parsed.data.command === "plan" && (!when || when.getTime() <= Date.now())) return { ok: false as const, error: "past" };
+  const config = await workersControl(parsed.data.command, when, who(u));
+  await audit(u.id, `cc.workers.${parsed.data.command}`, "Setting", "cc.workers", { at: when?.toISOString() ?? null });
+  rAll();
+  return { ok: true as const, config };
 }
 
 /** «Запустить сейчас»: пул (и задача) — диспетчер запустит на ближайшем проходе, не дожидаясь очереди и расписания */

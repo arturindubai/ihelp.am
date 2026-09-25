@@ -52,11 +52,19 @@ case "$role" in
       "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(date)")
     deny+=("Edit" "Write" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(cat >*)" "Bash(cat *>*)")
     ;;
-  product|designer)
-    # Продакт и дизайнер: читают проект, документы и Библиотеку, ищут в интернете, работают с карточками и записями Библиотеки через cc.mjs.
+  product)
+    # Продакт: читает проект, документы и Библиотеку, ищет в интернете, работает с карточками и записями Библиотеки через cc.mjs.
     # Файлы не правит, git не пишет: требования живут в карточках и в Библиотеке
     allow=(Read Glob Grep TodoWrite WebSearch WebFetch "${common[@]}" "Bash(git log *)" "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(date)" "Bash(mkdir *)" "Bash(cat >*)" "Bash(cat *>*)")
     deny+=("Edit" "Write" "NotebookEdit" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(curl *)")
+    ;;
+  designer)
+    # Дизайнер: то же, что продакт, плюс макеты — HTML в data/mockups/<КЛЮЧ>/, скриншоты scripts/mockup-shot.mjs, вложение cc.mjs attach.
+    # Писать может только в data/mockups: код проекта закрыт (режим dontAsk запрещает всё, чего нет в allow)
+    allow=(Read Glob Grep TodoWrite WebSearch WebFetch "${common[@]}" "Write(//opt/ihelp.am/data/mockups/**)" "Edit(//opt/ihelp.am/data/mockups/**)"
+      "Bash(node scripts/mockup-shot.mjs *)" "Bash(node */scripts/mockup-shot.mjs *)" "Bash(mkdir -p data/mockups/*)" "Bash(mkdir -p /opt/ihelp.am/data/mockups/*)"
+      "Bash(git log *)" "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(date)")
+    deny+=("NotebookEdit" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(curl *)")
     ;;
   nocode)
     # «Продукт и не-код»: читает проект, ищет и читает страницы в интернете, проверяет DNS, работает с карточками.

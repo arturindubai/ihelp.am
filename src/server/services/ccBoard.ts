@@ -6,7 +6,7 @@ import { unreadForOwner } from "./ccMessages";
 import { recentErrors } from "../logbuffer";
 import { flowOf, intakeTitle, laneOf, nextIntakeKey, sizeOf, weekStart } from "@/lib/cc-lanes";
 import { CLOSED_STATUSES, OPEN_STATUSES } from "@/lib/cc-flow";
-import { testedCurrent } from "@/lib/workers";
+import { testedCurrent, workersState } from "@/lib/workers";
 import { Prisma } from "@prisma/client";
 
 /**
@@ -82,11 +82,14 @@ export async function needsYou() {
 }
 
 /** Задачи с макетом, ожидающие утверждения владельцем: любой статус кроме завершённых */
-/** Дизайн ждёт утверждения владельцем: есть описание дизайна, макет или файлы, а утверждения нет */
+/**
+ * Дизайн ждёт утверждения владельцем: есть настоящий макет — картинка во вложениях или ссылка (mockupUrl) —
+ * либо стоит флаг «нужен макет». Текстовое описание дизайна само по себе на согласование не выносится
+ */
 const DESIGN_PENDING: Prisma.TaskWhereInput = {
   status: { notIn: ["done", "cancelled"] },
   mockupApprovedBy: null,
-  OR: [{ mockupRequired: true }, { mockupUrl: { not: null } }, { AND: [{ design: { not: null } }, { design: { not: "" } }] }, { attachments: { some: {} } }],
+  OR: [{ mockupRequired: true }, { mockupUrl: { not: null } }, { attachments: { some: { mime: { startsWith: "image/" } } } }],
 };
 
 export async function mockupPendingApprovals() {
@@ -304,7 +307,7 @@ export async function healthStatus() {
     heapMb: Math.round(mem.heapUsed / 1048576),
     node: process.version,
     tickAgeMin: tick ? (Date.now() - Date.parse(tick.at)) / 60_000 : null,
-    workers: { enabled: config.enabled, dryRun: config.dryRun, pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null, running },
+    workers: { enabled: config.enabled, dryRun: config.dryRun, pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null, state: workersState(config), running },
     runs24: Object.fromEntries(runs24.map((r) => [r.status, r._count])) as Record<string, number>,
     lastDeploy,
     orders24,

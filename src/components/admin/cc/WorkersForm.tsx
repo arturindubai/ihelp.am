@@ -2,9 +2,9 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
-import { ccSaveWorkersAction } from "@/server/actions/admin/cc";
-import { EVERY_MIN, MODELS, MODES, SINGLE, type Pool, type PoolConfig, type WorkersConfig } from "@/lib/workers";
-import { cn } from "@/lib/format";
+import { ccSaveWorkersAction, ccWorkersControlAction } from "@/server/actions/admin/cc";
+import { EVERY_MIN, MODELS, MODES, SINGLE, workersState, type Pool, type PoolConfig, type WorkersCommand, type WorkersConfig, type WorkersState } from "@/lib/workers";
+import { cn, dateLabel, timeLabel } from "@/lib/format";
 
 type Patch = Parameters<typeof ccSaveWorkersAction>[0];
 
@@ -25,71 +25,140 @@ function useSave() {
   return { pending, saved, error, save };
 }
 
+/** Дата и время по Еревану для подписи состояния — теми же Intl-помощниками, что на сервере, чтобы не расходилась гидратация */
+const when = (iso: string) => `${dateLabel(new Date(iso), "ru", { day: "numeric", month: "short" })}, ${timeLabel(new Date(iso))}`;
+
+/** Значение поля datetime-local (стенное время по Еревану, UTC+4 без перевода часов) → ISO */
+const yerevanToIso = (local: string) => (local ? new Date(`${local}:00+04:00`).toISOString() : null);
+
+/** Значение для datetime-local по умолчанию: через час, по Еревану, минуты округлены */
+const defaultPlanLocal = () => {
+  const d = new Date(Date.now() + 3600_000 + 4 * 3600_000);
+  d.setUTCMinutes(0, 0, 0);
+  return d.toISOString().slice(0, 16);
+};
+
+const STATE_TONE: Record<WorkersState, { box: string; dot: string; text: string }> = {
+  running: { box: "bg-ok-50", dot: "bg-ok", text: "text-ok" },
+  off: { box: "bg-surface", dot: "bg-muted", text: "text-ink" },
+  paused: { box: "bg-warn-50", dot: "bg-warn", text: "text-warn" },
+  planned: { box: "bg-brand-50", dot: "bg-brand", text: "text-brand" },
+  stopped: { box: "bg-bad-50", dot: "bg-bad", text: "text-bad" },
+};
+
 /**
- * Главный пульт воркеров, как «Master dispatcher» в LIA: общий выключатель, пробный режим, стоп-кран,
- * снятие паузы после лимита, окно выкладки и настройки триажа. Сохраняется сразу — диспетчер читает на следующем проходе
+ * Главный пульт воркеров, как «Master dispatcher» в LIA: состояние словами и четыре кнопки владельца —
+ * Пауза, Стоп, Старт, План старт (через 1–5 ч или дата-время по Еревану); пробный режим, окно выкладки и настройки триажа.
+ * Сохраняется сразу — диспетчер читает на следующем проходе
  */
 export function WorkersMaster({ initial, running }: { initial: WorkersConfig; running: number }) {
   const t = useTranslations("admin.cc.workers");
+  const router = useRouter();
   const [c, setC] = useState(initial);
   const { pending, saved, error, save } = useSave();
-  const paused = c.pausedUntil && Date.parse(c.pausedUntil) > Date.now();
+  const [busy, startControl] = useTransition();
+  const [controlError, setControlError] = useState<string | null>(null);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [planLocal, setPlanLocal] = useState("");
+  const state = workersState(c);
+  const tone = STATE_TONE[state];
   const set = (patch: Partial<WorkersConfig>, persist = true) => {
     setC({ ...c, ...patch });
     if (persist) save(patch as Patch);
   };
+  const control = (command: WorkersCommand, at?: string | null) =>
+    startControl(async () => {
+      setControlError(null);
+      const r = await ccWorkersControlAction(command, at ?? undefined);
+      if (!r.ok) return setControlError(r.error === "past" ? t("planPast") : t("invalid"));
+      setC(r.config);
+      setPlanOpen(false);
+      router.refresh();
+    });
+  const plan = (iso: string | null) => {
+    if (!iso || Date.parse(iso) <= Date.now()) return setControlError(t("planPast"));
+    control("plan", iso);
+  };
+  const disabled = pending || busy;
 
   return (
     <div className="space-y-3">
-      <div className={cn("flex flex-wrap items-center justify-between gap-3 rounded-xl p-3", c.enabled ? "bg-ok-50" : "bg-surface")}>
+      <div className={cn("flex flex-wrap items-center justify-between gap-3 rounded-xl p-3", tone.box)}>
         <div className="flex items-center gap-3">
-          <span className={cn("size-3 rounded-full", c.enabled ? "bg-ok" : "bg-muted")} />
+          <span className={cn("size-3 rounded-full", tone.dot, state === "running" && running > 0 && "animate-pulse")} />
           <div>
-            <div className={cn("font-semibold", c.enabled ? "text-ok" : "text-ink")}>
-              {c.enabled ? t("on") : t("off")} · {t("runningCount", { n: running })}
+            <div className={cn("font-semibold", tone.text)}>
+              {state === "planned" ? t("state.planned", { when: when(c.pausedUntil!) }) : t(`state.${state}`)} · {t("runningCount", { n: running })}
             </div>
-            <div className="text-xs text-muted">{c.enabled ? t("onHint") : t("offHint")}</div>
+            <div className="text-xs text-muted">
+              {state === "running" && t("onHint")}
+              {state === "off" && t("offHint")}
+              {state === "paused" && (c.pausedReason ?? t("pausedLimit"))}
+              {state === "paused" && c.pausedUntil && Date.parse(c.pausedUntil) - Date.now() < 365 * 86400_000 && ` · ${t("pausedUntilShort", { until: when(c.pausedUntil) })}`}
+              {state === "stopped" && t("stoppingAll")}
+              {state === "planned" && t("planHint")}
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <label className={cn("chip cursor-pointer gap-1.5 text-xs", c.dryRun ? "bg-warn-50 text-warn" : "bg-paper text-muted")} title={t("dryRunHint")}>
-            <input type="checkbox" checked={c.dryRun} onChange={(e) => set({ dryRun: e.target.checked })} disabled={pending} />
+            <input type="checkbox" checked={c.dryRun} onChange={(e) => set({ dryRun: e.target.checked })} disabled={disabled} />
             {t("dryRun")}
           </label>
-          {c.enabled ? (
-            <>
-              <button className="btn-outline btn-sm" disabled={pending} onClick={() => set({ enabled: false })}>
-                {t("pause")}
+          <button className="btn-outline btn-sm" disabled={disabled || state === "paused"} title={t("pauseHint")} onClick={() => control("pause")}>
+            {t("pause")}
+          </button>
+          <button className="btn-danger btn-sm" disabled={disabled || state === "stopped"} title={t("stopHint")} onClick={() => confirm(t("stopConfirm")) && control("stop")}>
+            {t("stop")}
+          </button>
+          <button className="btn-primary btn-sm" disabled={disabled} title={t("startHint")} onClick={() => control("start")}>
+            {t("start")}
+          </button>
+          <button
+            className={cn("btn-outline btn-sm", planOpen && "bg-surface")}
+            disabled={disabled}
+            title={t("planHint")}
+            onClick={() => {
+              setControlError(null);
+              if (!planLocal) setPlanLocal(defaultPlanLocal());
+              setPlanOpen((v) => !v);
+            }}
+          >
+            {t("plan")}
+          </button>
+        </div>
+      </div>
+
+      {planOpen && (
+        <div className="flex flex-wrap items-end gap-3 rounded-lg bg-brand-50 p-3 text-sm">
+          <div className="flex flex-wrap gap-1.5">
+            {[1, 2, 3, 4, 5].map((h) => (
+              <button key={h} type="button" className="btn-outline btn-sm" disabled={disabled} onClick={() => plan(new Date(Date.now() + h * 3600_000).toISOString())}>
+                {t("planIn", { h })}
               </button>
-              <button className="btn-danger btn-sm" disabled={pending} onClick={() => confirm(t("stopAllConfirm")) && set({ enabled: false, stopRunning: true })}>
-                {t("stopAll")}
-              </button>
-            </>
-          ) : (
-            <button className="btn-primary btn-sm" disabled={pending} onClick={() => set({ enabled: true, stopRunning: false })}>
-              {t("enable")}
+            ))}
+          </div>
+          <div>
+            <label className="label">{t("planAt")}</label>
+            <input className="input h-9 w-auto py-1" type="datetime-local" value={planLocal} onChange={(e) => setPlanLocal(e.target.value)} disabled={disabled} />
+          </div>
+          <button type="button" className="btn-dark btn-sm" disabled={disabled || !planLocal} onClick={() => plan(yerevanToIso(planLocal))}>
+            {t("planSubmit")}
+          </button>
+          {state === "planned" && (
+            <button type="button" className="btn-outline btn-sm" disabled={disabled} onClick={() => control("pause")}>
+              {t("planCancel")}
             </button>
           )}
         </div>
-      </div>
+      )}
+      {controlError && <p className="rounded-lg bg-bad-50 px-3 py-2 text-xs text-bad">{controlError}</p>}
 
       {c.stopRunning && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-bad-50 p-3 text-sm text-bad">
           <span>{t("stoppingAll")}</span>
-          <button className="btn-outline btn-sm" disabled={pending} onClick={() => set({ stopRunning: false })}>
+          <button className="btn-outline btn-sm" disabled={disabled} onClick={() => set({ stopRunning: false })}>
             {t("stopDone")}
-          </button>
-        </div>
-      )}
-
-      {paused && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-warn-50 p-3 text-sm text-warn">
-          <span>
-            {t("pausedUntil", { until: new Date(c.pausedUntil!).toLocaleString("ru-RU", { timeZone: "Asia/Yerevan", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) })}{" "}
-            {c.pausedReason ?? t("pausedLimit")}
-          </span>
-          <button className="btn-outline btn-sm" disabled={pending} onClick={() => set({ pausedUntil: null })}>
-            {t("resume")}
           </button>
         </div>
       )}
