@@ -37,6 +37,7 @@ export async function WorkersTab({ locale, taskHref }: { locale: string; taskHre
   const minutes = (a: Date, b: Date | null) => Math.max(1, Math.round(((b ?? new Date()).getTime() - a.getTime()) / 60_000));
   const tickAge = data.tick ? (Date.now() - Date.parse(data.tick.at)) / 60_000 : null;
   const queueOf = (p: Pool) => data.queues[p] as { key: string; title: string; priority: string; reason?: string; detail?: string; intake?: boolean }[];
+  const lastTriageBatch = data.runs.find((r) => r.pool === "triage" && r.keys.length > 0)?.keys.length ?? null;
   const runKeys = (r: { taskKey: string | null; keys: string[] }) => (r.taskKey ? [r.taskKey] : r.keys);
 
   return (
@@ -85,6 +86,7 @@ export async function WorkersTab({ locale, taskHref }: { locale: string; taskHre
               <div key="today" className="mt-2 text-xs text-muted">
                 {tw("todayOf", { n: data.today[p], cap: pc.dailyCap })}
                 {data.lastStart[p] && ` · ${tw("lastStart", { ago: ago(t, data.lastStart[p]) })}`}
+                {p === "triage" && lastTriageBatch !== null && ` · ${tw("lastBatch", { n: lastTriageBatch })}`}
                 {p === "deployer" && ` · ${data.deployWindowOpen ? tw("windowOpen") : tw("windowClosed", { from: data.config.deployWindow[0], to: data.config.deployWindow[1] })}`}
               </div>
 

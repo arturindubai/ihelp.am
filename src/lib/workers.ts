@@ -242,10 +242,18 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
     }
   }
 
-  if (due("triage")) {
-    const keys = triageBatch();
-    if (keys.length) actions.push({ pool: "triage", agent: "triage", keys });
-    else if (s.sweepDue && config.sweepEveryH > 0) actions.push({ pool: "triage", agent: "triage", sweep: true });
+  // Триаж: при непустой очереди — на каждом проходе (расписание игнорируется); обзор бэклога — только по расписанию
+  {
+    const pc = config.pools["triage"];
+    const canRun = pc.enabled && pc.mode !== "manual" && left("triage") > 0 && free("triage") > 0;
+    if (canRun) {
+      const keys = triageBatch();
+      if (keys.length) {
+        actions.push({ pool: "triage", agent: "triage", keys });
+      } else if (s.sweepDue && config.sweepEveryH > 0 && due("triage")) {
+        actions.push({ pool: "triage", agent: "triage", sweep: true });
+      }
+    }
   }
 
   // Разработчики и «Продукт и не-код» — по числу готовых задач своего вида; запущенные по просьбе уже заняли часть

@@ -1091,7 +1091,8 @@
         "tokens": "{in}k→{out}k токенов",
         "requestedBy": "по кнопке: {who}",
         "pausedUntil": "Пауза до {until}.",
-        "pausedLimit": "Исчерпан лимит подписки Claude — он общий с вашими чатами."
+        "pausedLimit": "Исчерпан лимит подписки Claude — он общий с вашими чатами.",
+        "lastBatch": "последняя пачка {n}"
       },
       "drawer": {
         "close": "Закрыть",
