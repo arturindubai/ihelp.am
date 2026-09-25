@@ -58,6 +58,8 @@ export async function ccCounts() {
   };
 }
 
+const AGENT_PREFIXES = ["system", "triage", "nocode", "dev-", "deployer", "tester"];
+
 /** «Нужен ты»: блокировки на владельце и продукте, брошенные задачи, застрявшая проверка, упавшие запуски, пауза воркеров */
 export async function needsYou() {
   const [attn, owner, failedRuns, config] = await Promise.all([
@@ -71,7 +73,10 @@ export async function needsYou() {
     getWorkersConfig(),
   ]);
   return {
-    owner,
+    owner: owner.map((x) => ({
+      ...x,
+      ownerAnswered: x.comments[0] ? !AGENT_PREFIXES.some((p) => x.comments[0].author.startsWith(p)) : false,
+    })),
     stale: attn.stale,
     stuckReview: attn.review.filter((r) => r.health.stuckReview),
     failedRuns,

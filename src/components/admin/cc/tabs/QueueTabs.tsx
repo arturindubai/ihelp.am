@@ -32,39 +32,79 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
           </p>
         </Card>
       )}
-      {data.owner.length > 0 && (
-        <Card title={`✋ ${ty("owner")} · ${data.owner.length}`}>
-          <p className="mb-2 text-xs text-muted">{ty("ownerHint")}</p>
-          <ul className="divide-y divide-line">
-            {data.owner.map((x) => {
-              const last = x.comments[0];
-              return (
-                <TaskLine
-                  key={x.key}
-                  k={x.key}
-                  title={x.title}
-                  priority={x.priority}
-                  href={taskHref(x.key)}
-                  sub={
-                    <>
-                      <span className="text-warn">
-                        {BLOCKED_ON_LABELS[x.blockedOn ?? ""] ?? x.blockedOn}: {x.blockedReason}
-                      </span>
-                      {last && (
-                        <span className="mt-0.5 line-clamp-2 block">
-                          {last.author}: {last.text}
-                        </span>
-                      )}
-                      <span className="block">{ty("since", { ago: ago(t, x.updatedAt) })}</span>
-                    </>
-                  }
-                  right={<span className="text-xs text-brand">{ty("answer")} →</span>}
-                />
-              );
-            })}
-          </ul>
-        </Card>
-      )}
+      {data.owner.length > 0 && (() => {
+        const needsAnswer = data.owner.filter((x) => !x.ownerAnswered);
+        const answered = data.owner.filter((x) => x.ownerAnswered);
+        return (
+          <>
+            {needsAnswer.length > 0 && (
+              <Card title={`✋ ${ty("ownerNeedAnswer")} · ${needsAnswer.length}`}>
+                <p className="mb-2 text-xs text-muted">{ty("ownerHint")}</p>
+                <ul className="divide-y divide-line">
+                  {needsAnswer.map((x) => {
+                    const last = x.comments[0];
+                    return (
+                      <TaskLine
+                        key={x.key}
+                        k={x.key}
+                        title={x.title}
+                        priority={x.priority}
+                        href={taskHref(x.key)}
+                        sub={
+                          <>
+                            <span className="text-warn">
+                              {BLOCKED_ON_LABELS[x.blockedOn ?? ""] ?? x.blockedOn}: {x.blockedReason}
+                            </span>
+                            {last && (
+                              <span className="mt-0.5 line-clamp-2 block">
+                                {last.author}: {last.text}
+                              </span>
+                            )}
+                            <span className="block">{ty("since", { ago: ago(t, x.updatedAt) })}</span>
+                          </>
+                        }
+                        right={<span className="text-xs text-brand">{ty("answer")} →</span>}
+                      />
+                    );
+                  })}
+                </ul>
+              </Card>
+            )}
+            {answered.length > 0 && (
+              <Card title={`✅ ${ty("ownerAnswered")} · ${answered.length}`}>
+                <ul className="divide-y divide-line">
+                  {answered.map((x) => {
+                    const last = x.comments[0];
+                    return (
+                      <TaskLine
+                        key={x.key}
+                        k={x.key}
+                        title={x.title}
+                        priority={x.priority}
+                        href={taskHref(x.key)}
+                        sub={
+                          <>
+                            <span className="text-muted">
+                              {BLOCKED_ON_LABELS[x.blockedOn ?? ""] ?? x.blockedOn}: {x.blockedReason}
+                            </span>
+                            {last && (
+                              <span className="mt-0.5 line-clamp-2 block text-muted">
+                                {last.author}: {last.text}
+                              </span>
+                            )}
+                            <span className="block">{ty("since", { ago: ago(t, x.updatedAt) })}</span>
+                          </>
+                        }
+                        right={<span className="text-xs text-muted">{ty("waitingTriage")}</span>}
+                      />
+                    );
+                  })}
+                </ul>
+              </Card>
+            )}
+          </>
+        );
+      })()}
       {data.stale.length > 0 && (
         <Card title={`🪦 ${ty("stale")} · ${data.stale.length}`}>
           <ul className="divide-y divide-line">
