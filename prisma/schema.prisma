@@ -306,6 +306,7 @@ model Order {
   redemptions       PromoRedemption[]
 
   @@index([userId])
+  @@index([userId, createdAt])
   @@index([status])
 }
 
@@ -738,6 +739,7 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   @@index([entity, entityId])
+  @@index([createdAt])
 }
 
 /// Надёжная доставка уведомлений: очередь с повторными попытками при сбое канала
