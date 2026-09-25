@@ -73,6 +73,7 @@ model OtpCode {
   createdAt  DateTime   @default(now())
 
   @@index([phone, createdAt])
+  @@index([ip, createdAt])
 }
 
 model Address {
