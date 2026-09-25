@@ -29,7 +29,7 @@ model User {
   id          String    @id @default(cuid())
   phone       String    @unique
   name        String?
-  email       String?
+  email       String?   @unique
   /// Когда владелец подтвердил email кодом из письма. Войти по email можно только с подтверждённым адресом: иначе вписанной в профиль чужой почтой перехватывается вход её владельца
   emailVerifiedAt DateTime?
   role        Role      @default(CLIENT)

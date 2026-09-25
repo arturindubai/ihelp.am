@@ -220,6 +220,8 @@ export async function registerTelegramWebhookAction() {
   const secret = telegramWebhookSecret(process.env.SESSION_SECRET || "dev");
   const r = await registerTelegramWebhook(appUrl, secret);
   if (!r.ok) return { ok: false as const, error: "telegram" };
+  // Имя бота нужно сайту для кнопки «Войти через Telegram»: без подключённого вебхука кнопки нет
+  if (r.username) await saveSettingsSection("notify", { ...(await getSettings()).notify, telegramBotUsername: r.username });
   await audit(u.id, "settings.telegramWebhook", "Setting", "notify");
   return { ok: true as const, username: r.username };
 }
