@@ -90,6 +90,12 @@ export interface CreateOrderInput {
 
 export class BookingError extends Error {}
 
+/** Берёт транзакционную блокировку по (masterId, date) — исключает двойное бронирование одного слота */
+async function lockMasterDay(tx: Tx, masterId: string, dateStr: string) {
+  const dateInt = parseInt(dateStr.replace(/-/g, ""), 10);
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${masterId}), ${dateInt})`;
+}
+
 export async function createOrder(user: User, input: CreateOrderInput) {
   const settings = await getSettings();
   const raw = await loadServiceRaw(input.slug);
@@ -136,9 +142,12 @@ export async function createOrder(user: User, input: CreateOrderInput) {
 
   const order = await db.$transaction(
     async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(424242)`;
       const masterId = await pickMaster(tx, raw.id, start, durationMin, input.masterId, !!input.masterId, buffer);
       if (!masterId) throw new BookingError("slot_taken");
+      await lockMasterDay(tx, masterId, input.date);
+      // Повторная проверка: пока ждали блокировку, другая транзакция могла занять этот слот
+      const [recheckMaster] = await loadAvailability({ serviceId: raw.id, from: new Date(start.getTime() - 24 * 3600_000), to: new Date(start.getTime() + 24 * 3600_000), masterIds: [masterId], tx });
+      if (!recheckMaster || !isMasterFree(recheckMaster, start, durationMin, buffer)) throw new BookingError("slot_taken");
 
       const recurrence: Recurrence | null = kind === "SUBSCRIPTION" ? { start: input.date, time: input.time, weekdays, intervalDays: plan?.intervalDays || 7 } : null;
       const addressSnapshot = { district: address.district, street: address.street, building: address.building, entrance: address.entrance, floor: address.floor, apartment: address.apartment, intercom: address.intercom, comment: address.comment, label: address.label };
@@ -210,16 +219,11 @@ export async function createOrder(user: User, input: CreateOrderInput) {
 }
 
 /** Досоздаёт визиты подписки до горизонта. Вызывается при создании заказа и по крону. */
-/**
- * Генерация визитов вне оформления заказа (крон, возобновление, админка).
- * Идёт в транзакции с той же блокировкой, что и оформление, иначе два процесса
- * могут одновременно занять одного мастера на один слот.
- */
+/** Генерация визитов вне оформления заказа (крон, возобновление, админка). */
 export async function generateSubscriptionVisitsSafe(orderId: string, horizonDays: number, bufferMin: number) {
   return db.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(424242)`;
     return generateSubscriptionVisits(tx, orderId, horizonDays, bufferMin);
-  });
+  }, { timeout: 20_000 });
 }
 
 /**
@@ -228,11 +232,10 @@ export async function generateSubscriptionVisitsSafe(orderId: string, horizonDay
  */
 export async function resumeSubscription(orderId: string, horizonDays: number, bufferMin: number) {
   return db.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(424242)`;
     await tx.visit.deleteMany({ where: { orderId, status: "SKIPPED", scheduledAt: { gt: new Date() } } });
     await tx.order.update({ where: { id: orderId }, data: { status: "ACTIVE", pausedUntil: null } });
     return generateSubscriptionVisits(tx, orderId, horizonDays, bufferMin);
-  });
+  }, { timeout: 20_000 });
 }
 
 export async function generateSubscriptionVisits(tx: Tx, orderId: string, horizonDays: number, bufferMin: number) {
@@ -249,7 +252,13 @@ export async function generateSubscriptionVisits(tx: Tx, orderId: string, horizo
     if (existing.has(d)) continue;
     const start = atYerevan(d, r.time);
     if (start < new Date()) continue;
-    const masterId = await pickMaster(tx, order.serviceId, start, order.durationMin, order.preferredMasterId, false, bufferMin);
+    const pickedMaster = await pickMaster(tx, order.serviceId, start, order.durationMin, order.preferredMasterId, false, bufferMin);
+    let masterId: string | null = pickedMaster;
+    if (masterId) {
+      await lockMasterDay(tx, masterId, d);
+      const [recheckMaster] = await loadAvailability({ serviceId: order.serviceId, from: new Date(start.getTime() - 24 * 3600_000), to: new Date(start.getTime() + 24 * 3600_000), masterIds: [masterId], tx });
+      if (!recheckMaster || !isMasterFree(recheckMaster, start, order.durationMin, bufferMin)) masterId = null;
+    }
     idx += 1;
     await tx.visit.create({ data: { orderId: order.id, index: idx, scheduledAt: start, durationMin: order.durationMin, masterId, price: order.pricePerVisit } });
     created++;
@@ -263,10 +272,13 @@ export async function scheduleVisit(visitId: string, date: string, time: string,
   const settings = await getSettings();
   const start = atYerevan(date, time);
   return db.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(424242)`;
     const v = await tx.visit.findUniqueOrThrow({ where: { id: visitId }, include: { order: true } });
     const chosen = await pickMaster(tx, v.order.serviceId, start, v.durationMin, masterId || v.masterId || v.order.preferredMasterId, !!opts.strictMaster, settings.booking.bufferMin, v.id);
     if (!chosen) throw new BookingError("slot_taken");
+    await lockMasterDay(tx, chosen, date);
+    // Повторная проверка с исключением самого визита — он мог быть назначен на этот же слот ранее
+    const [recheckMaster] = await loadAvailability({ serviceId: v.order.serviceId, from: new Date(start.getTime() - 24 * 3600_000), to: new Date(start.getTime() + 24 * 3600_000), masterIds: [chosen], excludeVisitId: v.id, tx });
+    if (!recheckMaster || !isMasterFree(recheckMaster, start, v.durationMin, settings.booking.bufferMin)) throw new BookingError("slot_taken");
     return tx.visit.update({ where: { id: v.id }, data: { scheduledAt: start, masterId: chosen, status: "SCHEDULED" } });
   });
 }
