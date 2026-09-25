@@ -4,6 +4,7 @@ import { Link, redirect } from "@/i18n/navigation";
 import { db } from "@/server/db";
 import { getCurrentUser, STAFF_ROLES } from "@/server/auth";
 import { getSettings } from "@/server/settings";
+import { emailCodesAvailable } from "@/server/otp";
 import { ProfileClient } from "@/components/account/ProfileClient";
 
 export default async function AccountPage({ params }: { params: Promise<{ locale: string }> }) {
@@ -20,7 +21,7 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
         {user.role === "MASTER" && <Link href="/pro" className="flex items-center gap-3 p-4 font-medium"><Briefcase size={20} /> <span className="flex-1">{tn("pro")}</span><ChevronRight size={18} className="text-muted" /></Link>}
         {STAFF_ROLES.includes(user.role) && <Link href="/admin" className="flex items-center gap-3 p-4 font-medium"><LayoutDashboard size={20} /> <span className="flex-1">{tn("admin")}</span><ChevronRight size={18} className="text-muted" /></Link>}
       </div>
-      <ProfileClient user={{ name: user.name, phone: user.phone, email: user.email, locale: user.locale }} addresses={addresses} districts={settings.booking.districts} enabledLocales={settings.locales.enabled} />
+      <ProfileClient user={{ name: user.name, phone: user.phone, email: user.email, emailVerified: !!user.emailVerifiedAt, locale: user.locale }} addresses={addresses} districts={settings.booking.districts} enabledLocales={settings.locales.enabled} emailCodes={emailCodesAvailable(settings)} />
     </div>
   );
 }

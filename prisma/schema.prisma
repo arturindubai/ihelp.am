@@ -22,6 +22,7 @@ enum OtpChannel {
   SMS
   WHATSAPP
   TELEGRAM
+  EMAIL
 }
 
 model User {
@@ -29,6 +30,8 @@ model User {
   phone       String    @unique
   name        String?
   email       String?
+  /// Когда владелец подтвердил email кодом из письма. Войти по email можно только с подтверждённым адресом: иначе вписанной в профиль чужой почтой перехватывается вход её владельца
+  emailVerifiedAt DateTime?
   role        Role      @default(CLIENT)
   locale      String    @default("ru")
   blocked     Boolean   @default(false)

@@ -2,7 +2,7 @@
 import { useRouter } from "@/i18n/navigation";
 import { LoginForm } from "@/components/auth/LoginForm";
 
-export function InlineLogin({ channels }: { channels: ("SMS" | "WHATSAPP" | "TELEGRAM")[] }) {
+export function InlineLogin({ channels, emailEnabled }: { channels: ("SMS" | "WHATSAPP" | "TELEGRAM")[]; emailEnabled: boolean }) {
   const router = useRouter();
-  return <LoginForm channels={channels} onDone={() => router.refresh()} />;
+  return <LoginForm channels={channels} emailEnabled={emailEnabled} onDone={() => router.refresh()} />;
 }

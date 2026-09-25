@@ -3,12 +3,16 @@ import { headers } from "next/headers";
 import type { OtpChannel } from "@prisma/client";
 import { db } from "../db";
 import { normalizePhone } from "@/lib/phone";
+import { normalizeEmail } from "@/lib/email";
 import { sendOtp, verifyOtp } from "../otp";
 import { createSession, getCurrentUser, hash, logout } from "../auth";
+import { audit } from "../audit";
 
 export async function sendCodeAction(phoneRaw: string, channel: OtpChannel, locale = "ru") {
   const phone = normalizePhone(phoneRaw);
   if (!phone) return { ok: false as const, error: "phone" };
+  // Код на email отправляется по адресу отдельным действием (sendEmailLoginCodeAction), не по номеру
+  if (channel === "EMAIL") return { ok: false as const, error: "channel_unavailable" };
   const existing = await db.user.findUnique({ where: { phone } });
   if (existing?.blocked) return { ok: false as const, error: "blocked" };
   const h = await headers();
@@ -41,6 +45,41 @@ export async function verifyCodeAction(phoneRaw: string, code: string, locale: s
   }
   await createSession(user.id);
   return { ok: true as const, needName: false, role: user.role };
+}
+
+/**
+ * Пользователь, чей email подтверждён кодом (AUTH-14). Только по такому адресу пускаем в аккаунт:
+ * иначе можно вписать в профиль чужую почту и перехватить вход её владельца. Если адрес почему-то у двух
+ * аккаунтов сразу (до уникальности email) — не пускаем никого.
+ */
+async function verifiedUserByEmail(email: string) {
+  const list = await db.user.findMany({ where: { email: { equals: email, mode: "insensitive" }, emailVerifiedAt: { not: null } }, take: 2 });
+  return list.length === 1 ? list[0] : null;
+}
+
+/**
+ * Код входа на email. Ответ одинаков для существующего, неизвестного, неподтверждённого и заблокированного
+ * адреса: код и лимиты создаются всегда, письмо уходит только настоящему подтверждённому аккаунту.
+ */
+export async function sendEmailLoginCodeAction(emailRaw: string, locale = "ru") {
+  const email = normalizeEmail(emailRaw);
+  if (!email) return { ok: false as const, error: "email" };
+  const user = await verifiedUserByEmail(email);
+  const h = await headers();
+  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || undefined;
+  const r = await sendOtp(email, "EMAIL", ip, ["ru", "en", "am"].includes(locale) ? locale : "ru", { skipDelivery: !user || user.blocked });
+  return { ...r, email };
+}
+
+export async function verifyEmailLoginCodeAction(emailRaw: string, code: string) {
+  const email = normalizeEmail(emailRaw);
+  if (!email || !/^\d{4,6}$/.test(code.trim())) return { ok: false as const, error: "code" };
+  if (!(await verifyOtp(email, code))) return { ok: false as const, error: "code" };
+  const user = await verifiedUserByEmail(email);
+  if (!user || user.blocked) return { ok: false as const, error: "code" };
+  await createSession(user.id);
+  await audit(user.id, "auth.email", "User", user.id);
+  return { ok: true as const, role: user.role };
 }
 
 export async function completeSignupAction(ticket: string, name: string) {
