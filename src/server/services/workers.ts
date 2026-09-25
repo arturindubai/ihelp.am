@@ -202,11 +202,37 @@ async function testerWithoutVerdict(run: { taskKey: string | null; startedAt: Da
   await transition(run.taskKey, { to: "blocked", blockedOn: "tech", text: why }, WATCHDOG).catch((e) => console.warn(`[workers] ${run.taskKey}: не удалось заблокировать — ${(e as Error).message}`));
 }
 
-/** Когда пора пересмотреть весь бэклог: с прошлого обзора прошло sweepEveryH часов */
-async function sweepDue(config: WorkersConfig) {
+/** Когда пора пересмотреть весь бэклог: с прошлого обзора этого пула прошло sweepEveryH часов */
+async function sweepDue(config: WorkersConfig, pool: "triage" | "product" | "designer" = "triage") {
   if (config.sweepEveryH <= 0) return false;
-  const last = await db.workerRun.findFirst({ where: { pool: "triage", taskKey: null, keys: { isEmpty: true } }, orderBy: { startedAt: "desc" }, select: { startedAt: true } });
+  const last = await db.workerRun.findFirst({ where: { pool, taskKey: null, keys: { isEmpty: true } }, orderBy: { startedAt: "desc" }, select: { startedAt: true } });
   return !last || Date.now() - last.startedAt.getTime() >= config.sweepEveryH * 3600_000;
+}
+
+/**
+ * Очередь дизайнера: вопросы «на дизайне» и интерфейсные задачи (фронт, бэк+фронт) в бэклоге и очереди
+ * без описания дизайна и без файлов-макетов — разработчик без этого перерисовывает экран после выкладки
+ */
+export async function designerQueue() {
+  const rows = await db.task.findMany({
+    where: {
+      OR: [
+        { status: "blocked", blockedOn: "design" },
+        { status: { in: ["backlog", "ready"] }, layer: { in: ["front", "fullstack"] }, OR: [{ design: null }, { design: "" }], attachments: { none: {} } },
+      ],
+    },
+    select: { key: true, title: true, priority: true, stage: true, status: true, sort: true, source: true, blockedOn: true, blockedReason: true },
+  });
+  return rows.sort((a, b) => Number(b.status === "blocked") - Number(a.status === "blocked") || PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority) || STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage) || a.sort - b.sort);
+}
+
+/** Очередь продакта: задачи с вопросом к продукту, важные первыми */
+export async function productQueue() {
+  const rows = await db.task.findMany({
+    where: { status: "blocked", blockedOn: "product" },
+    select: { key: true, title: true, priority: true, stage: true, status: true, sort: true, source: true, blockedReason: true },
+  });
+  return rows.sort((a, b) => PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority) || STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage) || a.sort - b.sort);
 }
 
 async function lastStarts() {
@@ -221,7 +247,7 @@ async function todayCounts() {
 
 export async function dispatchState(heads: Record<string, string>): Promise<DispatchState> {
   const config = await getWorkersConfig();
-  const [running, today, review, readyForDev, readyForNocode, triage, sweep, lastStart, requests] = await Promise.all([
+  const [running, today, review, readyForDev, readyForNocode, triage, sweep, lastStart, requests, product, productSweep, designer, designerSweep] = await Promise.all([
     db.workerRun.findMany({ where: { status: "running" }, select: { pool: true, agent: true } }),
     todayCounts(),
     reviewTasks(),
@@ -231,6 +257,10 @@ export async function dispatchState(heads: Record<string, string>): Promise<Disp
     sweepDue(config),
     lastStarts(),
     getRequests(),
+    productQueue(),
+    sweepDue(config, "product"),
+    designerQueue(),
+    sweepDue(config, "designer"),
   ]);
   return {
     config,
@@ -242,6 +272,10 @@ export async function dispatchState(heads: Record<string, string>): Promise<Disp
     heads,
     triageQueue: triage.map((t) => t.key),
     sweepDue: sweep,
+    productQueue: product.map((t) => t.key),
+    productSweepDue: productSweep,
+    designerQueue: designer.map((t) => t.key),
+    designerSweepDue: designerSweep,
     lastStart,
     requests: requests.filter((r) => Date.now() - Date.parse(r.at) < 30 * 60_000),
   };
@@ -340,7 +374,7 @@ export async function listRuns(take = 40) {
 /** Всё для вкладки «Воркеры»: настройки, очереди каждого пула с причинами, работающие, журнал, диспетчер */
 export async function workersOverview() {
   const config = await getWorkersConfig();
-  const [runs, running, today, tick, requests, triage, dev, nocode, review, lastStart] = await Promise.all([
+  const [runs, running, today, tick, requests, triage, dev, nocode, review, lastStart, product, designer] = await Promise.all([
     listRuns(60),
     db.workerRun.findMany({ where: { status: "running" }, orderBy: { startedAt: "asc" } }),
     todayCounts(),
@@ -351,6 +385,8 @@ export async function workersOverview() {
     readyQueue("nocode"),
     reviewTasks(),
     lastStarts(),
+    productQueue(),
+    designerQueue(),
   ]);
   const heads = tick?.heads ?? {};
   const q = reviewQueues(review, heads);
@@ -367,6 +403,8 @@ export async function workersOverview() {
     lastStart,
     queues: {
       triage: triage.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, intake: t.source === "intake" })),
+      product: product.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, reason: "question", detail: (t.blockedReason ?? "").slice(0, 80) })),
+      designer: designer.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, reason: t.status === "blocked" ? "question" : "nodesign", detail: (t.blockedReason ?? "").slice(0, 80) })),
       dev,
       nocode,
       tester: [
