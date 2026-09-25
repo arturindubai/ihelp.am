@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "../db";
+import { CLOSED_STATUSES } from "@/lib/cc-flow";
 import type { Prisma } from "@prisma/client";
 
 export type EpicFilters = { status?: string; q?: string };
@@ -20,7 +21,7 @@ export async function listEpics(f: EpicFilters = {}) {
   const counts = await db.task.groupBy({ by: ["epicKey", "status"], _count: true, where: { epicKey: { not: null } } });
   return epics.map((e) => {
     const rows = counts.filter((c) => c.epicKey === e.key);
-    const total = rows.reduce((s, r) => s + r._count, 0);
+    const total = rows.filter((r) => r.status !== "cancelled").reduce((s, r) => s + r._count, 0);
     const done = rows.filter((r) => r.status === "done").reduce((s, r) => s + r._count, 0);
     return { ...e, taskTotal: total, taskDone: done };
   });
@@ -81,6 +82,11 @@ export async function saveEpic(content: EpicContent, actor: string, isNew: boole
   const existing = await db.epic.findUnique({ where: { key } });
   if (isNew && existing) throw new Error("key_exists");
   if (!isNew && !existing) throw new Error("not_found");
+  // Эпик готов, только когда закрыты все его задачи: иначе «Сделано» у эпика ничего не значит
+  if (content.status === "done") {
+    const open = await db.task.count({ where: { epicKey: key, status: { notIn: CLOSED_STATUSES } } });
+    if (open) throw new Error("children_open");
+  }
   const maxSort = existing?.sort ?? ((await db.epic.aggregate({ _max: { sort: true } }))._max.sort ?? 0) + 1;
   const epic = existing ? await db.epic.update({ where: { key }, data }) : await db.epic.create({ data: { key, ...data, sort: maxSort, createdBy: actor } });
   return epic;

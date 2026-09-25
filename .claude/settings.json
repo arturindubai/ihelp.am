@@ -1,18 +1,33 @@
 {
   "permissions": {
     "deny": [
-      "Read(//var/www/**)",
       "Edit(//var/www/**)",
       "Read(//root/INFRASTRUCTURE.local.md)",
       "Read(//etc/nginx/**)",
-      "Edit(//etc/nginx/**)"
+      "Edit(//etc/nginx/**)",
+      "Read(//var/www/ai-blog-app/server/.env)"
     ]
   },
   "hooks": {
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "timeout": 10, "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/session-start.sh" }
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/session-start.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/cc-pulse.sh\"; [ -f \"$f\" ] && bash \"$f\" || true"
+          }
         ]
       }
     ]

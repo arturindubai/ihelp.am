@@ -1,7 +1,7 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { redirect } from "@/i18n/navigation";
 import { getCurrentUser } from "@/server/auth";
-import { availableChannels } from "@/server/otp";
+import { loginMethods } from "@/server/otp";
 import { getSettings } from "@/server/settings";
 import { LoginClient } from "./LoginClient";
 
@@ -12,7 +12,7 @@ export default async function LoginPage({ params, searchParams }: { params: Prom
   const user = await getCurrentUser();
   const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : null;
   if (user) redirect({ href: safeNext || "/account", locale });
-  const [channels, s, t] = await Promise.all([availableChannels(), getSettings(), getTranslations("auth")]);
+  const [{ channels, email: emailEnabled }, s, t] = await Promise.all([loginMethods(), getSettings(), getTranslations("auth")]);
   const google = s.google.enabled && !!s.google.clientId;
   const apple = s.apple.enabled && !!s.apple.clientId;
   const errorKey =
@@ -46,7 +46,7 @@ export default async function LoginPage({ params, searchParams }: { params: Prom
           )}
         </div>
       )}
-      <LoginClient channels={channels} next={safeNext} />
+      <LoginClient channels={channels} emailEnabled={emailEnabled} next={safeNext} />
     </div>
   );
 }
