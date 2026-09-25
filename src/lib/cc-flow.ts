@@ -57,7 +57,7 @@ const TRANSITIONS: Record<TaskStatusKey, Partial<Record<TaskStatusKey, Role[]>>>
   ready: { backlog: TRIAGE, blocked: ANY, cancelled: PLAN },
   in_progress: { review: WORK, ready: [...WORK, ...PLAN, "watchdog"], blocked: ANY, backlog: PLAN },
   // Сторож блокирует проверку, когда тестировщик дважды закончил без вердикта (src/server/services/workers.ts)
-  review: { done: RELEASE, ready: [...RELEASE, ...PLAN, "tester"], blocked: [...RELEASE, ...PLAN, "tester", "watchdog"] },
+  review: { done: RELEASE, ready: [...RELEASE, ...PLAN, "tester"], blocked: [...RELEASE, ...PLAN, "tester", "watchdog"], cancelled: PLAN },
   blocked: { ready: ANY, backlog: TRIAGE, cancelled: PLAN },
   done: { ready: RELEASE },
   cancelled: { backlog: PLAN },
