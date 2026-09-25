@@ -47,6 +47,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
 Библиотека (знания, инструкции, решения — Control Center → «Библиотека»):
   lib [--kind knowledge|rules|role|process|decision|spec] [--q слово]   список документов
   lib <slug>                                    текущий текст документа (slug — путь в репозитории или note-…)
+  lib add --title "…" --kind knowledge --file запись.md   новая запись команды (виды: rules role process decision spec knowledge)
 
 Сообщения:
   msg "текст" --to owner|cto|workers|triage|dev|tester|deployer [--key КЛЮЧ]
@@ -592,6 +593,15 @@ async function main() {
     }
     case "lib": {
       const base = URL_BASE.replace(/\/api\/cc\/?$/, "/api/cc/library");
+      if (pos[0] === "add") {
+        const file = typeof flags.file === "string" ? flags.file : null;
+        if (!file || !fs.existsSync(file)) die("нужен файл с текстом: --file запись.md");
+        const body = { title: typeof flags.title === "string" ? flags.title : "", kind: typeof flags.kind === "string" ? flags.kind : "knowledge", content: fs.readFileSync(file, "utf8"), agent: typeof flags.agent === "string" ? flags.agent : "cto" };
+        const res = await fetch(base, { method: "POST", headers: { "x-cc-key": KEY, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) die(d.error ?? res.status);
+        return console.log(`✓ запись ${d.slug} · ${d.kind} · ${d.title}`);
+      }
       const slug = pos[0];
       const query = new URLSearchParams(slug ? { slug } : { ...(typeof flags.kind === "string" ? { kind: flags.kind } : {}), ...(typeof flags.q === "string" ? { q: flags.q } : {}) });
       const res = await fetch(`${base}?${query}`, { headers: { "x-cc-key": KEY }, signal: AbortSignal.timeout(15000) }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));

@@ -58,10 +58,21 @@ const TRANSITIONS: Record<TaskStatusKey, Partial<Record<TaskStatusKey, Role[]>>>
   in_progress: { review: WORK, ready: [...WORK, ...PLAN, "watchdog"], blocked: ANY, backlog: PLAN },
   // Сторож блокирует проверку, когда тестировщик дважды закончил без вердикта (src/server/services/workers.ts)
   review: { done: RELEASE, ready: [...RELEASE, ...PLAN, "tester"], blocked: [...RELEASE, ...PLAN, "tester", "watchdog"] },
-  blocked: { ready: ANY, backlog: TRIAGE, cancelled: PLAN },
+  // Разблокировка ведёт туда, откуда задача была заблокирована (unblockTarget): с проверки — на проверку
+  blocked: { ready: ANY, review: ANY, backlog: TRIAGE, cancelled: PLAN },
   done: { ready: RELEASE },
   cancelled: { backlog: PLAN },
 };
+
+/**
+ * Куда возвращается задача при разблокировке: туда, откуда её заблокировали. С проверки — на проверку
+ * (ветка и отчёт целы, тестировщик проверит заново), из бэклога — в бэклог на новый разбор триажем,
+ * из работы и очереди — в очередь. Роли без права на такой переход — в очередь
+ */
+export function unblockTarget(blockedFrom: string | null | undefined, role: Role): TaskStatusKey {
+  const want: TaskStatusKey = blockedFrom === "review" ? "review" : blockedFrom === "backlog" ? "backlog" : "ready";
+  return canTransition("blocked", want, role) ? want : "ready";
+}
 
 export function canTransition(from: string, to: string, role: Role): boolean {
   return !!TRANSITIONS[from as TaskStatusKey]?.[to as TaskStatusKey]?.includes(role);
