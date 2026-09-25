@@ -212,6 +212,15 @@ describe("очереди и выбор пула", () => {
     expect(poolForTask({ status: "review", layer: "none" })).toBe(null);
     expect(poolForTask({ status: "done", layer: "back" })).toBe(null);
   });
+  it("задача с needs_mockup=true без утверждения идёт к дизайнеру", () => {
+    expect(poolForTask({ status: "ready", layer: "front", mockupRequired: true })).toBe("designer");
+    expect(poolForTask({ status: "ready", layer: "front", mockupRequired: true, mockupApprovedBy: null })).toBe("designer");
+    expect(poolForTask({ status: "ready", layer: "none", mockupRequired: true })).toBe("designer");
+    expect(poolForTask({ status: "ready", layer: "front", mockupRequired: true, mockupApprovedBy: "cto" })).toBe("dev");
+    expect(poolForTask({ status: "ready", layer: "none", mockupRequired: true, mockupApprovedBy: "owner" })).toBe("nocode");
+    expect(poolForTask({ status: "ready", layer: "front", mockupRequired: false })).toBe("dev");
+    expect(poolForTask({ status: "backlog", layer: "front", mockupRequired: true })).toBe("triage");
+  });
 });
 
 describe("«Продукт и не-код»", () => {

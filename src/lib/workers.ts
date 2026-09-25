@@ -380,10 +380,12 @@ export function executorOf(t: { status: string; layer: string; blockedOn?: strin
   return null;
 }
 
-export function poolForTask(t: { status: string; layer: string; testedSha?: string | null; blockedOn?: string | null }): Pool | null {
+export function poolForTask(t: { status: string; layer: string; testedSha?: string | null; blockedOn?: string | null; mockupRequired?: boolean | null; mockupApprovedBy?: string | null }): Pool | null {
   if (t.status === "blocked" && t.blockedOn === "product") return "product";
   if (t.status === "blocked" && t.blockedOn === "design") return "designer";
   if (t.status === "backlog" || t.status === "blocked") return "triage";
+  // Задачи с флагом «нужен макет» без утверждения — к дизайнеру, пока макет не утверждён
+  if (t.mockupRequired && !t.mockupApprovedBy) return "designer";
   if (t.status === "ready") return t.layer === "none" ? "nocode" : "dev";
   if (t.status === "review" && t.layer !== "none") return t.testedSha ? "deployer" : "tester";
   return null;
