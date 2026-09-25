@@ -115,6 +115,8 @@ services:
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
       # Время ночного бэкапа, UTC (23:30 UTC = 03:30 по Еревану)
       BACKUP_AT: ${BACKUP_AT:-23:30}
+      # Допустимое расхождение числа строк при проверке восстановления (ключевые таблицы)
+      BACKUP_ROW_DIFF: ${BACKUP_ROW_DIFF:-10}
     volumes:
       - ./backups:/backups
       - ./deploy/backup.sh:/backup.sh:ro
