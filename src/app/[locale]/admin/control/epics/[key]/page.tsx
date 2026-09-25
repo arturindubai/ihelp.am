@@ -115,7 +115,6 @@ export default async function EpicPage({ params }: { params: Promise<{ locale: s
           <Card title={t("form.edit")} className="mt-4">
             <EpicEditorForm
               isNew={false}
-              canDelete={epic.source === "ui"}
               initial={{
                 key: epic.key,
                 title: epic.title,

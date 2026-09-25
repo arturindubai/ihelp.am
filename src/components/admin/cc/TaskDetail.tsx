@@ -223,7 +223,6 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
             <Card>
               <TaskEditorForm
                 isNew={false}
-                canDelete={task.source !== "code"}
                 epics={epics.map((e) => ({ key: e.key, title: e.title }))}
                 initial={{
                   key: task.key,

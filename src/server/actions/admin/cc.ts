@@ -3,9 +3,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireSection } from "../../admin";
 import { audit } from "../../audit";
-import { addComment, deleteTask, saveTask, updateTask, type TaskContent } from "../../services/cc";
+import { addComment, saveTask, updateTask, type TaskContent } from "../../services/cc";
 import { CcError, approveMockup, retriage, returnDesign, transition } from "../../services/ccWork";
-import { saveEpic, deleteEpic, type EpicContent } from "../../services/epics";
+import { saveEpic, type EpicContent } from "../../services/epics";
 import { deleteAttachment } from "../../services/attachments";
 import { EPIC_STATUSES, OWNERS, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { BLOCKED_ON, type TaskStatusKey } from "@/lib/cc-flow";
@@ -90,17 +90,6 @@ export async function ccSaveTaskAction(content: unknown, isNew: boolean) {
   }
 }
 
-export async function ccDeleteTaskAction(key: string) {
-  const u = await requireSection("control");
-  try {
-    await deleteTask(key, who(u));
-    await audit(u.id, "cc.task.delete", "Task", key);
-    rAll();
-    return { ok: true as const };
-  } catch (e) {
-    return { ok: false as const, error: (e as Error).message };
-  }
-}
 
 export async function ccCommentAction(key: string, text: string) {
   const u = await requireSection("control");
@@ -170,17 +159,6 @@ export async function ccSaveEpicAction(content: unknown, isNew: boolean) {
   }
 }
 
-export async function ccDeleteEpicAction(key: string) {
-  const u = await requireSection("control");
-  try {
-    await deleteEpic(key);
-    await audit(u.id, "cc.epic.delete", "Epic", key);
-    rAll();
-    return { ok: true as const };
-  } catch (e) {
-    return { ok: false as const, error: (e as Error).message };
-  }
-}
 
 export async function ccDeleteAttachmentAction(id: string) {
   const u = await requireSection("control");
