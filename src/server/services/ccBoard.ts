@@ -82,11 +82,14 @@ export async function needsYou() {
 }
 
 /** Задачи с макетом, ожидающие утверждения владельцем: любой статус кроме завершённых */
-/** Дизайн ждёт утверждения владельцем: есть описание дизайна, макет или файлы, а утверждения нет */
+/**
+ * Дизайн ждёт утверждения владельцем: есть настоящий макет — картинка во вложениях или ссылка (mockupUrl) —
+ * либо стоит флаг «нужен макет». Текстовое описание дизайна само по себе на согласование не выносится
+ */
 const DESIGN_PENDING: Prisma.TaskWhereInput = {
   status: { notIn: ["done", "cancelled"] },
   mockupApprovedBy: null,
-  OR: [{ mockupRequired: true }, { mockupUrl: { not: null } }, { AND: [{ design: { not: null } }, { design: { not: "" } }] }, { attachments: { some: {} } }],
+  OR: [{ mockupRequired: true }, { mockupUrl: { not: null } }, { attachments: { some: { mime: { startsWith: "image/" } } } }],
 };
 
 export async function mockupPendingApprovals() {

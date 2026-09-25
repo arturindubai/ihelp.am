@@ -210,18 +210,20 @@ async function sweepDue(config: WorkersConfig, pool: "triage" | "product" | "des
 }
 
 /**
- * Очередь дизайнера: вопросы «на дизайне» и интерфейсные задачи (фронт, бэк+фронт) в бэклоге и очереди
- * без описания дизайна и без файлов-макетов — разработчик без этого перерисовывает экран после выкладки
+ * Очередь дизайнера: вопросы «на дизайне»; задачи с флагом «нужен макет» без макета; задачи слоя «Фронт»
+ * в бэклоге и очереди без описания дизайна. Бэк, инфра и не-код сюда не попадают — там нечего рисовать
  */
 export async function designerQueue() {
+  const open = { in: ["backlog", "ready", "in_progress"] };
   const rows = await db.task.findMany({
     where: {
       OR: [
         { status: "blocked", blockedOn: "design" },
-        { status: { in: ["backlog", "ready"] }, layer: { in: ["front", "fullstack"] }, OR: [{ design: null }, { design: "" }], attachments: { none: {} } },
+        { status: open, mockupRequired: true, mockupApprovedBy: null, mockupUrl: null, attachments: { none: { mime: { startsWith: "image/" } } } },
+        { status: { in: ["backlog", "ready"] }, layer: "front", OR: [{ design: null }, { design: "" }], attachments: { none: {} } },
       ],
     },
-    select: { key: true, title: true, priority: true, stage: true, status: true, sort: true, source: true, blockedOn: true, blockedReason: true },
+    select: { key: true, title: true, priority: true, stage: true, status: true, sort: true, source: true, blockedOn: true, blockedReason: true, mockupRequired: true },
   });
   return rows.sort((a, b) => Number(b.status === "blocked") - Number(a.status === "blocked") || PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority) || STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage) || a.sort - b.sort);
 }
@@ -404,7 +406,7 @@ export async function workersOverview() {
     queues: {
       triage: triage.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, intake: t.source === "intake" })),
       product: product.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, reason: "question", detail: (t.blockedReason ?? "").slice(0, 80) })),
-      designer: designer.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, reason: t.status === "blocked" ? "question" : "nodesign", detail: (t.blockedReason ?? "").slice(0, 80) })),
+      designer: designer.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, reason: t.status === "blocked" ? "question" : t.mockupRequired ? "mockup" : "nodesign", detail: (t.blockedReason ?? "").slice(0, 80) })),
       dev,
       nocode,
       tester: [

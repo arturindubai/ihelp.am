@@ -30,10 +30,14 @@ const TYPES: Record<string, string> = {
 };
 
 export async function POST(req: Request) {
-  const u = await getCurrentUser();
-  if (!u || !sectionsFor(u.role).includes("control")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  // Агенты (дизайнер-воркер прикладывает макеты) — по ключу агента, люди — по сессии
+  const agentKey = !!process.env.CC_AGENT_KEY && req.headers.get("x-cc-key") === process.env.CC_AGENT_KEY;
+  const u = agentKey ? null : await getCurrentUser();
+  if (!agentKey && (!u || !sectionsFor(u.role).includes("control"))) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const form = await req.formData();
+  const agent = form.get("agent");
+  const author = u ? u.name || formatPhone(u.phone) : typeof agent === "string" && agent ? agent.slice(0, 40) : "agent";
   const file = form.get("file");
   const taskKey = form.get("taskKey");
   const epicKey = form.get("epicKey");
@@ -54,9 +58,10 @@ export async function POST(req: Request) {
     const attachment = await addAttachment(
       { taskKey: typeof taskKey === "string" ? taskKey : undefined, epicKey: typeof epicKey === "string" ? epicKey : undefined },
       { fileName: file.name.slice(0, 200), url, size: file.size, mime: file.type },
-      u.name || formatPhone(u.phone),
+      author,
     );
-    await audit(u.id, "cc.attachment.add", typeof taskKey === "string" ? "Task" : "Epic", (taskKey || epicKey) as string, { fileName: attachment.fileName });
+    if (u) await audit(u.id, "cc.attachment.add", typeof taskKey === "string" ? "Task" : "Epic", (taskKey || epicKey) as string, { fileName: attachment.fileName });
+    else console.log(`[cc] вложение ${attachment.fileName} к ${taskKey || epicKey} от ${author}`);
     return NextResponse.json({ ok: true, attachment });
   } catch (e) {
     await fs.unlink(path.join(dir, month, name)).catch(() => {});

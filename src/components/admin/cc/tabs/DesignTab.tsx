@@ -5,8 +5,7 @@ import { designApproved, mockupPendingApprovals } from "@/server/services/ccBoar
 import { workersOverview } from "@/server/services/workers";
 import { PRIORITIES } from "@/lib/backlog-labels";
 import { Card } from "@/components/admin/fields";
-import { PoolSettings } from "@/components/admin/cc/WorkersForm";
-import { DesignReturnButton, MockupApproveButton, RunWorkerButton } from "@/components/admin/cc/CcControls";
+import { DesignReturnButton, MockupApproveButton } from "@/components/admin/cc/CcControls";
 import { PRIORITY_TONE } from "./shared";
 import { cn, dateLabel, timeLabel } from "@/lib/format";
 
@@ -16,8 +15,6 @@ import { cn, dateLabel, timeLabel } from "@/lib/format";
  */
 export async function DesignTab({ locale, taskHref }: { locale: string; taskHref: (key: string) => string }) {
   const [t, tw, pending, approved, w] = await Promise.all([getTranslations("admin.cc.designTab"), getTranslations("admin.cc.workers"), mockupPendingApprovals(), designApproved(), workersOverview()]);
-  const pc = w.config.pools.designer;
-  const running = w.running.filter((r) => r.pool === "designer");
   const queue = w.queues.designer;
   const when = (d: Date) => `${dateLabel(d, locale, { day: "numeric", month: "short" })}, ${timeLabel(d)}`;
 
@@ -60,22 +57,9 @@ export async function DesignTab({ locale, taskHref }: { locale: string; taskHref
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card
-          title={
-            <span className="flex flex-wrap items-center gap-2">
-              <span key="name">{t("pool")}</span>
-              <span key="state" className={cn("chip text-[10px]", running.length ? "bg-brand-50 text-brand" : pc.enabled ? "bg-ok-50 text-ok" : "bg-surface text-muted")}>
-                {running.length ? tw("poolRunning", { n: running.length }) : pc.enabled ? tw("poolIdle") : tw("poolOff")}
-              </span>
-            </span>
-          }
-          actions={<RunWorkerButton key="run" pool="designer" label={tw("runNow")} small />}
-        >
-          <p key="hint" className="mb-3 text-xs text-muted">{tw("poolHints.designer")}</p>
-          <PoolSettings key="settings" pool="designer" initial={pc} />
-          <div key="today" className="mt-2 text-xs text-muted">{tw("todayOf", { n: w.today.designer, cap: pc.dailyCap })}</div>
-          <div key="queue" className="mt-3 border-t border-line pt-2">
-            <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">{t("queue", { n: queue.length })}</div>
+        <Card title={t("queue", { n: queue.length })}>
+          <p className="mb-2 text-xs text-muted">{t("queueHint")}</p>
+          <div>
             {queue.length === 0 && <p className="py-2 text-xs text-muted">{t("queueEmpty")}</p>}
             <ul className="divide-y divide-line">
               {queue.slice(0, 12).map((q) => (
