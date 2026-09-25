@@ -230,6 +230,17 @@ describe("запрет воркерам заводить задачи и вхо�
   });
 });
 
+describe("дизайнер сдаёт и передаёт задачу", () => {
+  it("designer может перевести задачу на проверку и сделать handoff", () => {
+    expect(canTransition("in_progress", "review", "designer")).toBe(true);
+    expect(canTransition("in_progress", "ready", "designer")).toBe(true);
+  });
+  it("designer не может закрыть задачу и не может перевести её из бэклога в очередь", () => {
+    expect(canTransition("review", "done", "designer")).toBe(false);
+    expect(canTransition("backlog", "ready", "designer")).toBe(false);
+  });
+});
+
 describe("роли воркеров триажа и «Продукт и не-код»", () => {
   it("не-код сдаёт свою задачу на проверку и передаёт её, но не переводит чужие в очередь и не закрывает", () => {
     expect(canTransition("in_progress", "review", "nocode")).toBe(true);
