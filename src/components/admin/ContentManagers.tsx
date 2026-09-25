@@ -82,7 +82,10 @@ export function PageManager({ pages }: { pages: { id: string; data: PageData }[]
           <div className="space-y-3">
             <TextInput label={t("common.slug")} hint={t("common.slugHint")} value={d.slug} onChange={(v) => up({ slug: v })} />
             <I18nInput label={t("common.title")} value={d.title} onChange={(v) => up({ title: v })} />
-            <I18nInput label={t("pages.body")} multiline value={d.body} onChange={(v) => up({ body: v })} />
+            <div>
+              <I18nInput label={t("pages.body")} multiline value={d.body} onChange={(v) => up({ body: v })} />
+              <p className="mt-1 text-xs text-muted">{t("pages.markdownHint")}</p>
+            </div>
             <Toggle label={t("common.active")} checked={d.active} onChange={(v) => up({ active: v })} />
             {err && <p className="text-sm text-bad">{err}</p>}
           </div>
