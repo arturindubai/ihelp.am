@@ -36,16 +36,26 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Остальное — только сеть; при обрыве показываем понятное сообщение
+  // Остальное — только сеть; при обрыве показываем понятное сообщение на языке клиента
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(
-        () =>
-          new Response("<!doctype html><meta charset=utf-8><title>Нет связи</title><body style=\"font-family:system-ui;text-align:center;padding:80px\"><h1>Нет связи</h1><p>Проверьте интернет и обновите страницу.</p>", {
-            status: 503,
-            headers: { "Content-Type": "text/html; charset=utf-8" },
-          }),
-      ),
+      fetch(request).catch(() => {
+        const cookie = request.headers.get("Cookie") || "";
+        const match = cookie.match(/(?:^|;\s*)NEXT_LOCALE=([^;]+)/);
+        const locale = match ? match[1].trim() : "ru";
+
+        const OFFLINE = {
+          ru: { title: "Нет связи", body: "Проверьте интернет и обновите страницу." },
+          en: { title: "No connection", body: "Check your internet and reload the page." },
+          am: { title: "Կապ չկա", body: "Ստուգեք ինտերնետը և թարմացրեք էջը:" },
+        };
+        const t = OFFLINE[locale] || OFFLINE.ru;
+
+        return new Response(
+          `<!doctype html><meta charset=utf-8><title>${t.title}</title><body style="font-family:system-ui;text-align:center;padding:80px"><h1>${t.title}</h1><p>${t.body}</p>`,
+          { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } },
+        );
+      }),
     );
   }
 });
