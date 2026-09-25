@@ -6,7 +6,7 @@ import { sendMessage, takeInbox } from "@/server/services/ccMessages";
 import { intakeCreate, boardAudit } from "@/server/services/ccBoard";
 import { listEpics, getEpic } from "@/server/services/epics";
 import { DESIGNER_FIELDS, taskContentSchema } from "@/lib/cc-schema";
-import { roleOf, type TaskStatusKey } from "@/lib/cc-flow";
+import { canCreateTask, roleOf, type TaskStatusKey } from "@/lib/cc-flow";
 import type { Task } from "@prisma/client";
 
 /**
@@ -239,8 +239,11 @@ export async function POST(req: Request) {
         await markTriaged(key, agent, text);
         return json({ ok: true });
       }
-      // Чат получил от человека новую работу: не исполняет сам, а кладёт в очередь триажа
+      // Чат получил от человека новую работу: не исполняет сам, а кладёт в очередь триажа.
+      // Воркеры-исполнители (dev, nocode, tester, deployer) создавать входящие не могут:
+      // они сообщают о потребности через msg --to cto или запись в ленте своей задачи.
       case "intake": {
+        if (!canCreateTask(roleOf(agent))) return json({ error: "forbidden_role", detail: roleOf(agent) }, 403);
         try {
           const task = await intakeCreate(text, agent);
           return json({ ok: true, key: task.key });
