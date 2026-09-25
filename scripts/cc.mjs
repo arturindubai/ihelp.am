@@ -183,6 +183,7 @@ function hint(code) {
     branch_required: "\n  Отправьте ветку: git push -u origin task/<КЛЮЧ>.",
     report_required: "\n  Отчёт от 40 символов: что сделано, как проверено, как проверить деплоеру.",
     not_ready: "\n  Не выполнены обязательные пункты готовности — см. show КЛЮЧ.",
+    mockup_required: "\n  Макет не утверждён — утвердите в Control Center (Согласования) командой: node scripts/cc.mjs mockup КЛЮЧ.",
     sha_required: "\n  Нужен коммит в main: --sha <коммит>.",
     reason_required: "\n  Этот переход требует причину словами.",
     forbidden_transition: "\n  Этой роли такой переход не разрешён (docs/DEV_SYSTEM.md, раздел «Статусы»).",

@@ -108,6 +108,7 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   // В очередь разработчикам — только готовое: из бэклога, блокировки или отмены задача идёт через проверку готовности
   if (to === "ready" && ["backlog", "blocked", "cancelled"].includes(from) && actor.role !== "watchdog" && !force) {
     const failed = readiness(task, await closedKeys(), task._count.attachments).filter((i) => i.hard && !i.ok);
+    if (failed.some((i) => i.key === "mockup")) throw new CcError("mockup_required");
     if (failed.length) throw new CcError("not_ready", failed.map((i) => i.key).join(","));
   }
   if (to === "review") {

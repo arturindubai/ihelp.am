@@ -35,7 +35,7 @@ export type BoardTask = Awaited<ReturnType<typeof boardTasks>>[number];
 
 /** Счётчики вкладок */
 export async function ccCounts() {
-  const [byStatus, reviewCode, reviewNoCode, ownerBlocked, unread, running, attn, failed] = await Promise.all([
+  const [byStatus, reviewCode, reviewNoCode, ownerBlocked, unread, running, attn, failed, mockupPending] = await Promise.all([
     db.task.groupBy({ by: ["status"], _count: true }),
     db.task.count({ where: { status: "review", layer: { not: "none" } } }),
     db.task.count({ where: { status: "review", layer: "none" } }),
@@ -44,6 +44,7 @@ export async function ccCounts() {
     db.workerRun.count({ where: { status: "running" } }),
     attention(),
     db.workerRun.count({ where: { status: { in: ["failed", "timeout"] }, startedAt: { gte: new Date(Date.now() - 24 * 3600_000) } } }),
+    db.task.count({ where: { mockupRequired: true, mockupApprovedBy: null, status: { notIn: ["done", "cancelled"] } } }),
   ]);
   const n = (s: string) => byStatus.find((r) => r.status === s)?._count ?? 0;
   return {
@@ -51,7 +52,7 @@ export async function ccCounts() {
     you: ownerBlocked + attn.stale.length + attn.review.filter((r) => r.health.stuckReview).length + failed,
     dev: n("in_progress"),
     deployer: reviewCode,
-    approvals: reviewNoCode,
+    approvals: reviewNoCode + mockupPending,
     notify: unread,
     running,
     byStatus: Object.fromEntries(byStatus.map((r) => [r.status, r._count])) as Record<string, number>,
@@ -77,6 +78,15 @@ export async function needsYou() {
     failedRuns,
     pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null,
   };
+}
+
+/** Задачи с макетом, ожидающие утверждения владельцем: любой статус кроме завершённых */
+export async function mockupPendingApprovals() {
+  return db.task.findMany({
+    where: { mockupRequired: true, mockupApprovedBy: null, status: { notIn: ["done", "cancelled"] } },
+    orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
+    select: { key: true, title: true, priority: true, status: true, updatedAt: true, mockupUrl: true },
+  });
 }
 
 /** Согласования: не-код на проверке — принимает человек. С последним отчётом, чтобы решать, не открывая карточку */
