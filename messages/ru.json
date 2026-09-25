@@ -1142,6 +1142,9 @@
         "files": "Файлы",
         "noFiles": "Файлов пока нет",
         "uploadHint": "Картинки, PDF, текст, markdown, Word/Excel/PowerPoint, zip — до 20 МБ",
+        "dropHint": "или перетащите файл сюда",
+        "dropActive": "Отпустите файл",
+        "multiFileSkipped": "Загружен первый файл, остальные пропущены",
         "uploadErrors": {
           "type": "Такой тип файла не поддерживается",
           "size": "Файл больше 20 МБ",
