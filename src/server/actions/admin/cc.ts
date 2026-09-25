@@ -4,7 +4,7 @@ import { z } from "zod";
 import { requireSection } from "../../admin";
 import { audit } from "../../audit";
 import { addComment, deleteTask, saveTask, updateTask, type TaskContent } from "../../services/cc";
-import { CcError, retriage, transition } from "../../services/ccWork";
+import { CcError, approveMockup, retriage, transition } from "../../services/ccWork";
 import { saveEpic, deleteEpic, type EpicContent } from "../../services/epics";
 import { deleteAttachment } from "../../services/attachments";
 import { EPIC_STATUSES, OWNERS, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
@@ -112,6 +112,19 @@ export async function ccCommentAction(key: string, text: string) {
   await audit(u.id, "cc.comment", "Task", key);
   rAll();
   return { ok: true as const };
+}
+
+/** Утверждение макета задачи владельцем в интерфейсе — снимает гейт mockup_required */
+export async function ccApproveMockupAction(key: string, comment: string) {
+  const u = await requireSection("control");
+  try {
+    await approveMockup(key, who(u), comment.trim() || null);
+    await audit(u.id, "cc.mockup.approve", "Task", key);
+    rAll();
+    return { ok: true as const };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof CcError ? e.code : (e as Error).message };
+  }
 }
 
 /* ───── Эпики ───── */

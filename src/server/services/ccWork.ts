@@ -90,6 +90,7 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   // В очередь разработчикам — только готовое: из бэклога, блокировки или отмены задача идёт через проверку готовности
   if (to === "ready" && ["backlog", "blocked", "cancelled"].includes(from) && actor.role !== "watchdog" && !force) {
     const failed = readiness(task, await closedKeys(), task._count.attachments).filter((i) => i.hard && !i.ok);
+    if (failed.some((i) => i.key === "mockup")) throw new CcError("mockup_required");
     if (failed.length) throw new CcError("not_ready", failed.map((i) => i.key).join(","));
   }
   if (to === "review") {
@@ -489,4 +490,22 @@ export async function taskReadiness(key: string) {
   if (!t) throw new CcError("not_found");
   const items = readiness(t, await closedKeys(), t._count.attachments);
   return { items, ready: isReady(items) };
+}
+
+/**
+ * Утверждение макета задачи: владелец, техдиректор или продукт подтверждают, что макет согласован.
+ * После утверждения гейт mockup_required снимается и задачу можно переводить в «В очереди».
+ * Запись о решении попадает в ленту с именем утверждающего
+ */
+export async function approveMockup(key: string, actor: string, comment: string | null) {
+  const t = await db.task.findUnique({ where: { key }, select: { id: true, mockupRequired: true, mockupApprovedBy: true } });
+  if (!t) throw new CcError("not_found");
+  if (!t.mockupRequired) throw new CcError("mockup_not_required");
+  if (t.mockupApprovedBy) throw new CcError("already_approved");
+  const now = new Date();
+  await db.task.update({ where: { key }, data: { mockupApprovedBy: actor, mockupApprovedAt: now } });
+  await log(t.id, actor, "mockupApprovedBy", null, actor);
+  const text = comment ? `Макет утверждён: ${comment.trim().slice(0, 500)}` : "Макет утверждён.";
+  await say(t.id, actor, "note", text);
+  return db.task.findUniqueOrThrow({ where: { key } });
 }

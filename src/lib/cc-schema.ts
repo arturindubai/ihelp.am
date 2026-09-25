@@ -24,9 +24,11 @@ export const taskContentSchema = z.object({
   owner: z.enum(Object.keys(OWNERS) as [string, ...string[]]),
   estimate: z.enum(["S", "M", "L"]).nullable().optional(),
   scope: z.array(z.string().max(200)).max(30).optional(),
+  mockupRequired: z.boolean().optional(),
+  mockupUrl: z.string().max(500).nullable().optional(),
 });
 
 export type TaskContentInput = z.infer<typeof taskContentSchema>;
 
 /** Поля, которые дизайнер может менять через API: остальное — продукт и техдиректор */
-export const DESIGNER_FIELDS = ["design", "docs"] as const;
+export const DESIGNER_FIELDS = ["design", "docs", "mockupRequired", "mockupUrl"] as const;
