@@ -50,6 +50,8 @@
   },
   "home": {
     "hello": "Добрый день{name, select, empty {} other {, {name}}}",
+    "heroTitle": "Какая услуга нужна?",
+    "heroSearch": "Найти услугу…",
     "title": "Какая услуга нужна?",
     "categories": "Категории",
     "popular": "Популярное",
