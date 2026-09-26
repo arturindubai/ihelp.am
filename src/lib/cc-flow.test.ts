@@ -95,8 +95,16 @@ describe("переходы", () => {
     expect(canTransition("backlog", "in_progress", "owner")).toBe(false);
     expect(nextStatuses("backlog", "cto")).toEqual(["ready", "blocked", "cancelled"]);
   });
+  it("владелец и CTO могут отклонить задачу с проверки, разработчик — нет", () => {
+    expect(canTransition("review", "cancelled", "owner")).toBe(true);
+    expect(canTransition("review", "cancelled", "cto")).toBe(true);
+    expect(canTransition("review", "cancelled", "product")).toBe(true);
+    expect(canTransition("review", "cancelled", "deployer")).toBe(false);
+    expect(canTransition("review", "cancelled", "dev")).toBe(false);
+  });
   it("возврат на доработку и отмена требуют причины", () => {
     expect(needsReason("review", "ready")).toBe(true);
+    expect(needsReason("review", "cancelled")).toBe(true);
     expect(needsReason("ready", "cancelled")).toBe(true);
     expect(needsReason("backlog", "ready")).toBe(false);
   });

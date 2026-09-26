@@ -6,10 +6,13 @@ import { Link, useRouter } from "@/i18n/navigation";
 import {
   ccApproveManyAction,
   ccApproveMockupAction,
+  ccCommentAction,
   ccReturnDesignAction,
   ccIntakeAction,
   ccMessageToIntakeAction,
   ccReadMessageAction,
+  ccRejectManyAction,
+  ccReturnManyAction,
   ccRunWorkerAction,
   ccSendMessageAction,
   ccStopRunAction,
@@ -375,6 +378,36 @@ export function ApproveAllButton({ keys, label }: { keys: string[]; label: strin
   );
 }
 
+/** Добавить комментарий в ленту задачи без смены статуса (как note у разработчика) */
+export function CommentButton({ taskKey }: { taskKey: string }) {
+  const t = useTranslations("admin.cc.approvals");
+  const { pending, error, done, run } = useAct();
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button className="btn-outline btn-sm" disabled={pending} onClick={() => setOpen(!open)}>
+        {done ? t("commentDone") : t("comment")}
+      </button>
+      {open && (
+        <form
+          className="flex w-full max-w-sm gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(() => ccCommentAction(taskKey, text), () => (setOpen(false), setText("")));
+          }}
+        >
+          <input className="input h-9 flex-1 py-1 text-sm" value={text} onChange={(e) => setText(e.target.value)} placeholder={t("commentPh")} autoFocus />
+          <button className="btn-dark btn-sm" disabled={pending || text.trim().length < 2}>
+            {t("ok")}
+          </button>
+        </form>
+      )}
+      {error && <span className="text-xs text-bad">{t("failed", { error })}</span>}
+    </div>
+  );
+}
+
 /* ───────────── Макет ───────────── */
 
 /** Утвердить макет задачи: кнопка доступна владельцу, пишет в ленту, снимает гейт «нужен макет» */
@@ -407,6 +440,82 @@ export function MockupApproveButton({ taskKey }: { taskKey: string }) {
       )}
       {error && <span className="text-xs text-bad">{t("failed", { error })}</span>}
     </div>
+  );
+}
+
+/** «Вернуть все» по дорожке: запрашивает причину через inline-форму, затем возвращает каждую задачу */
+export function ReturnAllButton({ keys, label }: { keys: string[]; label: string }) {
+  const t = useTranslations("admin.cc.approvals");
+  const { pending, run } = useAct();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [result, setResult] = useState<string | null>(null);
+  return (
+    <span className="inline-flex flex-col items-end gap-1">
+      <button className="btn-outline btn-sm" disabled={pending || keys.length === 0} onClick={() => setOpen(!open)}>
+        {label}
+      </button>
+      {open && (
+        <form
+          className="flex gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(
+              async () => {
+                const r = await ccReturnManyAction(keys, reason);
+                if (r.ok && r.failed.length) setResult(t("returnAllFailed", { keys: r.failed.join(", ") }));
+                return r;
+              },
+              () => (setOpen(false), setReason("")),
+            );
+          }}
+        >
+          <input className="input h-9 w-40 py-1 text-sm" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("returnAllPh")} autoFocus />
+          <button className="btn-dark btn-sm" disabled={pending || reason.trim().length < 5}>
+            {t("ok")}
+          </button>
+        </form>
+      )}
+      {result && <span className="text-xs text-warn">{result}</span>}
+    </span>
+  );
+}
+
+/** «Отклонить все» по дорожке: запрашивает причину через inline-форму, затем отклоняет каждую задачу */
+export function RejectAllButton({ keys, label }: { keys: string[]; label: string }) {
+  const t = useTranslations("admin.cc.approvals");
+  const { pending, run } = useAct();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [result, setResult] = useState<string | null>(null);
+  return (
+    <span className="inline-flex flex-col items-end gap-1">
+      <button className="btn-ghost btn-sm text-bad" disabled={pending || keys.length === 0} onClick={() => setOpen(!open)}>
+        {label}
+      </button>
+      {open && (
+        <form
+          className="flex gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(
+              async () => {
+                const r = await ccRejectManyAction(keys, reason);
+                if (r.ok && r.failed.length) setResult(t("rejectAllFailed", { keys: r.failed.join(", ") }));
+                return r;
+              },
+              () => (setOpen(false), setReason("")),
+            );
+          }}
+        >
+          <input className="input h-9 w-40 py-1 text-sm" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("rejectAllPh")} autoFocus />
+          <button className="btn-danger btn-sm" disabled={pending || reason.trim().length < 5}>
+            {t("ok")}
+          </button>
+        </form>
+      )}
+      {result && <span className="text-xs text-warn">{result}</span>}
+    </span>
   );
 }
 

@@ -1441,7 +1441,16 @@
         "failed": "Не получилось: {error}",
         "approveAll": "Принять все",
         "approveAllConfirm": "Принять все задачи этой дорожки ({n})?",
-        "approveAllFailed": "Не приняты (не прошли гейт): {keys}"
+        "approveAllFailed": "Не приняты (не прошли гейт): {keys}",
+        "comment": "Комментарий",
+        "commentPh": "Текст комментария",
+        "commentDone": "Добавлено",
+        "returnAll": "Вернуть все",
+        "rejectAll": "Отклонить все",
+        "returnAllPh": "Что доработать",
+        "rejectAllPh": "Почему отклоняем",
+        "returnAllFailed": "Не возвращены (не прошли гейт): {keys}",
+        "rejectAllFailed": "Не отклонены (не прошли гейт): {keys}"
       },
       "plans": {
         "empty": "Эпиков пока нет",
