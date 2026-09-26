@@ -1,9 +1,18 @@
 import "server-only";
-import { pickTechRoute } from "@/lib/alertRoute";
 import { getSettings, type Settings } from "./settings";
 import { enqueueAndSend } from "./services/notifyQueue";
 
 export { html } from "@/lib/html";
+
+/** Разрешить токен по пути вида «section.field» из объекта настроек */
+function resolveToken(s: Settings, tokenPath: string): string {
+  const [section, field] = tokenPath.split(".");
+  const sec = s[section as keyof Settings];
+  if (sec && typeof sec === "object" && !Array.isArray(sec)) {
+    return ((sec as Record<string, unknown>)[field] as string) ?? "";
+  }
+  return "";
+}
 
 /**
  * Прямая отправка в Telegram без очереди — только для notifyTech.
@@ -30,11 +39,12 @@ async function post(token: string, chatId: string, text: string, tag: string) {
 /**
  * Отправка через очередь с повторными попытками.
  * Запись добавляется в NotifyQueue до первой попытки — сообщение не теряется при сбое.
+ * tokenPath: путь к токену в настройках, например «team.botToken»
  */
-async function send(chatId: string, text: string, tag: string) {
+async function send(chatId: string, text: string, tag: string, tokenPath: string) {
   let token = "";
   try {
-    token = (await getSettings()).notify.telegramBotToken;
+    token = resolveToken(await getSettings(), tokenPath);
   } catch (e) {
     console.error(`[notify:${tag}] настройки недоступны`, e, "|", text);
     return;
@@ -43,14 +53,15 @@ async function send(chatId: string, text: string, tag: string) {
     console.log(`[notify:${tag}]`, text);
     return;
   }
-  await enqueueAndSend(chatId, text, tag, token);
+  await enqueueAndSend(chatId, text, tag, token, tokenPath);
 }
 
-/** Уведомления команде: заказы, отмены, переносы, отзывы (бот → группа операторов) */
+/** Уведомления команде: заказы, отмены, переносы, отзывы (бот @ihelp_staff_bot → группа сотрудников) */
 export async function notifyTeam(text: string) {
   try {
     const s = await getSettings();
-    await send(s.notify.telegramChatId, text, "team");
+    const chatId = s.notify.teamChatId || s.notify.telegramChatId;
+    await send(chatId, text, "team", "team.botToken");
   } catch (e) {
     console.error("[notify:team] не отправлено", e, "|", text);
   }
@@ -63,16 +74,22 @@ export async function notifyTeam(text: string) {
  * Прямой fetch без очереди: при падении базы записать в очередь тоже нельзя.
  */
 export async function notifyTech(text: string) {
-  let notify: Settings["notify"] | null = null;
+  let token = "";
+  let chatId = "";
+  let via = "tech";
   try {
-    notify = (await getSettings()).notify;
+    const s = await getSettings();
+    token = s.team.botToken || s.notify.telegramBotToken;
+    chatId = s.notify.techChatId || s.notify.teamChatId || s.notify.telegramChatId;
   } catch (e) {
     console.error("[notify:tech] настройки недоступны, пробую запасной бот", e);
+    token = process.env.ALERT_BOT_TOKEN?.trim() ?? "";
+    chatId = process.env.ALERT_CHAT_ID?.trim() ?? "";
+    via = "tech-fallback";
   }
-  const route = pickTechRoute(notify, process.env);
-  if (!route) {
+  if (!token || !chatId) {
     console.error("[notify:tech] не отправлено: настройки недоступны, запасной бот не задан |", text);
     return;
   }
-  await post(route.token, route.chatId, text, route.via === "env" ? "tech-fallback" : "tech");
+  await post(token, chatId, text, via);
 }

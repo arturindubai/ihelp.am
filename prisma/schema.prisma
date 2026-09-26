@@ -750,6 +750,7 @@ model NotifyQueue {
   chatId        String
   text          String
   tag           String
+  tokenPath     String    @default("notify.telegramBotToken")
   status        String    @default("pending")
   attempts      Int       @default(0)
   lastError     String?
