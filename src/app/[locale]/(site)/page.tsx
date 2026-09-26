@@ -1,13 +1,13 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { MessageCircle, ShieldCheck, Receipt, CalendarClock } from "lucide-react";
-import { Link } from "@/i18n/navigation";
 import { getHome } from "@/server/services/catalog";
 import { getSettings } from "@/server/settings";
 import { contactLink } from "@/lib/contacts";
 import { getCurrentUser } from "@/server/auth";
 import { tr } from "@/i18n/locales";
 import { ServiceCard } from "@/components/ServiceCard";
-import { Img } from "@/components/Img";
+import { HeroSection } from "@/components/home/HeroSection";
+import { PromoCarousel } from "@/components/home/PromoCarousel";
 
 export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
@@ -18,43 +18,15 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
     <div className="container-w pt-4">
       <div className="mx-auto max-w-[560px] md:max-w-none">
         <p className="text-sm text-muted">{tr(s.brand.city, locale)}</p>
-        <h1 className="h1 mt-0.5">{t("title")}</h1>
 
-        {data.banners.length > 0 && (
-          <div className="no-scrollbar -mx-4 mt-4 flex snap-x gap-3 overflow-x-auto px-4">
-            {data.banners.map((b) => {
-              const inner = (
-                <div className="relative flex h-40 w-[86vw] max-w-[440px] shrink-0 snap-start flex-col justify-end overflow-hidden rounded-2xl p-4 text-inverse" style={{ background: b.bg || "var(--color-ink)" }}>
-                  {b.image && <Img src={b.image} fill sizes="(max-width: 512px) 86vw, 440px" className="object-cover opacity-60" />}
-                  <div className="relative">
-                    <div className="text-2xl leading-tight font-bold">{b.title}</div>
-                    {b.subtitle && <div className="mt-1 text-sm opacity-85">{b.subtitle}</div>}
-                    {b.promoCode && <span className="mt-2 inline-block rounded-md bg-paper px-2 py-0.5 text-xs font-bold text-ink">{b.promoCode}</span>}
-                  </div>
-                </div>
-              );
-              return b.link ? <Link key={b.id} href={b.link}>{inner}</Link> : <div key={b.id}>{inner}</div>;
-            })}
-          </div>
-        )}
+        <HeroSection
+          heroTitle={t("heroTitle")}
+          searchPlaceholder={t("heroSearch")}
+          comingSoonLabel={tc("comingSoon")}
+          categories={data.categories}
+        />
 
-        <section className="mt-6">
-          <h2 className="h2 mb-3">{t("categories")}</h2>
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
-            {data.categories.map((c) => {
-              const tile = (
-                <div className={`flex flex-col items-center gap-1.5 text-center ${c.comingSoon ? "opacity-60" : ""}`}>
-                  <div className="relative">
-                    <Img src={c.image || "/img/cat-cleaning.svg"} width={76} className="size-[76px] rounded-2xl" />
-                    {c.comingSoon && <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 rounded-full bg-ink px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap text-inverse">{tc("comingSoon")}</span>}
-                  </div>
-                  <span className="text-[13px] leading-tight font-medium">{c.title}</span>
-                </div>
-              );
-              return c.href ? <Link key={c.slug} href={c.href}>{tile}</Link> : <div key={c.slug}>{tile}</div>;
-            })}
-          </div>
-        </section>
+        <PromoCarousel banners={data.banners} />
 
         {data.services.length > 0 && (
           <section className="mt-8">
