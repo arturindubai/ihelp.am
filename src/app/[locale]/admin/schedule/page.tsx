@@ -54,6 +54,11 @@ export default async function Schedule({ params, searchParams }: { params: Promi
                       <li key={v.id}>
                         <Link href={`/admin/orders/${v.orderId}`} className="block rounded-lg bg-surface p-2.5 text-sm hover:bg-line/60">
                           <div className="flex items-center justify-between gap-2"><span className="font-bold">{hm(v.scheduledAt!)}–{hm(new Date(v.scheduledAt!.getTime() + v.durationMin * 60_000))}</span><StatusBadge status={v.status} label={to(`visitStatus.${v.status}`)} className="mt-0" /></div>
+                          {v.startedAt && (() => {
+                            const diff = Math.round((v.startedAt!.getTime() - v.scheduledAt!.getTime()) / 60_000);
+                            const delay = diff > 0 ? to("visitTiming.lateMin", { n: diff }) : diff < 0 ? to("visitTiming.earlyMin", { n: -diff }) : to("visitTiming.onTime");
+                            return <div className="text-xs text-muted">{to("visitTiming.started")} {hm(v.startedAt!)} · <span className={diff > 3 ? "text-bad" : diff < -1 ? "text-ok" : ""}>{delay}</span></div>;
+                          })()}
                           <div className="mt-0.5 truncate">{v.order.user.name || v.order.user.phone} · №{v.order.number}</div>
                           <div className="truncate text-xs text-muted">{a.district ? `${a.district}, ` : ""}{a.street} {a.building} · {tr(v.order.service.title, locale)}</div>
                         </Link>

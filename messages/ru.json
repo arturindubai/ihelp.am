@@ -317,7 +317,14 @@
       "REFUNDED": "Возврат"
     },
     "card": "Картой онлайн",
-    "everyWeeks": "каждые {n} нед."
+    "everyWeeks": "каждые {n} нед.",
+    "visitTiming": {
+      "scheduled": "Запланировано",
+      "started": "Начато",
+      "lateMin": "опоздание {n} мин",
+      "earlyMin": "на {n} мин раньше",
+      "onTime": "вовремя"
+    }
   },
   "master": {
     "about": "О мастере",
