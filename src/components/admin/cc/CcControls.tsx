@@ -589,7 +589,7 @@ export function OwnerQuestionCard({ taskKey, title, blockedReason, taskHref }: {
             <button
               key={v.id}
               disabled={pending}
-              className="rounded-lg border border-line bg-paper px-3 py-1 text-sm transition-colors hover:border-brand hover:bg-brand hover:text-white disabled:opacity-50"
+              className="rounded-lg border border-line bg-paper px-3 py-1 text-sm transition-colors hover:border-brand hover:bg-brand hover:text-on-action disabled:opacity-50"
               onClick={() => answer(t("answerVariant", { id: v.id }))}
             >
               {v.id}) {v.text}
