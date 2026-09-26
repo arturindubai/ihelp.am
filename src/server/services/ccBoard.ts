@@ -62,9 +62,9 @@ export async function ccCounts() {
 
 const AGENT_PREFIXES = ["system", "triage", "nocode", "dev-", "deployer", "tester"];
 
-/** «Нужен ты»: блокировки на владельце и продукте, брошенные задачи, застрявшая проверка, упавшие запуски, пауза воркеров */
+/** «Нужен ты»: блокировки на владельце и продукте, брошенные задачи, застрявшая проверка, не-код на приёмке, упавшие запуски, пауза воркеров */
 export async function needsYou() {
-  const [attn, owner, failedRuns, config] = await Promise.all([
+  const [attn, owner, failedRuns, config, nocodeReview] = await Promise.all([
     attention(),
     db.task.findMany({
       where: { status: "blocked", blockedOn: { in: ["owner", "product"] } },
@@ -73,6 +73,11 @@ export async function needsYou() {
     }),
     db.workerRun.findMany({ where: { status: { in: ["failed", "timeout"] }, startedAt: { gte: new Date(Date.now() - 24 * 3600_000) } }, orderBy: { startedAt: "desc" }, take: 10 }),
     getWorkersConfig(),
+    db.task.findMany({
+      where: { status: "review", layer: "none" },
+      orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
+      select: { key: true, title: true, priority: true, updatedAt: true, ownerSummary: true, _count: { select: { attachments: true } } },
+    }),
   ]);
   return {
     owner: owner.map((x) => ({
@@ -81,12 +86,12 @@ export async function needsYou() {
     })),
     stale: attn.stale,
     stuckReview: attn.review.filter((r) => r.health.stuckReview),
+    nocodeReview,
     failedRuns,
     pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null,
   };
 }
 
-/** Задачи с макетом, ожидающие утверждения владельцем: любой статус кроме завершённых */
 /**
  * Дизайн ждёт утверждения владельцем: есть настоящий макет — картинка во вложениях или ссылка (mockupUrl) —
  * либо стоит флаг «нужен макет». Текстовое описание дизайна само по себе на согласование не выносится
@@ -114,12 +119,12 @@ export async function designApproved(days = 14) {
   });
 }
 
-/** Согласования: не-код на проверке — принимает человек. С последним отчётом, чтобы решать, не открывая карточку */
+/** Согласования: не-код на проверке — принимает человек. С резюме для владельца и последним отчётом */
 export async function approvals() {
   const tasks = await db.task.findMany({
     where: { status: "review", layer: "none" },
     orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
-    select: { key: true, title: true, priority: true, updatedAt: true, _count: { select: { attachments: true } }, comments: { where: { kind: "report" }, orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, createdAt: true } } },
+    select: { key: true, title: true, priority: true, updatedAt: true, ownerSummary: true, _count: { select: { attachments: true } }, comments: { where: { kind: "report" }, orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, createdAt: true } } },
   });
   return tasks.map((t) => ({ ...t, lane: laneOf({ key: t.key, layer: "none" }) }));
 }
@@ -162,7 +167,7 @@ export async function releaseNotes(weeks = 12) {
   const tasks = await db.task.findMany({
     where: { status: "done", doneAt: { gte: new Date(Date.now() - weeks * 7 * 24 * 3600_000) } },
     orderBy: { doneAt: "desc" },
-    select: { key: true, title: true, summary: true, layer: true, deployedSha: true, doneAt: true, epicRef: { select: { title: true } } },
+    select: { key: true, title: true, summary: true, releaseNote: true, layer: true, deployedSha: true, doneAt: true, epicRef: { select: { title: true } } },
   });
   const groups = new Map<number, typeof tasks>();
   for (const t of tasks) {

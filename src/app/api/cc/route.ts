@@ -95,6 +95,8 @@ const full = (t: Task) => ({
   mockupUrl: t.mockupUrl,
   mockupApprovedBy: t.mockupApprovedBy,
   mockupApprovedAt: t.mockupApprovedAt,
+  releaseNote: t.releaseNote,
+  ownerSummary: t.ownerSummary,
 });
 
 export async function GET(req: Request) {
@@ -302,7 +304,7 @@ export async function POST(req: Request) {
           const current = (await getTask(key))?.task.status;
           if (current && current !== sc.from) return json({ error: "wrong_status", detail: current }, 409);
         }
-        const input: TransitionInput = { to, text, force: body.force === true, blockedOn: str(body.on), sha: str(body.sha), branch: str(body.branch) };
+        const input: TransitionInput = { to, text, force: body.force === true, blockedOn: str(body.on), sha: str(body.sha), branch: str(body.branch), releaseNote: str(body.releaseNote), ownerSummary: str(body.ownerSummary) };
         const task = await transition(key, input, actor);
         return json({ ok: true, status: task.status, task: brief(task) });
       }
