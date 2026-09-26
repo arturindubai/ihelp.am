@@ -3,11 +3,13 @@ import { db } from "../db";
 import { getSettings, type Settings } from "../settings";
 import { notifyBackoffMs, NOTIFY_MAX_ATTEMPTS } from "@/lib/notifyBackoff";
 
-async function sendTelegramRaw(token: string, chatId: string, text: string): Promise<void> {
+async function sendTelegramRaw(token: string, chatId: string, text: string, threadId?: string | null): Promise<void> {
+  const body: Record<string, unknown> = { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true };
+  if (threadId) body.message_thread_id = Number(threadId);
   const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
+    body: JSON.stringify(body),
     signal: AbortSignal.timeout(5000),
   });
   if (!r.ok) throw new Error(`telegram ${r.status}: ${(await r.text()).slice(0, 200)}`);
@@ -27,14 +29,15 @@ function resolveToken(s: Settings, tokenPath: string): string {
  * Поставить сообщение в очередь и сразу попробовать отправить.
  * При сбое запись остаётся в статусе pending — её заберёт cron на следующем проходе.
  * tokenPath: путь к токену в настройках, например «team.botToken» или «notify.telegramBotToken»
+ * threadId: числовой ID топика Telegram-группы (message_thread_id)
  */
-export async function enqueueAndSend(chatId: string, text: string, tag: string, token: string, tokenPath = "notify.telegramBotToken"): Promise<void> {
+export async function enqueueAndSend(chatId: string, text: string, tag: string, token: string, tokenPath = "notify.telegramBotToken", threadId?: string): Promise<void> {
   const msg = await db.notifyQueue.create({
-    data: { chatId, text, tag, tokenPath },
+    data: { chatId, threadId: threadId || null, text, tag, tokenPath },
     select: { id: true },
   });
   try {
-    await sendTelegramRaw(token, chatId, text);
+    await sendTelegramRaw(token, chatId, text, threadId);
     await db.notifyQueue.update({
       where: { id: msg.id },
       data: { status: "sent", sentAt: new Date(), attempts: 1 },
@@ -87,7 +90,7 @@ export async function processQueue(): Promise<{ sent: number; failed: number }> 
     }
     const attempts = msg.attempts + 1;
     try {
-      await sendTelegramRaw(token, msg.chatId, msg.text);
+      await sendTelegramRaw(token, msg.chatId, msg.text, msg.threadId);
       await db.notifyQueue.update({
         where: { id: msg.id },
         data: { status: "sent", sentAt: new Date(), attempts },
