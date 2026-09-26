@@ -19,6 +19,7 @@ import {
   ccTransitionAction,
 } from "@/server/actions/admin/cc";
 import { cn } from "@/lib/format";
+import { parseVariants } from "@/lib/cc-owner-q";
 
 /** Кнопки и формы пульта Control Center: Intake, запуск и остановка воркеров, согласования, сообщения */
 
@@ -546,6 +547,71 @@ export function DesignReturnButton({ taskKey }: { taskKey: string }) {
       )}
       {error && <span className="text-xs text-bad">{t("failed", { error })}</span>}
     </div>
+  );
+}
+
+/* ───────────── Вопросы владельцу ───────────── */
+
+/** Компактная карточка вопроса с вариантами (A/B/C) или полем ввода — в «Нужен ты» */
+export function OwnerQuestionCard({ taskKey, title, blockedReason, taskHref }: { taskKey: string; title: string; blockedReason: string | null; taskHref: string }) {
+  const t = useTranslations("admin.cc.you");
+  const { pending, error, run } = useAct();
+  const [expanded, setExpanded] = useState(false);
+  const [answered, setAnswered] = useState(false);
+  const [replyText, setReplyText] = useState("");
+
+  if (answered) return null;
+
+  const parsed = blockedReason ? parseVariants(blockedReason) : null;
+  const question = parsed?.question || blockedReason || "";
+
+  const answer = (text: string) => run(() => ccTransitionAction(taskKey, { to: "ready", text }), () => setAnswered(true));
+
+  return (
+    <li className="space-y-2 py-3">
+      <Link href={taskHref} scroll={false} className="flex items-baseline gap-2">
+        <span className="shrink-0 font-mono text-xs text-muted">{taskKey}</span>
+        <span className="font-medium">{title}</span>
+      </Link>
+      {question && (
+        <div className="text-sm">
+          <p className={cn("text-warn", !expanded && "line-clamp-2")}>{question}</p>
+          {question.length > 120 && (
+            <button className="mt-0.5 text-xs text-brand hover:underline" onClick={() => setExpanded(!expanded)}>
+              {expanded ? t("collapse") : t("expand")}
+            </button>
+          )}
+        </div>
+      )}
+      {parsed ? (
+        <div className="flex flex-wrap gap-1.5">
+          {parsed.variants.map((v) => (
+            <button
+              key={v.id}
+              disabled={pending}
+              className="rounded-lg border border-line bg-paper px-3 py-1 text-sm transition-colors hover:border-brand hover:bg-brand hover:text-on-action disabled:opacity-50"
+              onClick={() => answer(t("answerVariant", { id: v.id }))}
+            >
+              {v.id}) {v.text}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <form
+          className="flex gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            answer(replyText);
+          }}
+        >
+          <input className="input h-9 flex-1 py-1 text-sm" value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder={t("replyPh")} autoFocus />
+          <button className="btn-dark btn-sm" disabled={pending || replyText.trim().length < 2}>
+            {t("replySend")}
+          </button>
+        </form>
+      )}
+      {error && <p className="text-xs text-bad">{error}</p>}
+    </li>
   );
 }
 

@@ -13,7 +13,10 @@ describe("тикет завершения регистрации", () => {
   it("чужая подпись и другой секрет — отказ", () => {
     const ticket = packSignupTicket({ phone: "+37441000000", locale: "ru" }, secret);
     expect(unpackSignupTicket(ticket, "другой-секрет")).toBeNull();
-    expect(unpackSignupTicket(ticket.slice(0, -2) + "00", secret)).toBeNull();
+    // Гарантированно портим последний символ HMAC (a↔b): не зависит от случайного значения подписи
+    const lastChar = ticket.slice(-1);
+    const tampered = ticket.slice(0, -1) + (lastChar === "a" ? "b" : "a");
+    expect(unpackSignupTicket(tampered, secret)).toBeNull();
     expect(unpackSignupTicket("", secret)).toBeNull();
   });
 
