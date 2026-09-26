@@ -80,6 +80,12 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
 
   return (
     <div>
+      {task.status === "review" && task.ownerSummary && (
+        <div className="mb-4 rounded-xl border border-brand/30 bg-brand-50/40 px-4 py-3">
+          <div className="mb-1 text-xs font-medium text-brand">{t("ownerSummary")}</div>
+          <p className="whitespace-pre-line text-sm">{task.ownerSummary}</p>
+        </div>
+      )}
       <div className="mb-4">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-sm text-muted">{task.key}</span>

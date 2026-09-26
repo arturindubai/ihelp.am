@@ -168,6 +168,15 @@ describe("гейты сдачи", () => {
     expect(reviewGate({ layer: "back", branch: "task/AUTH-1" }, report)).toBeNull();
     expect(reviewGate({ layer: "none", branch: null }, report)).toBeNull();
   });
+  it("если opts переданы — требует releaseNote и ownerSummary", () => {
+    const report = "Сделано: вход через бота. Проверено: tsc, vitest, стенд 8082.";
+    const note = "Теперь клиент видит статус заказа в кабинете";
+    const summary = "Сделано: статус заказа; Проверить: кабинет → мои заказы; Риск: нет";
+    expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, {})).toBe("release_note_required");
+    expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note })).toBe("owner_summary_required");
+    expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note, ownerSummary: summary })).toBeNull();
+    expect(reviewGate({ layer: "none", branch: null }, report, { releaseNote: note, ownerSummary: summary })).toBeNull();
+  });
   it("«Готово» у код-задачи — только с коммитом и доказательством", () => {
     expect(doneGate({ layer: "back" }, { text: "smoke OK, вход проверен в проде" })).toBe("sha_required");
     expect(doneGate({ layer: "back" }, { sha: "d149ace", text: "" })).toBe("proof_required");

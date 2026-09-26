@@ -336,6 +336,7 @@ model Visit {
   price           Int
   cashCollected   Boolean     @default(false)
   cashCollectedAt DateTime?
+  departedAt      DateTime?
   startedAt       DateTime?
   finishedAt      DateTime?
   remindedAt      DateTime?
@@ -535,6 +536,10 @@ model Task {
   mockupApprovedBy  String?
   /// Когда утвердили макет
   mockupApprovedAt  DateTime?
+  /// «Что изменилось для людей» — 1–2 предложения простым языком для Release Notes
+  releaseNote   String?
+  /// Резюме для владельца: что сделано, что проверить, риск — до трёх строк
+  ownerSummary  String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -748,8 +753,10 @@ model NotifyQueue {
   id            String    @id @default(cuid())
   channel       String    @default("telegram")
   chatId        String
+  threadId      String?
   text          String
   tag           String
+  tokenPath     String    @default("notify.telegramBotToken")
   status        String    @default("pending")
   attempts      Int       @default(0)
   lastError     String?

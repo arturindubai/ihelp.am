@@ -64,6 +64,10 @@ export type TransitionInput = {
   sha?: string;
   /** Для «На проверке»: ветка, если не записана при аренде */
   branch?: string;
+  /** «Что изменилось для людей» — 1–2 предложения простым языком для Release Notes */
+  releaseNote?: string;
+  /** Резюме для владельца: что сделано, что проверить, риск */
+  ownerSummary?: string;
 };
 
 /** Смена статуса с проверкой прав, гейтов и записью в историю. Возвращает обновлённую задачу */
@@ -96,10 +100,16 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   }
   if (to === "review") {
     const branch = input.branch?.trim() || task.branch;
+    const extra =
+      input.releaseNote !== undefined || input.ownerSummary !== undefined
+        ? { releaseNote: input.releaseNote, ownerSummary: input.ownerSummary }
+        : undefined;
     // Возврат на проверку после блокировки: отчёт уже в ленте, нужна только ветка
-    const gate = from === "blocked" ? (isCodeTask(task.layer) && !branch?.trim() ? "branch_required" : null) : reviewGate({ layer: task.layer, branch }, text);
+    const gate = from === "blocked" ? (isCodeTask(task.layer) && !branch?.trim() ? "branch_required" : null) : reviewGate({ layer: task.layer, branch }, text, extra);
     if (gate && !force) throw new CcError(gate);
     if (branch) data.branch = branch;
+    if (input.releaseNote?.trim()) data.releaseNote = input.releaseNote.trim().slice(0, 500);
+    if (input.ownerSummary?.trim()) data.ownerSummary = input.ownerSummary.trim().slice(0, 800);
   }
   // Из блокировки обратно в бэклог — на новый разбор триажем: ответ человека мог всё изменить
   if (from === "blocked" && to === "backlog") Object.assign(data, { triagedAt: null, triagedBy: null });
@@ -138,7 +148,13 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   const extra = from === "done" && task.deployedSha ? `\nБыла выложена в ${task.deployedSha}.` : "";
   await say(task.id, actor.name, kindFor(from, to, actor, task.claimedBy), text + extra);
   if (to === "done" || to === "cancelled") await releaseDependents(key);
-  await tellTeam(task, from, to, text, data.blockedOn as string | null, actor).catch(() => null);
+  // task получен до обновления — передаём свежие значения из input для review-перехода
+  const taskForBot = {
+    ...task,
+    ...(data.releaseNote !== undefined ? { releaseNote: data.releaseNote as string } : {}),
+    ...(data.ownerSummary !== undefined ? { ownerSummary: data.ownerSummary as string } : {}),
+  };
+  await tellTeam(taskForBot, from, to, text, data.blockedOn as string | null, actor).catch(() => null);
   if (to === "done" && actor.role === "deployer") {
     await alertTech(`cc:done:${key}`, html`🚀 <b>Выложено: ${key}</b> ${task.title}${input.sha ? ` · ${input.sha.slice(0, 10)}` : ""}
 ${text.slice(0, 300)}`, 1);
@@ -150,12 +166,24 @@ ${text.slice(0, 300)}`, 1);
  * Бот команды (Control Center → «Ключи»): владельцу приходит то, что ждёт его — вопрос на задаче, работа без кода
  * на приёмку — и что выложено. Бот не подключён — ничего не происходит
  */
-async function tellTeam(task: { key: string; title: string; layer: string }, from: string, to: string, text: string, blockedOn: string | null, actor: Actor) {
+async function tellTeam(
+  task: { key: string; title: string; layer: string; releaseNote?: string | null; ownerSummary?: string | null },
+  from: string,
+  to: string,
+  text: string,
+  blockedOn: string | null,
+  actor: Actor,
+) {
   const link = `${(process.env.APP_URL || "").replace(/\/$/, "")}/ru/admin/control?task=${task.key}`;
   let msg = "";
   if (to === "blocked" && (blockedOn === "owner" || blockedOn === "product")) msg = html`✋ <b>${task.key}</b> ждёт вашего решения — ${task.title}\n\n${text.slice(0, 1200)}\n\nОтветьте в карточке: ${link}`;
-  else if (to === "review" && task.layer === "none") msg = html`✅ <b>${task.key}</b> готово к приёмке — ${task.title}\n${link}`;
-  else if (to === "done" && actor.role === "deployer" && from === "review") msg = html`🚀 Выложено: <b>${task.key}</b> ${task.title}`;
+  else if (to === "review" && task.layer === "none") {
+    const summary = task.ownerSummary ? `\n\n${task.ownerSummary}` : "";
+    msg = html`✅ <b>${task.key}</b> готово к приёмке — ${task.title}${summary}\n${link}`;
+  } else if (to === "done" && actor.role === "deployer" && from === "review") {
+    const note = task.releaseNote ? `\n${task.releaseNote}` : "";
+    msg = html`🚀 Выложено: <b>${task.key}</b> ${task.title}${note}`;
+  }
   if (!msg) return;
   const { notifyMembers } = await import("./teamBot");
   await notifyMembers(msg);

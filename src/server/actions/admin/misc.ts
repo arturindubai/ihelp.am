@@ -207,8 +207,12 @@ export async function saveSettingsAction<K extends keyof Settings>(key: K, value
 export async function testNotifyAction() {
   await requireSection("settings");
   const s = await getSettings();
-  await notifyTeam("✅ Тестовое уведомление");
-  if (s.notify.techChatId) await notifyTech("✅ Тестовое уведомление (тех-чат)");
+  const threadLabel = s.notify.telegramOrderThreadId ? ` (топик ${s.notify.telegramOrderThreadId})` : "";
+  await notifyTeam(`✅ Тестовое уведомление${threadLabel}`);
+  if (s.notify.techChatId || s.notify.telegramTechThreadId) {
+    const techLabel = s.notify.telegramTechThreadId ? ` (тех-топик ${s.notify.telegramTechThreadId})` : "";
+    await notifyTech(`✅ Тестовое уведомление (тех-алерт)${techLabel}`);
+  }
   return { ok: true };
 }
 

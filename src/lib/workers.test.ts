@@ -138,12 +138,16 @@ describe("режимы пулов", () => {
     const config = { ...on, pools: { ...on.pools, dev: { ...on.pools.dev, mode: "manual" as const } } };
     expect(planDispatch(state({ config, readyForDev: 3 }), noon)).toEqual([]);
   });
-  it("по расписанию — не чаще интервала после прошлого запуска", () => {
+  it("по расписанию — карточки в очереди обрабатываются без ограничения интервала; обзор бэклога (пустая очередь) — по интервалу", () => {
     const config = { ...on, pools: { ...on.pools, triage: { ...on.pools.triage, mode: "scheduled" as const, everyMin: 60 } } };
     const recent = { triage: new Date(noon.getTime() - 20 * 60_000).toISOString() };
     const old = { triage: new Date(noon.getTime() - 61 * 60_000).toISOString() };
-    expect(planDispatch(state({ config, triageQueue: ["A-1"], lastStart: recent }), noon)).toEqual([]);
+    // Непустая очередь — запускаем, игнорируя расписание
+    expect(planDispatch(state({ config, triageQueue: ["A-1"], lastStart: recent }), noon)).toEqual([{ pool: "triage", agent: "triage", keys: ["A-1"] }]);
     expect(planDispatch(state({ config, triageQueue: ["A-1"], lastStart: old }), noon)).toEqual([{ pool: "triage", agent: "triage", keys: ["A-1"] }]);
+    // Обзор бэклога при пустой очереди — только по расписанию
+    expect(planDispatch(state({ config, sweepDue: true, lastStart: recent }), noon)).toEqual([]);
+    expect(planDispatch(state({ config, sweepDue: true, lastStart: old }), noon)).toEqual([{ pool: "triage", agent: "triage", sweep: true }]);
   });
 });
 
