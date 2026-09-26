@@ -1559,6 +1559,12 @@
             "in_progress_stale": "В работе без пульса больше часа"
           }
         },
+        "otp24h": "Запросы кода (24ч)",
+        "otp24hHint": "всего / по каналам",
+        "otpErrors": "Ошибки доставки (24ч)",
+        "otpErrorsNone": "нет",
+        "otpErrorsHint": "каналов с ошибкой за сутки",
+        "otpByChannel": "{channel}: {n}",
         "tips": {
           "dispatcher": "Диспетчер молчит дольше 3 минут — на сервере: systemctl status ihelp-dispatcher.timer; установить — deploy/systemd/install.sh.",
           "login": "Воркеры пишут «Not logged in» — войти в подписку: scripts/claude-login.sh, затем «Снять паузу» во вкладке «Воркеры».",
