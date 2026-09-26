@@ -314,6 +314,11 @@ async function main() {
         await spawn("designer", "designer", null, pools.designer.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
       } else if (a.pool === "triage") {
         await spawn("triage", "triage", null, pools.triage.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
+        if (a.keys?.length) {
+          const taken = a.keys.length;
+          const remaining = Math.max(0, (plan.triageQueueSize ?? 0) - taken);
+          log(`· триаж: взято ${taken}, осталось ~${remaining}`);
+        }
       }
     } catch (e) {
       log(`! ${a.agent} ${a.key ?? ""}: ${String(e.message ?? e).slice(0, 300)}`);

@@ -69,7 +69,7 @@ const TRANSITIONS: Record<TaskStatusKey, Partial<Record<TaskStatusKey, Role[]>>>
   ready: { backlog: TRIAGE, blocked: ANY, cancelled: PLAN },
   in_progress: { review: WORK, ready: [...WORK, ...PLAN, "watchdog"], blocked: ANY, backlog: PLAN, cancelled: PLAN },
   // Сторож блокирует проверку, когда тестировщик дважды закончил без вердикта (src/server/services/workers.ts)
-  review: { done: RELEASE, ready: [...RELEASE, ...PLAN, "tester"], blocked: [...RELEASE, ...PLAN, "tester", "watchdog"] },
+  review: { done: RELEASE, ready: [...RELEASE, ...PLAN, "tester"], blocked: [...RELEASE, ...PLAN, "tester", "watchdog"], cancelled: PLAN },
   // Разблокировка ведёт туда, откуда задача была заблокирована (unblockTarget): с проверки — на проверку
   blocked: { ready: ANY, review: ANY, backlog: TRIAGE, cancelled: PLAN },
   done: { ready: RELEASE },
@@ -151,10 +151,18 @@ export const isReady = (items: CheckItem[]) => items.every((i) => i.ok || !i.har
 /** Код-задача: её доказательство готовности — коммит в main, а не слова */
 export const isCodeTask = (layer: string) => layer !== "none";
 
-/** Гейт «На проверке»: у код-задачи есть ветка, у любой — отчёт, по которому деплоер поймёт, что проверять */
-export function reviewGate(t: { layer: string; branch?: string | null }, report: string): string | null {
+/** Гейт «На проверке»: у код-задачи есть ветка, у любой — отчёт; если переданы opts — проверяем releaseNote и ownerSummary */
+export function reviewGate(
+  t: { layer: string; branch?: string | null },
+  report: string,
+  opts?: { releaseNote?: string; ownerSummary?: string },
+): string | null {
   if (isCodeTask(t.layer) && !t.branch?.trim()) return "branch_required";
   if (report.trim().length < 40) return "report_required";
+  if (opts !== undefined) {
+    if (!opts.releaseNote?.trim()) return "release_note_required";
+    if (!opts.ownerSummary?.trim()) return "owner_summary_required";
+  }
   return null;
 }
 

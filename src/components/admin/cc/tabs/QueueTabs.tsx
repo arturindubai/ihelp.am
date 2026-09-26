@@ -9,7 +9,7 @@ import { LANES } from "@/lib/cc-lanes";
 import { Card } from "@/components/admin/fields";
 import { QuickMove } from "@/components/admin/cc/TaskControls";
 import { silentLabel } from "@/components/admin/cc/TaskBadges";
-import { ApprovalButtons, ApproveAllButton, OwnerQuestionCard, RunWorkerButton } from "@/components/admin/cc/CcControls";
+import { ApprovalButtons, ApproveAllButton, CommentButton, OwnerQuestionCard, RejectAllButton, ReturnAllButton, RunWorkerButton } from "@/components/admin/cc/CcControls";
 import { Empty, LANE_DOT, PRIORITY_TONE, RUN_TONE, TaskLine, ago } from "./shared";
 import { cn } from "@/lib/format";
 
@@ -18,7 +18,7 @@ type Href = (key: string) => string;
 /** «Нужен ты»: всё, что стоит без решения человека — вопросы воркеров и чатов, брошенные задачи, упавшие запуски */
 export async function YouTab({ taskHref }: { taskHref: Href }) {
   const [t, ty, data] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.you"), needsYou()]);
-  const nothing = !data.owner.length && !data.stale.length && !data.stuckReview.length && !data.failedRuns.length && !data.pausedUntil;
+  const nothing = !data.owner.length && !data.stale.length && !data.stuckReview.length && !data.nocodeReview.length && !data.failedRuns.length && !data.pausedUntil;
   return (
     <div className="space-y-4">
       {nothing && <Empty>{ty("empty")}</Empty>}
@@ -39,6 +39,7 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
           <>
             {needsAnswer.length > 0 && (
               <Card title={`✋ ${ty("ownerNeedAnswer")} · ${needsAnswer.length}`}>
+                <p className="mb-2 text-xs text-muted">{ty("ownerHint")}</p>
                 <ul className="divide-y divide-line">
                   {needsAnswer.map((x) => (
                     <OwnerQuestionCard
@@ -108,6 +109,28 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
           <ul className="divide-y divide-line">
             {data.stuckReview.map((x) => (
               <TaskLine key={x.key} k={x.key} title={x.title} href={taskHref(x.key)} sub={ty("since", { ago: ago(t, x.updatedAt) })} />
+            ))}
+          </ul>
+        </Card>
+      )}
+      {data.nocodeReview.length > 0 && (
+        <Card title={`✅ ${ty("nocodeReview")} · ${data.nocodeReview.length}`}>
+          <p className="mb-2 text-xs text-muted">{ty("nocodeReviewHint")}</p>
+          <ul className="divide-y divide-line">
+            {data.nocodeReview.map((x) => (
+              <li key={x.key} className="flex flex-wrap items-start gap-3 py-3">
+                <Link href={taskHref(x.key)} scroll={false} className="min-w-0 flex-1">
+                  <span className="font-mono text-xs text-muted">{x.key}</span>{" "}
+                  <span className={cn("chip text-[10px]", PRIORITY_TONE[x.priority])}>{PRIORITIES[x.priority]}</span>
+                  <span className="mt-0.5 block font-medium">{x.title}</span>
+                  {x.ownerSummary && <p className="mt-1 line-clamp-3 whitespace-pre-line text-xs">{x.ownerSummary}</p>}
+                  <span className="block text-xs text-muted">
+                    {ago(t, x.updatedAt)}
+                    {x._count.attachments ? ` · 📎 ${x._count.attachments}` : ""}
+                  </span>
+                </Link>
+                <ApprovalButtons taskKey={x.key} />
+              </li>
             ))}
           </ul>
         </Card>
@@ -239,7 +262,13 @@ export async function ApprovalsTab({ taskHref }: { taskHref: Href }) {
                     </span>
                   </span>
                 }
-                actions={<ApproveAllButton keys={list.map((x) => x.key)} label={ta("approveAll")} />}
+                actions={
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <ApproveAllButton keys={list.map((x) => x.key)} label={ta("approveAll")} />
+                    <ReturnAllButton keys={list.map((x) => x.key)} label={ta("returnAll")} />
+                    <RejectAllButton keys={list.map((x) => x.key)} label={ta("rejectAll")} />
+                  </span>
+                }
               >
                 <ul className="divide-y divide-line">
                   {list.map((x) => {
@@ -250,6 +279,11 @@ export async function ApprovalsTab({ taskHref }: { taskHref: Href }) {
                           <span className="font-mono text-xs text-muted">{x.key}</span>{" "}
                           <span className={cn("chip text-[10px]", PRIORITY_TONE[x.priority])}>{PRIORITIES[x.priority]}</span>
                           <span className="mt-0.5 block font-medium">{x.title}</span>
+                          {x.ownerSummary && (
+                            <span className="mt-1 block whitespace-pre-line text-xs font-medium">
+                              {x.ownerSummary}
+                            </span>
+                          )}
                           {report && (
                             <span className="mt-1 line-clamp-3 block whitespace-pre-line text-xs text-muted">
                               {report.author}: {report.text}
@@ -260,7 +294,10 @@ export async function ApprovalsTab({ taskHref }: { taskHref: Href }) {
                             {x._count.attachments ? ` · 📎 ${x._count.attachments}` : ""}
                           </span>
                         </Link>
-                        <ApprovalButtons taskKey={x.key} />
+                        <div className="flex flex-col items-end gap-1">
+                          <ApprovalButtons taskKey={x.key} />
+                          <CommentButton taskKey={x.key} />
+                        </div>
                       </li>
                     );
                   })}

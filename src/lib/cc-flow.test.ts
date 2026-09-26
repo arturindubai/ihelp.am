@@ -95,8 +95,16 @@ describe("переходы", () => {
     expect(canTransition("backlog", "in_progress", "owner")).toBe(false);
     expect(nextStatuses("backlog", "cto")).toEqual(["ready", "blocked", "cancelled"]);
   });
+  it("владелец и CTO могут отклонить задачу с проверки, разработчик — нет", () => {
+    expect(canTransition("review", "cancelled", "owner")).toBe(true);
+    expect(canTransition("review", "cancelled", "cto")).toBe(true);
+    expect(canTransition("review", "cancelled", "product")).toBe(true);
+    expect(canTransition("review", "cancelled", "deployer")).toBe(false);
+    expect(canTransition("review", "cancelled", "dev")).toBe(false);
+  });
   it("возврат на доработку и отмена требуют причины", () => {
     expect(needsReason("review", "ready")).toBe(true);
+    expect(needsReason("review", "cancelled")).toBe(true);
     expect(needsReason("ready", "cancelled")).toBe(true);
     expect(needsReason("backlog", "ready")).toBe(false);
   });
@@ -159,6 +167,15 @@ describe("гейты сдачи", () => {
     expect(reviewGate({ layer: "back", branch: "task/AUTH-1" }, "готово")).toBe("report_required");
     expect(reviewGate({ layer: "back", branch: "task/AUTH-1" }, report)).toBeNull();
     expect(reviewGate({ layer: "none", branch: null }, report)).toBeNull();
+  });
+  it("если opts переданы — требует releaseNote и ownerSummary", () => {
+    const report = "Сделано: вход через бота. Проверено: tsc, vitest, стенд 8082.";
+    const note = "Теперь клиент видит статус заказа в кабинете";
+    const summary = "Сделано: статус заказа; Проверить: кабинет → мои заказы; Риск: нет";
+    expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, {})).toBe("release_note_required");
+    expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note })).toBe("owner_summary_required");
+    expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note, ownerSummary: summary })).toBeNull();
+    expect(reviewGate({ layer: "none", branch: null }, report, { releaseNote: note, ownerSummary: summary })).toBeNull();
   });
   it("«Готово» у код-задачи — только с коммитом и доказательством", () => {
     expect(doneGate({ layer: "back" }, { text: "smoke OK, вход проверен в проде" })).toBe("sha_required");

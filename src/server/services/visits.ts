@@ -7,6 +7,7 @@ import { html, notifyTeam } from "../notify";
 export async function setVisitStatus(visitId: string, status: VisitStatus, actor: string) {
   const v = await db.visit.findUniqueOrThrow({ where: { id: visitId }, include: { order: true, master: true } });
   const data: Record<string, unknown> = { status };
+  if (status === "ON_WAY" && !v.departedAt) data.departedAt = new Date();
   if (status === "IN_PROGRESS" && !v.startedAt) data.startedAt = new Date();
   if (status === "DONE") data.finishedAt = new Date();
   await db.visit.update({ where: { id: v.id }, data });

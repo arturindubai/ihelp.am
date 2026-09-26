@@ -34,8 +34,8 @@ if ! deploy/gate.sh; then
   exit 1
 fi
 
-echo "▶ 5/7 Запуск (миграции базы применяются автоматически)"
-docker compose up -d
+echo "▶ 5/7 Запуск на готовом образе (миграции базы применяются автоматически)"
+docker compose up -d --no-build
 
 echo "▶ 6/7 Ожидание готовности приложения"
 for _ in $(seq 1 60); do
