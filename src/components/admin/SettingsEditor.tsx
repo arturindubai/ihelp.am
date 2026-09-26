@@ -168,6 +168,8 @@ export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardInte
         <div className="grid gap-3 md:grid-cols-2">
           <TextInput label={t("teamChatId")} hint={t("teamChatHint")} value={s.notify.teamChatId} onChange={(v) => set("notify", { teamChatId: v })} />
           <TextInput label={t("techChatId")} hint={t("techChatHint")} value={s.notify.techChatId} onChange={(v) => set("notify", { techChatId: v })} />
+          <TextInput label={t("telegramOrderThreadId")} hint={t("telegramOrderThreadHint")} value={s.notify.telegramOrderThreadId} onChange={(v) => set("notify", { telegramOrderThreadId: v })} />
+          <TextInput label={t("telegramTechThreadId")} hint={t("telegramTechThreadHint")} value={s.notify.telegramTechThreadId} onChange={(v) => set("notify", { telegramTechThreadId: v })} />
           <TextInput label={t("botToken")} hint={t("secretHint")} value={s.notify.telegramBotToken} onChange={(v) => set("notify", { telegramBotToken: v })} />
           <TextInput label={t("chatId")} hint={t("chatIdHint")} value={s.notify.telegramChatId} onChange={(v) => set("notify", { telegramChatId: v })} />
         </div>

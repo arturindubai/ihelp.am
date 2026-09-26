@@ -748,6 +748,7 @@ model NotifyQueue {
   id            String    @id @default(cuid())
   channel       String    @default("telegram")
   chatId        String
+  threadId      String?
   text          String
   tag           String
   tokenPath     String    @default("notify.telegramBotToken")
