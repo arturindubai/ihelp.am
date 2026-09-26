@@ -312,6 +312,7 @@ export async function dispatchPlan(heads: Record<string, string>) {
     unmet: unmet
       .filter((r) => !waiting.has(`${r.pool}|${r.at}`))
       .map((r) => `${r.pool}${r.key ? ` ${r.key}` : ""}: ${state.config.stopRunning ? "идёт остановка" : state.config.pausedUntil && Date.parse(state.config.pausedUntil) > Date.now() ? `воркеры на паузе (${state.config.pausedReason ?? "лимит подписки или вход"})` : "нет подходящей работы (задача не в нужном статусе или без отправленной ветки)"}`),
+    triageQueueSize: state.triageQueue.length,
   };
 }
 
