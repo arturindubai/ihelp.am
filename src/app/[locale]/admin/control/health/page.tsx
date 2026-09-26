@@ -1,12 +1,13 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { pageUser } from "@/server/adminPage";
-import { boardAudit, healthStatus } from "@/server/services/ccBoard";
+import { boardAudit, healthStatus, staleTasksList } from "@/server/services/ccBoard";
 import { otpStats } from "@/server/services/otpStats";
 import { Forbidden } from "@/components/admin/ui";
 import { CcHeader } from "@/components/admin/cc/CcHeader";
 import { SystemPanel } from "@/components/admin/cc/SystemPanel";
 import { ErrorLogPanel } from "@/components/admin/cc/ErrorLogPanel";
+import { HealthPanel } from "@/components/admin/cc/HealthPanel";
 import { Card } from "@/components/admin/fields";
 import { ago } from "@/components/admin/cc/tabs/shared";
 import { cn, dateLabel, timeLabel } from "@/lib/format";
@@ -40,7 +41,7 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
   const { locale } = await params;
   setRequestLocale(locale);
   if (!(await pageUser("control"))) return <Forbidden />;
-  const [t, th, h, audit, otp] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.healthPage"), healthStatus(), boardAudit(), otpStats()]);
+  const [t, th, h, audit, otp, staleTasks] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.healthPage"), healthStatus(), boardAudit(), otpStats(), staleTasksList()]);
   const uptime = h.uptimeSec >= 86400 ? th("uptimeD", { d: Math.floor(h.uptimeSec / 86400), h: Math.floor((h.uptimeSec % 86400) / 3600) }) : th("uptimeH", { h: Math.floor(h.uptimeSec / 3600), m: Math.floor((h.uptimeSec % 3600) / 60) });
   const tickTone: Tone = h.tickAgeMin == null ? "warn" : h.tickAgeMin > 3 ? "bad" : "ok";
   const workersValue = h.workers.state === "stopped" ? th("workersStopped") : h.workers.state === "planned" ? th("workersPlanned", { when: `${dateLabel(new Date(h.workers.pausedUntil!), locale, { day: "numeric", month: "short" })}, ${timeLabel(new Date(h.workers.pausedUntil!))}` }) : h.workers.state === "paused" ? th("workersPaused") : h.workers.enabled ? (h.workers.dryRun ? th("workersDry") : th("workersOn")) : th("workersOff");
@@ -108,6 +109,11 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
         )}
         <p className="mt-2 text-xs text-muted">{th("audit.hint")}</p>
       </Card>
+
+      <div className="mb-4">
+        <HealthPanel tasks={staleTasks} locale={locale} />
+      </div>
+
       <div className="mb-4 grid gap-4 lg:grid-cols-2">
         <SystemPanel system={h.sys} />
         <Card title={th("howTo")}>

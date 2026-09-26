@@ -5,7 +5,7 @@ import { getTick, getWorkersConfig, requestRun } from "./workers";
 import { unreadForOwner } from "./ccMessages";
 import { recentErrors } from "../logbuffer";
 import { flowOf, intakeTitle, laneOf, nextIntakeKey, sizeOf, weekStart } from "@/lib/cc-lanes";
-import { CLOSED_STATUSES, OPEN_STATUSES } from "@/lib/cc-flow";
+import { CLOSED_STATUSES, LEASE_MIN, OPEN_STATUSES } from "@/lib/cc-flow";
 import { testedCurrent, workersState } from "@/lib/workers";
 import { Prisma } from "@prisma/client";
 
@@ -240,6 +240,28 @@ export async function intakeHistory(take = 12) {
 }
 
 /* ───────────── Здоровье ───────────── */
+
+/** Порог отображения в панели «Задачи без пульса» на странице Здоровье */
+const STALE_DISPLAY_MIN = 30;
+
+/** Задачи «В работе», от которых не было пульса более 30 минут — для ручного возврата в очередь */
+export async function staleTasksList() {
+  const now = new Date();
+  const tasks = await db.task.findMany({
+    where: { status: "in_progress", claimedBy: { not: null } },
+    select: { key: true, title: true, claimedBy: true, heartbeatAt: true, claimUntil: true },
+  });
+  return tasks
+    .map((t) => {
+      const lastSign = t.heartbeatAt ?? (t.claimUntil ? new Date(t.claimUntil.getTime() - LEASE_MIN * 60_000) : null);
+      const silentMin = lastSign ? Math.floor((now.getTime() - lastSign.getTime()) / 60_000) : null;
+      return { key: t.key, title: t.title, claimedBy: t.claimedBy, silentMin };
+    })
+    .filter((t) => t.silentMin != null && t.silentMin >= STALE_DISPLAY_MIN)
+    .sort((a, b) => (b.silentMin ?? 0) - (a.silentMin ?? 0));
+}
+
+export type StaleTask = Awaited<ReturnType<typeof staleTasksList>>[number];
 
 /** Страница «Здоровье»: сервер, база, память, бэкапы, фоновые задачи, диспетчер и воркеры, каналы, последняя выкладка */
 /** Инварианты доски из канона (docs/canon/PROCESS.md): что потеряно или зависло. Ничего не меняет — только отчёт */
