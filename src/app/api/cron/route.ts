@@ -5,6 +5,7 @@ import { getSettings } from "@/server/settings";
 import { generateSubscriptionVisitsSafe, resumeSubscription } from "@/server/services/booking";
 import { runWatchdog } from "@/server/services/ccWork";
 import { processQueue, cleanQueue } from "@/server/services/notifyQueue";
+import { runLogWatcher } from "@/server/services/logWatcher";
 import { html, notifyTeam } from "@/server/notify";
 import { alertTech } from "@/server/alerts";
 import { ymd } from "@/lib/time";
@@ -120,6 +121,9 @@ export async function GET(req: Request) {
   // 5в. Очистка старых отправленных уведомлений
   await step("notify-cleanup", () => daily("notify-cleanup", 5, () => cleanQueue(7).then(() => undefined)), undefined);
 
+  // 5г. Лог-вотчер: ошибки прода становятся входящими карточками IN-N
+  const lw = await step("log-watcher", () => runLogWatcher(), { created: 0, updated: 0, limited: false });
+
   // 6. Бэкапы: отметки пишет контейнер backup (Setting `_backup`)
   const b = await step("backup-state", async () => ((await db.setting.findUnique({ where: { key: "_backup" } }))?.value ?? null) as BackupState | null, null);
   if (b ? now.getTime() - time(b.lastOkAt) > 26 * HOUR : process.uptime() > 26 * 3600) {
@@ -142,5 +146,5 @@ export async function GET(req: Request) {
     console.error("[cron] disk check failed", e);
   }
 
-  return NextResponse.json({ ok: true, resumed, created, expired, unassigned, cleaned, diskFreePct, cc, nq });
+  return NextResponse.json({ ok: true, resumed, created, expired, unassigned, cleaned, diskFreePct, cc, nq, lw });
 }
