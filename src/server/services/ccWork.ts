@@ -129,7 +129,7 @@ export async function transition(key: string, input: TransitionInput, actor: Act
     const on = input.blockedOn || "tech";
     if (!(BLOCKED_ON as readonly string[]).includes(on)) throw new CcError("bad_blocked_on");
     data.blockedOn = on;
-    data.blockedReason = text.slice(0, 200) || null;
+    data.blockedReason = text.slice(0, 2000) || null;
     data.blockedFrom = from;
   } else {
     data.blockedOn = null;
