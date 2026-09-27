@@ -1,6 +1,15 @@
 # SITE_ADDRESS=":80" — работа по IP без HTTPS.
 # После покупки домена: SITE_ADDRESS="example.am, www.example.am" — Caddy сам выпустит SSL-сертификат
 # (только если Caddy владеет портами 80/443 хоста; на общем сервере с nginx см. README → «Подключение домена»).
+
+# trusted_proxies — доверять заголовку X-Forwarded-For только от приватных сетей (Docker-шлюз, nginx на хосте).
+# Без этого Caddy перетирает заголовок адресом соседа по Docker-сети, и приложение видит 172.x вместо IP клиента.
+{
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
 {$SITE_ADDRESS} {
 	encode gzip zstd
 	header {
