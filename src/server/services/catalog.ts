@@ -32,12 +32,13 @@ type SvcCardInput = {
   image: string | null;
   rating: number;
   reviewsCount: number;
-  groups: { options: { price: number }[] }[];
+  groups: { options: { price: number; durationMin: number }[] }[];
   plans: { discountPercent: number }[];
 };
 
 export function serviceCard(s: SvcCardInput, locale: string) {
   const prices = s.groups.flatMap((g) => g.options.map((o) => o.price)).filter((p) => p > 0);
+  const durations = s.groups.flatMap((g) => g.options.map((o) => o.durationMin)).filter((d) => d > 0);
   return {
     slug: s.slug,
     title: tr(s.title, locale),
@@ -47,7 +48,22 @@ export function serviceCard(s: SvcCardInput, locale: string) {
     reviewsCount: s.reviewsCount,
     fromPrice: prices.length ? Math.min(...prices) : 0,
     maxDiscount: Math.max(0, ...s.plans.map((p) => p.discountPercent)),
+    minDuration: durations.length ? Math.min(...durations) : 0,
   };
+}
+
+export async function getCategories(locale: string) {
+  const cats = await db.category.findMany({
+    where: { active: true },
+    orderBy: { sort: "asc" },
+    include: { services: { where: { active: true }, select: { slug: true } } },
+  });
+  return cats.map((c) => ({
+    slug: c.slug,
+    title: tr(c.title, locale) as string,
+    comingSoon: c.comingSoon,
+    href: c.services.length === 1 && !c.comingSoon ? `/s/${c.services[0].slug}` : `/c/${c.slug}`,
+  }));
 }
 
 export async function getCategory(slug: string, locale: string) {

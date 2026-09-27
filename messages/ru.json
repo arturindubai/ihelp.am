@@ -335,6 +335,12 @@
     "newMaster": "Новый мастер",
     "services": "Услуги"
   },
+  "catalog": {
+    "newService": "Новая услуга",
+    "comingSoonTitle": "Скоро откроем",
+    "comingSoonText": "Готовим услуги и мастеров. Напишите нам — ответим на вопросы",
+    "writeWhatsApp": "Написать в WhatsApp"
+  },
   "pro": {
     "title": "Кабинет мастера",
     "today": "Сегодня",
