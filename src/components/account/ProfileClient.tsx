@@ -1,16 +1,16 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { MapPin, Pencil, Trash2, Plus, LogOut } from "lucide-react";
+import { MapPin, Pencil, Trash2, Plus, LogOut, Send } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
-import { confirmProfileEmailAction, sendProfileEmailCodeAction, updateProfileAction } from "@/server/actions/account";
+import { confirmProfileEmailAction, sendProfileEmailCodeAction, unlinkTelegramAction, updateProfileAction } from "@/server/actions/account";
 import { deleteAddressAction } from "@/server/actions/booking";
 import { logoutAction } from "@/server/actions/auth";
 import { Sheet } from "@/components/ui/Sheet";
 import { AddressForm, addressLine, type AddressRow } from "@/components/booking/AddressForm";
 import { formatPhone } from "@/lib/phone";
 
-export function ProfileClient({ user, addresses: initial, districts, enabledLocales, emailCodes }: { user: { name: string | null; phone: string; email: string | null; emailVerified: boolean; locale: string }; addresses: AddressRow[]; districts: string[]; enabledLocales: string[]; emailCodes: boolean }) {
+export function ProfileClient({ user, addresses: initial, districts, enabledLocales, emailCodes, telegramLinkEnabled, telegramError }: { user: { name: string | null; phone: string; email: string | null; emailVerified: boolean; locale: string; telegramId: string | null; telegramUsername: string | null }; addresses: AddressRow[]; districts: string[]; enabledLocales: string[]; emailCodes: boolean; telegramLinkEnabled: boolean; telegramError: string | null }) {
   const t = useTranslations("account");
   const ta = useTranslations("address");
   const tc = useTranslations("common");
@@ -62,6 +62,10 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
         </form>
       </section>
 
+      {telegramLinkEnabled && (
+        <TelegramSection telegramId={user.telegramId} telegramUsername={user.telegramUsername} error={telegramError} />
+      )}
+
       <section className="card mt-4 p-4">
         <h2 className="h3 mb-3">{t("addresses")}</h2>
         {addresses.length === 0 && <p className="mb-3 text-sm text-muted">{t("noAddresses")}</p>}
@@ -95,6 +99,44 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
         )}
       </Sheet>
     </div>
+  );
+}
+
+/** Блок привязки Telegram в профиле (AUTH-10): привязать виджетом или отвязать */
+function TelegramSection({ telegramId, telegramUsername, error }: { telegramId: string | null; telegramUsername: string | null; error: string | null }) {
+  const t = useTranslations("account");
+  const tc = useTranslations("common");
+  const [linked, setLinked] = useState(!!telegramId);
+  const [username, setUsername] = useState(telegramUsername);
+  const [pending, start] = useTransition();
+
+  function handleUnlink() {
+    start(async () => {
+      await unlinkTelegramAction();
+      setLinked(false);
+      setUsername(null);
+    });
+  }
+
+  return (
+    <section className="card mt-4 p-4">
+      <h2 className="h3 mb-3">{t("telegramTitle")}</h2>
+      {error === "conflict" && <p className="mb-2 text-sm text-bad">{t("telegramConflict")}</p>}
+      {linked ? (
+        <div className="flex items-center gap-3">
+          <span className="chip bg-ok-50 text-ok flex items-center gap-1.5">
+            <Send size={14} />
+            <span className="truncate max-w-[200px]">{username ? t("telegramLinked", { username }) : t("telegramLinkedNoUsername")}</span>
+          </span>
+          <button className="btn-ghost btn-sm text-bad ml-auto" onClick={handleUnlink} disabled={pending}>{t("telegramDisconnect")}</button>
+        </div>
+      ) : (
+        <a className="btn-outline btn-sm inline-flex items-center gap-2" href="/api/auth/telegram/start?mode=link">
+          <Send size={16} />
+          {t("telegramConnect")}
+        </a>
+      )}
+    </section>
   );
 }
 
