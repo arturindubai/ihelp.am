@@ -6,6 +6,7 @@ import { unreadForOwner } from "./ccMessages";
 import { recentErrors } from "../logbuffer";
 import { flowOf, intakeTitle, laneOf, nextIntakeKey, sizeOf, weekStart } from "@/lib/cc-lanes";
 import { CLOSED_STATUSES, LEASE_MIN, OPEN_STATUSES } from "@/lib/cc-flow";
+import { isAgentAuthor } from "@/lib/cc-owner-question";
 import { testedCurrent, workersState } from "@/lib/workers";
 import { Prisma } from "@prisma/client";
 
@@ -49,7 +50,7 @@ export async function ccCounts() {
   const n = (s: string) => byStatus.find((r) => r.status === s)?._count ?? 0;
   return {
     backlog: OPEN_STATUSES.reduce((sum, s) => sum + n(s), 0),
-    you: ownerBlocked + attn.stale.length + attn.review.filter((r) => r.health.stuckReview).length + failed,
+    you: ownerBlocked + attn.stale.length + attn.review.filter((r) => r.health.stuckReview).length + failed + reviewNoCode,
     dev: n("in_progress"),
     deployer: reviewCode,
     approvals: reviewNoCode,
@@ -59,8 +60,6 @@ export async function ccCounts() {
     byStatus: Object.fromEntries(byStatus.map((r) => [r.status, r._count])) as Record<string, number>,
   };
 }
-
-const AGENT_PREFIXES = ["system", "triage", "nocode", "dev-", "deployer", "tester"];
 
 /** «Нужен ты»: блокировки на владельце и продукте, брошенные задачи, застрявшая проверка, не-код на приёмке, упавшие запуски, пауза воркеров */
 export async function needsYou() {
@@ -82,7 +81,7 @@ export async function needsYou() {
   return {
     owner: owner.map((x) => ({
       ...x,
-      ownerAnswered: x.comments[0] ? !AGENT_PREFIXES.some((p) => x.comments[0].author.startsWith(p)) : false,
+      ownerAnswered: x.comments[0] ? !isAgentAuthor(x.comments[0].author) : false,
     })),
     stale: attn.stale,
     stuckReview: attn.review.filter((r) => r.health.stuckReview),
@@ -268,7 +267,6 @@ export type StaleTask = Awaited<ReturnType<typeof staleTasksList>>[number];
 /** Страница «Здоровье»: сервер, база, память, бэкапы, фоновые задачи, диспетчер и воркеры, каналы, последняя выкладка */
 /** Инварианты доски из канона (docs/canon/PROCESS.md): что потеряно или зависло. Ничего не меняет — только отчёт */
 export async function boardAudit() {
-  const AGENT = /^(triage|dev|nocode|tester|deployer|watchdog|dispatcher|cto|system)/i;
   const [tasks, tick] = await Promise.all([
     db.task.findMany({
       select: {
@@ -292,7 +290,7 @@ export async function boardAudit() {
       if (!t.blockedOn || !t.blockedReason?.trim()) add("blocked_no_reason", t.key);
       const last = t.comments[0];
       const since = t.events[0]?.createdAt;
-      if (last && since && last.createdAt > since && !AGENT.test(last.author)) add("blocked_answered", t.key);
+      if (last && since && last.createdAt > since && !isAgentAuthor(last.author)) add("blocked_answered", t.key);
       if (t.blockedOn === "deps" && !open.length) add("blocked_deps_closed", t.key);
     }
     if (t.status === "backlog" && !t.triagedAt) add("backlog_untriaged", t.key);

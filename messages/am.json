@@ -260,7 +260,12 @@
     "subscriptions": "",
     "history": "",
     "noOrders": "",
-    "bookNow": ""
+    "bookNow": "",
+    "locales": {
+      "ru": "Русский",
+      "en": "English",
+      "am": "Հայերեն"
+    }
   },
   "order": {
     "number": "",
@@ -806,7 +811,12 @@
         "OWNER": ""
       },
       "rolesHint": "",
-      "addStaff": ""
+      "addStaff": "",
+      "namePlaceholder": "",
+      "revokeAccess": "",
+      "revokeConfirm": "",
+      "lastLogin": "",
+      "lastLoginNever": ""
     },
     "log": {
       "title": "",

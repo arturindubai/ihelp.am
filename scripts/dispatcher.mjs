@@ -104,12 +104,17 @@ function heads() {
 
 const isActive = (unit) => ["active", "activating", "deactivating", "reloading"].includes(sh("systemctl", ["is-active", unit]).stdout.trim());
 
-/** Итог запуска по JSON claude -p: закончен, ошибка или упёрлись в лимит подписки (та же логика, что runOutcome в src/lib/workers.ts) */
-function outcome(result, killed) {
-  const text = `${result?.result ?? ""} ${result?.subtype ?? ""}`;
+/** Итог запуска по JSON claude -p: закончен, ошибка, упёрлись в лимит или команда записи в карточку отклонена правами */
+function outcome(result, killed, err = "") {
+  const text = `${result?.result ?? ""} ${result?.subtype ?? ""} ${err}`;
   if (/usage limit|limit reached|rate.?limit|out of (extra )?usage|5-hour limit|weekly limit/i.test(text)) return "limit";
   if (!result) return killed ? "timeout" : "failed";
   if (result.subtype === "error_max_turns") return "failed";
+  // Запись в карточку отклонена правилами прав: Bash(node scripts/cc.mjs …) с многострочным текстом не прошёл
+  if (/(cc\.mjs|scripts\/cc).*(note|block|review|triaged|unblock|msg)/i.test(text) &&
+      /(denied|not permitted|not allowed|отклонен|запрещен|недоступн|tool.*blocked|permission)/i.test(text)) {
+    return "permission_blocked";
+  }
   return result.is_error ? "failed" : "done";
 }
 
@@ -152,7 +157,7 @@ async function reconcile(running, stopAll) {
     } catch {}
     const err = readText(path.join(DATA, `${run.id}.err`)).trim();
     const minutes = (Date.now() - Date.parse(run.startedAt)) / 60000;
-    const status = stopped ? "stopped" : outcome(result, minutes >= LIMIT_MIN[run.pool] - 1);
+    const status = stopped ? "stopped" : outcome(result, minutes >= LIMIT_MIN[run.pool] - 1, err);
     const summary = ((result?.result ? String(result.result) : err) || "нет ответа").trim().slice(-1500);
     const logText = [result?.result ? String(result.result) : "", err ? `--- stderr ---\n${err.slice(-8000)}` : ""].filter(Boolean).join("\n\n").slice(-20000);
     const u = result?.usage ?? {};

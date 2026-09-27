@@ -260,7 +260,12 @@
     "subscriptions": "Subscriptions & packages",
     "history": "History",
     "noOrders": "Your orders will appear here",
-    "bookNow": "Book a cleaning"
+    "bookNow": "Book a cleaning",
+    "locales": {
+      "ru": "Русский",
+      "en": "English",
+      "am": "Հայերեն"
+    }
   },
   "order": {
     "number": "Order #{number}",
@@ -809,7 +814,12 @@
         "OWNER": "Owner"
       },
       "rolesHint": "Operator — orders, schedule, clients, reviews. Administrator — everything except staff and settings. Owner — full access.",
-      "addStaff": "Add staff member"
+      "addStaff": "Add staff member",
+      "namePlaceholder": "Name (optional)",
+      "revokeAccess": "Revoke access",
+      "revokeConfirm": "Revoke access for {label}? Role will change to Client and all sessions will be terminated.",
+      "lastLogin": "Last login:",
+      "lastLoginNever": "never logged in"
     },
     "log": {
       "title": "Activity log",
