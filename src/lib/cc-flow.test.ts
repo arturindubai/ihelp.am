@@ -35,6 +35,7 @@ const task = (patch: Partial<HealthTask> = {}): HealthTask => ({
   staleAt: null,
   updatedAt: min(-10),
   blockedOn: null,
+  blockedUntil: null,
   depends: [],
   rework: 0,
   reclaims: 0,
@@ -249,6 +250,13 @@ describe("здоровье и сторож", () => {
     const b = task({ key: "B1", status: "blocked", blockedOn: "deps", depends: ["X"], claimedBy: null, claimUntil: null });
     expect(watchdogPlan([b], new Set(), now).unblock).toEqual([]);
     expect(watchdogPlan([b], new Set(["X"]), now).unblock).toEqual(["B1"]);
+  });
+  it("задача с blockedUntil в прошлом попадает в unblockScheduled", () => {
+    const past = task({ key: "S1", status: "blocked", blockedOn: "external", claimedBy: null, claimUntil: null, blockedUntil: min(-1) });
+    const future = task({ key: "S2", status: "blocked", blockedOn: "external", claimedBy: null, claimUntil: null, blockedUntil: min(60 * 24) });
+    const noDate = task({ key: "S3", status: "blocked", blockedOn: "tech", claimedBy: null, claimUntil: null, blockedUntil: null });
+    const plan = watchdogPlan([past, future, noDate], new Set(), now);
+    expect(plan.unblockScheduled).toEqual(["S1"]);
   });
 });
 

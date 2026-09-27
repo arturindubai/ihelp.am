@@ -86,6 +86,8 @@ export async function needsYou() {
     })),
     stale: attn.stale,
     stuckReview: attn.review.filter((r) => r.health.stuckReview),
+    /** Заблокированы на tech/external — видно техдиректору в «Нужен ты» */
+    techBlocked: attn.tech,
     nocodeReview,
     failedRuns,
     pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null,

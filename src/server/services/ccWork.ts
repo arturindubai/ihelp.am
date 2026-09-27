@@ -60,6 +60,8 @@ export type TransitionInput = {
   force?: boolean;
   /** Для «Заблокирована»: кто должен снять блокировку */
   blockedOn?: string;
+  /** Для «Заблокирована»: дата автоматической разблокировки — в этот день сторож вернёт задачу на разбор */
+  blockedUntil?: Date | null;
   /** Для «Сделано»: коммит в main, с которым задача выложена */
   sha?: string;
   /** Для «На проверке»: ветка, если не записана при аренде */
@@ -131,9 +133,11 @@ export async function transition(key: string, input: TransitionInput, actor: Act
     data.blockedOn = on;
     data.blockedReason = text.slice(0, 200) || null;
     data.blockedFrom = from;
+    if (input.blockedUntil !== undefined) data.blockedUntil = input.blockedUntil;
   } else {
     data.blockedOn = null;
     data.blockedReason = null;
+    data.blockedUntil = null;
   }
   // Уход из «В работе» снимает аренду. Ветка остаётся: следующий исполнитель продолжит с неё
   if (from === "in_progress") Object.assign(data, { claimedBy: null, claimUntil: null, staleAt: null, session: null });
@@ -194,13 +198,18 @@ async function tellTeam(
   await notifyMembers(msg);
 }
 
-/** Задача закрылась: те, кто был заблокирован только ею, возвращаются в очередь */
+/** Задача закрылась: заблокированные только ею возвращаются в очередь; триажированные задачи бэклога — на разбор */
 async function releaseDependents(key: string) {
-  const waiting = await db.task.findMany({ where: { status: "blocked", blockedOn: "deps", depends: { has: key } }, select: { key: true, depends: true } });
-  if (!waiting.length) return;
   const closed = await closedKeys();
-  for (const w of waiting.filter((t) => t.depends.every((d) => closed.has(d)))) {
+  // Заблокированные на зависимостях — в очередь (blockedOn=deps → ready)
+  const blockedOnDeps = await db.task.findMany({ where: { status: "blocked", blockedOn: "deps", depends: { has: key } }, select: { key: true, depends: true } });
+  for (const w of blockedOnDeps.filter((t) => t.depends.every((d) => closed.has(d)))) {
     await transition(w.key, { to: "ready", text: `Зависимости закрыты (последней — ${key}), задача вернулась в очередь.` }, WATCHDOG).catch(() => null);
+  }
+  // Триажированные задачи бэклога, ждавшие этой зависимости — снова на разбор
+  const backlogWaiting = await db.task.findMany({ where: { status: "backlog", triagedAt: { not: null }, depends: { has: key } }, select: { key: true, depends: true } });
+  for (const w of backlogWaiting.filter((t) => t.depends.every((d) => closed.has(d)))) {
+    await retriage(w.key);
   }
 }
 
@@ -344,6 +353,16 @@ export async function markTriaged(key: string, agent: string, text: string) {
   if (text.trim().length < 10) throw new CcError("reason_required");
   const t = await db.task.findUnique({ where: { key }, select: { id: true } });
   if (!t) throw new CcError("not_found");
+  // Гонка: владелец мог ответить пока триаж обрабатывал задачу.
+  // retriage() фиксирует момент отправки на разбор — если после него есть человеческий ответ, не затираем его.
+  const lastRetriage = await db.taskEvent.findFirst({ where: { taskId: t.id, field: "retriage" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
+  if (lastRetriage) {
+    const freshAnswer = await db.taskComment.findFirst({ where: { taskId: t.id, kind: { notIn: ["system", "triage"] }, createdAt: { gt: lastRetriage.createdAt } } });
+    if (freshAnswer) {
+      await say(t.id, agent, "system", "Триаж завершён, но после отправки на разбор пришёл ответ человека — задача остаётся в очереди триажа.");
+      return;
+    }
+  }
   await db.task.update({ where: { key }, data: { triagedAt: new Date(), triagedBy: agent, triageNote: text.trim().slice(0, 1000) } });
   await say(t.id, agent, "triage", text);
   await log(t.id, agent, "triaged", null, text.trim().slice(0, 120));
@@ -351,10 +370,12 @@ export async function markTriaged(key: string, agent: string, text: string) {
 
 /** Человек ответил в ленте задачи, заблокированной на нём, или поправил карточку бэклога — триаж посмотрит её снова */
 export async function retriage(key: string) {
-  await db.task.updateMany({
-    where: { key, triagedAt: { not: null }, OR: [{ status: "backlog" }, { status: "blocked", blockedOn: { in: ["owner", "product"] } }] },
-    data: { triagedAt: null },
-  });
+  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, blockedOn: true, triagedAt: true } });
+  if (!t || !t.triagedAt) return;
+  if (t.status !== "backlog" && !(t.status === "blocked" && (t.blockedOn === "owner" || t.blockedOn === "product"))) return;
+  await db.task.update({ where: { id: t.id }, data: { triagedAt: null } });
+  // Событие retriage нужно markTriaged(), чтобы не затереть свежий ответ человека
+  await db.taskEvent.create({ data: { taskId: t.id, actor: "system", field: "retriage", from: null, to: "pending" } });
 }
 
 export async function agentNote(key: string, agent: string, kind: CommentKind, text: string) {
@@ -442,6 +463,7 @@ export async function runWatchdog(now = new Date()) {
       staleAt: true,
       updatedAt: true,
       blockedOn: true,
+      blockedUntil: true,
       depends: true,
       rework: true,
       reclaims: true,
@@ -505,6 +527,18 @@ export async function runWatchdog(now = new Date()) {
     await transition(key, { to: "ready", text: "Все зависимости закрыты — задача вернулась в очередь." }, WATCHDOG).catch(() => null);
   }
 
+  for (const key of plan.unblockScheduled) {
+    const t = byKey.get(key)!;
+    const dateStr = t.blockedUntil
+      ? new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Yerevan", day: "numeric", month: "long" }).format(t.blockedUntil)
+      : "";
+    await transition(
+      key,
+      { to: "backlog", text: `Наступила дата плановой разблокировки${dateStr ? ` (${dateStr})` : ""}. Задача возвращена на разбор.` },
+      WATCHDOG,
+    ).catch(() => null);
+  }
+
   if (plan.phantom.length) {
     await alertTech("cc:phantom", html`👻 «В работе», но никто не держит: ${plan.phantom.join(", ")}\nВернуть в очередь или взять — в Control Center.`, 24 * 60);
   }
@@ -512,7 +546,7 @@ export async function runWatchdog(now = new Date()) {
     await alertTech("cc:review", html`⏳ Ждут проверки дольше суток: ${plan.stuckReview.join(", ")}\nОчередь деплоера: /admin/control?status=review`, 24 * 60);
   }
 
-  return { stale: plan.markStale.length, returned: plan.autoReturn.length, unblocked: plan.unblock.length, phantom: plan.phantom.length, stuckReview: plan.stuckReview.length, releasedLeases: plan.releaseLease.length };
+  return { stale: plan.markStale.length, returned: plan.autoReturn.length, unblocked: plan.unblock.length, phantom: plan.phantom.length, stuckReview: plan.stuckReview.length, releasedLeases: plan.releaseLease.length, scheduledUnblocks: plan.unblockScheduled.length };
 }
 
 /** Подписи для писем сторожа и интерфейса: кто должен снять блокировку */
@@ -559,6 +593,8 @@ export async function approveMockup(key: string, actor: string, comment: string 
       console.warn(`[cc] approveMockup: не удалось снять блокировку ${key}: ${(e as Error).message}`);
     });
   }
+  // Если задача в бэклоге — снова на разбор: утверждение макета могло снять последний блокер
+  if (t.status === "backlog") await retriage(key);
   return db.task.findUniqueOrThrow({ where: { key } });
 }
 
@@ -581,6 +617,20 @@ async function designToCanon(t: { key: string; title: string; design: string | n
   if (t.mockupUrl) lines.push("", "## Макет", "", t.mockupUrl);
   if (t.attachments.length) lines.push("", "## Файлы", "", ...t.attachments.map((a) => `- [${a.fileName}](${a.url})`));
   return upsertNote(`design-${t.key.toLowerCase()}`, { title: `Дизайн: ${t.key} — ${t.title}`, kind: "spec", content: lines.join("\n"), note: comment?.trim() || "утверждение дизайна" }, actor);
+}
+
+/** Сменить адресата блокировки с записью в историю — используется командой reblock */
+export async function reblockOn(key: string, newBlockedOn: string, reason: string, actor: Actor): Promise<Task> {
+  if (!(BLOCKED_ON as readonly string[]).includes(newBlockedOn)) throw new CcError("bad_blocked_on");
+  if (reason.trim().length < 5) throw new CcError("reason_required");
+  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, blockedOn: true } });
+  if (!t) throw new CcError("not_found");
+  if (t.status !== "blocked") throw new CcError("wrong_status", t.status);
+  const prev = t.blockedOn;
+  await db.task.update({ where: { id: t.id }, data: { blockedOn: newBlockedOn, blockedReason: reason.trim().slice(0, 200) } });
+  await log(t.id, actor.name, "blockedOn", prev, newBlockedOn);
+  await say(t.id, actor.name, "note", `Адресат блокировки изменён: ${prev ?? "—"} → ${newBlockedOn}. ${reason.trim()}`);
+  return db.task.findUniqueOrThrow({ where: { id: t.id } });
 }
 
 /** Вернуть дизайн дизайнеру: задача блокируется на дизайне с причиной, утверждение и ссылка на макет снимаются */

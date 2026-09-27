@@ -71,7 +71,8 @@ const TRANSITIONS: Record<TaskStatusKey, Partial<Record<TaskStatusKey, Role[]>>>
   // Сторож блокирует проверку, когда тестировщик дважды закончил без вердикта (src/server/services/workers.ts)
   review: { done: RELEASE, ready: [...RELEASE, ...PLAN, "tester"], blocked: [...RELEASE, ...PLAN, "tester", "watchdog"], cancelled: PLAN },
   // Разблокировка ведёт туда, откуда задача была заблокирована (unblockTarget): с проверки — на проверку
-  blocked: { ready: ANY, review: ANY, backlog: TRIAGE, cancelled: PLAN },
+  // watchdog добавлен в backlog: плановая разблокировка по blockedUntil возвращает задачу на разбор
+  blocked: { ready: ANY, review: ANY, backlog: [...TRIAGE, "watchdog"], cancelled: PLAN },
   done: { ready: RELEASE },
   cancelled: { backlog: PLAN },
 };
@@ -239,6 +240,7 @@ export type HealthTask = {
   staleAt: Date | null;
   updatedAt: Date;
   blockedOn: string | null;
+  blockedUntil: Date | null;
   depends: string[];
   rework: number;
   reclaims: number;
@@ -290,11 +292,13 @@ export type WatchdogPlan = {
   stuckReview: string[];
   /** Тестировщик или деплоер держал задачу на проверке и замолчал — снять аренду, статус не трогать */
   releaseLease: string[];
+  /** Наступила дата автоматической разблокировки — вернуть на разбор */
+  unblockScheduled: string[];
 };
 
 /** Решения сторожа по текущему состоянию доски. Применяет их сервис — здесь только логика */
 export function watchdogPlan(tasks: HealthTask[], closedKeys: Set<string>, now = new Date()): WatchdogPlan {
-  const plan: WatchdogPlan = { markStale: [], revive: [], autoReturn: [], phantom: [], unblock: [], stuckReview: [], releaseLease: [] };
+  const plan: WatchdogPlan = { markStale: [], revive: [], autoReturn: [], phantom: [], unblock: [], stuckReview: [], releaseLease: [], unblockScheduled: [] };
   for (const t of tasks) {
     const h = taskHealth(t, closedKeys, now);
     if (h.stale && !t.staleAt) plan.markStale.push(t.key);
@@ -304,6 +308,7 @@ export function watchdogPlan(tasks: HealthTask[], closedKeys: Set<string>, now =
     if (t.status === "blocked" && t.blockedOn === "deps" && t.depends.every((d) => closedKeys.has(d))) plan.unblock.push(t.key);
     if (h.stuckReview) plan.stuckReview.push(t.key);
     if (t.status === "review" && t.claimedBy && (!t.claimUntil || t.claimUntil < now)) plan.releaseLease.push(t.key);
+    if (t.status === "blocked" && t.blockedUntil && t.blockedUntil <= now) plan.unblockScheduled.push(t.key);
   }
   return plan;
 }
