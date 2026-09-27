@@ -3,8 +3,9 @@ import { useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Plus, ExternalLink } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
-import { deleteBannerAction, deletePageAction, saveBannerAction, savePageAction, type BannerPayload } from "@/server/actions/admin/misc";
+import { deleteBannerAction, deleteFeatureAction, deleteFaqAction, deletePageAction, saveBannerAction, saveFeatureAction, saveFaqAction, savePageAction, type BannerPayload, type FeaturePayload, type FaqPayload } from "@/server/actions/admin/misc";
 import { tr } from "@/i18n/locales";
+import { ICON_NAMES, Icon } from "@/components/Icon";
 import { Sheet } from "@/components/ui/Sheet";
 import { I18nInput, ImageInput, NumInput, TextInput, Toggle, type I18n } from "./fields";
 
@@ -42,6 +43,85 @@ export function BannerManager({ banners }: { banners: { id: string; data: Banner
             <TextInput label={t("banners.promoCode")} value={d.promoCode} onChange={(v) => up({ promoCode: v.toUpperCase() })} />
             <div><label className="label">{t("banners.bg")}</label><input type="color" className="h-11 w-20 rounded-lg border border-line" value={d.bg || "#1c1917"} onChange={(e) => up({ bg: e.target.value })} /></div>
             <ImageInput label={t("common.image")} value={d.image} onChange={(v) => up({ image: v })} />
+            <NumInput label={t("common.sort")} value={d.sort} onChange={(v) => up({ sort: v ?? 0 })} />
+            <Toggle label={t("common.active")} checked={d.active} onChange={(v) => up({ active: v })} />
+          </div>
+        )}
+      </Sheet>
+    </div>
+  );
+}
+
+export function FeatureManager({ features }: { features: { id: string; data: FeaturePayload }[] }) {
+  const t = useTranslations("admin");
+  const locale = useLocale();
+  const router = useRouter();
+  const [edit, setEdit] = useState<{ id: string | null; data: FeaturePayload } | null>(null);
+  const [pending, start] = useTransition();
+  const d = edit?.data;
+  const up = (p: Partial<FeaturePayload>) => edit && setEdit({ ...edit, data: { ...edit.data, ...p } });
+  return (
+    <div>
+      <button className="btn-dark mb-3" onClick={() => setEdit({ id: null, data: { icon: "check", title: {}, body: null, active: true, sort: features.length } })}><Plus size={18} /> {t("content.newFeature")}</button>
+      <div className="card divide-y divide-line">
+        {features.map((f) => (
+          <button key={f.id} onClick={() => setEdit(f)} className={`flex w-full items-center gap-3 p-3 text-left ${f.data.active ? "" : "opacity-50"}`}>
+            <Icon name={f.data.icon} size={20} className="shrink-0 text-brand" />
+            <span className="min-w-0 flex-1 font-medium">{tr(f.data.title, locale) || "…"}</span>
+          </button>
+        ))}
+      </div>
+      <Sheet open={!!edit} onClose={() => setEdit(null)} title={t("content.features")} footer={
+        <div className="flex gap-2">
+          {edit?.id && <button className="btn-danger" disabled={pending} onClick={() => confirm(t("common.deleteConfirm")) && start(async () => { await deleteFeatureAction(edit.id!); setEdit(null); router.refresh(); })}>{t("common.delete")}</button>}
+          <button className="btn-primary flex-1" disabled={pending} onClick={() => start(async () => { await saveFeatureAction(edit!.id, edit!.data); setEdit(null); router.refresh(); })}>{t("common.save")}</button>
+        </div>
+      }>
+        {d && (
+          <div className="space-y-3">
+            <div>
+              <label className="label">{t("content.icon")}</label>
+              <select className="input" value={d.icon} onChange={(e) => up({ icon: e.target.value })}>{ICON_NAMES.map((n) => <option key={n}>{n}</option>)}</select>
+            </div>
+            <I18nInput label={t("common.title")} value={d.title} onChange={(v) => up({ title: v })} />
+            <I18nInput label={t("common.description")} multiline value={d.body ?? {}} onChange={(v) => up({ body: v })} />
+            <NumInput label={t("common.sort")} value={d.sort} onChange={(v) => up({ sort: v ?? 0 })} />
+            <Toggle label={t("common.active")} checked={d.active} onChange={(v) => up({ active: v })} />
+          </div>
+        )}
+      </Sheet>
+    </div>
+  );
+}
+
+export function FaqManager({ items }: { items: { id: string; data: FaqPayload }[] }) {
+  const t = useTranslations("admin");
+  const locale = useLocale();
+  const router = useRouter();
+  const [edit, setEdit] = useState<{ id: string | null; data: FaqPayload } | null>(null);
+  const [pending, start] = useTransition();
+  const d = edit?.data;
+  const up = (p: Partial<FaqPayload>) => edit && setEdit({ ...edit, data: { ...edit.data, ...p } });
+  return (
+    <div>
+      <button className="btn-dark mb-3" onClick={() => setEdit({ id: null, data: { q: {}, a: {}, active: true, sort: items.length } })}><Plus size={18} /> {t("content.newFaq")}</button>
+      <div className="card divide-y divide-line">
+        {items.map((f) => (
+          <button key={f.id} onClick={() => setEdit(f)} className={`flex w-full items-center gap-2 p-3 text-left ${f.data.active ? "" : "opacity-50"}`}>
+            <span className="min-w-0 flex-1 font-medium">{tr(f.data.q, locale) || "…"}</span>
+          </button>
+        ))}
+      </div>
+      <Sheet open={!!edit} onClose={() => setEdit(null)} title={t("content.faq")} footer={
+        <div className="flex gap-2">
+          {edit?.id && <button className="btn-danger" disabled={pending} onClick={() => confirm(t("common.deleteConfirm")) && start(async () => { await deleteFaqAction(edit.id!); setEdit(null); router.refresh(); })}>{t("common.delete")}</button>}
+          <button className="btn-primary flex-1" disabled={pending} onClick={() => start(async () => { await saveFaqAction(edit!.id, edit!.data); setEdit(null); router.refresh(); })}>{t("common.save")}</button>
+        </div>
+      }>
+        {d && (
+          <div className="space-y-3">
+            <I18nInput label={t("content.question")} value={d.q} onChange={(v) => up({ q: v })} />
+            <I18nInput label={t("content.answer")} multiline value={d.a} onChange={(v) => up({ a: v })} />
             <NumInput label={t("common.sort")} value={d.sort} onChange={(v) => up({ sort: v ?? 0 })} />
             <Toggle label={t("common.active")} checked={d.active} onChange={(v) => up({ active: v })} />
           </div>

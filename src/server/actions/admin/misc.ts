@@ -158,6 +158,51 @@ export async function deletePageAction(id: string) {
   return { ok: true };
 }
 
+/* ───── Обещания (SiteFeature) ───── */
+const featureSchema = z.object({ icon: z.string().max(30), title: i18n, body: i18n.nullable().optional(), active: z.boolean(), sort: z.number().int() });
+export type FeaturePayload = z.infer<typeof featureSchema>;
+
+export async function saveFeatureAction(id: string | null, input: FeaturePayload) {
+  const u = await requireSection("content");
+  const p = featureSchema.safeParse(input);
+  if (!p.success) return { ok: false };
+  const d = { ...p.data, body: p.data.body ?? Prisma.DbNull };
+  const r = id ? await db.siteFeature.update({ where: { id }, data: d }) : await db.siteFeature.create({ data: d });
+  await audit(u.id, "feature.save", "SiteFeature", r.id);
+  rAll();
+  return { ok: true };
+}
+
+export async function deleteFeatureAction(id: string) {
+  const u = await requireSection("content");
+  await db.siteFeature.delete({ where: { id } });
+  await audit(u.id, "feature.delete", "SiteFeature", id);
+  rAll();
+  return { ok: true };
+}
+
+/* ───── FAQ (SiteFaq) ───── */
+const faqSchema = z.object({ q: i18n, a: i18n, active: z.boolean(), sort: z.number().int() });
+export type FaqPayload = z.infer<typeof faqSchema>;
+
+export async function saveFaqAction(id: string | null, input: FaqPayload) {
+  const u = await requireSection("content");
+  const p = faqSchema.safeParse(input);
+  if (!p.success) return { ok: false };
+  const r = id ? await db.siteFaq.update({ where: { id }, data: p.data }) : await db.siteFaq.create({ data: p.data });
+  await audit(u.id, "faq.save", "SiteFaq", r.id);
+  rAll();
+  return { ok: true };
+}
+
+export async function deleteFaqAction(id: string) {
+  const u = await requireSection("content");
+  await db.siteFaq.delete({ where: { id } });
+  await audit(u.id, "faq.delete", "SiteFaq", id);
+  rAll();
+  return { ok: true };
+}
+
 /* ───── Тексты интерфейса ───── */
 export async function saveUiStringAction(locale: string, key: string, value: string) {
   const u = await requireSection("translations");
