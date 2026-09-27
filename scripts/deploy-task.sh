@@ -51,6 +51,7 @@ fi
 merge=$(git rev-parse HEAD)
 changed=$(git diff --name-only "$prev" "$merge")
 log="data/deploys/$KEY-$(date +%Y%m%d-%H%M%S).log"
+prod_marker=$(< src/lib/deploy-marker.txt)
 echo "▶ $KEY: слияние $merge, лог $log"
 
 if grep -q '^prisma/migrations/' <<< "$changed"; then
@@ -65,7 +66,7 @@ fi
 fail() {
   local why="$1"
   local rolled="прод не тронут (сборка не дошла до запуска)"
-  if grep -q '▶ 4/6' "$log"; then
+  if grep -qF "$prod_marker" "$log"; then
     echo "▶ Откат на предыдущие образы"
     if deploy/rollback.sh >> "$log" 2>&1; then rolled="прод откатан на предыдущую версию (deploy/rollback.sh)"; else rolled="ОТКАТ НЕ УДАЛСЯ — нужен человек"; fi
   fi
