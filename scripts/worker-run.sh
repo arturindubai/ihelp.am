@@ -22,6 +22,8 @@ export CLAUDE_CODE_OAUTH_TOKEN
 common=("Bash(cd *)" "Bash(node scripts/cc.mjs *)" "Bash(node */scripts/cc.mjs *)")
 check=("Bash(scripts/check.sh*)" "Bash(bash scripts/check.sh*)" "Bash(*/scripts/check.sh*)" "Bash(bash */scripts/check.sh*)"
   "Bash(scripts/stand.sh *)" "Bash(bash scripts/stand.sh *)" "Bash(*/scripts/stand.sh *)" "Bash(bash */scripts/stand.sh *)" "Bash(node scripts/stand-shot.mjs *)" "Bash(node */scripts/stand-shot.mjs *)")
+# Обновление package-lock.json в образе сборки (нужно, если задача меняет package.json)
+lockupdate=("Bash(scripts/lock-update.sh*)" "Bash(bash scripts/lock-update.sh*)" "Bash(*/scripts/lock-update.sh*)" "Bash(bash */scripts/lock-update.sh*)")
 allow=(Read Glob Grep Edit Write TodoWrite "${common[@]}" "${check[@]}"
   "Bash(git *)"
   "Bash(ls *)" "Bash(ls)" "Bash(pwd)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(jq *)"
@@ -88,7 +90,8 @@ case "$role" in
     ;;
   dev)
     # Разработчик пишет в свою рабочую копию; tmp-папка на случай --text-file
-    allow+=("Write(//opt/ihelp.am/data/tmp/dev/**)" "Edit(//opt/ihelp.am/data/tmp/dev/**)")
+    # lock-update.sh разрешён явно: он нужен при изменении package.json (обновляет lock в образе сборки)
+    allow+=("Write(//opt/ihelp.am/data/tmp/dev/**)" "Edit(//opt/ihelp.am/data/tmp/dev/**)" "${lockupdate[@]}")
     ;;
   *) echo '{"is_error":true,"result":"неизвестная роль"}'; exit 2 ;;
 esac
