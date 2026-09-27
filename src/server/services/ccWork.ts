@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "../db";
 import { upsertNote } from "./library";
 import { alertTech } from "../alerts";
-import { html } from "../notify";
+import { html, notifyTech } from "../notify";
 import { BLOCKED_ON_LABELS, STATUSES } from "@/lib/backlog-labels";
 import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, doneGate, isReady, needsReason, pickNext, readiness, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
 import type { Prisma, Task } from "@prisma/client";
@@ -156,8 +156,8 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   };
   await tellTeam(taskForBot, from, to, text, data.blockedOn as string | null, actor).catch(() => null);
   if (to === "done" && actor.role === "deployer") {
-    await alertTech(`cc:done:${key}`, html`🚀 <b>Выложено: ${key}</b> ${task.title}${input.sha ? ` · ${input.sha.slice(0, 10)}` : ""}
-${text.slice(0, 300)}`, 1);
+    await notifyTech(html`🚀 <b>Выложено: ${key}</b> ${task.title}${input.sha ? ` · ${input.sha.slice(0, 10)}` : ""}
+${text.slice(0, 300)}`);
   }
   return db.task.findUniqueOrThrow({ where: { id: task.id } });
 }

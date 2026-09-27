@@ -21,7 +21,7 @@ function Section<K extends keyof Settings>({ k, title, value, children, hint }: 
 export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardIntegrated = false, googleRedirect = "", appleRedirect = "" }: { initial: Settings; devMode: boolean; lockedContacts?: Partial<Record<ContactKey, string>>; cardIntegrated?: boolean; googleRedirect?: string; appleRedirect?: string }) {
   const t = useTranslations("admin.settings");
   const [s, setS] = useState(initial);
-  const [sent, setSent] = useState(false);
+  const [sentResult, setSentResult] = useState<{ teamConfigured: boolean; techConfigured: boolean; techSeparate: boolean } | null>(null);
   const [mailTo, setMailTo] = useState("");
   const [mailSent, setMailSent] = useState<string | null>(null);
   const [tgWebhook, setTgWebhook] = useState<string | null>(null);
@@ -174,7 +174,15 @@ export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardInte
           <TextInput label={t("chatId")} hint={t("chatIdHint")} value={s.notify.telegramChatId} onChange={(v) => set("notify", { telegramChatId: v })} />
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <button className="btn-outline btn-sm" onClick={async () => { await testNotifyAction(); setSent(true); }}>{sent ? t("testSent") : t("testNotify")}</button>
+          <button
+            className="btn-outline btn-sm"
+            onClick={async () => {
+              const r = await testNotifyAction();
+              setSentResult({ teamConfigured: r.teamConfigured, techConfigured: r.techConfigured, techSeparate: r.techSeparate });
+            }}
+          >
+            {sentResult == null ? t("testNotify") : sentResult.techSeparate ? t("testSentBoth") : sentResult.techConfigured ? t("testSentTeamOnly") : t("testSentNoChatId")}
+          </button>
           <button
             className="btn-outline btn-sm"
             onClick={async () => {

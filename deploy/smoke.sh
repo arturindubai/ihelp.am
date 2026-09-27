@@ -18,6 +18,11 @@ check() {
   shift
   if "$@"; then echo "  ✓ $name"; else echo "  ✗ $name"; fail=1; fi
 }
+warn() {
+  local name="$1"
+  shift
+  if "$@"; then echo "  ✓ $name"; else echo "  ! $name (предупреждение)"; fi
+}
 http_code() { curl -s -o /dev/null -m 20 -w '%{http_code}' "$@"; }
 state() { docker inspect -f '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}|{{.State.ExitCode}}' "homecare-$1-1" 2> /dev/null; }
 
@@ -28,6 +33,14 @@ for s in caddy cron backup; do check "$s запущен" [ "$(state "$s" | cut -
 check "migrate завершился успешно" [ "$(state migrate | cut -d'|' -f1,3)" = "exited|0" ]
 check "OTP_DEV_MODE выключен" [ "$(docker exec homecare-app-1 printenv OTP_DEV_MODE 2> /dev/null)" = false ]
 check "ключ шифрования настроек задан" docker exec homecare-app-1 sh -c 'test ${#SETTINGS_ENCRYPTION_KEY} -eq 64'
+
+echo "Уведомления"
+tech_alert_ok() {
+  docker compose exec -T db psql -U app -d homeservices -tAc \
+    "SELECT (COALESCE(value->>'telegramBotToken','') != '') AND (COALESCE(value->>'techChatId','') != '' OR COALESCE(value->>'teamChatId','') != '' OR COALESCE(value->>'telegramChatId','') != '') FROM (SELECT (value::jsonb) AS value FROM \"Setting\" WHERE key='notify') t" \
+    2>/dev/null | grep -q "^t"
+}
+warn "адресат тех-алертов задан" tech_alert_ok
 
 echo "Страницы ($BASE)"
 check "/api/health → {\"ok\":true}" [ "$(curl -s -m 20 "$BASE/api/health")" = '{"ok":true}' ]

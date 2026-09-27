@@ -209,11 +209,17 @@ export async function testNotifyAction() {
   const s = await getSettings();
   const threadLabel = s.notify.telegramOrderThreadId ? ` (топик ${s.notify.telegramOrderThreadId})` : "";
   await notifyTeam(`✅ Тестовое уведомление${threadLabel}`);
-  if (s.notify.techChatId || s.notify.telegramTechThreadId) {
-    const techLabel = s.notify.telegramTechThreadId ? ` (тех-топик ${s.notify.telegramTechThreadId})` : "";
-    await notifyTech(`✅ Тестовое уведомление (тех-алерт)${techLabel}`);
-  }
-  return { ok: true };
+  const techLabel = s.notify.telegramTechThreadId ? ` (тех-топик ${s.notify.telegramTechThreadId})` : "";
+  await notifyTech(`✅ Тестовое уведомление (тех-алерт)${techLabel}`);
+  const token = s.team.botToken || s.notify.telegramBotToken;
+  const teamChat = s.notify.teamChatId || s.notify.telegramChatId;
+  const techSeparate = !!s.notify.techChatId;
+  return {
+    ok: true as const,
+    teamConfigured: !!(token && teamChat),
+    techConfigured: !!(token && (s.notify.techChatId || teamChat)),
+    techSeparate,
+  };
 }
 
 /** Подключить вход через Telegram-бота (AUTH-10): регистрирует вебхук на текущем APP_URL */
