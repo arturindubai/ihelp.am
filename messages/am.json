@@ -811,7 +811,12 @@
         "OWNER": ""
       },
       "rolesHint": "",
-      "addStaff": ""
+      "addStaff": "",
+      "namePlaceholder": "",
+      "revokeAccess": "",
+      "revokeConfirm": "",
+      "lastLogin": "",
+      "lastLoginNever": ""
     },
     "log": {
       "title": "",

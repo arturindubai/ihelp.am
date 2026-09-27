@@ -257,12 +257,13 @@ export async function testMailAction(to: string) {
   return r.ok ? { ok: true as const } : { ok: false as const, error: r.error };
 }
 
-export async function setRoleAction(phoneRaw: string, role: Role) {
+export async function setRoleAction(phoneRaw: string, role: Role, name?: string) {
   const u = await requireSection("staff");
   const phone = normalizePhone(phoneRaw);
   if (!phone) return { ok: false as const, error: "phone" };
   if (phone === u.phone && role !== "OWNER") return { ok: false as const, error: "self" };
-  const r = await db.user.upsert({ where: { phone }, create: { phone, role }, update: { role } });
+  const namePatch = name ? { name } : {};
+  const r = await db.user.upsert({ where: { phone }, create: { phone, role, ...namePatch }, update: { role, ...namePatch } });
   if (role === "CLIENT") await db.session.deleteMany({ where: { userId: r.id } });
   await audit(u.id, "staff.role", "User", r.id, { role });
   return { ok: true as const };
