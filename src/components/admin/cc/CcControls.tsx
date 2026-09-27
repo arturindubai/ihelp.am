@@ -10,6 +10,7 @@ import {
   ccReturnDesignAction,
   ccIntakeAction,
   ccMessageToIntakeAction,
+  ccOwnerAnswerAction,
   ccReadMessageAction,
   ccRejectManyAction,
   ccReturnManyAction,
@@ -565,7 +566,7 @@ export function OwnerQuestionCard({ taskKey, title, blockedReason, taskHref }: {
   const parsed = blockedReason ? parseVariants(blockedReason) : null;
   const question = parsed?.question || blockedReason || "";
 
-  const answer = (text: string) => run(() => ccTransitionAction(taskKey, { to: "ready", text }), () => setAnswered(true));
+  const answer = (text: string) => run(() => ccOwnerAnswerAction(taskKey, text), () => setAnswered(true));
 
   return (
     <li className="space-y-2 py-3">

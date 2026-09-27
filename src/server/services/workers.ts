@@ -247,13 +247,49 @@ export async function designerQueue() {
   return filtered.sort((a, b) => Number(b.status === "blocked") - Number(a.status === "blocked") || PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority) || STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage) || a.sort - b.sort);
 }
 
-/** Очередь продакта: задачи с вопросом к продукту, важные первыми */
+/** Очередь продакта: заблокированные на product + «В очереди» с открытыми needs; важные первыми */
 export async function productQueue() {
   const rows = await db.task.findMany({
-    where: { status: "blocked", blockedOn: "product" },
-    select: { key: true, title: true, priority: true, stage: true, status: true, sort: true, source: true, blockedReason: true },
+    where: {
+      OR: [
+        { status: "blocked", blockedOn: "product" },
+        { status: "ready", needs: { isEmpty: false } },
+      ],
+    },
+    select: { key: true, title: true, priority: true, stage: true, status: true, sort: true, source: true, blockedReason: true, needs: true },
   });
-  return rows.sort((a, b) => PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority) || STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage) || a.sort - b.sort);
+  // Заблокированные (ждут ответа) — первыми; внутри группы — по приоритету и этапу
+  return rows.sort(
+    (a, b) =>
+      Number(b.status === "blocked") - Number(a.status === "blocked") ||
+      PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority) ||
+      STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage) ||
+      a.sort - b.sort,
+  );
+}
+
+/** Задачи в 60-минутном холде: недавно были у продакта, с тех пор не менялись — повтор бессмыслен */
+const PRODUCT_HOLD_MIN = 60;
+
+async function productHoldKeys(): Promise<string[]> {
+  const since = new Date(Date.now() - PRODUCT_HOLD_MIN * 60_000);
+  const runs = await db.workerRun.findMany({
+    where: { pool: "product", status: { not: "running" }, finishedAt: { gte: since }, keys: { isEmpty: false } },
+    select: { keys: true, finishedAt: true },
+    orderBy: { finishedAt: "desc" },
+  });
+  // Первое появление ключа в последних запусках
+  const lastRun = new Map<string, Date>();
+  for (const r of runs) {
+    if (!r.finishedAt) continue;
+    for (const key of r.keys) {
+      if (!lastRun.has(key)) lastRun.set(key, r.finishedAt);
+    }
+  }
+  if (lastRun.size === 0) return [];
+  // Задача изменилась после запуска продакта → снова в очередь
+  const tasks = await db.task.findMany({ where: { key: { in: [...lastRun.keys()] } }, select: { key: true, updatedAt: true } });
+  return tasks.filter((t) => t.updatedAt <= lastRun.get(t.key)!).map((t) => t.key);
 }
 
 async function lastStarts() {
@@ -268,7 +304,7 @@ async function todayCounts() {
 
 export async function dispatchState(heads: Record<string, string>): Promise<DispatchState> {
   const config = await getWorkersConfig();
-  const [running, today, review, readyForDev, readyForNocode, triage, sweep, lastStart, requests, product, productSweep, designer, designerSweep] = await Promise.all([
+  const [running, today, review, readyForDev, readyForNocode, triage, sweep, lastStart, requests, product, productSweep, productHold, designer, designerSweep] = await Promise.all([
     db.workerRun.findMany({ where: { status: "running" }, select: { pool: true, agent: true } }),
     todayCounts(),
     reviewTasks(),
@@ -280,6 +316,7 @@ export async function dispatchState(heads: Record<string, string>): Promise<Disp
     getRequests(),
     productQueue(),
     sweepDue(config, "product"),
+    productHoldKeys(),
     designerQueue(),
     sweepDue(config, "designer"),
   ]);
@@ -295,6 +332,7 @@ export async function dispatchState(heads: Record<string, string>): Promise<Disp
     sweepDue: sweep,
     productQueue: product.map((t) => t.key),
     productSweepDue: productSweep,
+    productHold,
     designerQueue: designer.map((t) => t.key),
     designerSweepDue: designerSweep,
     lastStart,
@@ -444,7 +482,14 @@ export async function workersOverview() {
     lastStart,
     queues: {
       triage: triage.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, intake: t.source === "intake" })),
-      product: product.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, reason: "question", detail: (t.blockedReason ?? "").slice(0, 80) })),
+      product: product.map((t) => ({
+        key: t.key,
+        title: t.title,
+        priority: t.priority,
+        status: t.status,
+        reason: t.status === "blocked" ? "question" : "needs",
+        detail: t.status === "blocked" ? (t.blockedReason ?? "").slice(0, 80) : (t.needs?.[0] ?? "").slice(0, 80),
+      })),
       designer: designer.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, reason: t.status === "blocked" ? "question" : t.mockupRequired ? "mockup" : "nodesign", detail: (t.blockedReason ?? "").slice(0, 80) })),
       dev,
       nocode,

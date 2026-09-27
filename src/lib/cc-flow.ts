@@ -168,6 +168,26 @@ export function reviewGate(
 
 export const SHA_RE = /^[0-9a-f]{7,40}$/i;
 
+/**
+ * Гейт «В очереди»: задача с открытыми вопросами к продукту не идёт разработчику.
+ * Обойти может только владелец или техдиректор с причиной (force=true).
+ * Аналог reviewGate и doneGate для перехода в «В очереди»
+ */
+export function readyNeedsGate(needs: string[], role: Role, force: boolean): "needs_open" | null {
+  if (needs.length === 0) return null;
+  if (force && (role === "owner" || role === "cto")) return null;
+  return "needs_open";
+}
+
+/**
+ * Ответ владельца в «Нужен ты» всегда возвращает задачу триажу для повторного разбора.
+ * В «В очереди» задача не переходит напрямую — triagedAt сбрасывается, триаж принимает решение.
+ * Функция документирует инвариант: blockedFrom не влияет на решение
+ */
+export function ownerAnswerTarget(_blockedFrom: string | null | undefined): "triage" {
+  return "triage";
+}
+
 /** Гейт «Сделано»: код-задача — коммит в main и что проверено после выкладки; прочие — доказательство словами или файлом */
 export function doneGate(t: { layer: string }, proof: { sha?: string | null; text?: string | null; attachments?: number }): string | null {
   if (isCodeTask(t.layer) && !SHA_RE.test(proof.sha?.trim() ?? "")) return "sha_required";

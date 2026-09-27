@@ -1039,7 +1039,8 @@
         "invalid": "Check the fields",
         "mockup_required": "Mockup not approved — task cannot be started",
         "mockup_not_required": "Task does not have 'mockup required' flag",
-        "already_approved": "Mockup already approved"
+        "already_approved": "Mockup already approved",
+        "needs_open": "There are open product questions — get an answer first or remove them from the card"
       },
       "attrs": "Task parameters",
       "workers": {
@@ -1157,7 +1158,7 @@
           "ok": "claimable",
           "deps": "waiting for {detail}",
           "scope": "conflicts with {detail}",
-          "needs": "product questions",
+          "needs": "waiting for answer: {detail}",
           "people": "for humans — not code",
           "test": "waiting for test",
           "retest": "new commit — test again",

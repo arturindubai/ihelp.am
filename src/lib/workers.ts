@@ -202,8 +202,10 @@ export type DispatchState = {
   triageQueue: string[];
   /** Пора пересмотреть весь бэклог */
   sweepDue: boolean;
-  /** Задачи с вопросом к продукту (заблокированы на product), в порядке приоритета */
+  /** Задачи с вопросом к продукту: заблокированы на product ИЛИ «В очереди» с открытыми needs */
   productQueue: string[];
+  /** Ключи задач, которые недавно уже были у продакта и с тех пор не менялись: 60 мин не трогаем повторно */
+  productHold: string[];
   /** Пора продакту пройти бэклог на качество требований */
   productSweepDue: boolean;
   /** Интерфейсные задачи без дизайна и вопросы «на дизайне» */
@@ -268,7 +270,7 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
   const nextTest = () => q.test.find((t) => !taken().has(t.key));
   const nextDeploy = () => q.deploy.find((t) => !taken().has(t.key));
   const triageBatch = () => s.triageQueue.filter((k) => !taken().has(k)).slice(0, config.triageBatch);
-  const productBatch = () => (s.productQueue ?? []).filter((k) => !taken().has(k)).slice(0, config.triageBatch);
+  const productBatch = () => (s.productQueue ?? []).filter((k) => !taken().has(k) && !(s.productHold ?? []).includes(k)).slice(0, config.triageBatch);
   const designerBatch = () => (s.designerQueue ?? []).filter((k) => !taken().has(k)).slice(0, Math.min(3, config.triageBatch));
 
   for (const r of s.requests) {

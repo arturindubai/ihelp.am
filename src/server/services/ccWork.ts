@@ -4,7 +4,7 @@ import { upsertNote } from "./library";
 import { alertTech } from "../alerts";
 import { html, notifyTech } from "../notify";
 import { BLOCKED_ON_LABELS, STATUSES } from "@/lib/backlog-labels";
-import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, doneGate, isReady, needsReason, pickNext, readiness, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
+import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, doneGate, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
 import type { Prisma, Task } from "@prisma/client";
 
 /**
@@ -97,6 +97,11 @@ export async function transition(key: string, input: TransitionInput, actor: Act
     const failed = readiness(task, await closedKeys(), task._count.attachments).filter((i) => i.hard && !i.ok);
     if (failed.some((i) => i.key === "mockup")) throw new CcError("mockup_required");
     if (failed.length) throw new CcError("not_ready", failed.map((i) => i.key).join(","));
+  }
+  // Гейт needs_open: задача с открытыми вопросами к продукту не идёт разработчику без решения
+  if (to === "ready" && actor.role !== "watchdog") {
+    const gate = readyNeedsGate(task.needs ?? [], actor.role, force);
+    if (gate) throw new CcError(gate, task.needs?.[0]);
   }
   if (to === "review") {
     const branch = input.branch?.trim() || task.branch;
