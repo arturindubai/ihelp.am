@@ -152,6 +152,10 @@ export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardInte
         )}
       </Section>
 
+      <Section k="telegramWidget" title={t("telegramWidget")} value={s.telegramWidget} hint={t("telegramWidgetHint")}>
+        <Toggle label={t("telegramWidgetEnabled")} checked={s.telegramWidget.enabled} onChange={(v) => set("telegramWidget", { enabled: v })} />
+      </Section>
+
       <Section k="mail" title={t("mail")} value={s.mail} hint={t("mailHint")}>
         <Toggle label={t("mailEnabled")} checked={s.mail.enabled} onChange={(v) => set("mail", { enabled: v })} />
         <div className="mt-2 grid gap-2 md:grid-cols-2">
