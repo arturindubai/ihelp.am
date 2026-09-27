@@ -62,9 +62,9 @@ export function WorkersMaster({ initial, running }: { initial: WorkersConfig; ru
   const [planLocal, setPlanLocal] = useState("");
   const state = workersState(c);
   const tone = STATE_TONE[state];
-  const set = (patch: Partial<WorkersConfig>, persist = true) => {
-    setC({ ...c, ...patch });
-    if (persist) save(patch as Patch);
+  const set = (patch: Patch, persist = true) => {
+    setC({ ...c, ...(patch as Partial<WorkersConfig>) });
+    if (persist) save(patch);
   };
   const control = (command: WorkersCommand, at?: string | null) =>
     startControl(async () => {
@@ -195,10 +195,15 @@ export function PoolSettings({ pool, initial }: { pool: Pool; initial: PoolConfi
   const t = useTranslations("admin.cc.workers");
   const [p, setP] = useState(initial);
   const { pending, saved, error, save } = useSave();
+  const savePool = (poolPatch: Partial<PoolConfig>) => {
+    const pools: NonNullable<Patch["pools"]> = {};
+    pools[pool] = poolPatch;
+    save({ pools });
+  };
   const put = (patch: Partial<PoolConfig>, persist = false) => {
     const next = { ...p, ...patch };
     setP(next);
-    if (persist) save({ pools: { [pool]: patch } } as Patch);
+    if (persist) savePool(patch);
   };
   const single = SINGLE.includes(pool);
 
@@ -257,7 +262,7 @@ export function PoolSettings({ pool, initial }: { pool: Pool; initial: PoolConfi
           <span className="text-muted">{t("dailyCap")}</span>
           <input className="input h-8 w-16 py-0.5 text-xs" type="number" min={0} max={100} value={p.dailyCap} onChange={(e) => put({ dailyCap: Number(e.target.value) })} />
         </label>
-        <button className="btn-outline btn-sm" disabled={pending} onClick={() => save({ pools: { [pool]: { model: p.model, modelForL: p.modelForL, max: p.max, dailyCap: p.dailyCap } } } as Patch)}>
+        <button className="btn-outline btn-sm" disabled={pending} onClick={() => savePool({ model: p.model, modelForL: p.modelForL, max: p.max, dailyCap: p.dailyCap })}>
           {saved ? t("saved") : t("save")}
         </button>
       </div>

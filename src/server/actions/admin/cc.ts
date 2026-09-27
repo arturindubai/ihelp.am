@@ -10,7 +10,8 @@ import { deleteAttachment } from "../../services/attachments";
 import { EPIC_STATUSES, OWNERS, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { BLOCKED_ON, type TaskStatusKey } from "@/lib/cc-flow";
 import { taskContentSchema } from "@/lib/cc-schema";
-import { EVERY_MIN, MODELS, MODES, POOLS, WORKERS_COMMANDS, type Pool } from "@/lib/workers";
+import { POOLS, WORKERS_COMMANDS, type Pool } from "@/lib/workers";
+import { workersPatchSchema } from "@/lib/workers-schema";
 import { requestRun, requestStop, saveWorkersConfig, workersControl } from "../../services/workers";
 import { intakeCreate } from "../../services/ccBoard";
 import { MESSAGE_ROLES, markRead, sendMessage } from "../../services/ccMessages";
@@ -207,43 +208,11 @@ export async function ccDeleteAttachmentAction(id: string) {
 
 /* ───── Воркеры ───── */
 
-const poolSchema = z
-  .object({
-    enabled: z.boolean(),
-    max: z.number().int().min(0).max(4),
-    model: z.enum(MODELS),
-    dailyCap: z.number().int().min(0).max(100),
-    mode: z.enum(MODES),
-    everyMin: z.number().int().refine((n) => (EVERY_MIN as readonly number[]).includes(n)),
-  })
-  .partial();
-const workersSchema = z.object({
-  enabled: z.boolean().optional(),
-  dryRun: z.boolean().optional(),
-  pools: z
-    .object({
-      triage: poolSchema,
-      product: poolSchema,
-      designer: poolSchema,
-      dev: poolSchema,
-      nocode: poolSchema,
-      tester: poolSchema,
-      deployer: poolSchema,
-    })
-    .strict()
-    .partial()
-    .optional(),
-  deployWindow: z.tuple([z.number().int().min(0).max(23), z.number().int().min(1).max(24)]).optional(),
-  triageBatch: z.number().int().min(1).max(15).optional(),
-  sweepEveryH: z.number().int().min(0).max(168).optional(),
-  stopRunning: z.boolean().optional(),
-  pausedUntil: z.null().optional(),
-});
 
 /** Настройки воркеров из Control Center: выключатель, пробный режим, пулы, окно выкладки, триаж, стоп-кран, снятие паузы */
-export async function ccSaveWorkersAction(patch: z.infer<typeof workersSchema>) {
+export async function ccSaveWorkersAction(patch: z.infer<typeof workersPatchSchema>) {
   const u = await requireSection("control");
-  const parsed = workersSchema.safeParse(patch);
+  const parsed = workersPatchSchema.safeParse(patch);
   if (!parsed.success) return { ok: false as const, error: "invalid" };
   await saveWorkersConfig(parsed.data, who(u));
   await audit(u.id, "cc.workers", "Setting", "cc.workers", parsed.data);
