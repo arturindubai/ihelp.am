@@ -58,5 +58,6 @@ if ! deploy/smoke.sh "$@"; then
 fi
 
 docker image prune -f > /dev/null
-docker builder prune -f --filter until=720h > /dev/null
+# Кэш сборки ограничиваем 10 ГБ; --keep-storage поддерживается с Docker 20.10
+docker builder prune -f --keep-storage 10g > /dev/null 2>&1 || docker builder prune -f --filter until=168h > /dev/null
 echo "✓ Обновление завершено: $(git log -1 --format='%h %s')"
