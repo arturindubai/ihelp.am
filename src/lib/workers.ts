@@ -398,3 +398,49 @@ export function poolForTask(t: { status: string; layer: string; testedSha?: stri
   if (t.status === "review" && t.layer !== "none") return t.testedSha ? "deployer" : "tester";
   return null;
 }
+
+/**
+ * Должна ли задача попасть в очередь дизайнера — чистая функция для тестов и фильтрации.
+ * Зеркало условий DB-запроса в designerQueue (src/server/services/workers.ts).
+ * hasImageAttachments — есть хотя бы один вложенный файл с mime image/*
+ * hasAnyAttachments — есть хотя бы одно вложение (любого типа)
+ */
+export function inDesignerQueue(t: {
+  status: string;
+  blockedOn: string | null;
+  mockupUrl: string | null;
+  mockupRequired: boolean;
+  mockupApprovedBy: string | null;
+  design: string | null;
+  layer: string;
+  hasImageAttachments: boolean;
+  hasAnyAttachments: boolean;
+}): boolean {
+  // Заблокирована на дизайне, но макет ещё не подан (нет mockupUrl)
+  if (t.status === "blocked" && t.blockedOn === "design" && !t.mockupUrl) return true;
+  // Нужен макет, не утверждён и не подан: бэклог, очередь или в работе
+  const open = ["backlog", "ready", "in_progress"];
+  if (open.includes(t.status) && t.mockupRequired && !t.mockupApprovedBy && !t.mockupUrl && !t.hasImageAttachments) return true;
+  // Интерфейсная задача фронта без описания дизайна, без файлов, без ссылки на макет и без утверждения
+  if (["backlog", "ready"].includes(t.status) && t.layer === "front" && !t.design?.trim() && !t.hasAnyAttachments && !t.mockupApprovedBy && !t.mockupUrl) return true;
+  return false;
+}
+
+/**
+ * Исключить задачи дизайнера с 60-минутным остыванием: задача не показывается снова,
+ * если была выдана дизайнеру в течение cooldownMs миллисекунд и с тех пор не обновлялась.
+ * recentSeen: ключ задачи → время последнего показа дизайнеру
+ */
+export function filterDesignerCooldown<T extends { key: string; updatedAt: Date }>(
+  tasks: T[],
+  recentSeen: Map<string, Date>,
+  now: Date,
+  cooldownMs = 60 * 60_000,
+): T[] {
+  return tasks.filter((t) => {
+    const seenAt = recentSeen.get(t.key);
+    if (!seenAt) return true;
+    if (now.getTime() - seenAt.getTime() >= cooldownMs) return true;
+    return t.updatedAt > seenAt;
+  });
+}

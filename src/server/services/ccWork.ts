@@ -537,10 +537,23 @@ export async function approveMockup(key: string, actor: string, comment: string 
   if (!t.design?.trim() && !t.mockupUrl && !t.attachments.length) throw new CcError("no_design");
   const now = new Date();
   const canon = await designToCanon(t, actor, comment);
-  await db.task.update({ where: { key }, data: { mockupApprovedBy: actor, mockupApprovedAt: now } });
+  // Убрать пункты про макет из needs: триаж или владелец мог записать «Нужен макет» в список нужного
+  const needsClean = t.needs.filter((n) => !/макет/i.test(n));
+  await db.task.update({
+    where: { key },
+    data: { mockupApprovedBy: actor, mockupApprovedAt: now, ...(needsClean.length !== t.needs.length ? { needs: needsClean } : {}) },
+  });
   await log(t.id, actor, "mockupApprovedBy", t.mockupApprovedBy, actor);
   const text = `${comment ? `Дизайн утверждён: ${comment.trim().slice(0, 500)}` : "Дизайн утверждён."}\nВ Библиотеке: ${canon.slug} (версия ${canon.version}).`;
   await say(t.id, actor, "note", text);
+  // Если задача заблокирована на дизайне — снять блокировку, вернуть туда, откуда заблокировали
+  if (t.status === "blocked" && t.blockedOn === "design") {
+    const actorObj = agentActor(actor);
+    const target = unblockTarget(t.blockedFrom, actorObj.role);
+    await transition(key, { to: target, text: "Дизайн утверждён, задача возвращена." }, actorObj).catch((e) => {
+      console.warn(`[cc] approveMockup: не удалось снять блокировку ${key}: ${(e as Error).message}`);
+    });
+  }
   return db.task.findUniqueOrThrow({ where: { key } });
 }
 
@@ -565,12 +578,13 @@ async function designToCanon(t: { key: string; title: string; design: string | n
   return upsertNote(`design-${t.key.toLowerCase()}`, { title: `Дизайн: ${t.key} — ${t.title}`, kind: "spec", content: lines.join("\n"), note: comment?.trim() || "утверждение дизайна" }, actor);
 }
 
-/** Вернуть дизайн дизайнеру: задача блокируется на дизайне с причиной, утверждение снимается */
+/** Вернуть дизайн дизайнеру: задача блокируется на дизайне с причиной, утверждение и ссылка на макет снимаются */
 export async function returnDesign(key: string, actor: Actor, reason: string) {
   const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true } });
   if (!t) throw new CcError("not_found");
   if (reason.trim().length < 5) throw new CcError("reason_required");
-  await db.task.update({ where: { key }, data: { mockupApprovedBy: null, mockupApprovedAt: null } });
+  // Сбросить утверждение и ссылку на макет: дизайнер должен сделать новый макет с чистого листа
+  await db.task.update({ where: { key }, data: { mockupApprovedBy: null, mockupApprovedAt: null, mockupUrl: null } });
   if (t.status !== "blocked") return transition(key, { to: "blocked", blockedOn: "design", text: `Дизайн возвращён: ${reason.trim()}` }, actor);
   await say(t.id, actor.name, "note", `Дизайн возвращён: ${reason.trim()}`);
   return db.task.findUniqueOrThrow({ where: { key } });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { controlPatch, DEFAULT_WORKERS, executorOf, freeName, normalizeWorkers, planDispatch, poolForTask, reviewQueues, runOutcome, testedCurrent, workersState, type DispatchState, type ReviewTask, type WorkersConfig } from "./workers";
+import { controlPatch, DEFAULT_WORKERS, executorOf, filterDesignerCooldown, freeName, inDesignerQueue, normalizeWorkers, planDispatch, poolForTask, reviewQueues, runOutcome, testedCurrent, workersState, type DispatchState, type ReviewTask, type WorkersConfig } from "./workers";
+import { unblockTarget } from "./cc-flow";
 
 // 12:00 по Еревану — внутри окна выкладки 10–20
 const noon = new Date("2026-09-24T08:00:00Z");
@@ -329,5 +330,95 @@ describe("кнопки владельца: Пауза, Стоп, Старт, П�
     expect(workersState(DEFAULT_WORKERS, noon)).toBe("off");
     expect(workersState({ ...on, pausedUntil: "2026-09-24T09:00:00Z", pausedReason: "лимит" }, noon)).toBe("paused");
     expect(workersState({ ...on, pausedUntil: "2026-09-24T07:00:00Z", plannedStart: true }, noon)).toBe("running");
+  });
+});
+
+describe("отбор очереди дизайнера", () => {
+  const base = { mockupRequired: false, mockupApprovedBy: null, mockupUrl: null, design: null, layer: "front", blockedOn: null, hasImageAttachments: false, hasAnyAttachments: false };
+
+  it("задача заблокирована на дизайне без поданного макета — в очереди", () => {
+    expect(inDesignerQueue({ ...base, status: "blocked", blockedOn: "design" })).toBe(true);
+  });
+  it("задача заблокирована на дизайне, но mockupUrl уже есть — ждёт утверждения, не в очереди", () => {
+    expect(inDesignerQueue({ ...base, status: "blocked", blockedOn: "design", mockupUrl: "/uploads/2026-09/abc.png" })).toBe(false);
+  });
+  it("задача с needs_mockup без утверждения и без файлов — в очереди", () => {
+    expect(inDesignerQueue({ ...base, status: "ready", mockupRequired: true })).toBe(true);
+    expect(inDesignerQueue({ ...base, status: "in_progress", mockupRequired: true })).toBe(true);
+  });
+  it("нужен макет, но mockupUrl или картинки уже есть — ждёт утверждения, не в очереди", () => {
+    expect(inDesignerQueue({ ...base, status: "ready", mockupRequired: true, mockupUrl: "/uploads/2026-09/x.png" })).toBe(false);
+    // hasImageAttachments → hasAnyAttachments тоже true (картинки — подмножество всех файлов)
+    expect(inDesignerQueue({ ...base, status: "ready", mockupRequired: true, hasImageAttachments: true, hasAnyAttachments: true })).toBe(false);
+  });
+  it("нужен макет, утверждён — не в очереди (разработчик возьмёт)", () => {
+    // После утверждения задача готова к разработке, даже если нет текстового дизайна
+    expect(inDesignerQueue({ ...base, status: "ready", mockupRequired: true, mockupApprovedBy: "owner" })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "front", design: null, mockupApprovedBy: "cto" })).toBe(false);
+  });
+  it("задача фронта без описания дизайна и без файлов — в очереди", () => {
+    expect(inDesignerQueue({ ...base, status: "backlog", layer: "front" })).toBe(true);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "front" })).toBe(true);
+  });
+  it("задача фронта с описанием дизайна или файлами — не в очереди", () => {
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "front", design: "Экран списка..." })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "front", hasAnyAttachments: true })).toBe(false);
+  });
+  it("бэк-задача без дизайна не в очереди дизайнера — только front", () => {
+    expect(inDesignerQueue({ ...base, status: "backlog", layer: "back" })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "backlog", layer: "none" })).toBe(false);
+  });
+  it("заблокирована не на дизайне — не в очереди дизайнера", () => {
+    expect(inDesignerQueue({ ...base, status: "blocked", blockedOn: "product" })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "blocked", blockedOn: "owner" })).toBe(false);
+  });
+});
+
+describe("60-минутное остывание очереди дизайнера", () => {
+  const t = (key: string, updatedAt: Date) => ({ key, updatedAt });
+  const now = new Date("2026-09-27T10:00:00Z");
+
+  it("задача не выдавалась дизайнеру — всегда в очереди", () => {
+    expect(filterDesignerCooldown([t("A", new Date("2026-09-27T09:00:00Z"))], new Map(), now)).toHaveLength(1);
+  });
+  it("задача выдавалась более 60 минут назад — остывание истекло, снова в очереди", () => {
+    const seen = new Map([["A", new Date("2026-09-27T08:59:00Z")]]);
+    expect(filterDesignerCooldown([t("A", new Date("2026-09-27T08:00:00Z"))], seen, now)).toHaveLength(1);
+  });
+  it("задача выдавалась менее 60 минут назад и не менялась — не в очереди", () => {
+    const seen = new Map([["A", new Date("2026-09-27T09:30:00Z")]]);
+    expect(filterDesignerCooldown([t("A", new Date("2026-09-27T09:00:00Z"))], seen, now)).toHaveLength(0);
+  });
+  it("задача выдавалась менее 60 минут назад, но обновилась после — снова в очереди", () => {
+    const seen = new Map([["A", new Date("2026-09-27T09:30:00Z")]]);
+    expect(filterDesignerCooldown([t("A", new Date("2026-09-27T09:45:00Z"))], seen, now)).toHaveLength(1);
+  });
+  it("остывание не касается других задач", () => {
+    const seen = new Map([["A", new Date("2026-09-27T09:30:00Z")]]);
+    const tasks = [t("A", new Date("2026-09-27T09:00:00Z")), t("B", new Date("2026-09-27T09:00:00Z"))];
+    const result = filterDesignerCooldown(tasks, seen, now);
+    expect(result.map((x) => x.key)).toEqual(["B"]);
+  });
+});
+
+describe("цель разблокировки при утверждении дизайна", () => {
+  it("задача была заблокирована из очереди — возвращается в очередь", () => {
+    expect(unblockTarget("ready", "owner")).toBe("ready");
+    expect(unblockTarget("ready", "cto")).toBe("ready");
+    expect(unblockTarget("ready", "dev")).toBe("ready");
+  });
+  it("задача была заблокирована с проверки — возвращается на проверку", () => {
+    expect(unblockTarget("review", "owner")).toBe("review");
+    expect(unblockTarget("review", "cto")).toBe("review");
+  });
+  it("задача была заблокирована из бэклога — возвращается в бэклог (только для ролей с правом)", () => {
+    expect(unblockTarget("backlog", "owner")).toBe("backlog");
+    expect(unblockTarget("backlog", "cto")).toBe("backlog");
+    // dev не имеет права вернуть в backlog — переходит в ready
+    expect(unblockTarget("backlog", "dev")).toBe("ready");
+  });
+  it("blockedFrom не задан — возвращается в очередь", () => {
+    expect(unblockTarget(null, "owner")).toBe("ready");
+    expect(unblockTarget(undefined, "dev")).toBe("ready");
   });
 });
