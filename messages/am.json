@@ -1016,5 +1016,19 @@
         "needs_open": "Կան բաց հարցեր արտադրանքի վերաբերյալ — նախ ստացեք պատասխան"
       }
     }
+  },
+  "cookies": {
+    "title": "",
+    "text": "",
+    "policyLinkText": "",
+    "accept": "",
+    "essentialOnly": ""
+  },
+  "consent": {
+    "ads": {
+      "label": "",
+      "hint": "",
+      "notifications": ""
+    }
   }
 }
