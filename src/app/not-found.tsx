@@ -4,7 +4,7 @@ export default function NotFound() {
   return (
     <html lang="ru">
       <head>
-        <style>{`body{margin:0;font-family:system-ui,sans-serif;text-align:center;padding:80px;color:#1a1a1a;background:#fff}`}</style>
+        <style>{`body{margin:0;font-family:system-ui,sans-serif;text-align:center;padding:80px;color:var(--color-ink);background:var(--color-paper)}`}</style>
       </head>
       <body>
         <h1>{messages.notFound.title}</h1>
