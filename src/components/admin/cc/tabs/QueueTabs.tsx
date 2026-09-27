@@ -18,7 +18,7 @@ type Href = (key: string) => string;
 /** «Нужен ты»: всё, что стоит без решения человека — вопросы воркеров и чатов, брошенные задачи, упавшие запуски */
 export async function YouTab({ taskHref }: { taskHref: Href }) {
   const [t, ty, data] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.you"), needsYou()]);
-  const nothing = !data.owner.length && !data.stale.length && !data.stuckReview.length && !data.nocodeReview.length && !data.failedRuns.length && !data.pausedUntil;
+  const nothing = !data.owner.length && !data.stale.length && !data.stuckReview.length && !data.nocodeReview.length && !data.failedRuns.length && !data.pausedUntil && !data.techBlocked.length;
   return (
     <div className="space-y-4">
       {nothing && <Empty>{ty("empty")}</Empty>}
@@ -155,6 +155,36 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
           <Link href="/admin/control?tab=workers" className="mt-2 inline-block text-xs text-brand hover:underline">
             {ty("toWorkers")}
           </Link>
+        </Card>
+      )}
+      {data.techBlocked.length > 0 && (
+        <Card title={`🔧 ${ty("techBlocked")} · ${data.techBlocked.length}`}>
+          <p className="mb-2 text-xs text-muted">{ty("techBlockedHint")}</p>
+          <ul className="divide-y divide-line">
+            {data.techBlocked.map((x) => (
+              <TaskLine
+                key={x.key}
+                k={x.key}
+                title={x.title}
+                priority={x.priority}
+                href={taskHref(x.key)}
+                sub={
+                  <>
+                    <span className="text-muted">
+                      {BLOCKED_ON_LABELS[x.blockedOn ?? ""] ?? x.blockedOn}
+                      {x.blockedReason ? `: ${x.blockedReason}` : ""}
+                    </span>
+                    {x.blockedUntil && (
+                      <span className="mt-0.5 block text-muted">
+                        {ty("techBlockedUntil", { date: new Date(x.blockedUntil).toLocaleDateString("ru-RU", { timeZone: "Asia/Yerevan", day: "numeric", month: "short", year: "numeric" }) })}
+                      </span>
+                    )}
+                    <span className="block">{ty("since", { ago: ago(t, x.updatedAt) })}</span>
+                  </>
+                }
+              />
+            ))}
+          </ul>
         </Card>
       )}
     </div>

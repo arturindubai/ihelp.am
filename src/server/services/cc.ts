@@ -105,7 +105,7 @@ export async function annotate<T extends Task>(tasks: T[]) {
 export async function attention() {
   const tasks = await db.task.findMany({
     where: { status: { in: ["in_progress", "review", "blocked", "ready"] } },
-    select: { key: true, title: true, status: true, claimedBy: true, claimUntil: true, heartbeatAt: true, assignee: true, staleAt: true, updatedAt: true, blockedOn: true, blockedUntil: true, blockedReason: true, depends: true, rework: true, reclaims: true, branch: true },
+    select: { key: true, title: true, priority: true, status: true, claimedBy: true, claimUntil: true, heartbeatAt: true, assignee: true, staleAt: true, updatedAt: true, blockedOn: true, blockedUntil: true, blockedReason: true, depends: true, rework: true, reclaims: true, branch: true },
     orderBy: [{ priority: "asc" }, { sort: "asc" }],
   });
   const closed = await closedKeys();
