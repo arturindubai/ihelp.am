@@ -107,4 +107,6 @@ if grep -q '^prisma/migrations/' <<< "$changed"; then
 fi
 cc done "$KEY" --sha "$merge" "Автовыкладка ${merge:0:10}: SMOKE OK (${checks} проверок, соседних сайтов отвечают: ${neighbors}).${migr} ${tested_label} Слияние ${pushed}. Лог: /opt/ihelp.am/${log}"
 [ "$pushed" = "отправлено в origin/main" ] || cc note "$KEY" "$pushed" --error
+echo "▶ Уборка рабочих копий и образов стендов"
+node scripts/cc.mjs gc --agent "$AGENT" 2>&1 | tee -a "$log" || true
 echo "DEPLOY OK $merge"
