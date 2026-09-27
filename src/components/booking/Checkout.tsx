@@ -56,9 +56,9 @@ export function Checkout(props: {
   const today = ymd(new Date());
   const days = useMemo(() => Array.from({ length: Math.min(props.horizonDays, 7) }, (_, i) => addDays(today, i)), [today, props.horizonDays]);
   const [date, setDate] = useState(days[0]);
-  const [slotsState, setSlotsState] = useState<{ date: string; list: { time: string; masterIds: string[] }[] } | null>(null);
+  const [slotsState, setSlotsState] = useState<{ date: string; list: { time: string; masterIds: string[]; available: boolean }[] } | null>(null);
   const slots = slotsState?.date === date ? slotsState.list : null;
-  const setSlots = (list: { time: string; masterIds: string[] }[] | null, d = date) => setSlotsState(list ? { date: d, list } : null);
+  const setSlots = (list: { time: string; masterIds: string[]; available: boolean }[] | null, d = date) => setSlotsState(list ? { date: d, list } : null);
   const [time, setTime] = useState<string>();
   const [slotRace, setSlotRace] = useState(false);
   const [masterId, setMasterId] = useState<string | null>(null);
@@ -89,7 +89,7 @@ export function Checkout(props: {
 
   const [autoSkipped, setAutoSkipped] = useState(0);
   useEffect(() => {
-    if (slots && slots.length === 0 && autoSkipped < 7 && date === days[autoSkipped]) {
+    if (slots && !slots.some((s) => s.available) && autoSkipped < 7 && date === days[autoSkipped]) {
       setAutoSkipped((n) => n + 1);
       if (days[autoSkipped + 1]) setDate(days[autoSkipped + 1]);
     }
@@ -227,13 +227,17 @@ export function Checkout(props: {
                 <div className="grid grid-cols-4 gap-1.5">
                   {slots.map((s) => {
                     const on = s.time === time;
+                    const occupied = !s.available;
                     return (
                       <button
                         key={s.time}
+                        disabled={occupied}
                         onClick={() => { setTime(s.time); setSlotRace(false); if (masterId && !s.masterIds.includes(masterId)) setMasterId(null); }}
                         className={cn(
                           "flex min-h-11 items-center justify-center rounded-xl border text-sm font-semibold transition",
-                          on ? "border-action bg-action text-on-action" : "border-line bg-paper"
+                          on ? "border-action bg-action text-on-action"
+                            : occupied ? "cursor-not-allowed border-line text-muted line-through"
+                            : "border-line bg-paper"
                         )}
                       >
                         {s.time}
