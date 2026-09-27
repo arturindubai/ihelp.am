@@ -360,7 +360,10 @@ export async function dispatchPlan(heads: Record<string, string>) {
   // Разобранные просьбы снимаем. Остаются пришедшие за время прохода и те, чей пул сейчас занят, —
   // их выполнит один из следующих проходов, когда слот освободится (но не позже чем через 30 минут)
   const unmet = state.requests.filter((r) => !actions.some((a) => a.requestAt === r.at));
-  const busy = (r: RunRequest) => state.running.filter((x) => x.pool === r.pool).length >= state.config.pools[r.pool].max;
+  // «Занят» — это и уже работающие запуски, и только что запланированные в этом проходе:
+  // без учёта actions вторая просьба к пулу с одним слотом снималась с ложной причиной «нет работы»
+  const busy = (r: RunRequest) =>
+    state.running.filter((x) => x.pool === r.pool).length + actions.filter((a) => a.pool === r.pool).length >= state.config.pools[r.pool].max;
   const waiting = new Set(unmet.filter(busy).map((r) => `${r.pool}|${r.at}`));
   const pending = await getRequests();
   const seen = new Set(state.requests.map((r) => `${r.pool}|${r.at}`));
