@@ -4,7 +4,7 @@ import { alertTech } from "../alerts";
 import { html } from "../notify";
 import { CLOSED_STATUSES, pickNext, scopeOverlap } from "@/lib/cc-flow";
 import { transition, WATCHDOG } from "./ccWork";
-import { controlPatch, normalizeWorkers, planDispatch, POOLS, reviewQueues, yerevanHour, type DispatchAction, type DispatchState, type Pool, type RunRequest, type WorkersCommand, type WorkersConfig } from "@/lib/workers";
+import { controlPatch, filterDesignerCooldown, normalizeWorkers, planDispatch, POOLS, reviewQueues, yerevanHour, type DispatchAction, type DispatchState, type Pool, type RunRequest, type WorkersCommand, type WorkersConfig } from "@/lib/workers";
 
 /**
  * Воркеры: настройки пулов (Setting cc.workers), просьбы «Запустить сейчас» (cc.workers.requests),
@@ -210,22 +210,41 @@ async function sweepDue(config: WorkersConfig, pool: "triage" | "product" | "des
 }
 
 /**
- * Очередь дизайнера: вопросы «на дизайне»; задачи с флагом «нужен макет» без макета; задачи слоя «Фронт»
- * в бэклоге и очереди без описания дизайна. Бэк, инфра и не-код сюда не попадают — там нечего рисовать
+ * Очередь дизайнера: вопросы «на дизайне» (без поданного макета); задачи с флагом «нужен макет» без макета;
+ * задачи слоя «Фронт» в бэклоге и очереди без описания дизайна. Бэк, инфра и не-код сюда не попадают.
+ * Задачи с уже поданным макетом (есть mockupUrl) исключаются — они ждут утверждения владельца.
+ * Одна и та же задача не выдаётся повторно в течение 60 минут, если она не менялась.
  */
 export async function designerQueue() {
   const open = { in: ["backlog", "ready", "in_progress"] };
   const rows = await db.task.findMany({
     where: {
       OR: [
-        { status: "blocked", blockedOn: "design" },
+        // Заблокирована на дизайне, но макет ещё не подан (mockupUrl не задан)
+        { status: "blocked", blockedOn: "design", mockupUrl: null },
         { status: open, mockupRequired: true, mockupApprovedBy: null, mockupUrl: null, attachments: { none: { mime: { startsWith: "image/" } } } },
-        { status: { in: ["backlog", "ready"] }, layer: "front", OR: [{ design: null }, { design: "" }], attachments: { none: {} } },
+        { status: { in: ["backlog", "ready"] }, layer: "front", mockupApprovedBy: null, mockupUrl: null, OR: [{ design: null }, { design: "" }], attachments: { none: {} } },
       ],
     },
-    select: { key: true, title: true, priority: true, stage: true, status: true, sort: true, source: true, blockedOn: true, blockedReason: true, mockupRequired: true },
+    select: { key: true, title: true, priority: true, stage: true, status: true, sort: true, source: true, blockedOn: true, blockedReason: true, mockupRequired: true, updatedAt: true },
   });
-  return rows.sort((a, b) => Number(b.status === "blocked") - Number(a.status === "blocked") || PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority) || STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage) || a.sort - b.sort);
+
+  // 60-минутное остывание: задача, которую дизайнер уже видел и которая не менялась, не выдаётся снова
+  const cutoff = new Date(Date.now() - 60 * 60_000);
+  const recentRuns = await db.workerRun.findMany({
+    where: { pool: "designer", startedAt: { gte: cutoff }, keys: { isEmpty: false } },
+    select: { keys: true, startedAt: true },
+  });
+  const recentSeen = new Map<string, Date>();
+  for (const r of recentRuns) {
+    for (const k of r.keys) {
+      const cur = recentSeen.get(k);
+      if (!cur || r.startedAt > cur) recentSeen.set(k, r.startedAt);
+    }
+  }
+  const filtered = filterDesignerCooldown(rows, recentSeen, new Date());
+
+  return filtered.sort((a, b) => Number(b.status === "blocked") - Number(a.status === "blocked") || PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority) || STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage) || a.sort - b.sort);
 }
 
 /** Очередь продакта: задачи с вопросом к продукту, важные первыми */

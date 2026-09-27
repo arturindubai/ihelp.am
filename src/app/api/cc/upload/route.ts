@@ -7,6 +7,7 @@ import { sectionsFor } from "@/server/admin";
 import { addAttachment } from "@/server/services/attachments";
 import { audit } from "@/server/audit";
 import { formatPhone } from "@/lib/phone";
+import { db } from "@/server/db";
 
 /**
  * Загрузка файлов к задаче или эпику Control Center (макет, документ, скриншот).
@@ -46,6 +47,17 @@ export async function POST(req: Request) {
   const ext = TYPES[file.type];
   if (!ext) return NextResponse.json({ error: "type" }, { status: 400 });
   if (file.size > 20 * 1024 * 1024) return NextResponse.json({ error: "size" }, { status: 400 });
+
+  // Проверить дублирование до записи на диск: тот же файл (имя, размер, тип) к той же задаче/эпику
+  {
+    const fileName = file.name.slice(0, 200);
+    const dup = await db.attachment.findFirst({
+      where: typeof taskKey === "string"
+        ? { task: { key: taskKey }, fileName, size: file.size, mime: file.type }
+        : { epicKey: typeof epicKey === "string" ? epicKey : undefined, fileName, size: file.size, mime: file.type },
+    });
+    if (dup) return NextResponse.json({ ok: true, attachment: dup });
+  }
 
   const dir = path.resolve(process.env.UPLOAD_DIR || "./data/uploads");
   const month = new Date().toISOString().slice(0, 7);
