@@ -7,8 +7,10 @@ import {
   isReady,
   needsReason,
   nextStatuses,
+  ownerAnswerTarget,
   pickNext,
   readiness,
+  readyNeedsGate,
   reviewGate,
   roleOf,
   scopeOverlap,
@@ -247,6 +249,30 @@ describe("здоровье и сторож", () => {
     const b = task({ key: "B1", status: "blocked", blockedOn: "deps", depends: ["X"], claimedBy: null, claimUntil: null });
     expect(watchdogPlan([b], new Set(), now).unblock).toEqual([]);
     expect(watchdogPlan([b], new Set(["X"]), now).unblock).toEqual(["B1"]);
+  });
+});
+
+describe("ответ владельца и гейт needs_open", () => {
+  it("ответ владельца при любом blockedFrom возвращает задачу триажу, не в «В очереди»", () => {
+    expect(ownerAnswerTarget(null)).toBe("triage");
+    expect(ownerAnswerTarget("ready")).toBe("triage");
+    expect(ownerAnswerTarget("backlog")).toBe("triage");
+    expect(ownerAnswerTarget("in_progress")).toBe("triage");
+  });
+  it("гейт needs_open блокирует переход в «В очереди» с открытыми вопросами к продукту", () => {
+    expect(readyNeedsGate([], "triage", false)).toBeNull();
+    expect(readyNeedsGate([], "owner", false)).toBeNull();
+    expect(readyNeedsGate(["Ключ API Stripe"], "triage", false)).toBe("needs_open");
+    expect(readyNeedsGate(["Ключ API Stripe"], "dev", false)).toBe("needs_open");
+    expect(readyNeedsGate(["Ключ API Stripe"], "product", false)).toBe("needs_open");
+    expect(readyNeedsGate(["Ключ API Stripe", "Цена подписки"], "owner", false)).toBe("needs_open");
+  });
+  it("владелец и техдиректор могут обойти гейт needs_open с force=true", () => {
+    expect(readyNeedsGate(["Ключ API Stripe"], "owner", true)).toBeNull();
+    expect(readyNeedsGate(["Ключ API Stripe"], "cto", true)).toBeNull();
+    expect(readyNeedsGate(["Ключ API Stripe"], "product", true)).toBe("needs_open");
+    expect(readyNeedsGate(["Ключ API Stripe"], "triage", true)).toBe("needs_open");
+    expect(readyNeedsGate(["Ключ API Stripe"], "dev", true)).toBe("needs_open");
   });
 });
 

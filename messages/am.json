@@ -951,6 +951,9 @@
         "comparePrev": "",
         "repoHint": "",
         "markdownHint": ""
+      },
+      "gate": {
+        "needs_open": "Կան բաց հարցեր արտադրանքի վերաբերյալ — նախ ստացեք պատասխան"
       }
     }
   }

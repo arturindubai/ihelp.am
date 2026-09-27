@@ -13,6 +13,7 @@ const state = (patch: Partial<DispatchState> = {}): DispatchState => ({
   today: { triage: 0, product: 0, designer: 0, dev: 0, nocode: 0, tester: 0, deployer: 0 },
   productQueue: [],
   productSweepDue: false,
+  productHold: [],
   designerQueue: [],
   designerSweepDue: false,
   review: [],
@@ -247,6 +248,30 @@ describe("«Продукт и не-код»", () => {
     expect(planDispatch(state({ config: DEFAULT_WORKERS, requests: [{ pool: "nocode", key: "TEAM-9", at, by: "owner" }] }), noon)).toEqual([
       { pool: "nocode", agent: "nocode-1", key: "TEAM-9", requestAt: at },
     ]);
+  });
+});
+
+describe("продакт: задачи ready с opens needs и холд на 60 мин", () => {
+  it("задача «В очереди» с открытыми needs попадает в очередь продакта (страховка)", () => {
+    const plan = planDispatch(state({ productQueue: ["DEV-1"] }), noon);
+    expect(plan).toContainEqual(expect.objectContaining({ pool: "product", keys: ["DEV-1"] }));
+  });
+  it("задача в productHold продакту повторно не выдаётся в течение 60 мин", () => {
+    const plan = planDispatch(state({ productQueue: ["DEV-1", "DEV-2"], productHold: ["DEV-1"] }), noon);
+    expect(plan).toContainEqual(expect.objectContaining({ pool: "product", keys: ["DEV-2"] }));
+    expect(plan.find((a) => a.pool === "product")?.keys).not.toContain("DEV-1");
+  });
+  it("после истечения холда (или при отсутствии) задача снова идёт продакту", () => {
+    expect(planDispatch(state({ productQueue: ["DEV-1"], productHold: [] }), noon)).toContainEqual(
+      expect.objectContaining({ pool: "product", keys: ["DEV-1"] }),
+    );
+    expect(planDispatch(state({ productQueue: ["DEV-1"], productHold: ["DEV-2"] }), noon)).toContainEqual(
+      expect.objectContaining({ pool: "product", keys: ["DEV-1"] }),
+    );
+  });
+  it("если все задачи в холде и нет обзора — продакта не запускаем", () => {
+    const plan = planDispatch(state({ productQueue: ["DEV-1"], productHold: ["DEV-1"], productSweepDue: false }), noon);
+    expect(plan.find((a) => a.pool === "product")).toBeUndefined();
   });
 });
 

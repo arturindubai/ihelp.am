@@ -102,6 +102,22 @@ export async function ccCommentAction(key: string, text: string) {
   return { ok: true as const };
 }
 
+/**
+ * Ответ владельца на вопрос из вкладки «Нужен ты»: записывается в ленту и возвращает задачу триажу
+ * (сброс triagedAt). Задача не переходит сама в «В очереди» — триаж принимает решение на основе ответа.
+ */
+export async function ccOwnerAnswerAction(key: string, text: string) {
+  const u = await requireSection("control");
+  const t = text.trim();
+  if (t.length < 2) return { ok: false as const, error: "empty" };
+  await addComment(key, `Ответ владельца: ${t}`, who(u));
+  // Сбрасываем triagedAt — задача возвращается в очередь триажа для повторного разбора
+  await retriage(key);
+  await audit(u.id, "cc.owner.answer", "Task", key);
+  rAll();
+  return { ok: true as const };
+}
+
 /** Утверждение макета задачи владельцем в интерфейсе — снимает гейт mockup_required */
 /** «Вернуть дизайнеру»: утверждение снимается, задача блокируется на дизайне с причиной */
 export async function ccReturnDesignAction(key: string, reason: string) {
