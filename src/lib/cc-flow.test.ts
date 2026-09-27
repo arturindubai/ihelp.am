@@ -4,6 +4,7 @@ import {
   canTransition,
   unblockTarget,
   doneGate,
+  isOwnerQuestion,
   isReady,
   needsReason,
   nextStatuses,
@@ -35,6 +36,7 @@ const task = (patch: Partial<HealthTask> = {}): HealthTask => ({
   staleAt: null,
   updatedAt: min(-10),
   blockedOn: null,
+  blockedUntil: null,
   depends: [],
   rework: 0,
   reclaims: 0,
@@ -250,6 +252,13 @@ describe("здоровье и сторож", () => {
     expect(watchdogPlan([b], new Set(), now).unblock).toEqual([]);
     expect(watchdogPlan([b], new Set(["X"]), now).unblock).toEqual(["B1"]);
   });
+  it("задача с blockedUntil в прошлом попадает в unblockScheduled", () => {
+    const past = task({ key: "S1", status: "blocked", blockedOn: "external", claimedBy: null, claimUntil: null, blockedUntil: min(-1) });
+    const future = task({ key: "S2", status: "blocked", blockedOn: "external", claimedBy: null, claimUntil: null, blockedUntil: min(60 * 24) });
+    const noDate = task({ key: "S3", status: "blocked", blockedOn: "tech", claimedBy: null, claimUntil: null, blockedUntil: null });
+    const plan = watchdogPlan([past, future, noDate], new Set(), now);
+    expect(plan.unblockScheduled).toEqual(["S1"]);
+  });
 });
 
 describe("ответ владельца и гейт needs_open", () => {
@@ -320,5 +329,26 @@ describe("роли воркеров триажа и «Продукт и не-к�
     expect(canTransition("backlog", "blocked", "triage")).toBe(true);
     expect(canTransition("review", "done", "triage")).toBe(false);
     expect(canTransition("in_progress", "review", "triage")).toBe(false);
+  });
+});
+
+describe("фильтр вопросов к владельцу (needsYou)", () => {
+  it("заблокированная задача на owner или product — вопрос к владельцу", () => {
+    expect(isOwnerQuestion({ status: "blocked", blockedOn: "owner" })).toBe(true);
+    expect(isOwnerQuestion({ status: "blocked", blockedOn: "product" })).toBe(true);
+  });
+  it("задача с blockedOn=external не появляется в «Нужен ты»", () => {
+    expect(isOwnerQuestion({ status: "blocked", blockedOn: "external" })).toBe(false);
+  });
+  it("отменённая задача не появляется в «Нужен ты» даже с blockedOn=owner", () => {
+    expect(isOwnerQuestion({ status: "cancelled", blockedOn: "owner" })).toBe(false);
+    expect(isOwnerQuestion({ status: "cancelled", blockedOn: "product" })).toBe(false);
+  });
+  it("другие статусы и другие blockedOn не являются вопросами к владельцу", () => {
+    expect(isOwnerQuestion({ status: "in_progress", blockedOn: null })).toBe(false);
+    expect(isOwnerQuestion({ status: "blocked", blockedOn: "tech" })).toBe(false);
+    expect(isOwnerQuestion({ status: "blocked", blockedOn: "deps" })).toBe(false);
+    expect(isOwnerQuestion({ status: "blocked", blockedOn: null })).toBe(false);
+    expect(isOwnerQuestion({ status: "done", blockedOn: "owner" })).toBe(false);
   });
 });

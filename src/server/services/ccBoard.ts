@@ -85,6 +85,8 @@ export async function needsYou() {
     })),
     stale: attn.stale,
     stuckReview: attn.review.filter((r) => r.health.stuckReview),
+    /** Заблокированы на tech/external — видно техдиректору в «Нужен ты» */
+    techBlocked: attn.tech,
     nocodeReview,
     failedRuns,
     pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null,
@@ -105,7 +107,12 @@ export async function mockupPendingApprovals() {
   return db.task.findMany({
     where: DESIGN_PENDING,
     orderBy: [{ mockupRequired: "desc" }, { priority: "asc" }, { updatedAt: "asc" }],
-    select: { key: true, title: true, priority: true, status: true, layer: true, updatedAt: true, mockupUrl: true, mockupRequired: true, design: true, _count: { select: { attachments: true } } },
+    select: {
+      key: true, title: true, priority: true, status: true, layer: true, updatedAt: true,
+      mockupUrl: true, mockupRequired: true, design: true,
+      _count: { select: { attachments: true } },
+      attachments: { where: { mime: { startsWith: "image/" } }, select: { url: true, fileName: true }, orderBy: { createdAt: "desc" } },
+    },
   });
 }
 
@@ -114,7 +121,11 @@ export async function designApproved(days = 14) {
   return db.task.findMany({
     where: { mockupApprovedAt: { gte: new Date(Date.now() - days * 86400_000) } },
     orderBy: { mockupApprovedAt: "desc" },
-    select: { key: true, title: true, status: true, mockupApprovedAt: true, mockupApprovedBy: true },
+    select: {
+      key: true, title: true, status: true, mockupApprovedAt: true, mockupApprovedBy: true,
+      mockupUrl: true,
+      attachments: { where: { mime: { startsWith: "image/" } }, select: { url: true, fileName: true }, orderBy: { createdAt: "desc" } },
+    },
   });
 }
 

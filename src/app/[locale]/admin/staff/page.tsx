@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
 import { formatPhone } from "@/lib/phone";
+import { ymd } from "@/lib/time";
 import { PageHead, Forbidden } from "@/components/admin/ui";
 import { StaffManager } from "@/components/admin/StaffManager";
 
@@ -12,7 +13,7 @@ export default async function AdminStaff() {
   return (
     <div className="max-w-3xl">
       <PageHead title={t("staff.title")} sub={t("staff.hint")} />
-      <StaffManager staff={staff.map((u) => ({ phone: u.phone, label: `${u.name || "—"} · ${formatPhone(u.phone)}`, role: u.role }))} />
+      <StaffManager staff={staff.map((u) => ({ phone: u.phone, label: `${u.name || "—"} · ${formatPhone(u.phone)}`, role: u.role, lastLoginAt: u.lastLoginAt ? ymd(u.lastLoginAt) : null }))} />
     </div>
   );
 }

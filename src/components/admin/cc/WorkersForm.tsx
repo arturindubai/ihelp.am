@@ -237,6 +237,18 @@ export function PoolSettings({ pool, initial }: { pool: Pool; initial: PoolConfi
             ))}
           </select>
         </label>
+        {pool === "dev" && (
+          <label className="flex flex-col gap-0.5">
+            <span className="text-muted">{t("modelForL")}</span>
+            <select className="input h-8 w-auto py-0.5 text-xs" value={p.modelForL} onChange={(e) => put({ modelForL: e.target.value as PoolConfig["modelForL"] })}>
+              {MODELS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="flex flex-col gap-0.5">
           <span className="text-muted">{t("max")}</span>
           <input className="input h-8 w-14 py-0.5 text-xs" type="number" min={0} max={single ? 1 : 4} value={p.max} disabled={single} onChange={(e) => put({ max: Number(e.target.value) })} />
@@ -245,7 +257,7 @@ export function PoolSettings({ pool, initial }: { pool: Pool; initial: PoolConfi
           <span className="text-muted">{t("dailyCap")}</span>
           <input className="input h-8 w-16 py-0.5 text-xs" type="number" min={0} max={100} value={p.dailyCap} onChange={(e) => put({ dailyCap: Number(e.target.value) })} />
         </label>
-        <button className="btn-outline btn-sm" disabled={pending} onClick={() => save({ pools: { [pool]: { model: p.model, max: p.max, dailyCap: p.dailyCap } } } as Patch)}>
+        <button className="btn-outline btn-sm" disabled={pending} onClick={() => save({ pools: { [pool]: { model: p.model, modelForL: p.modelForL, max: p.max, dailyCap: p.dailyCap } } } as Patch)}>
           {saved ? t("saved") : t("save")}
         </button>
       </div>

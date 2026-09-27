@@ -6,10 +6,12 @@ import type { PriceLine, PricePlan } from "@/lib/pricing";
 export type LText = string;
 
 export async function getHome(locale: string) {
-  const [categories, banners, services] = await Promise.all([
+  const [categories, banners, services, features, faq] = await Promise.all([
     db.category.findMany({ where: { active: true }, orderBy: { sort: "asc" }, include: { services: { where: { active: true }, orderBy: { sort: "asc" }, select: { slug: true } } } }),
     db.banner.findMany({ where: { active: true }, orderBy: { sort: "asc" } }),
     db.service.findMany({ where: { active: true, category: { active: true } }, orderBy: { sort: "asc" }, include: { groups: { where: { active: true, isDuration: true }, include: { options: { where: { active: true } } } }, plans: { where: { active: true } } } }),
+    db.siteFeature.findMany({ where: { active: true }, orderBy: { sort: "asc" } }),
+    db.siteFaq.findMany({ where: { active: true }, orderBy: { sort: "asc" } }),
   ]);
   return {
     categories: categories.map((c) => ({
@@ -22,6 +24,8 @@ export async function getHome(locale: string) {
     })),
     banners: banners.map((b) => ({ id: b.id, title: tr(b.title, locale), subtitle: tr(b.subtitle, locale), image: b.image, link: b.link, bg: b.bg, promoCode: b.promoCode })),
     services: services.map((s) => serviceCard(s, locale)),
+    features: features.map((f) => ({ id: f.id, icon: f.icon, title: tr(f.title, locale) as string, body: tr(f.body, locale) as string })),
+    faq: faq.map((f) => ({ id: f.id, q: tr(f.q, locale) as string, a: tr(f.a, locale) as string })),
   };
 }
 

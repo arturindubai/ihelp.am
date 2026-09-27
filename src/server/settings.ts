@@ -40,6 +40,8 @@ export interface Settings {
   mail: { enabled: boolean; apiKey: string; from: string; replyTo: string };
   /** Сессии: сроки хранения куки для клиентов и персонала (OPERATOR/ADMIN/OWNER) */
   auth: { clientSessionDays: number; staffSessionDays: number };
+  /** Вход через Telegram Login Widget на странице входа. Требует /setdomain в @BotFather для ihelp.am */
+  telegramWidget: { enabled: boolean };
   /**
    * Бот команды в Telegram (как бот LIA): задачи владельца → входящие IN-N, «статус», сообщения «Нужен ты».
    * Отдельный от бота входа клиентов (notify.telegramBotToken). Токен вставляется в Control Center → «Ключи»
@@ -93,6 +95,7 @@ export const DEFAULT_SETTINGS: Settings = {
   apple: { enabled: false, teamId: "", keyId: "", clientId: "", privateKey: "" },
   mail: { enabled: false, apiKey: "", from: "", replyTo: "" },
   auth: { clientSessionDays: 60, staffSessionDays: 7 },
+  telegramWidget: { enabled: false },
   team: { botToken: "", botUsername: "", members: [], linkCode: "", linkCodeAt: "" },
 };
 

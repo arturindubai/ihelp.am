@@ -153,3 +153,11 @@ export async function reviewAction(visitId: string, rating: number, text: string
   await notifyTeam(html`⭐ Новый отзыв ${r}/5 · заказ №${v.order.number} — на модерации`);
   return { ok: true };
 }
+
+/** Отвязать Telegram-аккаунт от профиля (AUTH-10) */
+export async function unlinkTelegramAction() {
+  const u = await me();
+  await db.user.update({ where: { id: u.id }, data: { telegramId: null, telegramUsername: null } });
+  revalidatePath("/", "layout");
+  return { ok: true };
+}

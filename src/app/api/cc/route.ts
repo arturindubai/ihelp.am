@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { attention, getTask, listTasks, annotate, saveTask } from "@/server/services/cc";
-import { CcError, agentActor, agentNote, claim, heartbeat, markTriaged, reviewRelease, reviewTake, testPass, transition, approveMockup, type TransitionInput } from "@/server/services/ccWork";
-import { dispatchPlan, pauseWorkers, runFinish, runStart, tickLog, triageQueue, workersOverview } from "@/server/services/workers";
+import { CcError, agentActor, agentNote, claim, heartbeat, markTriaged, reviewRelease, reviewTake, testPass, transition, approveMockup, reblockOn, type TransitionInput } from "@/server/services/ccWork";
+import { dispatchPlan, pauseWorkers, runFinish, runStart, setOpusLimit, tickLog, triageQueue, workersOverview } from "@/server/services/workers";
 import { sendMessage, takeInbox } from "@/server/services/ccMessages";
 import { intakeCreate, boardAudit } from "@/server/services/ccBoard";
 import { listEpics, getEpic } from "@/server/services/epics";
@@ -70,6 +70,7 @@ const brief = (t: Task) => ({
   branch: t.branch,
   rework: t.rework,
   reclaims: t.reclaims,
+  estimate: t.estimate,
 });
 
 const full = (t: Task) => ({
@@ -84,6 +85,7 @@ const full = (t: Task) => ({
   owner: t.owner,
   estimate: t.estimate,
   blockedOn: t.blockedOn,
+  blockedUntil: t.blockedUntil,
   blockedReason: t.blockedReason,
   deployedSha: t.deployedSha,
   proof: t.proof,
@@ -212,7 +214,8 @@ export async function POST(req: Request) {
       case "run-start":
       case "run-finish":
       case "tick":
-      case "workers-pause": {
+      case "workers-pause":
+      case "opus-limit": {
         if (agent !== "dispatcher") return json({ error: "forbidden_role" }, 403);
         const num = (v: unknown) => (typeof v === "number" ? v : undefined);
         if (action === "dispatch") return json(await dispatchPlan((body.heads ?? {}) as Record<string, string>));
@@ -235,6 +238,10 @@ export async function POST(req: Request) {
             costUsd: num(body.costUsd),
           });
           return json({ ok: true, run });
+        }
+        if (action === "opus-limit") {
+          const until = new Date(str(body.until) ?? Date.now() + 3600_000);
+          return json({ ok: true, config: await setOpusLimit(Number.isNaN(until.getTime()) ? new Date(Date.now() + 3600_000) : until) });
         }
         const until = new Date(str(body.until) ?? Date.now() + 3600_000);
         return json({ ok: true, config: await pauseWorkers(Number.isNaN(until.getTime()) ? new Date(Date.now() + 3600_000) : until, text || "лимит подписки") });
@@ -304,9 +311,19 @@ export async function POST(req: Request) {
           const current = (await getTask(key))?.task.status;
           if (current && current !== sc.from) return json({ error: "wrong_status", detail: current }, 409);
         }
-        const input: TransitionInput = { to, text, force: body.force === true, blockedOn: str(body.on), sha: str(body.sha), branch: str(body.branch), releaseNote: str(body.releaseNote), ownerSummary: str(body.ownerSummary) };
+        const blockedUntilRaw = str(body.blockedUntil);
+        const blockedUntil = blockedUntilRaw ? (() => { const d = new Date(blockedUntilRaw); return isNaN(d.getTime()) ? undefined : d; })() : undefined;
+        const input: TransitionInput = { to, text, force: body.force === true, blockedOn: str(body.on), blockedUntil, sha: str(body.sha), branch: str(body.branch), releaseNote: str(body.releaseNote), ownerSummary: str(body.ownerSummary) };
         const task = await transition(key, input, actor);
         return json({ ok: true, status: task.status, task: brief(task) });
+      }
+      // Смена адресата блокировки с записью в историю (в отличие от прямого редактирования базы)
+      case "reblock": {
+        if (!key) return json({ error: "key_required" }, 400);
+        const newOn = str(body.on);
+        if (!newOn) return json({ error: "on_required" }, 400);
+        const task = await reblockOn(key, newOn, text, actor);
+        return json({ ok: true, task: brief(task) });
       }
       case "report": {
         // Старый формат отчёта: текст + статус review | blocked | backlog. Оставлен для совместимости

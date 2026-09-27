@@ -103,6 +103,25 @@ export async function ccCommentAction(key: string, text: string) {
 }
 
 /**
+ * Отложить вопрос из «Нужен ты»: blockedOn меняется с owner/product на external,
+ * карточка исчезает из секции вопросов, воркеры её не тронут до разблокировки владельцем
+ */
+export async function ccOwnerPostponeAction(key: string, reason?: string) {
+  const u = await requireSection("control");
+  const text = (reason?.trim() || "Отложено владельцем").slice(0, 500);
+  const task = await db.task.findUnique({ where: { key }, select: { key: true, status: true, blockedOn: true } });
+  if (!task) return { ok: false as const, error: "not_found" };
+  if (task.status !== "blocked" || !["owner", "product"].includes(task.blockedOn ?? "")) {
+    return { ok: false as const, error: "invalid_state" };
+  }
+  await db.task.update({ where: { key }, data: { blockedOn: "external", blockedReason: text, updatedAt: new Date() } });
+  await addComment(key, `Отложено: ${text}`, who(u));
+  await audit(u.id, "cc.owner.postpone", "Task", key);
+  rAll();
+  return { ok: true as const };
+}
+
+/**
  * Ответ владельца на вопрос из вкладки «Нужен ты»: записывается в ленту и возвращает задачу триажу
  * (сброс triagedAt). Задача не переходит сама в «В очереди» — триаж принимает решение на основе ответа.
  */
@@ -201,7 +220,19 @@ const poolSchema = z
 const workersSchema = z.object({
   enabled: z.boolean().optional(),
   dryRun: z.boolean().optional(),
-  pools: z.object({ triage: poolSchema, dev: poolSchema, tester: poolSchema, deployer: poolSchema }).partial().optional(),
+  pools: z
+    .object({
+      triage: poolSchema,
+      product: poolSchema,
+      designer: poolSchema,
+      dev: poolSchema,
+      nocode: poolSchema,
+      tester: poolSchema,
+      deployer: poolSchema,
+    })
+    .strict()
+    .partial()
+    .optional(),
   deployWindow: z.tuple([z.number().int().min(0).max(23), z.number().int().min(1).max(24)]).optional(),
   triageBatch: z.number().int().min(1).max(15).optional(),
   sweepEveryH: z.number().int().min(0).max(168).optional(),

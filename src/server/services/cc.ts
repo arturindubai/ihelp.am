@@ -105,7 +105,7 @@ export async function annotate<T extends Task>(tasks: T[]) {
 export async function attention() {
   const tasks = await db.task.findMany({
     where: { status: { in: ["in_progress", "review", "blocked", "ready"] } },
-    select: { key: true, title: true, status: true, claimedBy: true, claimUntil: true, heartbeatAt: true, assignee: true, staleAt: true, updatedAt: true, blockedOn: true, blockedReason: true, depends: true, rework: true, reclaims: true, branch: true },
+    select: { key: true, title: true, priority: true, status: true, claimedBy: true, claimUntil: true, heartbeatAt: true, assignee: true, staleAt: true, updatedAt: true, blockedOn: true, blockedUntil: true, blockedReason: true, depends: true, rework: true, reclaims: true, branch: true },
     orderBy: [{ priority: "asc" }, { sort: "asc" }],
   });
   const closed = await closedKeys();
@@ -115,6 +115,8 @@ export async function attention() {
     stale: withHealth.filter((t) => t.health.stale || t.health.phantom),
     review: withHealth.filter((t) => t.status === "review"),
     owner: withHealth.filter((t) => t.health.needsOwner),
+    /** Заблокированы на технических или внешних причинах — видно техдиректору */
+    tech: withHealth.filter((t) => t.status === "blocked" && (t.blockedOn === "tech" || t.blockedOn === "external")),
     working: withHealth.filter((t) => t.status === "in_progress" && !t.health.stale && !t.health.phantom),
     readyCount: withHealth.filter((t) => t.status === "ready").length,
   };
