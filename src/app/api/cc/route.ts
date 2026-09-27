@@ -153,7 +153,7 @@ export async function GET(req: Request) {
         claimedBy: p.get("agent") ?? undefined,
         epicKey: p.get("epicKey") ?? undefined,
         q: p.get("q") ?? undefined,
-        open: !p.get("status"),
+        open: !p.get("q") && !p.get("status"),
       }),
     );
     return json({ tasks: tasks.map((t) => ({ ...brief(t), health: t.health, dorOk: t.dorOk })) });
