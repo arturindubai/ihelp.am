@@ -6,8 +6,10 @@ import { describe, expect, it } from "vitest";
 const ROOT = process.cwd();
 const SRC_DIR = join(ROOT, "src");
 const RU_PATH = join(ROOT, "messages", "ru.json");
+const EN_PATH = join(ROOT, "messages", "en.json");
 
 const ru: Record<string, unknown> = JSON.parse(readFileSync(RU_PATH, "utf-8"));
+const en: Record<string, unknown> = JSON.parse(readFileSync(EN_PATH, "utf-8"));
 
 /** Проверяет, что путь вида "a.b.c" существует в ru.json (в том числе промежуточные узлы) */
 function hasKey(obj: Record<string, unknown>, path: string): boolean {
@@ -146,6 +148,30 @@ describe("i18n ключи", () => {
     if (missing.length > 0) {
       const details = missing.map((m) => `  ${m.file}:${m.line} — "${m.key}"`).join("\n");
       expect.fail(`Ключи i18n отсутствуют в messages/ru.json:\n${details}`);
+    }
+  });
+
+  it("все ключи messages/ru.json присутствуют в messages/en.json", () => {
+    /** Рекурсивно собирает все dot-нотации ключей вложенного объекта */
+    function collectKeys(obj: Record<string, unknown>, prefix = ""): string[] {
+      const keys: string[] = [];
+      for (const [k, v] of Object.entries(obj)) {
+        const full = prefix ? `${prefix}.${k}` : k;
+        if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+          keys.push(...collectKeys(v as Record<string, unknown>, full));
+        } else {
+          keys.push(full);
+        }
+      }
+      return keys;
+    }
+
+    const ruKeys = collectKeys(ru);
+    const missingInEn = ruKeys.filter((k) => !hasKey(en, k));
+
+    if (missingInEn.length > 0) {
+      const details = missingInEn.map((k) => `  "${k}"`).join("\n");
+      expect.fail(`Ключи присутствуют в messages/ru.json, но отсутствуют в messages/en.json (${missingInEn.length}):\n${details}`);
     }
   });
 });
