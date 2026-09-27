@@ -380,6 +380,27 @@
     "stats": "",
     "schedule": ""
   },
+  "operator": {
+    "title": "",
+    "today": "",
+    "all": "",
+    "noMaster": "",
+    "noOrdersToday": "",
+    "noOrders": "",
+    "noOrdersUnassigned": "",
+    "assignMaster": "",
+    "changeMaster": "",
+    "changeStatus": "",
+    "noMasterChip": "",
+    "noMastersAvail": "",
+    "selectMaster": "",
+    "loadMore": "",
+    "loadError": "",
+    "saving": "",
+    "toSite": "",
+    "masterBusy": "",
+    "error": ""
+  },
   "footer": {
     "offer": "Օֆերտա",
     "privacy": "Գաղտնիություն",
