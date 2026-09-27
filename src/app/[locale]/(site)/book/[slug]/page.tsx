@@ -5,6 +5,7 @@ import { db } from "@/server/db";
 import { getCurrentUser } from "@/server/auth";
 import { getSettings } from "@/server/settings";
 import { loginMethods } from "@/server/otp";
+import { envContacts } from "@/server/contacts";
 import { getMastersForService, loadServiceRaw, localizeService, resolveSelection } from "@/server/services/catalog";
 import { isFirstOrder } from "@/server/services/booking";
 import { tr } from "@/i18n/locales";
@@ -24,18 +25,14 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   const ok = sel as Extract<typeof sel, { ok: true }>;
   const [user, settings, t] = await Promise.all([getCurrentUser(), getSettings(), getTranslations("booking")]);
 
-  const header = (
-    <div className="flex items-center gap-3 pt-3">
-      <Link href={`/s/${slug}`} className="grid size-9 place-items-center rounded-full bg-surface" aria-label="back"><ArrowLeft size={18} /></Link>
-      <h1 className="text-xl font-bold">{t("title")}</h1>
-    </div>
-  );
-
   if (!user) {
     const methods = await loginMethods(settings);
     return (
       <div className="container-m">
-        {header}
+        <div className="flex items-center gap-3 pt-3">
+          <Link href={`/s/${slug}`} className="grid size-9 place-items-center rounded-full bg-surface" aria-label="back"><ArrowLeft size={18} /></Link>
+          <h1 className="text-xl font-bold">{t("title")}</h1>
+        </div>
         <div className="card mt-4 p-4">
           <h2 className="h3 mb-3">{t("loginToContinue")}</h2>
           <InlineLogin channels={methods.channels} emailEnabled={methods.email} telegramBot={settings.notify.telegramBotUsername || null} />
@@ -51,24 +48,23 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   ]);
 
   return (
-    <div className="container-m">
-      {header}
-      <Checkout
-        service={{ id: s.id, slug: s.slug, title: s.title }}
-        lines={ok.lines.map(({ groupTitle, optionTitle, price, discountable, durationMin }) => ({ groupTitle, optionTitle, price, discountable, durationMin }))}
-        optionIds={optionIds}
-        plan={ok.plan ? { id: ok.plan.id, kind: ok.plan.kind, title: ok.plan.title, discountPercent: ok.plan.discountPercent, packageVisits: ok.plan.packageVisits, visitsPerWeek: ok.plan.visitsPerWeek } : null}
-        durationMin={ok.durationMin}
-        rules={settings.pricing}
-        isFirstOrder={first}
-        addresses={addresses}
-        districts={settings.booking.districts}
-        masters={masters.map((m) => ({ id: m.id, name: tr(m.name, locale), photo: m.photo, rating: m.rating, reviewsCount: m.reviewsCount, experienceYears: m.experienceYears }))}
-        allowChooseMaster={settings.booking.allowChooseMaster}
-        horizonDays={settings.booking.horizonDays}
-        cashEnabled={settings.payments.cashEnabled}
-        cardEnabled={settings.payments.cardEnabled}
-      />
-    </div>
+    <Checkout
+      service={{ id: s.id, slug: s.slug, title: s.title }}
+      lines={ok.lines.map(({ groupTitle, optionTitle, price, discountable, durationMin }) => ({ groupTitle, optionTitle, price, discountable, durationMin }))}
+      optionIds={optionIds}
+      plan={ok.plan ? { id: ok.plan.id, kind: ok.plan.kind, title: ok.plan.title, discountPercent: ok.plan.discountPercent, packageVisits: ok.plan.packageVisits, visitsPerWeek: ok.plan.visitsPerWeek } : null}
+      durationMin={ok.durationMin}
+      rules={settings.pricing}
+      isFirstOrder={first}
+      addresses={addresses}
+      districts={settings.booking.districts}
+      masters={masters.map((m) => ({ id: m.id, name: tr(m.name, locale), photo: m.photo, rating: m.rating, reviewsCount: m.reviewsCount, experienceYears: m.experienceYears, languages: m.languages }))}
+      allowChooseMaster={settings.booking.allowChooseMaster}
+      horizonDays={settings.booking.horizonDays}
+      cashEnabled={settings.payments.cashEnabled}
+      cardEnabled={settings.payments.cardEnabled}
+      freeCancelHours={settings.booking.freeCancelHours}
+      contacts={envContacts()}
+    />
   );
 }

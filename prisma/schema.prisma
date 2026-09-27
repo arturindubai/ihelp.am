@@ -41,6 +41,9 @@ model User {
   lastLoginAt DateTime?
   /// Когда пользователь получил код из формы с уведомлением о политике конфиденциальности
   privacyConsentAt DateTime?
+  /// Telegram-аккаунт для входа через виджет (AUTH-10): id и username, nullable, привязывается из профиля
+  telegramId       String?   @unique
+  telegramUsername String?
 
   sessions    Session[]
   addresses   Address[]
@@ -425,6 +428,25 @@ model Banner {
   bg        String?
   active    Boolean  @default(true)
   sort      Int      @default(0)
+}
+
+/// Карточки «Обещания» на главной (управляются в AdminKit → Контент)
+model SiteFeature {
+  id     String  @id @default(cuid())
+  icon   String  @default("check")
+  title  Json
+  body   Json?
+  active Boolean @default(true)
+  sort   Int     @default(0)
+}
+
+/// FAQ на главной (управляется в AdminKit → Контент)
+model SiteFaq {
+  id     String  @id @default(cuid())
+  q      Json
+  a      Json
+  active Boolean @default(true)
+  sort   Int     @default(0)
 }
 
 model Page {

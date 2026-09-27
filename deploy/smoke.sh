@@ -44,12 +44,30 @@ warn "адресат тех-алертов задан" tech_alert_ok
 
 echo "Страницы ($BASE)"
 check "/api/health → {\"ok\":true}" [ "$(curl -s -m 20 "$BASE/api/health")" = '{"ok":true}' ]
-for p in /ru /ru/login /robots.txt /sitemap.xml; do check "$p → 200" [ "$(http_code "$BASE$p")" = 200 ]; done
+for p in /ru /en /am /ru/login /robots.txt /sitemap.xml; do check "$p → 200" [ "$(http_code "$BASE$p")" = 200 ]; done
 check "/ru/admin → 307 (вход)" [ "$(http_code "$BASE/ru/admin")" = 307 ]
 check "/api/cron без секрета → 403" [ "$(http_code "$BASE/api/cron")" = 403 ]
 og="$(curl -s -m 20 "$BASE/ru" | grep -oE '<meta property="og:image" content="[^"]+"' | head -n 1 | sed -E 's/.*content="([^"]+)"/\1/; s/&amp;/\&/g')"
 og_ok() { [ -n "$og" ] && [ "$(curl -s -o /dev/null -m 30 -w '%{http_code} %{content_type}' "$BASE/${og#*://*/}")" = "200 image/png" ]; }
 check "превью ссылок (og:image) → PNG" og_ok
+
+echo "Логи приложения"
+# Первые 60 секунд после запуска контейнера — не должно быть MISSING_MESSAGE (next-intl) или
+# необработанных исключений Node.js, которые сигнализируют о пропавших ключах перевода / багах.
+app_logs_clean() {
+  local started started_epoch end_ts errors
+  started=$(docker inspect -f '{{.State.StartedAt}}' homecare-app-1 2>/dev/null) || return 0
+  started_epoch=$(date -d "$started" +%s 2>/dev/null) || return 0
+  end_ts=$(date -u -d "@$((started_epoch + 60))" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) || return 0
+  errors=$(docker logs homecare-app-1 --since "$started" --until "$end_ts" 2>&1 | \
+    grep -E "(MISSING_MESSAGE|UnhandledPromiseRejection)" | head -5)
+  if [ -n "$errors" ]; then
+    echo ""
+    while IFS= read -r line; do printf '    %s\n' "$line"; done <<< "$errors"
+    return 1
+  fi
+}
+check "нет MISSING_MESSAGE / необработанных исключений" app_logs_clean
 
 echo "Заголовки"
 robots="$(env_val ROBOTS_TAG)"

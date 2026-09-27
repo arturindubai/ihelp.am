@@ -144,7 +144,7 @@ export async function GET(req: Request) {
   try {
     const st = await fs.statfs(process.env.UPLOAD_DIR || "/data/uploads");
     diskFreePct = Math.round((st.bavail / st.blocks) * 100);
-    if (diskFreePct < 10) await alertTech("disk", html`⚠️ <b>На диске сервера осталось ${diskFreePct}% места</b>\nОсвободить: docker builder prune -f, старые бэкапы`, 12 * 60);
+    if (diskFreePct < 15) await alertTech("disk", html`⚠️ <b>На диске сервера осталось ${diskFreePct}% места (занято >${100 - diskFreePct}%)</b>\nОсвободить: node scripts/cc.mjs gc, docker builder prune -f, старые бэкапы`, 12 * 60);
   } catch (e) {
     console.error("[cron] disk check failed", e);
   }

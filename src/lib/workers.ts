@@ -26,6 +26,8 @@ export type PoolConfig = {
   /** Сколько воркеров пула работают одновременно (деплоер и триаж — всегда один) */
   max: number;
   model: (typeof MODELS)[number];
+  /** Модель для задач размера L — только для пула dev; остальные пулы игнорируют это поле */
+  modelForL: (typeof MODELS)[number];
   /** Сколько запусков пула в сутки, чтобы не съесть лимит подписки */
   dailyCap: number;
   mode: Mode;
@@ -53,6 +55,8 @@ export type WorkersConfig = {
   stopRunning: boolean;
   /** pausedUntil — это «План старт» владельца, а не пауза: в назначенное время диспетчер запускает всех сам */
   plannedStart: boolean;
+  /** Opus на лимите до этого момента: L-задачи в пуле dev переключаются на Sonnet; null — лимит не известен */
+  opusLimitUntil: string | null;
 };
 
 export const DEFAULT_WORKERS: WorkersConfig = {
@@ -60,15 +64,15 @@ export const DEFAULT_WORKERS: WorkersConfig = {
   dryRun: false,
   pools: {
     // Триаж: каждая входящая IN-N — отдельный запуск, пачка бэклога — ещё один; 12 в сутки не хватало и очередь вставала
-    triage: { enabled: true, max: 1, model: "sonnet", dailyCap: 40, mode: "auto", everyMin: 30 },
-    dev: { enabled: true, max: 2, model: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
-    nocode: { enabled: true, max: 1, model: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
+    triage: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 40, mode: "auto", everyMin: 30 },
+    dev: { enabled: true, max: 2, model: "sonnet", modelForL: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
+    nocode: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
     // Продакт: отвечает на вопросы, заблокированные «на продукте», раз в сутки проходит бэклог на качество требований
-    product: { enabled: true, max: 1, model: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
+    product: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
     // Дизайнер: интерфейсные задачи без описания дизайна и вопросы «на дизайне»
-    designer: { enabled: true, max: 1, model: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
-    tester: { enabled: true, max: 1, model: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
-    deployer: { enabled: true, max: 1, model: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
+    designer: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
+    tester: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
+    deployer: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
   },
   deployWindow: [10, 20],
   triageBatch: 6,
@@ -77,6 +81,7 @@ export const DEFAULT_WORKERS: WorkersConfig = {
   pausedReason: null,
   stopRunning: false,
   plannedStart: false,
+  opusLimitUntil: null,
 };
 
 const clamp = (v: unknown, min: number, max: number, fallback: number) => {
@@ -95,6 +100,7 @@ export function normalizeWorkers(raw: unknown): WorkersConfig {
       enabled: typeof src.enabled === "boolean" ? src.enabled : d.enabled,
       max: SINGLE.includes(p) ? 1 : clamp(src.max ?? d.max, 0, 4, d.max),
       model: (MODELS as readonly string[]).includes(String(src.model)) ? (src.model as PoolConfig["model"]) : d.model,
+      modelForL: (MODELS as readonly string[]).includes(String((src as Partial<PoolConfig>).modelForL)) ? ((src as Partial<PoolConfig>).modelForL as PoolConfig["modelForL"]) : d.modelForL,
       dailyCap: clamp(src.dailyCap ?? d.dailyCap, 0, 100, d.dailyCap),
       mode: (MODES as readonly string[]).includes(String(src.mode)) ? (src.mode as Mode) : d.mode,
       everyMin: (EVERY_MIN as readonly number[]).includes(Number(src.everyMin)) ? Number(src.everyMin) : d.everyMin,
@@ -115,6 +121,7 @@ export function normalizeWorkers(raw: unknown): WorkersConfig {
     stopRunning: r.stopRunning === true,
     // Запланированный старт без времени бессмыслен: без pausedUntil — обычная работа
     plannedStart: r.plannedStart === true && typeof r.pausedUntil === "string",
+    opusLimitUntil: typeof r.opusLimitUntil === "string" ? r.opusLimitUntil : null,
   };
 }
 

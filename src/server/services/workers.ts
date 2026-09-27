@@ -33,6 +33,14 @@ export async function saveWorkersConfig(patch: WorkersPatch, actor: string): Pro
   return next;
 }
 
+/** Opus на лимите: L-задачи пула dev переключаются на Sonnet до сброса, другие пулы не останавливаем */
+export async function setOpusLimit(until: Date) {
+  const current = await getWorkersConfig();
+  const next = normalizeWorkers({ ...current, opusLimitUntil: until.toISOString() });
+  await db.setting.upsert({ where: { key: KEY }, create: { key: KEY, value: next }, update: { value: next } });
+  return next;
+}
+
 /** Начало суток по Еревану — для дневного лимита запусков */
 function dayStart(now = new Date()) {
   const y = new Date(now.getTime() + 4 * 3600_000);
@@ -360,7 +368,7 @@ export async function dispatchPlan(heads: Record<string, string>) {
   if (rest.length !== pending.length) await setRequests(rest);
   const running = await db.workerRun.findMany({
     where: { status: "running" },
-    select: { id: true, unit: true, pool: true, agent: true, taskKey: true, keys: true, startedAt: true, stopRequested: true },
+    select: { id: true, unit: true, pool: true, agent: true, taskKey: true, keys: true, startedAt: true, stopRequested: true, model: true },
   });
   return {
     config: state.config,

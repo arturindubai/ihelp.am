@@ -15,6 +15,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
 Смотреть:
   list [статус] [--area back] [--agent dev-1]   задачи; без статуса — все открытые
   show КЛЮЧ                                     задача целиком: требования, связи, лента, готовность
+  search «слова»                                поиск задач по ключевым словам в заголовке и описании
   attention                                     нужно вам: брошенные, очередь проверки, ждут владельца
   worktrees                                     рабочие копии задач на этом сервере
 
@@ -79,7 +80,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
   mockup КЛЮЧ ["комментарий"]                    утвердить макет задачи; снимает гейт «нужен макет»
 
 Уборка:
-  gc                                            убрать worktree закрытых задач (только чистые и влитые)
+  gc                                            убрать worktree закрытых задач, влитые ветки task/* и стенды Docker старше 3 дней
 
 Имя агента: --agent, иначе переменная CC_AGENT, иначе то, с которым задачу брали на этом сервере.`;
 
@@ -367,7 +368,7 @@ async function takeTask(key) {
   // Задача без кода у воркера «Продукт и не-код»: результат — в карточке, рабочая копия с веткой не нужна
   const { dir, created } = agent.startsWith("nocode") && t.layer === "none" ? { dir: ROOT, created: false } : ensureWorktree(t.key, branch);
   writeState(t.key, { agent, branch, dir, takenAt: new Date().toISOString() });
-  if (flags.json) return console.log(JSON.stringify({ task: t.key, agent, dir, branch, role: roleForTask(t) }));
+  if (flags.json) return console.log(JSON.stringify({ task: t.key, agent, dir, branch, role: roleForTask(t), estimate: t.estimate ?? null }));
   if (auto) console.log(`Ваше имя агента: ${agent} — используйте его во всех командах этого чата (--agent ${agent}).\n`);
   const d = await api("GET", { key: t.key });
   briefing(roleForTask(d.task), d, agent, dir);
@@ -486,6 +487,14 @@ async function main() {
       const d = await api("GET", { key: needKey() });
       if (flags.json) return console.log(JSON.stringify(d, null, 2));
       printTask(d);
+      return;
+    }
+    case "search": {
+      const q = pos.join(" ").trim();
+      if (!q) die('укажите слова поиска: search «запрос»');
+      const r = await api("GET", { q });
+      if (flags.json) return console.log(JSON.stringify(r.tasks, null, 2));
+      console.log(r.tasks.length ? r.tasks.map(line).join("\n") : "Ничего не найдено");
       return;
     }
     case "attention": {
@@ -750,42 +759,128 @@ async function main() {
       return;
     }
     case "gc": {
-      if (!fs.existsSync(WT)) return console.log("Нечего убирать");
-      tryGit(["fetch", "-q", "origin"], ROOT);
-      for (const name of fs.readdirSync(WT)) {
-        const dir = path.join(WT, name);
-        // Копия тестировщика — без своих коммитов, убирается, как только задача ушла с проверки
-        if (name.startsWith("test-")) {
-          const d = await api("GET", { key: name.slice(5) }, null, true);
-          if (d?.task?.status === "review" && d.task.claimedBy) {
-            console.log(`  ${name}: идёт проверка — оставляю`);
+      /** Свободное место на /, МБ */
+      function diskFreeMB() {
+        try {
+          const out = execFileSync("df", ["-BM", "--output=avail", "/"], { encoding: "utf8" });
+          return parseInt(out.split("\n").filter(Boolean).pop().trim(), 10);
+        } catch { return null; }
+      }
+
+      /** Убрать контейнер docker по имени; возвращает true при успехе */
+      function dockerRm(containerName) {
+        try { execFileSync("docker", ["rm", "-fv", containerName], { stdio: "ignore" }); return true; }
+        catch { return false; }
+      }
+
+      const diskBefore = diskFreeMB();
+      if (diskBefore !== null) console.log(`Диск до уборки: ${diskBefore} МБ свободно`);
+
+      if (!fs.existsSync(WT)) {
+        console.log("Рабочих копий нет — пропускаю");
+      } else {
+        console.log("Рабочие копии:");
+        tryGit(["fetch", "-q", "origin"], ROOT);
+        for (const name of fs.readdirSync(WT)) {
+          const dir = path.join(WT, name);
+          // Копия тестировщика — без своих коммитов, убирается, как только задача ушла с проверки
+          if (name.startsWith("test-")) {
+            const d = await api("GET", { key: name.slice(5) }, null, true);
+            if (d?.task?.status === "review" && d.task.claimedBy) {
+              console.log(`  ${name}: идёт проверка — оставляю`);
+              continue;
+            }
+            tryGit(["worktree", "remove", "--force", dir], ROOT);
+            console.log(`  ${name}: убрана`);
             continue;
           }
-          tryGit(["worktree", "remove", "--force", dir], ROOT);
-          console.log(`  ${name}: убрана`);
-          continue;
+          const key = name;
+          const d = await api("GET", { key }, null, true);
+          const status = d?.task?.status;
+          const branch = d?.task?.branch || `task/${key}`;
+          if (!["done", "cancelled"].includes(status)) {
+            console.log(`  ${key}: ${STATUS[status] ?? status ?? "?"} — оставляю`);
+            continue;
+          }
+          if (tryGit(["status", "--porcelain"], dir)) {
+            console.log(`  ${key}: есть незакоммиченные изменения — оставляю`);
+            continue;
+          }
+          const merged = tryGit(["merge-base", "--is-ancestor", branch, "origin/main"], ROOT) !== null;
+          if (!merged && status === "done") {
+            console.log(`  ${key}: ветка не влита в main — оставляю`);
+            continue;
+          }
+          git(["worktree", "remove", dir], ROOT);
+          if (merged) tryGit(["branch", "-d", branch], ROOT);
+          fs.rmSync(path.join(STATE, `${key}.json`), { force: true });
+          console.log(`  ${key}: убрана`);
         }
-        const key = name;
-        const d = await api("GET", { key }, null, true);
-        const status = d?.task?.status;
-        const branch = d?.task?.branch || `task/${key}`;
-        if (!["done", "cancelled"].includes(status)) {
-          console.log(`  ${key}: ${STATUS[status] ?? status ?? "?"} — оставляю`);
-          continue;
-        }
-        if (tryGit(["status", "--porcelain"], dir)) {
-          console.log(`  ${key}: есть незакоммиченные изменения — оставляю`);
-          continue;
-        }
+      }
+
+      // Влитые локальные ветки task/* без worktree
+      console.log("Влитые ветки task/* без рабочей копии:");
+      const localBranches = (tryGit(["branch", "--list", "task/*"], ROOT) ?? "")
+        .split("\n").map(l => l.replace(/^\*?\s+/, "")).filter(Boolean);
+      const openWorktrees = new Set(
+        (tryGit(["worktree", "list", "--porcelain"], ROOT) ?? "")
+          .split("\n").filter(l => l.startsWith("branch ")).map(l => l.replace("branch refs/heads/", ""))
+      );
+      for (const branch of localBranches) {
+        if (openWorktrees.has(branch)) continue; // открыта в worktree — не трогаем
         const merged = tryGit(["merge-base", "--is-ancestor", branch, "origin/main"], ROOT) !== null;
-        if (!merged && status === "done") {
-          console.log(`  ${key}: ветка не влита в main — оставляю`);
-          continue;
+        if (merged) {
+          tryGit(["branch", "-d", branch], ROOT);
+          console.log(`  ${branch}: удалена (влита в main)`);
+        } else {
+          console.log(`  ${branch}: не влита — оставляю`);
         }
-        git(["worktree", "remove", dir], ROOT);
-        if (merged) tryGit(["branch", "-d", branch], ROOT);
-        fs.rmSync(path.join(STATE, `${key}.json`), { force: true });
-        console.log(`  ${key}: убрана`);
+      }
+
+      // Docker-стенды iHelp старше 3 дней (контейнеры ihelp-stand-*)
+      console.log("Docker-стенды iHelp старше 3 дней:");
+      try {
+        const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+        const now = Date.now();
+        const psOut = execFileSync(
+          "docker", ["ps", "-a", "--filter", "name=ihelp-stand-", "--format", "{{.Names}}\t{{.CreatedAt}}"],
+          { encoding: "utf8" }
+        ).trim();
+        if (!psOut) { console.log("  стендов нет"); }
+        else {
+          for (const line of psOut.split("\n").filter(Boolean)) {
+            const tab = line.indexOf("\t");
+            const cname = line.slice(0, tab);
+            const createdStr = line.slice(tab + 1);
+            const created = new Date(createdStr);
+            if (isNaN(created.getTime())) continue;
+            if (now - created.getTime() > THREE_DAYS_MS) {
+              dockerRm(cname);
+              console.log(`  ${cname}: убран (создан ${createdStr})`);
+            } else {
+              console.log(`  ${cname}: свежий — оставляю`);
+            }
+          }
+        }
+        // Сети ihelp-stand-* без активных контейнеров
+        const netsOut = execFileSync(
+          "docker", ["network", "ls", "--filter", "name=ihelp-stand-", "--format", "{{.Name}}"],
+          { encoding: "utf8" }
+        ).trim();
+        for (const net of netsOut.split("\n").filter(Boolean)) {
+          try {
+            execFileSync("docker", ["network", "rm", net], { stdio: "ignore" });
+            console.log(`  сеть ${net}: убрана`);
+          } catch { /* сеть используется — пропускаем */ }
+        }
+      } catch (e) {
+        console.log(`  docker недоступен или нет прав: ${e.message}`);
+      }
+
+      const diskAfter = diskFreeMB();
+      if (diskBefore !== null && diskAfter !== null) {
+        const freed = diskAfter - diskBefore;
+        console.log(`Диск после уборки: ${diskAfter} МБ свободно${freed > 0 ? ` (освобождено ~${freed} МБ)` : ""}`);
       }
       return;
     }

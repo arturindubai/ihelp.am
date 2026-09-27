@@ -4,6 +4,7 @@ import {
   canTransition,
   unblockTarget,
   doneGate,
+  isOwnerQuestion,
   isReady,
   needsReason,
   nextStatuses,
@@ -328,5 +329,26 @@ describe("роли воркеров триажа и «Продукт и не-к�
     expect(canTransition("backlog", "blocked", "triage")).toBe(true);
     expect(canTransition("review", "done", "triage")).toBe(false);
     expect(canTransition("in_progress", "review", "triage")).toBe(false);
+  });
+});
+
+describe("фильтр вопросов к владельцу (needsYou)", () => {
+  it("заблокированная задача на owner или product — вопрос к владельцу", () => {
+    expect(isOwnerQuestion({ status: "blocked", blockedOn: "owner" })).toBe(true);
+    expect(isOwnerQuestion({ status: "blocked", blockedOn: "product" })).toBe(true);
+  });
+  it("задача с blockedOn=external не появляется в «Нужен ты»", () => {
+    expect(isOwnerQuestion({ status: "blocked", blockedOn: "external" })).toBe(false);
+  });
+  it("отменённая задача не появляется в «Нужен ты» даже с blockedOn=owner", () => {
+    expect(isOwnerQuestion({ status: "cancelled", blockedOn: "owner" })).toBe(false);
+    expect(isOwnerQuestion({ status: "cancelled", blockedOn: "product" })).toBe(false);
+  });
+  it("другие статусы и другие blockedOn не являются вопросами к владельцу", () => {
+    expect(isOwnerQuestion({ status: "in_progress", blockedOn: null })).toBe(false);
+    expect(isOwnerQuestion({ status: "blocked", blockedOn: "tech" })).toBe(false);
+    expect(isOwnerQuestion({ status: "blocked", blockedOn: "deps" })).toBe(false);
+    expect(isOwnerQuestion({ status: "blocked", blockedOn: null })).toBe(false);
+    expect(isOwnerQuestion({ status: "done", blockedOn: "owner" })).toBe(false);
   });
 });

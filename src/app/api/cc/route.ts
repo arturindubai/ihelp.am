@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { attention, getTask, listTasks, annotate, saveTask } from "@/server/services/cc";
 import { CcError, agentActor, agentNote, claim, heartbeat, markTriaged, reviewRelease, reviewTake, testPass, transition, approveMockup, reblockOn, type TransitionInput } from "@/server/services/ccWork";
-import { dispatchPlan, pauseWorkers, runFinish, runStart, tickLog, triageQueue, workersOverview } from "@/server/services/workers";
+import { dispatchPlan, pauseWorkers, runFinish, runStart, setOpusLimit, tickLog, triageQueue, workersOverview } from "@/server/services/workers";
 import { sendMessage, takeInbox } from "@/server/services/ccMessages";
 import { intakeCreate, boardAudit } from "@/server/services/ccBoard";
 import { listEpics, getEpic } from "@/server/services/epics";
@@ -70,6 +70,7 @@ const brief = (t: Task) => ({
   branch: t.branch,
   rework: t.rework,
   reclaims: t.reclaims,
+  estimate: t.estimate,
 });
 
 const full = (t: Task) => ({
@@ -213,7 +214,8 @@ export async function POST(req: Request) {
       case "run-start":
       case "run-finish":
       case "tick":
-      case "workers-pause": {
+      case "workers-pause":
+      case "opus-limit": {
         if (agent !== "dispatcher") return json({ error: "forbidden_role" }, 403);
         const num = (v: unknown) => (typeof v === "number" ? v : undefined);
         if (action === "dispatch") return json(await dispatchPlan((body.heads ?? {}) as Record<string, string>));
@@ -236,6 +238,10 @@ export async function POST(req: Request) {
             costUsd: num(body.costUsd),
           });
           return json({ ok: true, run });
+        }
+        if (action === "opus-limit") {
+          const until = new Date(str(body.until) ?? Date.now() + 3600_000);
+          return json({ ok: true, config: await setOpusLimit(Number.isNaN(until.getTime()) ? new Date(Date.now() + 3600_000) : until) });
         }
         const until = new Date(str(body.until) ?? Date.now() + 3600_000);
         return json({ ok: true, config: await pauseWorkers(Number.isNaN(until.getTime()) ? new Date(Date.now() + 3600_000) : until, text || "лимит подписки") });
