@@ -32,8 +32,23 @@ export function resolveText(ctx: CcTextContext): string {
  * Возвращает false, если:
  * - stdin терминал (пользователь работает интерактивно)
  * - передан --text-file
- * - в позиционных аргументах уже есть текст (команда не зависает при открытом молчащем stdin)
+ * - команда не принимает текстовый ввод (show, take, next, pulse, …)
+ * - в позиционных аргументах уже есть текст
  */
+
+// Команды, которые принимают текст от пользователя.
+// Все остальные stdin не читают — иначе зависают при открытом молчащем stdin.
+const TEXT_CMDS = new Set([
+  "note", "block", "reblock", "unblock",
+  "ready", "cancel", "return",
+  "review", "handoff", "done",
+  "pass", "fail", "triaged",
+  "intake", "msg",
+]);
+
+// Из текстовых команд: у части нет позиционного ключа задачи, весь pos — текст.
+const NO_KEY_TEXT_CMDS = new Set(["intake", "msg"]);
+
 export function shouldReadStdin(opts: {
   isTTY: boolean;
   hasTextFile: boolean;
@@ -41,8 +56,11 @@ export function shouldReadStdin(opts: {
   positional: string[];
 }): boolean {
   if (opts.isTTY || opts.hasTextFile) return false;
-  // Команды, у которых нет позиционного ключа задачи — весь pos это текст
-  const noKeyCmds = new Set(["intake", "msg", "search", "help", "list", "triage", "attention", "inbox", "worktrees", "gc", "lib"]);
-  const hasTextArg = noKeyCmds.has(opts.cmd) ? opts.positional.length > 0 : opts.positional.length > 1;
+  // Команда не принимает текст → stdin не трогаем
+  if (!TEXT_CMDS.has(opts.cmd)) return false;
+  // Есть ли уже текст в аргументах?
+  const hasTextArg = NO_KEY_TEXT_CMDS.has(opts.cmd)
+    ? opts.positional.length > 0
+    : opts.positional.length > 1;
   return !hasTextArg;
 }
