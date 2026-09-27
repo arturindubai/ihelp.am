@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "../db";
 import { alertTech } from "../alerts";
-import { html } from "../notify";
+import { html, notifyTech } from "../notify";
 import { CLOSED_STATUSES, pickNext, scopeOverlap } from "@/lib/cc-flow";
 import { transition, WATCHDOG } from "./ccWork";
 import { controlPatch, filterDesignerCooldown, normalizeWorkers, planDispatch, POOLS, reviewQueues, yerevanHour, type DispatchAction, type DispatchState, type Pool, type RunRequest, type WorkersCommand, type WorkersConfig } from "@/lib/workers";
@@ -449,7 +449,7 @@ export async function workersControl(command: WorkersCommand, at: Date | null, b
     start: html`▶ <b>Воркеры запущены</b> — ${by}. Все пулы включены в режиме «Авто».`,
     plan: html`⏰ <b>Старт воркеров запланирован на ${yerevanClock(at ?? new Date())}</b> — ${by}. До этого времени пауза, дальше диспетчер запустит всех сам.`,
   }[command];
-  await alertTech(`workers:control:${command}`, text, 0);
+  await notifyTech(text);
   console.log(`[workers] ${by}: ${command}${at ? ` в ${at.toISOString()}` : ""}`);
   return next;
 }

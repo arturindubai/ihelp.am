@@ -36,11 +36,9 @@ check "ключ шифрования настроек задан" docker exec ho
 
 echo "Уведомления"
 tech_alert_ok() {
-  docker compose exec -T db psql -U app -d homeservices -tAc \
-    "SELECT (COALESCE(value->>'telegramBotToken','') != '') AND (COALESCE(value->>'techChatId','') != '' OR COALESCE(value->>'teamChatId','') != '' OR COALESCE(value->>'telegramChatId','') != '') FROM (SELECT (value::jsonb) AS value FROM \"Setting\" WHERE key='notify') t" \
-    2>/dev/null | grep -q "^t"
+  curl -s -m 20 "$BASE/api/health?check=alert" | grep -q '"ok":true'
 }
-warn "адресат тех-алертов задан" tech_alert_ok
+check "адресат тех-алертов задан" tech_alert_ok
 
 echo "Страницы ($BASE)"
 check "/api/health → {\"ok\":true}" [ "$(curl -s -m 20 "$BASE/api/health")" = '{"ok":true}' ]
