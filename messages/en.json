@@ -1237,7 +1237,8 @@
         "scopeHint": "File or folder paths, one per line, e.g. src/server/services/booking.ts — parallel assignees won't conflict",
         "sourceIntake": "from Intake",
         "mockupRequired": "Mockup required",
-        "mockupUrl": "Mockup link"
+        "mockupUrl": "Mockup link",
+        "delete": "Delete"
       },
       "searchAll": "Search tasks",
       "pages": {
