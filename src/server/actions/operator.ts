@@ -4,6 +4,7 @@ import type { VisitStatus } from "@prisma/client";
 import { requireRole } from "../auth";
 import { db } from "../db";
 import { setVisitStatus } from "../services/visits";
+import { notifyMasterAssigned } from "../services/workerNotify";
 import { audit } from "../audit";
 
 const OPERATOR_ROLES = ["OPERATOR", "ADMIN", "OWNER"] as const;
@@ -21,6 +22,9 @@ export async function operatorAssignMasterAction(visitId: string, masterId: stri
   const v = await db.visit.findUniqueOrThrow({ where: { id: visitId } });
   await db.visit.update({ where: { id: visitId }, data: { masterId } });
   await audit(u.id, "visit.assignMaster", "Visit", visitId, { from: v.masterId, to: masterId });
+  if (masterId && masterId !== v.masterId) {
+    await notifyMasterAssigned(visitId).catch(() => {});
+  }
   rv();
   return { ok: true };
 }

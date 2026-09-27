@@ -6,6 +6,7 @@ import { getCurrentUser } from "../auth";
 import { getSettings } from "../settings";
 import { html, notifyTeam } from "../notify";
 import { notifyCancelOrderTeam, notifyCancelVisitTeam, notifyRescheduleVisitTeam } from "../services/teamNotify";
+import { notifyMasterCancelled, notifyMasterRescheduled } from "../services/workerNotify";
 import { headers } from "next/headers";
 import { sendOtp, verifyOtp } from "../otp";
 import { normalizeEmail } from "@/lib/email";
@@ -73,6 +74,8 @@ export async function cancelVisitAction(visitId: string) {
   if (!BUSY_STATUSES.includes(v.status) || v.status === "IN_PROGRESS" || v.status === "ON_WAY") return { ok: false, error: "state" };
   if (v.scheduledAt && v.scheduledAt.getTime() - Date.now() < s.booking.freeCancelHours * 3600_000) return { ok: false, error: "late" };
   const status = v.order.kind === "SUBSCRIPTION" ? "SKIPPED" : v.order.kind === "PACKAGE" ? "UNSCHEDULED" : "CANCELLED";
+  // Уведомить мастера до изменения статуса, пока masterId ещё доступен
+  if (v.masterId) await notifyMasterCancelled(v.id).catch(() => {});
   await db.visit.update({ where: { id: v.id }, data: { status, ...(status === "UNSCHEDULED" ? { scheduledAt: null, masterId: null } : {}) } });
   if (v.order.kind === "ONE_TIME") await db.order.update({ where: { id: v.orderId }, data: { status: "CANCELLED", cancelReason: "client" } });
   await notifyCancelVisitTeam(v.orderId, v.scheduledAt, status === "SKIPPED");
@@ -97,6 +100,7 @@ export async function rescheduleVisitAction(visitId: string, date: string, time:
     throw e;
   }
   await notifyRescheduleVisitTeam(v.orderId, date, time);
+  await notifyMasterRescheduled(v.id).catch(() => {});
   return { ok: true };
 }
 

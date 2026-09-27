@@ -7,6 +7,7 @@ import { audit } from "../../audit";
 import { getSettings } from "../../settings";
 import { BUSY_STATUSES, generateSubscriptionVisits, loadAvailability } from "../../services/booking";
 import { setCashCollected, setVisitStatus, refreshOrderState } from "../../services/visits";
+import { notifyMasterAssigned, notifyMasterRescheduled, notifyMasterCancelled } from "../../services/workerNotify";
 import { isMasterFree } from "@/lib/slots";
 import { atYerevan } from "@/lib/time";
 
@@ -28,10 +29,18 @@ export async function adminVisitAction(visitId: string, patch: { status?: VisitS
     if (v.status === "UNSCHEDULED") data.status = "SCHEDULED";
   }
   if (patch.masterId !== undefined) data.masterId = patch.masterId;
+  const hadMaster = v.masterId;
+  const wasMoved = !!(patch.date && patch.time);
   if (Object.keys(data).length) await db.visit.update({ where: { id: v.id }, data });
   if (patch.status && patch.status !== v.status) await setVisitStatus(v.id, patch.status, "админ");
   if (patch.cash !== undefined) await setCashCollected(v.id, patch.cash);
   await audit(u.id, "visit.update", "Visit", v.id, patch);
+  // Уведомления мастеру: назначение нового мастера, перенос даты/времени
+  if (patch.masterId && patch.masterId !== hadMaster) {
+    await notifyMasterAssigned(v.id).catch(() => {});
+  } else if (wasMoved && hadMaster) {
+    await notifyMasterRescheduled(v.id).catch(() => {});
+  }
   rv(v.orderId);
   return { ok: true };
 }

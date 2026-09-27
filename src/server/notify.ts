@@ -59,6 +59,15 @@ async function send(chatId: string, text: string, tag: string, tokenPath: string
   await enqueueAndSend(chatId, text, tag, token, tokenPath, threadId);
 }
 
+/** Личное сообщение мастеру через @ihelp_staff_bot. Без staffChatId — тихо игнорируется. */
+export async function notifyMaster(staffChatId: string, text: string) {
+  try {
+    await send(staffChatId, text, "master", "team.botToken");
+  } catch (e) {
+    console.error("[notify:master] не отправлено", e, "|", text);
+  }
+}
+
 /** Уведомления команде: заказы, отмены, переносы, отзывы (бот @ihelp_staff_bot → группа сотрудников) */
 export async function notifyTeam(text: string) {
   try {
