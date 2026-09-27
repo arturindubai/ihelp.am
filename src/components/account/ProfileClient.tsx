@@ -8,7 +8,6 @@ import { deleteAddressAction } from "@/server/actions/booking";
 import { logoutAction } from "@/server/actions/auth";
 import { Sheet } from "@/components/ui/Sheet";
 import { AddressForm, addressLine, type AddressRow } from "@/components/booking/AddressForm";
-import { localeNames, type Locale } from "@/i18n/locales";
 import { formatPhone } from "@/lib/phone";
 
 export function ProfileClient({ user, addresses: initial, districts, enabledLocales, emailCodes }: { user: { name: string | null; phone: string; email: string | null; emailVerified: boolean; locale: string }; addresses: AddressRow[]; districts: string[]; enabledLocales: string[]; emailCodes: boolean }) {
@@ -54,7 +53,7 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
           {enabledLocales.length > 1 && (
             <div><label className="label">{t("language")}</label>
               <select className="input" value={form.locale} onChange={(e) => setForm({ ...form, locale: e.target.value })}>
-                {enabledLocales.map((l) => <option key={l} value={l}>{localeNames[l as Locale]}</option>)}
+                {enabledLocales.map((l) => <option key={l} value={l}>{t("locales." + l)}</option>)}
               </select>
             </div>
           )}

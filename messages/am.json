@@ -260,7 +260,12 @@
     "subscriptions": "",
     "history": "",
     "noOrders": "",
-    "bookNow": ""
+    "bookNow": "",
+    "locales": {
+      "ru": "Русский",
+      "en": "English",
+      "am": "Հայերեն"
+    }
   },
   "order": {
     "number": "",
