@@ -73,9 +73,10 @@ restore_check() {
     [ "$prod_t" = "$rest_t" ] && [ "$migrations" -gt 0 ]
   rc=$?
   if [ "$rc" = "0" ]; then
-    for tbl in '"Order"' '"User"' '"Service"'; do
-      prod_cnt=$($PSQL -d homeservices -tAc "SELECT count(*) FROM $tbl" 2>/dev/null) || continue
-      rest_cnt=$($PSQL -d restore_check -tAc "SELECT count(*) FROM $tbl" 2>/dev/null) || { rc=1; continue; }
+    tables=$($PSQL -d homeservices -tAc "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename" 2>/dev/null) || rc=1
+    for tbl in $tables; do
+      prod_cnt=$($PSQL -d homeservices -tAc "SELECT count(*) FROM \"$tbl\"" 2>/dev/null) || continue
+      rest_cnt=$($PSQL -d restore_check -tAc "SELECT count(*) FROM \"$tbl\"" 2>/dev/null) || { rc=1; continue; }
       diff=$((prod_cnt - rest_cnt))
       [ "$diff" -lt 0 ] && diff=$((-diff))
       log "строки $tbl: prod=$prod_cnt restored=$rest_cnt расхождение=$diff"
@@ -115,9 +116,22 @@ sleep_until() {
 }
 
 if [ "${1:-}" = "once" ]; then
-  day="$(date +%F)${2:+-$2}"
-  backup_db_retry "$day" 1 && backup_uploads "$day"
-  exit $?
+  label="${2:-}"
+  day="$(date +%F)${label:+-$label}"
+  backup_db_retry "$day" 1 && backup_uploads "$day" || exit $?
+  if [ -n "$label" ]; then
+    # Ротация бэкапов выкладки: 7 дней, не более 30 файлов
+    find /backups -maxdepth 1 -name 'db-????-??-??-*.sql.gz' -mtime +7 -delete 2>/dev/null || true
+    find /backups -maxdepth 1 -name 'uploads-????-??-??-*.tar.gz' -mtime +7 -delete 2>/dev/null || true
+    count=$(find /backups -maxdepth 1 -name 'db-????-??-??-*.sql.gz' 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$count" -gt 30 ]; then
+      excess=$((count - 30))
+      find /backups -maxdepth 1 -name 'db-????-??-??-*.sql.gz' 2>/dev/null | sort | head -n "$excess" | xargs rm -f
+      find /backups -maxdepth 1 -name 'uploads-????-??-??-*.tar.gz' 2>/dev/null | sort | head -n "$excess" | xargs rm -f
+    fi
+    log "ротация бэкапов выкладки завершена"
+  fi
+  exit 0
 fi
 
 latest=$(ls -t /backups/db-*.sql.gz 2> /dev/null | head -n 1)

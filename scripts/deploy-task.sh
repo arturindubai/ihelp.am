@@ -54,13 +54,16 @@ log="data/deploys/$KEY-$(date +%Y%m%d-%H%M%S).log"
 prod_marker=$(< src/lib/deploy-marker.txt)
 echo "▶ $KEY: слияние $merge, лог $log"
 
+backup_file=""
 if grep -q '^prisma/migrations/' <<< "$changed"; then
   echo "▶ Есть миграция — бэкап перед выкладкой"
-  if ! timeout 900 docker compose exec -T backup sh /backup.sh once >> "$log" 2>&1; then
+  deploy_label="$(date +%H%M%S)-$KEY"
+  if ! timeout 900 docker compose exec -T backup sh /backup.sh once "$deploy_label" >> "$log" 2>&1; then
     git reset -q --hard "$prev"
     cc note "$KEY" "Автовыкладка отменена: бэкап перед миграцией не снялся. Прод не тронут." --error
     stop "Бэкап не снялся — выкладку не начинаю" 1
   fi
+  backup_file=$(grep ' db ok: /backups/' "$log" | tail -n 1 | grep -oE '/backups/db-[^ ]+' | sed 's|^/backups/|backups/|')
 fi
 
 fail() {
@@ -94,7 +97,14 @@ git push -q origin main || pushed="ВНИМАНИЕ: push в origin/main не п
 git push -q origin --delete "$branch" 2> /dev/null || true
 checks=$(grep -c '✓' "$log")
 neighbors=$(sed -n '/Соседние сайты/,/SMOKE/p' "$log" | grep -c '✓')
-migr=$(grep -q '^prisma/migrations/' <<< "$changed" && echo " Миграция применена, бэкап снят перед ней." || echo "")
+migr=""
+if grep -q '^prisma/migrations/' <<< "$changed"; then
+  if [ -n "$backup_file" ]; then
+    migr=" Миграция применена, бэкап: /opt/ihelp.am/${backup_file}."
+  else
+    migr=" Миграция применена, бэкап снят (см. лог)."
+  fi
+fi
 cc done "$KEY" --sha "$merge" "Автовыкладка ${merge:0:10}: SMOKE OK (${checks} проверок, соседних сайтов отвечают: ${neighbors}).${migr} ${tested_label} Слияние ${pushed}. Лог: /opt/ihelp.am/${log}"
 [ "$pushed" = "отправлено в origin/main" ] || cc note "$KEY" "$pushed" --error
 echo "DEPLOY OK $merge"
