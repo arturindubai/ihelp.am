@@ -1283,7 +1283,8 @@
         "scopeHint": "Пути к файлам или папкам, по одному в строке, например src/server/services/booking.ts — по ним параллельные исполнители не сталкиваются",
         "sourceIntake": "из Intake",
         "mockupRequired": "Нужен макет",
-        "mockupUrl": "Ссылка на макет"
+        "mockupUrl": "Ссылка на макет",
+        "delete": "Удалить"
       },
       "searchAll": "Поиск по задачам",
       "pages": {
