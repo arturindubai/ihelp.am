@@ -439,7 +439,10 @@ function branchFacts(branch) {
 
 /* ───── команды ───── */
 
-/** Текст для команды: из --text-file, stdin (если подан через pipe) или позиционных аргументов */
+/**
+ * Текст для команды: из --text-file > позиционных аргументов > stdin.
+ * Пустой stdin не перекрывает позиционный аргумент — только непустой и только при отсутствии аргумента.
+ */
 let stdinText = null;
 
 const text = (skipFirst = true) => {
@@ -448,8 +451,9 @@ const text = (skipFirst = true) => {
     if (!fs.existsSync(f)) die(`файл не найден: ${f}`);
     return fs.readFileSync(f, "utf8").trim();
   }
-  if (stdinText !== null) return stdinText;
-  return (skipFirst ? pos.slice(1) : pos).join(" ").trim();
+  const positional = (skipFirst ? pos.slice(1) : pos).join(" ").trim();
+  if (positional) return positional;          // аргумент есть — stdin не нужен
+  return stdinText || "";                     // stdin только при отсутствии аргумента
 };
 
 const needKey = () => {
@@ -459,8 +463,12 @@ const needKey = () => {
 };
 
 async function main() {
-  // Читаем stdin, если подан через pipe и нет --text-file
-  if (!process.stdin.isTTY && typeof flags["text-file"] !== "string") {
+  // Читаем stdin, если подан через pipe, нет --text-file и нет текстовых аргументов.
+  // Команды без позиционного ключа задачи (intake, msg, …) — весь pos текст, проверяем pos.length > 0.
+  // Остальные команды — key + text, проверяем pos.length > 1.
+  const noKeyCmds = new Set(["intake", "msg", "search", "help", "list", "triage", "attention", "inbox", "worktrees", "gc", "lib"]);
+  const hasTextArg = noKeyCmds.has(cmd) ? pos.length > 0 : pos.length > 1;
+  if (!process.stdin.isTTY && typeof flags["text-file"] !== "string" && !hasTextArg) {
     stdinText = await new Promise((resolve) => {
       let d = "";
       process.stdin.setEncoding("utf8");
