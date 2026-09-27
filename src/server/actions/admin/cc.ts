@@ -220,7 +220,19 @@ const poolSchema = z
 const workersSchema = z.object({
   enabled: z.boolean().optional(),
   dryRun: z.boolean().optional(),
-  pools: z.object({ triage: poolSchema, dev: poolSchema, tester: poolSchema, deployer: poolSchema }).partial().optional(),
+  pools: z
+    .object({
+      triage: poolSchema,
+      product: poolSchema,
+      designer: poolSchema,
+      dev: poolSchema,
+      nocode: poolSchema,
+      tester: poolSchema,
+      deployer: poolSchema,
+    })
+    .strict()
+    .partial()
+    .optional(),
   deployWindow: z.tuple([z.number().int().min(0).max(23), z.number().int().min(1).max(24)]).optional(),
   triageBatch: z.number().int().min(1).max(15).optional(),
   sweepEveryH: z.number().int().min(0).max(168).optional(),

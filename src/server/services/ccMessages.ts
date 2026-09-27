@@ -8,7 +8,7 @@ import { html } from "../notify";
  * воркер получит непрочитанное в брифинге при запуске. Воркеры пишут владельцу: вопросы, отчёты триажа.
  */
 
-export const MESSAGE_ROLES = ["owner", "cto", "workers", "triage", "dev", "tester", "deployer"] as const;
+export const MESSAGE_ROLES = ["owner", "cto", "workers", "triage", "product", "designer", "dev", "nocode", "tester", "deployer"] as const;
 export type MessageRole = (typeof MESSAGE_ROLES)[number];
 
 export async function sendMessage(m: { to: string; from: string; text: string; taskKey?: string | null }) {
