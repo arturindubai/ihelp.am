@@ -24,7 +24,7 @@ export async function GET(req: Request) {
   if (!user) return fail("telegram_failed");
   if (user.blocked) return fail("blocked");
 
-  await createSession(user.id);
+  await createSession(user.id, user.role);
   await audit(user.id, "auth.telegram", "User", user.id);
   await alertTech("telegram-login", html`🔓 <b>Вход через Telegram-бота</b>\n${user.phone}`, 5);
   const dest = user.role === "MASTER" ? "/ru/pro" : STAFF_ROLES.includes(user.role) ? "/ru/admin" : "/ru/account";

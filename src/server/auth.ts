@@ -2,14 +2,17 @@ import "server-only";
 import crypto from "crypto";
 import { cookies, headers } from "next/headers";
 import { db } from "./db";
+import { getSettings } from "./settings";
+import { sessionDays } from "@/lib/sessionDays";
 import type { Role, User } from "@prisma/client";
 
 const COOKIE = "sid";
-const DAYS = 60;
 
 export const hash = (v: string) => crypto.createHmac("sha256", process.env.SESSION_SECRET || "dev").update(v).digest("hex");
 
-export async function createSession(userId: string, days = DAYS) {
+export async function createSession(userId: string, role?: string) {
+  const s = await getSettings().catch(() => null);
+  const days = sessionDays(role, s?.auth.staffSessionDays ?? 7, s?.auth.clientSessionDays ?? 60);
   const token = crypto.randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + days * 86400_000);
   const ua = (await headers()).get("user-agent")?.slice(0, 200);

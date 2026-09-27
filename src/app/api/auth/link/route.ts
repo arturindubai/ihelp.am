@@ -9,11 +9,9 @@ import { html } from "@/server/notify";
 /**
  * Вход владельца по секретной ссылке — запасной способ, пока не подключены каналы кода (задача AUTH-1).
  *   http://<сайт>/api/auth/link?token=<ADMIN_LOGIN_TOKEN из .env>
- * Работает только для номера ADMIN_PHONE, сессия на 7 дней, каждое использование —
- * запись в журнал и тех-алерт. Пустой ADMIN_LOGIN_TOKEN полностью выключает вход по ссылке.
+ * Работает только для номера ADMIN_PHONE, каждое использование — запись в журнал и тех-алерт.
+ * Пустой ADMIN_LOGIN_TOKEN полностью выключает вход по ссылке.
  */
-const SESSION_DAYS = 7;
-
 function equal(a: string, b: string) {
   const x = Buffer.from(a);
   const y = Buffer.from(b);
@@ -33,7 +31,7 @@ export async function GET(req: Request) {
   const user = (phone ? await db.user.findUnique({ where: { phone } }) : null) ?? (await db.user.findFirst({ where: { role: "OWNER" }, orderBy: { createdAt: "asc" } }));
   if (!user) return NextResponse.json({ error: "owner_not_found" }, { status: 500 });
 
-  await createSession(user.id, SESSION_DAYS);
+  await createSession(user.id, user.role);
   await audit(user.id, "auth.link", "User", user.id);
   const ua = req.headers.get("user-agent")?.slice(0, 120) ?? "";
   await alertTech("admin-link-used", html`🔑 <b>Вход владельца по ссылке</b>\n${user.phone}\n${ua}`, 1);
