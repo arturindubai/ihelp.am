@@ -1,8 +1,10 @@
 import { cn } from "@/lib/format";
 
-/** Логотип: смена файла или разметки — только здесь (+ src/app/icon.svg для вкладки браузера и manifest) */
-export const LOGO_SRC = "/img/icon.svg";
-
+/** Логотип iHelp: текстовый вариант А, утверждён 27.09.2026 (design-content-6). Иконки приложения — public/img/icon.svg, src/app/icon.svg */
 export function Logo({ className }: { className?: string }) {
-  return <img src={LOGO_SRC} alt="" className={cn("size-8 rounded-lg", className)} />;
+  return (
+    <span className={cn("inline font-bold leading-none tracking-tight text-brand", className)}>
+      iHelp
+    </span>
+  );
 }
