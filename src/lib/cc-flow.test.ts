@@ -60,6 +60,23 @@ describe("разблокировка", () => {
     expect(unblockTarget("in_progress", "owner")).toBe("ready");
     expect(unblockTarget(null, "owner")).toBe("ready");
   });
+
+  // Случай CONTENT-6: заблокирована на дизайне, blockedFrom ready, один открытый вопрос без слова «макет».
+  // После утверждения дизайна owner переходит задачу в ready — но гейт needs_open блокирует.
+  // Задача должна попасть к триажу, а не зависнуть молча.
+  it("CONTENT-6: после утверждения дизайна owner может перейти blocked→ready", () => {
+    expect(canTransition("blocked", "ready", "owner")).toBe(true);
+  });
+  it("CONTENT-6: readyNeedsGate блокирует переход при открытых вопросах без force", () => {
+    expect(readyNeedsGate(["Нужно согласовать текст кнопки"], "owner", false)).toBe("needs_open");
+  });
+  it("CONTENT-6: owner с force может обойти opens вопросы и отправить задачу в очередь", () => {
+    expect(readyNeedsGate(["Нужно согласовать текст кнопки"], "owner", true)).toBeNull();
+  });
+  it("CONTENT-6: роль из агентского имени — dev, из имени человека — тоже dev (не owner)", () => {
+    expect(roleOf("Артур")).toBe("dev");
+    expect(roleOf("owner")).toBe("owner");
+  });
 });
 
 describe("сторож и проверка", () => {

@@ -372,7 +372,8 @@ export async function markTriaged(key: string, agent: string, text: string) {
 export async function retriage(key: string) {
   const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, blockedOn: true, triagedAt: true } });
   if (!t || !t.triagedAt) return;
-  if (t.status !== "backlog" && !(t.status === "blocked" && (t.blockedOn === "owner" || t.blockedOn === "product"))) return;
+  // blockedOn=design добавлен: утверждение дизайна с открытыми вопросами должно попасть к триажу
+  if (t.status !== "backlog" && !(t.status === "blocked" && (t.blockedOn === "owner" || t.blockedOn === "product" || t.blockedOn === "design"))) return;
   await db.task.update({ where: { id: t.id }, data: { triagedAt: null } });
   // Событие retriage нужно markTriaged(), чтобы не затереть свежий ответ человека
   await db.taskEvent.create({ data: { taskId: t.id, actor: "system", field: "retriage", from: null, to: "pending" } });
@@ -570,28 +571,40 @@ export async function taskReadiness(key: string) {
  * это канон, от него строят разработчики. Утвердить можно любую задачу с описанием дизайна, макетом или файлами;
  * повторное утверждение после правок — новая версия той же записи
  */
-export async function approveMockup(key: string, actor: string, comment: string | null) {
+/**
+ * closeNeeds — список вопросов из needs, которые владелец явно снял при утверждении.
+ * Все пункты со словом «макет» убираются автоматически.
+ */
+export async function approveMockup(key: string, actor: Actor, comment: string | null, closeNeeds?: string[]) {
   const t = await db.task.findUnique({ where: { key }, include: { attachments: { select: { fileName: true, url: true } } } });
   if (!t) throw new CcError("not_found");
   if (!t.design?.trim() && !t.mockupUrl && !t.attachments.length) throw new CcError("no_design");
   const now = new Date();
-  const canon = await designToCanon(t, actor, comment);
-  // Убрать пункты про макет из needs: триаж или владелец мог записать «Нужен макет» в список нужного
-  const needsClean = t.needs.filter((n) => !/макет/i.test(n));
+  const canon = await designToCanon(t, actor.name, comment);
+  // Убрать пункты про макет и явно закрытые вопросы
+  const toClose = new Set(closeNeeds ?? []);
+  const needsClean = t.needs.filter((n) => !/макет/i.test(n) && !toClose.has(n));
   await db.task.update({
     where: { key },
-    data: { mockupApprovedBy: actor, mockupApprovedAt: now, ...(needsClean.length !== t.needs.length ? { needs: needsClean } : {}) },
+    data: { mockupApprovedBy: actor.name, mockupApprovedAt: now, ...(needsClean.length !== t.needs.length ? { needs: needsClean } : {}) },
   });
-  await log(t.id, actor, "mockupApprovedBy", t.mockupApprovedBy, actor);
+  await log(t.id, actor.name, "mockupApprovedBy", t.mockupApprovedBy, actor.name);
   const text = `${comment ? `Дизайн утверждён: ${comment.trim().slice(0, 500)}` : "Дизайн утверждён."}\nВ Библиотеке: ${canon.slug} (версия ${canon.version}).`;
-  await say(t.id, actor, "note", text);
+  await say(t.id, actor.name, "note", text);
   // Если задача заблокирована на дизайне — снять блокировку, вернуть туда, откуда заблокировали
   if (t.status === "blocked" && t.blockedOn === "design") {
-    const actorObj = agentActor(actor);
-    const target = unblockTarget(t.blockedFrom, actorObj.role);
-    await transition(key, { to: target, text: "Дизайн утверждён, задача возвращена." }, actorObj).catch((e) => {
-      console.warn(`[cc] approveMockup: не удалось снять блокировку ${key}: ${(e as Error).message}`);
-    });
+    const target = unblockTarget(t.blockedFrom, actor.role);
+    try {
+      await transition(key, { to: target, text: "Дизайн утверждён, задача возвращена." }, actor);
+    } catch (e) {
+      const code = e instanceof CcError ? e.code : "transition_error";
+      const detail = e instanceof CcError && e.detail ? `: ${e.detail}` : "";
+      // Системная запись с кодом отказа — владелец видит причину в ленте
+      await say(t.id, actor.name, "system", `Дизайн утверждён, но вернуть задачу не удалось (${code}${detail}). Передано триажу.`);
+      await log(t.id, actor.name, "unblock_failed", null, `${code}${detail}`);
+      // Открытые вопросы → в очередь триажа, чтобы он принял решение
+      await retriage(key);
+    }
   }
   // Если задача в бэклоге — снова на разбор: утверждение макета могло снять последний блокер
   if (t.status === "backlog") await retriage(key);

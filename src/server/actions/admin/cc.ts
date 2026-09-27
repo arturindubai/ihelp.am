@@ -151,10 +151,10 @@ export async function ccReturnDesignAction(key: string, reason: string) {
   }
 }
 
-export async function ccApproveMockupAction(key: string, comment: string) {
+export async function ccApproveMockupAction(key: string, comment: string, closeNeeds?: string[]) {
   const u = await requireSection("control");
   try {
-    await approveMockup(key, who(u), comment.trim() || null);
+    await approveMockup(key, { name: who(u), role: "owner", via: "ui" }, comment.trim() || null, closeNeeds);
     await audit(u.id, "cc.mockup.approve", "Task", key);
     rAll();
     return { ok: true as const };
