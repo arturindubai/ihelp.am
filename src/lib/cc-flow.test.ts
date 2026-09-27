@@ -4,6 +4,7 @@ import {
   canTransition,
   unblockTarget,
   doneGate,
+  inTriageQueue,
   isOwnerQuestion,
   isReady,
   needsReason,
@@ -76,6 +77,25 @@ describe("разблокировка", () => {
   it("CONTENT-6: роль из агентского имени — dev, из имени человека — тоже dev (не owner)", () => {
     expect(roleOf("Артур")).toBe("dev");
     expect(roleOf("owner")).toBe("owner");
+  });
+  // Случай CONTENT-6: заблокирована на дизайне, triagedAt пуст — должна попасть в очередь триажа
+  it("CONTENT-6: задача blocked/design/triagedAt=null попадает в очередь триажа", () => {
+    expect(inTriageQueue({ status: "blocked", blockedOn: "design", triagedAt: null })).toBe(true);
+  });
+  it("уже разобранная задача не попадает в очередь триажа повторно", () => {
+    expect(inTriageQueue({ status: "blocked", blockedOn: "design", triagedAt: new Date() })).toBe(false);
+  });
+  it("blocked/owner и blocked/product тоже в очереди триажа", () => {
+    expect(inTriageQueue({ status: "blocked", blockedOn: "owner", triagedAt: null })).toBe(true);
+    expect(inTriageQueue({ status: "blocked", blockedOn: "product", triagedAt: null })).toBe(true);
+  });
+  it("blocked/tech и blocked/external не попадают в очередь триажа", () => {
+    expect(inTriageQueue({ status: "blocked", blockedOn: "tech", triagedAt: null })).toBe(false);
+    expect(inTriageQueue({ status: "blocked", blockedOn: "external", triagedAt: null })).toBe(false);
+  });
+  it("бэклог без triagedAt попадает в очередь триажа", () => {
+    expect(inTriageQueue({ status: "backlog", blockedOn: null, triagedAt: null })).toBe(true);
+    expect(inTriageQueue({ status: "backlog", blockedOn: null, triagedAt: new Date() })).toBe(false);
   });
 });
 

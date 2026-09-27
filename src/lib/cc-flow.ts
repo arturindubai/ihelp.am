@@ -180,6 +180,14 @@ export function readyNeedsGate(needs: string[], role: Role, force: boolean): "ne
   return "needs_open";
 }
 
+/** Попадает ли задача в очередь триажа: новые из бэклога и заблокированные на owner/product/design без triagedAt */
+export function inTriageQueue(task: { status: string; triagedAt: Date | null; blockedOn: string | null }): boolean {
+  if (task.triagedAt !== null) return false;
+  if (task.status === "backlog") return true;
+  if (task.status === "blocked" && (task.blockedOn === "owner" || task.blockedOn === "product" || task.blockedOn === "design")) return true;
+  return false;
+}
+
 /**
  * Ответ владельца в «Нужен ты» всегда возвращает задачу триажу для повторного разбора.
  * В «В очереди» задача не переходит напрямую — triagedAt сбрасывается, триаж принимает решение.
