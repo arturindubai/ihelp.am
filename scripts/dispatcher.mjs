@@ -174,7 +174,15 @@ async function reconcile(running, stopAll) {
       costUsd: result?.total_cost_usd,
     });
     log(`${status === "done" ? "✓" : "✗"} ${run.agent} ${run.taskKey ?? (run.keys?.join(",") || (run.pool === "triage" ? "обзор" : "—"))}: ${status}`);
-    if (status === "limit") await api({ action: "workers-pause", until: resetAt(result).toISOString(), text: summary.slice(0, 300) });
+    if (status === "limit") {
+      if (run.pool === "dev" && run.model === "opus") {
+        // Лимит Opus не блокирует Sonnet-воркеров: другие пулы продолжают работу
+        await api({ action: "opus-limit", until: resetAt(result).toISOString() });
+        log(`⛔ ${run.agent}: opus на лимите до ${resetAt(result).toISOString().slice(0, 16)}, L-задачи переключатся на sonnet`);
+      } else {
+        await api({ action: "workers-pause", until: resetAt(result).toISOString(), text: summary.slice(0, 300) });
+      }
+    }
     // Вход в подписку пропал или истёк — пауза, пока человек не войдёт заново
     if (/not logged in|\/login|oauth|failed to authenticate|authentication_error|\b401\b/i.test(summary)) {
       await api({ action: "workers-pause", until: new Date(Date.now() + 6 * 3600_000).toISOString(), text: "Воркеры не вошли в Claude. Войти: scripts/claude-login.sh на сервере, затем «Снять паузу» в Control Center → Воркеры." });
@@ -299,7 +307,15 @@ async function main() {
           log(`${a.agent}: подходящей задачи нет`);
           continue;
         }
-        await spawn("dev", a.agent, out.task, pools.dev.model, { ...extra, dir: out.dir, role: out.role });
+        const isL = out.estimate === "L";
+        let devModel = isL ? (pools.dev.modelForL ?? pools.dev.model) : pools.dev.model;
+        if (devModel === "opus" && plan.config.opusLimitUntil && Date.parse(plan.config.opusLimitUntil) > Date.now()) {
+          log(`· ${a.agent}: ${out.task} размер L, opus на лимите до ${plan.config.opusLimitUntil.slice(0, 16)} — запуск на sonnet`);
+          devModel = "sonnet";
+        } else if (isL && devModel !== pools.dev.model) {
+          log(`· ${a.agent}: ${out.task} размер L → ${devModel}`);
+        }
+        await spawn("dev", a.agent, out.task, devModel, { ...extra, dir: out.dir, role: out.role });
       } else if (a.pool === "nocode") {
         const out = JSON.parse(cc(a.key ? ["take", a.key, "--agent", a.agent, "--json"] : ["next", "--agent", a.agent, "--json"]));
         if (!out.task) {

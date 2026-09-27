@@ -367,7 +367,7 @@ async function takeTask(key) {
   // Задача без кода у воркера «Продукт и не-код»: результат — в карточке, рабочая копия с веткой не нужна
   const { dir, created } = agent.startsWith("nocode") && t.layer === "none" ? { dir: ROOT, created: false } : ensureWorktree(t.key, branch);
   writeState(t.key, { agent, branch, dir, takenAt: new Date().toISOString() });
-  if (flags.json) return console.log(JSON.stringify({ task: t.key, agent, dir, branch, role: roleForTask(t) }));
+  if (flags.json) return console.log(JSON.stringify({ task: t.key, agent, dir, branch, role: roleForTask(t), estimate: t.estimate ?? null }));
   if (auto) console.log(`Ваше имя агента: ${agent} — используйте его во всех командах этого чата (--agent ${agent}).\n`);
   const d = await api("GET", { key: t.key });
   briefing(roleForTask(d.task), d, agent, dir);
