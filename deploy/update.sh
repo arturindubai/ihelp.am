@@ -22,7 +22,13 @@ fi
 
 echo "▶ 2/7 Сохраняю текущие образы для отката (:previous)"
 for s in app migrate; do
-  if docker image inspect "homecare-$s:latest" > /dev/null 2>&1; then docker tag "homecare-$s:latest" "homecare-$s:previous"; fi
+  # Берём образ из контейнера, а не тег :latest — он мог обновиться после сборки без запуска
+  running_id=$(docker inspect --format='{{.Image}}' "homecare-$s-1" 2>/dev/null || true)
+  if [ -n "$running_id" ]; then
+    docker tag "$running_id" "homecare-$s:previous"
+  elif docker image inspect "homecare-$s:latest" > /dev/null 2>&1; then
+    docker tag "homecare-$s:latest" "homecare-$s:previous"
+  fi
 done
 
 echo "▶ 3/7 Сборка (на этом сервере — до 40 минут; лучше вне пиковых часов)"
@@ -35,6 +41,7 @@ if ! deploy/gate.sh; then
 fi
 
 echo "▶ 5/7 Запуск на готовом образе (миграции базы применяются автоматически)"
+echo "$(< src/lib/deploy-marker.txt)"
 docker compose up -d --no-build
 
 echo "▶ 6/7 Ожидание готовности приложения"
