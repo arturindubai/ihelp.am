@@ -59,7 +59,7 @@ body { background: var(--color-paper); color: var(--color-ink); font-family: var
 }
 @utility select-card {
   @apply relative flex min-h-[72px] min-w-[132px] flex-col justify-center rounded-xl border border-line bg-paper px-3 py-2.5 text-left transition;
-  &[data-on="true"] { @apply border-ink bg-brand-50 ring-1 ring-ink; }
+  &[data-on="true"] { @apply border-action bg-brand-50 ring-1 ring-action; }
 }
 
 .no-scrollbar::-webkit-scrollbar { display: none; }

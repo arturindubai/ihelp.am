@@ -23,7 +23,7 @@ export function initialSelection(s: ServiceView) {
   return { opts, planId: plan?.id || null };
 }
 
-export function ServiceConfigurator({ s, rules, isFirstOrder }: { s: ServiceView; rules: PricingRules; isFirstOrder: boolean }) {
+export function ServiceConfigurator({ s, rules, isFirstOrder, policy }: { s: ServiceView; rules: PricingRules; isFirstOrder: boolean; policy?: string }) {
   const t = useTranslations("service");
   const tc = useTranslations("common");
   const locale = useLocale();
@@ -38,6 +38,8 @@ export function ServiceConfigurator({ s, rules, isFirstOrder }: { s: ServiceView
   const plan = s.plans.find((p) => p.id === planId);
   const priceFor = (p?: (typeof s.plans)[number]) => calculatePrice({ lines, plan: p ? { kind: p.kind, discountPercent: p.discountPercent, packageVisits: p.packageVisits } : null, isFirstOrder, rules });
   const price = priceFor(plan);
+  // Базовая цена без тарифного дисконта — для расчёта экономии в карточках тарифов
+  const basePrice = priceFor();
 
   function toggle(groupId: string, optionId: string) {
     const g = s.groups.find((x) => x.id === groupId)!;
@@ -50,9 +52,18 @@ export function ServiceConfigurator({ s, rules, isFirstOrder }: { s: ServiceView
   const durationOpt = s.groups.find((g) => g.isDuration)?.options.find((o) => opts.includes(o.id));
   let step = 0;
 
-  let caption = "";
-  if (plan?.kind === "SUBSCRIPTION") caption = price.first.price !== price.regular.price ? `${t("firstVisit")} · ${t("thenPerVisit", { price: amd(price.regular.price) })}` : tc("perVisit");
-  else if (plan?.kind === "PACKAGE") caption = t("packTotal", { count: price.visits || 1 });
+  let barLabel = "";
+  let barCaption = "";
+  if (plan?.kind === "SUBSCRIPTION") {
+    if (price.first.price !== price.regular.price) {
+      barLabel = t("firstVisit");
+      barCaption = t("thenPerVisit", { price: amd(price.regular.price) });
+    } else {
+      barCaption = tc("perVisit");
+    }
+  } else if (plan?.kind === "PACKAGE") {
+    barCaption = t("packTotal", { count: price.visits || 1 });
+  }
   const barPrice = plan?.kind === "PACKAGE" ? price.payNow : price.first.price;
   const barStrike = plan?.kind === "PACKAGE" ? price.payNowBase : price.base;
   const committedPct = rules.firstVisitCommittedDiscount;
@@ -69,6 +80,104 @@ export function ServiceConfigurator({ s, rules, isFirstOrder }: { s: ServiceView
       {s.groups.map((g) => {
         step++;
         const selected = g.options.find((o) => opts.includes(o.id));
+
+        // Длительности — сетка 3 колонки
+        if (g.isDuration) {
+          return (
+            <section key={g.id} className="border-b border-line py-4">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="grid size-6 place-items-center rounded-full bg-surface text-xs font-bold">{step}</span>
+                <h3 className="h3">{g.title}</h3>
+                {!g.required && <span className="text-xs text-muted">({tc("optional")})</span>}
+              </div>
+              {g.hint && <p className="-mt-2 mb-3 text-sm text-muted">{g.hint}</p>}
+              <div className="grid grid-cols-3 gap-2">
+                {g.options.map((o) => {
+                  const on = opts.includes(o.id);
+                  return (
+                    <button
+                      key={o.id}
+                      data-on={on}
+                      onClick={() => toggle(g.id, o.id)}
+                      className={cn(
+                        "relative flex min-h-[80px] flex-col items-center justify-center rounded-xl border border-line bg-paper px-2 py-3 text-center transition",
+                        on && "border-action bg-brand-50 ring-1 ring-action",
+                      )}
+                    >
+                      {o.badge && <span className="absolute -top-2 right-1.5 rounded bg-badge px-1.5 py-px text-[10px] font-semibold text-on-badge">{o.badge}</span>}
+                      <span className="text-[13px] font-semibold leading-tight">{o.title}</span>
+                      {o.subtitle && <span className="mt-0.5 text-[11px] leading-tight text-muted">{o.subtitle}</span>}
+                      <span className="mt-1.5 text-sm font-bold">{amd(o.price)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-4">
+                {selected && selected.schedule.length > 0 && (
+                  <button className="link text-sm" onClick={() => setInfo({ title: t("sampleTitle", { duration: durationLabel(selected.durationMin, locale) }), body: t("sampleSub"), schedule: selected.schedule })}>
+                    {t("sampleSchedule")}
+                  </button>
+                )}
+                {g.infoTitle && (
+                  <button className="link text-sm" onClick={() => setInfo({ title: g.infoTitle, body: g.infoBody })}>
+                    {g.infoTitle}
+                  </button>
+                )}
+              </div>
+            </section>
+          );
+        }
+
+        // Мульти-выбор — вертикальный список с чекбоксами
+        if (g.type === "MULTI") {
+          return (
+            <section key={g.id} className="border-b border-line py-4">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="grid size-6 place-items-center rounded-full bg-surface text-xs font-bold">{step}</span>
+                <h3 className="h3">{g.title}</h3>
+                {!g.required && <span className="text-xs text-muted">({tc("optional")})</span>}
+              </div>
+              {g.hint && <p className="-mt-2 mb-3 text-sm text-muted">{g.hint}</p>}
+              <div className="space-y-2">
+                {g.options.map((o) => {
+                  const on = opts.includes(o.id);
+                  return (
+                    <button
+                      key={o.id}
+                      data-on={on}
+                      onClick={() => toggle(g.id, o.id)}
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-xl border border-line bg-paper px-3 py-3 text-left transition",
+                        on && "border-action bg-brand-50 ring-1 ring-action",
+                      )}
+                    >
+                      <span className={cn("grid size-5 shrink-0 place-items-center rounded border-2 transition", on ? "border-action bg-action text-on-action" : "border-line-strong")}>
+                        {on && <Check size={12} />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[14px] font-medium">{o.title}</span>
+                          {o.badge && <span className="rounded bg-badge px-1.5 py-px text-[10px] font-semibold text-on-badge">{o.badge}</span>}
+                        </span>
+                        {o.subtitle && <span className="block text-xs text-muted">{o.subtitle}</span>}
+                      </span>
+                      <span className="shrink-0 text-sm font-semibold text-muted">+ {amd(o.price)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {g.infoTitle && (
+                <div className="mt-2">
+                  <button className="link text-sm" onClick={() => setInfo({ title: g.infoTitle, body: g.infoBody })}>
+                    {g.infoTitle}
+                  </button>
+                </div>
+              )}
+            </section>
+          );
+        }
+
+        // SINGLE без isDuration — горизонтальный скролл карточек
         return (
           <section key={g.id} className="border-b border-line py-4">
             <div className="mb-3 flex items-center gap-2">
@@ -82,23 +191,15 @@ export function ServiceConfigurator({ s, rules, isFirstOrder }: { s: ServiceView
                 const on = opts.includes(o.id);
                 return (
                   <button key={o.id} data-on={on} onClick={() => toggle(g.id, o.id)} className="select-card">
-                    {o.badge && <span className="absolute -top-2 right-2 rounded bg-ok px-1.5 py-px text-[10px] font-semibold text-inverse">{o.badge}</span>}
-                    <span className="flex items-center gap-1 text-[13px] font-medium">
-                      {g.type === "MULTI" && <span className={cn("grid size-4 place-items-center rounded border", on ? "border-ink bg-ink text-inverse" : "border-line")}>{on && <Check size={12} />}</span>}
-                      {o.title}
-                    </span>
+                    {o.badge && <span className="absolute -top-2 right-2 rounded bg-badge px-1.5 py-px text-[10px] font-semibold text-on-badge">{o.badge}</span>}
+                    <span className="text-[13px] font-medium">{o.title}</span>
                     {o.subtitle && <span className="text-[11px] leading-tight text-muted">{o.subtitle}</span>}
-                    <span className="mt-1 text-sm font-semibold">{g.isDuration ? amd(o.price) : `+ ${amd(o.price)}`}</span>
+                    <span className="mt-1 text-sm font-semibold">+ {amd(o.price)}</span>
                   </button>
                 );
               })}
             </div>
             <div className="mt-2 flex flex-wrap gap-4">
-              {g.isDuration && selected && selected.schedule.length > 0 && (
-                <button className="link text-sm" onClick={() => setInfo({ title: t("sampleTitle", { duration: durationLabel(selected.durationMin, locale) }), body: t("sampleSub"), schedule: selected.schedule })}>
-                  {t("sampleSchedule")}
-                </button>
-              )}
               {g.infoTitle && (
                 <button className="link text-sm" onClick={() => setInfo({ title: g.infoTitle, body: g.infoBody })}>
                   {g.infoTitle}
@@ -116,36 +217,64 @@ export function ServiceConfigurator({ s, rules, isFirstOrder }: { s: ServiceView
             <h3 className="h3">{t("frequency")}</h3>
           </div>
           <p className="mb-3 text-sm text-muted">{t("frequencyHint")}</p>
-          {isFirstOrder && committedPct > 0 && (
-            <div className="mb-3 flex items-center gap-2 rounded-xl bg-ok-50 px-3 py-2 text-sm text-ok">
-              <Info size={16} className="shrink-0" /> {t("firstOffer", { percent: committedPct })}
-            </div>
-          )}
           <div className="space-y-2">
             {s.plans.map((p) => {
               const pr = priceFor(p);
               const on = p.id === planId;
+              // Экономия за визит относительно базовой цены (без тарифа)
+              const saving = basePrice.regular.price - pr.regular.price;
               return (
-                <button key={p.id} data-on={on} onClick={() => setPlanId(p.id)} className="select-card w-full flex-row items-center gap-3">
-                  <span className={cn("grid size-5 shrink-0 place-items-center rounded-full border-2", on ? "border-ink" : "border-line")}>{on && <span className="size-2.5 rounded-full bg-ink" />}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[15px] font-semibold">{p.title}</span>
-                      {p.badge && <span className="rounded bg-ok px-1.5 py-px text-[10px] font-semibold text-inverse">{p.badge}</span>}
+                <button key={p.id} data-on={on} onClick={() => setPlanId(p.id)} className={cn("w-full flex-row items-center gap-3 rounded-xl border border-line bg-paper px-3 py-3 text-left transition", on && "border-action bg-brand-50 ring-1 ring-action")}>
+                  <div className="flex items-center gap-3">
+                    <span className={cn("grid size-5 shrink-0 place-items-center rounded-full border-2", on ? "border-action" : "border-line-strong")}>
+                      {on && <span className="size-2.5 rounded-full bg-action" />}
                     </span>
-                    {p.subtitle && <span className="block text-xs text-muted">{p.subtitle}</span>}
-                  </span>
-                  <span className="text-right">
-                    <span className="block text-[15px] font-semibold">{amd(p.kind === "PACKAGE" ? pr.payNow : pr.regular.price)}</span>
-                    <span className="block text-[11px] text-muted">
-                      {p.kind === "PACKAGE" ? t("packTotal", { count: pr.visits || 1 }) : tc("perVisit")}
-                      {p.discountPercent > 0 && <span className="ml-1 font-semibold text-ok">{tc("off", { percent: p.discountPercent })}</span>}
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[15px] font-semibold">{p.title}</span>
+                        {p.badge && <span className="rounded bg-badge px-1.5 py-px text-[10px] font-semibold text-on-badge">{p.badge}</span>}
+                      </span>
+                      {p.subtitle && <span className="block text-xs text-muted">{p.subtitle}</span>}
                     </span>
-                  </span>
+                    <span className="shrink-0 text-right">
+                      <span className="block text-[15px] font-semibold">{amd(p.kind === "PACKAGE" ? pr.payNow : pr.regular.price)}</span>
+                      <span className="block text-[11px] text-muted">
+                        {p.kind === "PACKAGE" ? t("packTotal", { count: pr.visits || 1 }) : tc("perVisit")}
+                      </span>
+                      {saving > 0 && (
+                        <span className="block text-[11px] font-semibold text-ok">
+                          {t("perVisitSaving", { amount: amd(saving) })}
+                        </span>
+                      )}
+                    </span>
+                  </div>
                 </button>
               );
             })}
           </div>
+        </section>
+      )}
+
+      {/* Плашка скидки первого визита — показывается только при наличии акции */}
+      {isFirstOrder && rules.firstVisitDiscount > 0 && (
+        <div className="mt-2 flex items-start gap-2 rounded-2xl bg-ok-50 px-4 py-3">
+          <Info size={16} className="mt-0.5 shrink-0 text-ok" />
+          <div>
+            <div className="text-sm font-semibold text-ok">{t("firstVisitBannerTitle")}</div>
+            <div className="text-xs text-ok/80">
+              {committedPct > 0
+                ? t("firstOffer", { percent: committedPct })
+                : t("firstVisitBannerText", { percent: rules.firstVisitDiscount })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Условия */}
+      {policy && (
+        <section className="mt-6 border-t border-line pt-4">
+          <h3 className="h3 mb-2">{t("policy")}</h3>
+          <p className="text-sm whitespace-pre-line text-muted">{policy}</p>
         </section>
       )}
 
@@ -154,7 +283,8 @@ export function ServiceConfigurator({ s, rules, isFirstOrder }: { s: ServiceView
       <PriceBar
         price={barPrice}
         strike={barStrike}
-        caption={complete ? caption : t("selectAll")}
+        label={complete ? barLabel : undefined}
+        caption={complete ? barCaption : t("selectAll")}
         action={
           <button className="btn-primary min-w-[140px]" disabled={!complete} onClick={go}>
             {tc("continue")}
