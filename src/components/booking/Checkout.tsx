@@ -314,9 +314,9 @@ export function Checkout(props: {
         </dl>
         <p className="mt-4 text-xs text-muted">
           {t.rich("agree", {
-            offer: (c) => <Link href="/p/offer" className="underline">{c}</Link>,
-            cancel: (c) => <Link href="/p/cancellation" className="underline">{c}</Link>,
-            privacy: (c) => <Link href="/p/privacy" className="underline">{c}</Link>,
+            offer: (c) => <Link href="/p/offer" className="underline underline-offset-2">{c}</Link>,
+            cancel: (c) => <Link href="/p/cancellation" className="underline underline-offset-2">{c}</Link>,
+            privacy: (c) => <Link href="/p/privacy" className="underline underline-offset-2">{c}</Link>,
           })}
         </p>
         {error && <p className="mt-3 rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad">{error}</p>}
