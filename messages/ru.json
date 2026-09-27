@@ -373,6 +373,25 @@
     "stats": "Моя статистика",
     "schedule": "Мой график"
   },
+  "operator": {
+    "title": "Кабинет оператора",
+    "today": "Сегодня",
+    "all": "Все заявки",
+    "noMaster": "Без мастера",
+    "noOrdersToday": "Нет заявок на сегодня",
+    "noOrders": "Нет заявок",
+    "noOrdersUnassigned": "Все заявки назначены",
+    "assignMaster": "Назначить мастера",
+    "changeMaster": "Сменить мастера",
+    "changeStatus": "Сменить статус",
+    "noMasterChip": "Без мастера",
+    "noMastersAvail": "Нет доступных мастеров",
+    "selectMaster": "Выберите мастера",
+    "loadMore": "Загрузить ещё",
+    "loadError": "Не удалось загрузить. Обновить →",
+    "saving": "Сохранение…",
+    "toSite": "На сайт"
+  },
   "footer": {
     "offer": "Оферта",
     "privacy": "Конфиденциальность",
