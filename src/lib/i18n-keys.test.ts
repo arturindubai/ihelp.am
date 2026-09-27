@@ -108,7 +108,8 @@ function extractCalls(content: string): Call[] {
 
   for (let i = 0; i < lines.length; i++) {
     for (const m of lines[i].matchAll(/\b(\w+)(?:\.\w+)?\(\s*(["'])([^"'\\\n{}]+)\2/g)) {
-      result.push({ line: i + 1, varName: m[1], key: m[3] });
+      // Ключ оканчивается на "." — это динамическая конкатенация вида t("prefix." + var), не проверяем статически
+      if (!m[3].endsWith(".")) result.push({ line: i + 1, varName: m[1], key: m[3] });
     }
   }
 
