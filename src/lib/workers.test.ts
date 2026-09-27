@@ -51,7 +51,7 @@ describe("настройки воркеров", () => {
   });
   it("старые настройки без триажа и режимов получают значения по умолчанию", () => {
     const c = normalizeWorkers({ enabled: true, pools: { dev: { enabled: true, max: 2, model: "opus", dailyCap: 5 } } });
-    expect(c.pools.dev).toEqual({ enabled: true, max: 2, model: "opus", dailyCap: 5, mode: "auto", everyMin: 30 });
+    expect(c.pools.dev).toEqual({ enabled: true, max: 2, model: "opus", modelForL: "sonnet", dailyCap: 5, mode: "auto", everyMin: 30 });
     expect(c.pools.triage.enabled).toBe(true);
     expect(c.triageBatch).toBe(6);
     expect(c.dryRun).toBe(false);
