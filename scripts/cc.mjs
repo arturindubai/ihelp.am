@@ -15,6 +15,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
 Смотреть:
   list [статус] [--area back] [--agent dev-1]   задачи; без статуса — все открытые
   show КЛЮЧ                                     задача целиком: требования, связи, лента, готовность
+  search «слова»                                поиск задач по ключевым словам в заголовке и описании
   attention                                     нужно вам: брошенные, очередь проверки, ждут владельца
   worktrees                                     рабочие копии задач на этом сервере
 
@@ -460,6 +461,14 @@ async function main() {
       const d = await api("GET", { key: needKey() });
       if (flags.json) return console.log(JSON.stringify(d, null, 2));
       printTask(d);
+      return;
+    }
+    case "search": {
+      const q = pos.join(" ").trim();
+      if (!q) die('укажите слова поиска: search «запрос»');
+      const r = await api("GET", { q });
+      if (flags.json) return console.log(JSON.stringify(r.tasks, null, 2));
+      console.log(r.tasks.length ? r.tasks.map(line).join("\n") : "Ничего не найдено");
       return;
     }
     case "attention": {
