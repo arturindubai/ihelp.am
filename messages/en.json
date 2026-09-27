@@ -1313,6 +1313,12 @@
         "returned": "Returned to designer",
         "failed": "Error: {error}"
       },
+      "imageViewer": {
+        "close": "Close",
+        "prev": "Previous",
+        "next": "Next",
+        "openNew": "Open in new tab"
+      },
       "designTab": {
         "subtitle": "Design of UI tasks: designer queue, what awaits your approval, what's approved. Approved design goes to Library — that's the canon developers build from.",
         "pool": "Designer",

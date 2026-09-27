@@ -12,6 +12,7 @@ import { TaskEditorForm } from "@/components/admin/cc/TaskEditorForm";
 import { Attachments } from "@/components/admin/cc/Attachments";
 import { Collapsible } from "@/components/admin/cc/Collapsible";
 import { RunWorkerButton } from "@/components/admin/cc/CcControls";
+import { ImageGallery, type GalleryImage } from "@/components/admin/cc/ImageGallery";
 import { poolForTask } from "@/lib/workers";
 import { cn, dateLabel, timeLabel } from "@/lib/format";
 
@@ -66,6 +67,18 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
   const errors = task.comments.filter((c) => c.kind === "error").length;
   const moves = nextStatuses(task.status, "owner");
   const pool = poolForTask(task);
+
+  // Изображения для блока «Дизайн и макет»: вложения-картинки + mockupUrl если это /uploads/ путь
+  const imageAttachments: GalleryImage[] = task.attachments
+    .filter((a) => a.mime.startsWith("image/"))
+    .map((a) => ({ url: a.url, fileName: a.fileName }));
+  const mockupIsUpload = task.mockupUrl && /^\/uploads\//.test(task.mockupUrl);
+  const galleryImages: GalleryImage[] = mockupIsUpload
+    ? [
+        { url: task.mockupUrl!, fileName: t("mockup.link") },
+        ...imageAttachments.filter((a) => a.url !== task.mockupUrl),
+      ]
+    : imageAttachments;
   const branchUrl = task.branch ? `${REPO}/compare/main...${encodeURIComponent(task.branch)}` : null;
   const chips = [
     health.stale && { tone: "bg-bad-50 text-bad", text: `🪦 ${t("health.stale")}` },
@@ -198,6 +211,12 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
               </div>
             )}
           </Card>
+
+          {galleryImages.length > 0 && (
+            <Card title={t("mockup.title")}>
+              <ImageGallery images={galleryImages} />
+            </Card>
+          )}
 
           <Card title={t("feed.title")}>
             {feed.length === 0 && <p className="text-sm text-muted">{t("feed.empty")}</p>}
@@ -351,7 +370,7 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
               ) : (
                 <>
                   <p className="mb-2 text-xs text-bad">{task.mockupRequired ? t("mockup.pending") : t("mockup.pendingSoft")}</p>
-                  {task.mockupUrl && (
+                  {task.mockupUrl && /^(https?:\/\/|\/uploads\/)/.test(task.mockupUrl) && (
                     <a href={task.mockupUrl} target="_blank" rel="noreferrer" className="mb-2 flex items-center gap-1 text-xs text-brand hover:underline">
                       <ExternalLink size={11} /> {t("mockup.link")}
                     </a>

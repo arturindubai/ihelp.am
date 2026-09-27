@@ -960,6 +960,16 @@
           "no_https": ""
         }
       },
+      "form": {
+        "delete": "Ջնջել",
+        "deleteConfirm": ""
+      },
+      "imageViewer": {
+        "close": "Փակել",
+        "prev": "",
+        "next": "",
+        "openNew": ""
+      },
       "library": {
         "title": "",
         "subtitle": "",

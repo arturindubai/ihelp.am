@@ -7,6 +7,7 @@ import { PRIORITIES } from "@/lib/backlog-labels";
 import { Card } from "@/components/admin/fields";
 import { DesignReturnButton, MockupApproveButton, RunWorkerButton, StopRunButton } from "@/components/admin/cc/CcControls";
 import { PoolSettings } from "@/components/admin/cc/WorkersForm";
+import { ImageGallery, type GalleryImage } from "@/components/admin/cc/ImageGallery";
 import { PRIORITY_TONE, ago } from "./shared";
 import { cn, dateLabel, timeLabel } from "@/lib/format";
 
@@ -123,30 +124,45 @@ export async function DesignTab({ locale, taskHref }: { locale: string; taskHref
           <p className="text-sm text-muted">{t("pendingEmpty")}</p>
         ) : (
           <ul className="divide-y divide-line">
-            {pending.map((x) => (
-              <li key={x.key} className="flex flex-wrap items-start gap-3 py-3">
-                <Link href={taskHref(x.key)} scroll={false} className="min-w-0 flex-1">
-                  <span className="font-mono text-xs text-muted">{x.key}</span> <span className="font-medium">{x.title}</span>
-                  <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
-                    <span className={cn("chip text-[10px]", PRIORITY_TONE[x.priority])} title={PRIORITIES[x.priority]}>
-                      {x.priority.toUpperCase()}
-                    </span>
-                    {x.mockupRequired && <span className="chip bg-bad-50 text-[10px] text-bad">{t("gate")}</span>}
-                    {x._count.attachments > 0 && <span className="chip bg-surface text-[10px]">{t("files", { n: x._count.attachments })}</span>}
-                  </span>
-                  {x.design?.trim() && <span className="mt-1 line-clamp-2 block text-xs text-muted">{t("designSnippet", { text: x.design.trim().slice(0, 220) })}</span>}
-                  {x.mockupUrl && (
-                    <a href={x.mockupUrl} target="_blank" rel="noreferrer" className="mt-1 flex items-center gap-1 text-xs text-brand hover:underline">
-                      <ExternalLink size={11} /> {x.mockupUrl.replace(/^https?:\/\//, "").slice(0, 60)}
-                    </a>
+            {pending.map((x) => {
+              const imgs: GalleryImage[] = [
+                ...(x.mockupUrl && /^\/uploads\//.test(x.mockupUrl) ? [{ url: x.mockupUrl, fileName: x.key }] : []),
+                ...x.attachments.filter((a) => !x.mockupUrl || a.url !== x.mockupUrl).map((a) => ({ url: a.url, fileName: a.fileName })),
+              ];
+              return (
+                <li key={x.key} className="py-3">
+                  <div className="flex flex-wrap items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <Link href={taskHref(x.key)} scroll={false} className="hover:underline">
+                        <span className="font-mono text-xs text-muted">{x.key}</span> <span className="font-medium">{x.title}</span>
+                      </Link>
+                      <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                        <span className={cn("chip text-[10px]", PRIORITY_TONE[x.priority])} title={PRIORITIES[x.priority]}>
+                          {x.priority.toUpperCase()}
+                        </span>
+                        {x.mockupRequired && <span className="chip bg-bad-50 text-[10px] text-bad">{t("gate")}</span>}
+                        {x._count.attachments > 0 && <span className="chip bg-surface text-[10px]">{t("files", { n: x._count.attachments })}</span>}
+                      </span>
+                      {x.design?.trim() && <span className="mt-1 line-clamp-2 block text-xs text-muted">{t("designSnippet", { text: x.design.trim().slice(0, 220) })}</span>}
+                      {x.mockupUrl && /^https?:\/\//.test(x.mockupUrl) && (
+                        <a href={x.mockupUrl} target="_blank" rel="noreferrer" className="mt-1 flex items-center gap-1 text-xs text-brand hover:underline">
+                          <ExternalLink size={11} /> {x.mockupUrl.replace(/^https?:\/\//, "").slice(0, 60)}
+                        </a>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <MockupApproveButton taskKey={x.key} />
+                      <DesignReturnButton taskKey={x.key} />
+                    </div>
+                  </div>
+                  {imgs.length > 0 && (
+                    <div className="mt-2">
+                      <ImageGallery images={imgs} />
+                    </div>
                   )}
-                </Link>
-                <div className="flex flex-col items-end gap-1.5">
-                  <MockupApproveButton taskKey={x.key} />
-                  <DesignReturnButton taskKey={x.key} />
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>
@@ -156,20 +172,33 @@ export async function DesignTab({ locale, taskHref }: { locale: string; taskHref
           <p className="text-sm text-muted">{t("approvedEmpty")}</p>
         ) : (
           <ul className="divide-y divide-line text-sm">
-            {approved.map((x) => (
-              <li key={x.key} className="flex flex-wrap items-baseline gap-2 py-1.5">
-                <Link href={taskHref(x.key)} scroll={false} className="flex min-w-0 flex-1 items-baseline gap-2 hover:underline">
-                  <span className="w-20 shrink-0 font-mono text-xs text-muted">{x.key}</span>
-                  <span className="min-w-0 truncate">{x.title}</span>
-                </Link>
-                <span className="text-xs text-muted">
-                  {x.mockupApprovedBy} · {when(x.mockupApprovedAt!)}
-                </span>
-                <Link href={`/admin/control/library?doc=design-${x.key.toLowerCase()}`} className="text-xs text-brand hover:underline">
-                  {t("canon")}
-                </Link>
-              </li>
-            ))}
+            {approved.map((x) => {
+              const imgs: GalleryImage[] = [
+                ...(x.mockupUrl && /^\/uploads\//.test(x.mockupUrl) ? [{ url: x.mockupUrl, fileName: x.key }] : []),
+                ...x.attachments.filter((a) => !x.mockupUrl || a.url !== x.mockupUrl).map((a) => ({ url: a.url, fileName: a.fileName })),
+              ];
+              return (
+                <li key={x.key} className="py-2">
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <Link href={taskHref(x.key)} scroll={false} className="flex min-w-0 flex-1 items-baseline gap-2 hover:underline">
+                      <span className="w-20 shrink-0 font-mono text-xs text-muted">{x.key}</span>
+                      <span className="min-w-0 truncate">{x.title}</span>
+                    </Link>
+                    <span className="text-xs text-muted">
+                      {x.mockupApprovedBy} · {when(x.mockupApprovedAt!)}
+                    </span>
+                    <Link href={`/admin/control/library?doc=design-${x.key.toLowerCase()}`} className="text-xs text-brand hover:underline">
+                      {t("canon")}
+                    </Link>
+                  </div>
+                  {imgs.length > 0 && (
+                    <div className="mt-2">
+                      <ImageGallery images={imgs} />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>

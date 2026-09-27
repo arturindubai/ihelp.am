@@ -39,7 +39,7 @@ function renderInline(nodes: Inline[], docPath?: string | null, key = ""): React
           {renderInline(n.c, docPath, `${k}-`)}
         </Link>
       );
-    if (/^https?:\/\//i.test(n.href))
+    if (/^https?:\/\//i.test(n.href) || /^\/uploads\//i.test(n.href))
       return (
         <a key={k} href={n.href} target="_blank" rel="noreferrer" className="text-brand underline-offset-2 hover:underline">
           {renderInline(n.c, docPath, `${k}-`)}

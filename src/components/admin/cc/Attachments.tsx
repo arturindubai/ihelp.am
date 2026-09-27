@@ -1,8 +1,10 @@
 "use client";
 import { useRef, useState, useTransition } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { ccDeleteAttachmentAction } from "@/server/actions/admin/cc";
+import { ImageViewer, type GalleryImage } from "@/components/admin/cc/ImageGallery";
+import { dateLabel } from "@/lib/format";
 
 export interface AttachmentValue {
   id: string;
@@ -19,12 +21,19 @@ const humanSize = (bytes: number) => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 
 /** Файлы, прикреплённые к задаче или эпику: список, загрузка, удаление */
 export function Attachments({ subject, items }: { subject: { taskKey?: string; epicKey?: string }; items: AttachmentValue[] }) {
   const t = useTranslations("admin.cc");
+  const locale = useLocale();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [multiFileSkipped, setMultiFileSkipped] = useState(false);
+  const [viewIndex, setViewIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+
+  const imageItems: GalleryImage[] = items
+    .filter((a) => a.mime.startsWith("image/"))
+    .map((a) => ({ url: a.url, fileName: a.fileName }));
+  const n = imageItems.length;
 
   const upload = (file: File) =>
     start(async () => {
@@ -57,29 +66,54 @@ export function Attachments({ subject, items }: { subject: { taskKey?: string; e
     <div>
       {items.length === 0 && <p className="text-sm text-muted">{t("form.noFiles")}</p>}
       <ul className="space-y-2">
-        {items.map((a) => (
-          <li key={a.id} className="flex items-center justify-between gap-2 text-sm">
-            <a href={a.url} target="_blank" rel="noreferrer" className="truncate text-brand hover:underline">
-              {a.fileName}
-            </a>
-            <span className="shrink-0 text-xs text-muted">
-              {humanSize(a.size)} · {a.uploadedBy}
-            </span>
-            <button
-              className="btn-ghost btn-sm shrink-0 px-2 text-bad"
-              disabled={pending}
-              onClick={() =>
-                start(async () => {
-                  await ccDeleteAttachmentAction(a.id);
-                  router.refresh();
-                })
-              }
-            >
-              {t("form.delete")}
-            </button>
-          </li>
-        ))}
+        {items.map((a) => {
+          const isImage = a.mime.startsWith("image/");
+          const galleryIdx = isImage ? imageItems.findIndex((im) => im.url === a.url) : -1;
+          const uploadedDate = dateLabel(new Date(a.createdAt), locale, { day: "numeric", month: "short" });
+          return (
+            <li key={a.id} className="flex items-center gap-2 text-sm">
+              {isImage && (
+                <button
+                  className="shrink-0 overflow-hidden rounded-[var(--radius-card)] border border-line"
+                  onClick={() => setViewIndex(galleryIdx)}
+                  title={a.fileName}
+                >
+                  <img src={a.url} alt={a.fileName} className="block h-12 w-12 object-cover" />
+                </button>
+              )}
+              <div className="min-w-0 flex-1">
+                <a href={a.url} target="_blank" rel="noreferrer" className="block truncate text-brand hover:underline">
+                  {a.fileName}
+                </a>
+                <span className="text-xs text-muted">
+                  {humanSize(a.size)} · {a.uploadedBy} · {uploadedDate}
+                </span>
+              </div>
+              <button
+                className="btn-ghost btn-sm shrink-0 px-2 text-bad"
+                disabled={pending}
+                onClick={() =>
+                  start(async () => {
+                    await ccDeleteAttachmentAction(a.id);
+                    router.refresh();
+                  })
+                }
+              >
+                {t("form.delete")}
+              </button>
+            </li>
+          );
+        })}
       </ul>
+      {viewIndex >= 0 && (
+        <ImageViewer
+          images={imageItems}
+          index={viewIndex}
+          onClose={() => setViewIndex(-1)}
+          onPrev={() => setViewIndex((i) => (i - 1 + n) % n)}
+          onNext={() => setViewIndex((i) => (i + 1) % n)}
+        />
+      )}
       <div
         className={[
           "mt-3 rounded-lg border border-dashed p-3 transition-colors",
