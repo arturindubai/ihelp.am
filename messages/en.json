@@ -260,7 +260,12 @@
     "subscriptions": "Subscriptions & packages",
     "history": "History",
     "noOrders": "Your orders will appear here",
-    "bookNow": "Book a cleaning"
+    "bookNow": "Book a cleaning",
+    "locales": {
+      "ru": "Русский",
+      "en": "English",
+      "am": "Հայերեն"
+    }
   },
   "order": {
     "number": "Order #{number}",

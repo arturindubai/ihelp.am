@@ -4,7 +4,6 @@ export type Locale = (typeof locales)[number];
 export const defaultLocale: Locale = "ru";
 
 export const localeLabels: Record<Locale, string> = { ru: "RU", en: "EN", am: "ՀՅ" };
-export const localeNames: Record<Locale, string> = { ru: "Русский", en: "English", am: "Հայերեն" };
 export const localeIso: Record<Locale, string> = { ru: "ru", en: "en", am: "hy" };
 
 export type I18nText = Partial<Record<Locale, string>>;
