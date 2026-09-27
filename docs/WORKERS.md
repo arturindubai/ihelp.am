@@ -120,6 +120,22 @@ node scripts/cc.mjs msg "Нашёл X — предлагаю завести за
 | Прод | нет | нет | нет | нет | нет | только `scripts/deploy-task.sh` |
 | docker, systemctl, sudo, pm2, `.env`, `/var/www`, `/etc` | нет | нет | нет | нет | нет | нет |
 
+### Временные файлы для длинных текстов
+
+У каждой роли есть своя папка в `data/tmp/<роль>/` для промежуточных файлов — туда можно писать через инструмент Write. Это нужно для команд `cc.mjs note/block/review/triaged/unblock/msg` с многострочным текстом: длинный аргумент в Bash-команде не проходит проверку прав, а файловый путь — проходит.
+
+```bash
+# Пример для триажа: длинный вердикт через файл
+Write /opt/ihelp.am/data/tmp/triage/triaged.md  "Проверено: ...\nРешение: ..."
+node scripts/cc.mjs triaged КЛЮЧ --text-file /opt/ihelp.am/data/tmp/triage/triaged.md
+
+# Аналогично для других ролей:
+# data/tmp/triage/    data/tmp/product/   data/tmp/designer/
+# data/tmp/nocode/    data/tmp/dev/       data/tmp/tester/    data/tmp/deployer/
+```
+
+Папки создаются автоматически при запуске воркера. Файлы не удаляются автоматически — при необходимости можно убирать вручную.
+
 Время работы ограничено:
 
 | Воркер | Минут |

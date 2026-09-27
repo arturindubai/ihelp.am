@@ -47,3 +47,20 @@ node scripts/cc.mjs handoff КЛЮЧ "что готово, что осталос
 node scripts/cc.mjs msg "нужна задача: …" --to cto             # предложить новую работу (intake воркерам запрещён)
 dig MX ihelp.am +short                                         # проверка DNS
 ```
+
+### Длинные тексты — через файл
+
+Подробный отчёт, пошаговая инструкция для владельца или длинное сообщение — передавай через файл:
+
+```bash
+# 1. Написать текст инструментом Write в папку tmp:
+# Write /opt/ihelp.am/data/tmp/nocode/имя.md
+
+# 2. Передать файл в команду:
+node scripts/cc.mjs review КЛЮЧ --text-file /opt/ihelp.am/data/tmp/nocode/review.md \
+  --release "…" --summary "…"
+node scripts/cc.mjs block КЛЮЧ --on owner --text-file /opt/ihelp.am/data/tmp/nocode/block.md
+node scripts/cc.mjs note КЛЮЧ --text-file /opt/ihelp.am/data/tmp/nocode/note.md
+```
+
+Папка `/opt/ihelp.am/data/tmp/nocode/` разрешена для записи. Короткие тексты по-прежнему передаются inline.
