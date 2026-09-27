@@ -326,6 +326,12 @@
     "newMaster": "New pro",
     "services": "Services"
   },
+  "catalog": {
+    "newService": "New service",
+    "comingSoonTitle": "Opening soon",
+    "comingSoonText": "We're preparing services and pros. Write to us — we'll answer your questions",
+    "writeWhatsApp": "Write on WhatsApp"
+  },
   "pro": {
     "title": "Pro cabinet",
     "today": "Today",

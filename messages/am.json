@@ -326,6 +326,12 @@
     "newMaster": "",
     "services": "Ծառայություններ"
   },
+  "catalog": {
+    "newService": "Նոր ծառայություն",
+    "comingSoonTitle": "Շուտով կբացենք",
+    "comingSoonText": "Պատրաստում ենք ծառայություններ: Գրեք մեզ՝ ձեր հարցերին կպատասխանենք",
+    "writeWhatsApp": "Գրել WhatsApp-ում"
+  },
   "pro": {
     "title": "",
     "today": "Այսոր",
