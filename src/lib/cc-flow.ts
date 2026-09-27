@@ -188,6 +188,11 @@ export function ownerAnswerTarget(_blockedFrom: string | null | undefined): "tri
   return "triage";
 }
 
+/** Является ли задача вопросом к владельцу, требующим ответа в «Нужен ты» */
+export function isOwnerQuestion(task: { status: string; blockedOn: string | null }): boolean {
+  return task.status === "blocked" && (task.blockedOn === "owner" || task.blockedOn === "product");
+}
+
 /** Гейт «Сделано»: код-задача — коммит в main и что проверено после выкладки; прочие — доказательство словами или файлом */
 export function doneGate(t: { layer: string }, proof: { sha?: string | null; text?: string | null; attachments?: number }): string | null {
   if (isCodeTask(t.layer) && !SHA_RE.test(proof.sha?.trim() ?? "")) return "sha_required";
