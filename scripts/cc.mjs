@@ -27,8 +27,9 @@ const HELP = `cc — Control Center из командной строки (docs/D
   note КЛЮЧ "текст" [--error]                   запись в ленту: ход работы или ошибка
   review КЛЮЧ "отчёт"                           сдать на проверку: ветка должна быть отправлена
   handoff КЛЮЧ "что сделано и что осталось"     передать задачу — вернуть в очередь с веткой
-  block КЛЮЧ "причина" --on owner|product|design|tech|external|deps
+  block КЛЮЧ "причина" --on owner|product|design|tech|external|deps [--until YYYY-MM-DD]
   unblock КЛЮЧ "что изменилось"
+  reblock КЛЮЧ "причина" --on новый_адресат   сменить адресата блокировки с записью в историю
 
   Длинный текст (многострочный отчёт, вердикт, блокировка):
     --text-file /path/file   читать текст из файла (Write /opt/ihelp.am/data/tmp/<роль>/имя.md)
@@ -502,6 +503,7 @@ async function main() {
       block("🪦 Брошены или без исполнителя", a.stale, (t) => `  ${t.key} ${t.title} · ${t.claimedBy ?? "никто"}`);
       block("⏳ Ждут проверки", a.review, (t) => `  ${t.key} ${t.title}${t.health.stuckReview ? " · дольше суток" : ""}`);
       block("✋ Ждут владельца или продукта", a.owner, (t) => `  ${t.key} ${t.title} · ${t.blockedReason ?? ""}`);
+      block("🔧 Заблокированы на тех/внешних причинах", a.tech ?? [], (t) => `  ${t.key} ${t.title} · ${t.blockedOn}${t.blockedUntil ? ` (до ${new Date(t.blockedUntil).toISOString().slice(0, 10)})` : ""} · ${t.blockedReason ?? ""}`);
       block("⚙ В работе", a.working, (t) => `  ${t.key} ${t.title} · ${t.claimedBy} · ${t.health.silentMin ?? "?"} мин назад`);
       console.log(`✓ Готовы к работе: ${a.readyCount}`);
       return;
@@ -610,9 +612,19 @@ async function main() {
     case "block": {
       const k = needKey();
       if (!flags.on) die("укажите, кто разблокирует: --on owner|product|design|tech|external|deps");
-      await api("POST", null, { action: "block", agent: agentFor(k), key: k, text: text(), on: flags.on });
+      const until = typeof flags.until === "string" ? flags.until : undefined;
+      if (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) die("--until ожидает дату в формате YYYY-MM-DD, например --until 2026-10-10");
+      await api("POST", null, { action: "block", agent: agentFor(k), key: k, text: text(), on: flags.on, ...(until ? { blockedUntil: until } : {}) });
       dropState(k);
-      console.log(`✓ ${k} заблокирована (${flags.on}). Аренда снята, ветка сохранена.`);
+      console.log(`✓ ${k} заблокирована (${flags.on})${until ? `, авторазблокировка ${until}` : ""}. Аренда снята, ветка сохранена.`);
+      return;
+    }
+    case "reblock": {
+      const k = needKey();
+      if (!flags.on) die("укажите нового адресата: --on owner|product|design|tech|external|deps");
+      if (!text()) die("нужна причина смены адресата");
+      await api("POST", null, { action: "reblock", agent: agentFor(k), key: k, text: text(), on: flags.on });
+      console.log(`✓ ${k}: адресат блокировки изменён на ${flags.on}`);
       return;
     }
     case "unblock":
