@@ -1381,6 +1381,9 @@
         "ownerHint": "Reply in the task feed — triage will pick up the answer, update the card and return the task to queue.",
         "since": "waiting {ago}",
         "answer": "reply",
+        "postpone": "Postpone",
+        "postponePh": "Reason (optional)…",
+        "postponeConfirm": "Postpone",
         "stale": "Stale or without assignee",
         "stuckReview": "Review stuck",
         "failedRuns": "Failed worker runs in the last 24 hours"

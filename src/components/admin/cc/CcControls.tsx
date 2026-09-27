@@ -11,6 +11,7 @@ import {
   ccIntakeAction,
   ccMessageToIntakeAction,
   ccOwnerAnswerAction,
+  ccOwnerPostponeAction,
   ccReadMessageAction,
   ccRejectManyAction,
   ccReturnManyAction,
@@ -560,6 +561,8 @@ export function OwnerQuestionCard({ taskKey, title, blockedReason, taskHref }: {
   const [expanded, setExpanded] = useState(false);
   const [answered, setAnswered] = useState(false);
   const [replyText, setReplyText] = useState("");
+  const [postponeOpen, setPostponeOpen] = useState(false);
+  const [postponeReason, setPostponeReason] = useState("");
 
   if (answered) return null;
 
@@ -567,6 +570,11 @@ export function OwnerQuestionCard({ taskKey, title, blockedReason, taskHref }: {
   const question = parsed?.question || blockedReason || "";
 
   const answer = (text: string) => run(() => ccOwnerAnswerAction(taskKey, text), () => setAnswered(true));
+  const postpone = () =>
+    run(
+      () => ccOwnerPostponeAction(taskKey, postponeReason || undefined),
+      () => { setAnswered(true); setPostponeOpen(false); setPostponeReason(""); },
+    );
 
   return (
     <li className="space-y-2 py-3">
@@ -596,18 +604,43 @@ export function OwnerQuestionCard({ taskKey, title, blockedReason, taskHref }: {
               {v.id}) {v.text}
             </button>
           ))}
+          <button className="btn-ghost btn-sm text-muted" disabled={pending} onClick={() => setPostponeOpen(!postponeOpen)}>
+            {t("postpone")}
+          </button>
         </div>
       ) : (
+        <div className="space-y-1.5">
+          <form
+            className="flex gap-1.5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              answer(replyText);
+            }}
+          >
+            <input className="input h-9 flex-1 py-1 text-sm" value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder={t("replyPh")} autoFocus />
+            <button className="btn-dark btn-sm" disabled={pending || replyText.trim().length < 2}>
+              {t("replySend")}
+            </button>
+          </form>
+          <button className="btn-ghost btn-sm text-muted" disabled={pending} onClick={() => setPostponeOpen(!postponeOpen)}>
+            {t("postpone")}
+          </button>
+        </div>
+      )}
+      {postponeOpen && (
         <form
           className="flex gap-1.5"
           onSubmit={(e) => {
             e.preventDefault();
-            answer(replyText);
+            postpone();
           }}
         >
-          <input className="input h-9 flex-1 py-1 text-sm" value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder={t("replyPh")} autoFocus />
-          <button className="btn-dark btn-sm" disabled={pending || replyText.trim().length < 2}>
-            {t("replySend")}
+          <input className="input h-9 flex-1 py-1 text-sm" value={postponeReason} onChange={(e) => setPostponeReason(e.target.value)} placeholder={t("postponePh")} />
+          <button className="btn-outline btn-sm" disabled={pending}>
+            {t("postponeConfirm")}
+          </button>
+          <button type="button" className="btn-ghost btn-sm" onClick={() => setPostponeOpen(false)}>
+            ×
           </button>
         </form>
       )}

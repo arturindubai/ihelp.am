@@ -972,6 +972,11 @@
         "repoHint": "",
         "markdownHint": ""
       },
+      "you": {
+        "postpone": "Հետաձգել",
+        "postponePh": "",
+        "postponeConfirm": "Հետաձգել"
+      },
       "gate": {
         "needs_open": "Կան բաց հարցեր արտադրանքի վերաբերյալ — նախ ստացեք պատասխան"
       }
