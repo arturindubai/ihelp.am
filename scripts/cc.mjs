@@ -29,6 +29,10 @@ const HELP = `cc — Control Center из командной строки (docs/D
   block КЛЮЧ "причина" --on owner|product|design|tech|external|deps
   unblock КЛЮЧ "что изменилось"
 
+  Длинный текст (многострочный отчёт, вердикт, блокировка):
+    --text-file /path/file   читать текст из файла (Write /opt/ihelp.am/data/tmp/<роль>/имя.md)
+    echo "…" | node …        или через stdin
+
   brief КЛЮЧ [--role dev|tester|deployer|nocode]   брифинг: правила роли, карточка, что сдать
                                                   При сдаче (review) обязательны:
                                                     --release "Теперь X работает так-то"  (что изменилось для людей)
@@ -433,7 +437,19 @@ function branchFacts(branch) {
 
 /* ───── команды ───── */
 
-const text = () => pos.slice(1).join(" ").trim();
+/** Текст для команды: из --text-file, stdin (если подан через pipe) или позиционных аргументов */
+let stdinText = null;
+
+const text = (skipFirst = true) => {
+  if (typeof flags["text-file"] === "string") {
+    const f = path.resolve(flags["text-file"]);
+    if (!fs.existsSync(f)) die(`файл не найден: ${f}`);
+    return fs.readFileSync(f, "utf8").trim();
+  }
+  if (stdinText !== null) return stdinText;
+  return (skipFirst ? pos.slice(1) : pos).join(" ").trim();
+};
+
 const needKey = () => {
   const k = pos[0]?.toUpperCase();
   if (!k) die("укажите ключ задачи, например AUTH-1");
@@ -441,6 +457,15 @@ const needKey = () => {
 };
 
 async function main() {
+  // Читаем stdin, если подан через pipe и нет --text-file
+  if (!process.stdin.isTTY && typeof flags["text-file"] !== "string") {
+    stdinText = await new Promise((resolve) => {
+      let d = "";
+      process.stdin.setEncoding("utf8");
+      process.stdin.on("data", (chunk) => (d += chunk));
+      process.stdin.on("end", () => resolve(d.trim()));
+    });
+  }
   switch (cmd) {
     case "help":
     case "--help":
@@ -693,7 +718,7 @@ async function main() {
       return;
     }
     case "msg": {
-      const body = pos.join(" ").trim();
+      const body = text(false); // у msg нет ключа в позиционных аргументах
       if (body.length < 2) die('нужен текст: msg "текст" --to owner');
       const to = typeof flags.to === "string" ? flags.to : "owner";
       const key = typeof flags.key === "string" ? flags.key.toUpperCase() : undefined;

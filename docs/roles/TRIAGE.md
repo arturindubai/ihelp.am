@@ -78,4 +78,20 @@ node scripts/cc.mjs triaged КЛЮЧ "вердикт"                   # отм
 node scripts/cc.mjs msg "текст" --to owner                   # сообщение владельцу
 ```
 
-Все команды — с `--agent triage` (воркеру его подставляет диспетчер через `CC_AGENT`). Файлы воркер триажа писать не может — поля передаются через `--data`.
+Все команды — с `--agent triage` (воркеру его подставляет диспетчер через `CC_AGENT`).
+
+### Длинные тексты — через файл
+
+Многострочный вердикт, вопрос с вариантами или сообщение, которое не умещается в одну строку, передавай через файл — иначе команда может не пройти проверку прав:
+
+```bash
+# 1. Написать текст в папку tmp триажа (Write-инструментом или строкой):
+# Инструментом Write: путь /opt/ihelp.am/data/tmp/triage/имя.md
+
+# 2. Передать файл в команду:
+node scripts/cc.mjs triaged КЛЮЧ --text-file /opt/ihelp.am/data/tmp/triage/triaged.md
+node scripts/cc.mjs block КЛЮЧ --on owner --text-file /opt/ihelp.am/data/tmp/triage/block.md
+node scripts/cc.mjs msg --to owner --text-file /opt/ihelp.am/data/tmp/triage/msg.md
+```
+
+Папка `/opt/ihelp.am/data/tmp/triage/` разрешена для записи триажу. Короткие тексты по-прежнему передаются inline.

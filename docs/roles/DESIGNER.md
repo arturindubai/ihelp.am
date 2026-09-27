@@ -94,3 +94,17 @@ node scripts/cc.mjs lib --q дизайн                                   # д�
 node scripts/cc.mjs lib add --title "…" --kind spec --file запись.md --agent designer
 node scripts/cc.mjs lib update note-… --file запись.md --note "…" --agent designer
 ```
+
+### Длинные тексты — через файл
+
+Длинное описание дизайна, детальный вопрос к владельцу — передавай через файл:
+
+```bash
+# Написать текст инструментом Write в папку tmp:
+# Write /opt/ihelp.am/data/tmp/designer/имя.md
+
+node scripts/cc.mjs block КЛЮЧ --on owner --text-file /opt/ihelp.am/data/tmp/designer/block.md
+node scripts/cc.mjs msg --to owner --text-file /opt/ihelp.am/data/tmp/designer/msg.md
+```
+
+Папка `/opt/ihelp.am/data/tmp/designer/` разрешена для записи (наряду с `data/mockups/`).
