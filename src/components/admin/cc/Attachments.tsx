@@ -85,8 +85,9 @@ export function Attachments({ subject, items }: { subject: { taskKey?: string; e
           "mt-3 rounded-lg border border-dashed p-3 transition-colors",
           dragOver ? "border-brand bg-brand-50" : "border-line",
         ].join(" ")}
+        onDragEnter={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-        onDragLeave={() => setDragOver(false)}
+        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false); }}
         onDrop={handleDrop}
       >
         <div className="flex flex-wrap items-center gap-2">
