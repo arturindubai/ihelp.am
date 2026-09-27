@@ -81,6 +81,13 @@ export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardInte
         <Toggle label={t("card")} checked={s.payments.cardEnabled} disabled={!cardIntegrated} hint={cardIntegrated ? undefined : t("cardLocked")} onChange={(v) => set("payments", { cardEnabled: v })} />
       </Section>
 
+      <Section k="auth" title={t("authSessions")} value={s.auth} hint={t("authSessionsHint")}>
+        <div className="grid gap-3 md:grid-cols-2">
+          <NumInput label={t("clientSessionDays")} value={s.auth.clientSessionDays} onChange={(v) => set("auth", { clientSessionDays: v ?? 60 })} />
+          <NumInput label={t("staffSessionDays")} value={s.auth.staffSessionDays} onChange={(v) => set("auth", { staffSessionDays: v ?? 7 })} />
+        </div>
+      </Section>
+
       <Section k="otp" title={t("otp")} value={s.otp} hint={`${t("otpHint")}${devMode ? " (OTP_DEV_MODE=true)" : ""}`}>
         <div className="grid gap-3 md:grid-cols-4">
           <NumInput label={t("codeLength")} value={o.codeLength} onChange={(v) => set("otp", { codeLength: Math.min(6, Math.max(4, v ?? 4)) })} />

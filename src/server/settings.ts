@@ -38,6 +38,8 @@ export interface Settings {
   apple: { enabled: boolean; teamId: string; keyId: string; clientId: string; privateKey: string };
   /** Отправка писем через Resend: домен должен быть подтверждён в кабинете сервиса */
   mail: { enabled: boolean; apiKey: string; from: string; replyTo: string };
+  /** Сессии: сроки хранения куки для клиентов и персонала (OPERATOR/ADMIN/OWNER) */
+  auth: { clientSessionDays: number; staffSessionDays: number };
   /**
    * Бот команды в Telegram (как бот LIA): задачи владельца → входящие IN-N, «статус», сообщения «Нужен ты».
    * Отдельный от бота входа клиентов (notify.telegramBotToken). Токен вставляется в Control Center → «Ключи»
@@ -90,6 +92,7 @@ export const DEFAULT_SETTINGS: Settings = {
   google: { enabled: false, clientId: "", clientSecret: "" },
   apple: { enabled: false, teamId: "", keyId: "", clientId: "", privateKey: "" },
   mail: { enabled: false, apiKey: "", from: "", replyTo: "" },
+  auth: { clientSessionDays: 60, staffSessionDays: 7 },
   team: { botToken: "", botUsername: "", members: [], linkCode: "", linkCodeAt: "" },
 };
 

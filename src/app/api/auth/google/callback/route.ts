@@ -37,7 +37,7 @@ export async function GET(req: Request) {
   }
   if (user.blocked) return fail("blocked");
 
-  await createSession(user.id);
+  await createSession(user.id, user.role);
   await audit(user.id, "auth.google", "User", user.id, { email: profile.email });
   const next = (verifyState(state, process.env.SESSION_SECRET || "dev") ?? "").split("|")[1] || "";
   const dest = next.startsWith("/") ? `/ru${next}` : STAFF_ROLES.includes(user.role) ? "/ru/admin" : "/ru/account";

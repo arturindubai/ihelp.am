@@ -113,6 +113,9 @@ export async function verifyOtp(phone: string, code: string): Promise<boolean> {
     if (fails === ALERT_FAILS_PER_DAY) {
       const u = await db.user.findUnique({ where: { phone }, select: { role: true } });
       await alertTech(`otp-fails:${phone}`, html`⚠️ <b>Возможен подбор кода входа</b>\n${phone}${u ? ` · роль ${u.role}` : ""}: ${fails} неверных кодов за сутки. После ${MAX_FAILS_PER_DAY} вход для номера закрывается до конца суток`, 12 * 60);
+    } else if (fails >= MAX_FAILS_PER_DAY) {
+      const u = await db.user.findUnique({ where: { phone }, select: { role: true } });
+      await alertTech(`otp-blocked:${phone}`, html`🔒 <b>Номер заблокирован</b>\n${phone}${u ? ` · роль ${u.role}` : ""}: ${fails} неверных кодов за сутки. Новые коды для этого номера не выдаются 24 часа`, 24 * 60);
     }
   }
   return ok;
