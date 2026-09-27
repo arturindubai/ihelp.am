@@ -128,10 +128,11 @@ iHelp изолирован: отдельный каталог `/opt/ihelp.am`, d
 docker compose -f /opt/ihelp.am/docker-compose.yml logs app | grep otp
 
 # Проверить, что всё работает (ничего не меняет)
-cd /opt/ihelp.am && deploy/smoke.sh https://liacontentos.com https://aistudiolia.com https://arturoganesian.com
+# Соседние сайты берутся из NEIGHBORS в .env
+cd /opt/ihelp.am && deploy/smoke.sh
 
 # Обновление (после git commit) и откат
-cd /opt/ihelp.am && deploy/update.sh https://liacontentos.com https://aistudiolia.com https://arturoganesian.com
+cd /opt/ihelp.am && deploy/update.sh
 cd /opt/ihelp.am && deploy/rollback.sh
 
 # Статус и логи
@@ -151,7 +152,8 @@ cd /opt/ihelp.am && docker compose up -d
 
 1. Если код пришёл новым архивом: распаковать во временную папку, `rsync -a --exclude .env --exclude backups --exclude .git <папка>/ /opt/ihelp.am/`, затем `git -C /opt/ihelp.am diff` — **не потерять серверные доработки**: порты (`HTTP_BIND`), контакты, скрипты `deploy/`, фиксы seed, формы входа, уведомлений.
 2. `git -C /opt/ihelp.am add -A && git -C /opt/ihelp.am commit -m "…"` — `update.sh` не запускается с незафиксированными правками.
-3. Вне пиковых часов (сборка нагружает общий сервер): `deploy/update.sh https://liacontentos.com https://aistudiolia.com https://arturoganesian.com`.
+3. Вне пиковых часов (сборка нагружает общий сервер): `deploy/update.sh`.
+   Соседние сайты для проверки берутся из `NEIGHBORS` в `.env`.
    Скрипт сам: бэкап → образы для отката → сборка → запуск и миграции → ожидание healthy → smoke-тест (контейнеры, `OTP_DEV_MODE=false`, ключ шифрования, страницы, защита `/api/cron`, превью ссылок, `X-Robots-Tag`, свежесть бэкапа, соседние сайты) → очистка.
 4. Упал на сборке — прод не тронут, смотреть вывод. Упал smoke-тест — `docker compose logs --tail 100 app migrate`, при необходимости `deploy/rollback.sh`.
 5. Если обновление меняло схему базы — `docker compose logs migrate | tail -5`: миграция применена, seed пишет `skipped`.
