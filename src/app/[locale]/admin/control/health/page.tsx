@@ -51,6 +51,12 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
     <div className="max-w-6xl">
       <CcHeader page="health" locale={locale} />
       <p className="mb-4 text-sm text-muted">{th("subtitle")}</p>
+      {!h.sys.techChat && (
+        <div className="mb-4 rounded-xl border border-bad bg-bad/10 p-3 text-sm text-bad">
+          <span className="font-medium">{th("alertMissing")}</span>{" "}
+          <Link href="/admin/settings" className="font-medium underline">{th("alertMissingLink")}</Link>
+        </div>
+      )}
 
       <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Metric label={th("server")} value={th("serverOk")} hint={`${th("uptime")}: ${uptime}`} />

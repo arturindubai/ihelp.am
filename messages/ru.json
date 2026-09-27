@@ -810,6 +810,9 @@
       "testMailSent": "Письмо отправлено",
       "testMailTo": "Кому отправить тест",
       "testSent": "Отправлено",
+      "testSentBoth": "Отправлено в оба чата",
+      "testSentTeamOnly": "Отправлено · тех-чат через чат команды",
+      "testSentNoChatId": "Отправлено · тех-чат не настроен",
       "langRu": "RU — Русский"
     },
     "staff": {
@@ -1601,6 +1604,8 @@
         "otpErrorsNone": "нет",
         "otpErrorsHint": "каналов с ошибкой за сутки",
         "otpByChannel": "{channel}: {n}",
+        "alertMissing": "Тех-алерты не доставляются: чат не задан. Критические ошибки, сбои бэкапов и брошенные задачи пишутся только в журнал.",
+        "alertMissingLink": "Настроить в Уведомлениях",
         "tips": {
           "dispatcher": "Диспетчер молчит дольше 3 минут — на сервере: systemctl status ihelp-dispatcher.timer; установить — deploy/systemd/install.sh.",
           "login": "Воркеры пишут «Not logged in» — войти в подписку: scripts/claude-login.sh, затем «Снять паузу» во вкладке «Воркеры».",
