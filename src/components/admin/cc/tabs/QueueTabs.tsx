@@ -18,10 +18,20 @@ type Href = (key: string) => string;
 /** «Нужен ты»: всё, что стоит без решения человека — вопросы воркеров и чатов, брошенные задачи, упавшие запуски */
 export async function YouTab({ taskHref }: { taskHref: Href }) {
   const [t, ty, data] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.you"), needsYou()]);
-  const nothing = !data.owner.length && !data.stale.length && !data.stuckReview.length && !data.nocodeReview.length && !data.failedRuns.length && !data.pausedUntil && !data.techBlocked.length;
+  const nothing = !data.owner.length && !data.stale.length && !data.stuckReview.length && !data.nocodeReview.length && !data.failedRuns.length && !data.pausedUntil && !data.techBlocked.length && !data.alertMissing;
   return (
     <div className="space-y-4">
       {nothing && <Empty>{ty("empty")}</Empty>}
+      {data.alertMissing && (
+        <Card>
+          <p className="text-sm text-bad">
+            <span className="font-medium">{ty("alertMissing")}</span>{" "}
+            <Link href="/admin/settings" className="font-medium underline">
+              {ty("alertMissingLink")}
+            </Link>
+          </p>
+        </Card>
+      )}
       {data.pausedUntil && (
         <Card>
           <p className="text-sm text-warn">
@@ -324,7 +334,20 @@ export async function ApprovalsTab({ taskHref }: { taskHref: Href }) {
                             {x._count.attachments ? ` · 📎 ${x._count.attachments}` : ""}
                           </span>
                         </Link>
-                        <div className="flex flex-col items-end gap-1">
+                        <div className="flex flex-col items-end gap-1 self-start">
+                          {x.nextSteps.length > 0 && (
+                            <div className="mb-1 w-full rounded-lg bg-surface p-3 text-sm">
+                              <p className="font-medium text-muted">{ta("afterAccept")}</p>
+                              <ul className="mt-1 list-disc pl-4 text-ink">
+                                {x.nextSteps.slice(0, 5).map((s, i) => (
+                                  <li key={i} className="break-words">{s}</li>
+                                ))}
+                              </ul>
+                              {x.nextSteps.length > 5 && (
+                                <p className="mt-1 text-xs text-muted">{ta("afterAcceptMore", { count: x.nextSteps.length - 5 })}</p>
+                              )}
+                            </div>
+                          )}
                           <ApprovalButtons taskKey={x.key} />
                           <CommentButton taskKey={x.key} />
                         </div>
