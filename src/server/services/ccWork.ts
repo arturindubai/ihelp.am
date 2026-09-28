@@ -1,11 +1,12 @@
 import "server-only";
 import { db } from "../db";
-import { upsertNote } from "./library";
+import { upsertNote, createNote } from "./library";
 import { alertTech } from "../alerts";
 import { html, notifyTech } from "../notify";
 import { BLOCKED_ON_LABELS, STATUSES } from "@/lib/backlog-labels";
 import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, doneGate, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
 import { nextIntakeKey, intakeTitle } from "@/lib/cc-lanes";
+import { needsLibrary, buildSummaryText, buildLibraryTitle } from "@/lib/cc-overflow";
 import type { Prisma, Task } from "@prisma/client";
 
 /**
@@ -40,8 +41,24 @@ async function log(taskId: string, actor: string, field: string, from: string | 
   await db.taskEvent.create({ data: { taskId, actor, field, from, to } });
 }
 
-async function say(taskId: string, author: string, kind: CommentKind, text: string) {
-  if (text.trim()) await db.taskComment.create({ data: { taskId, author, kind, text: text.trim().slice(0, 5000) } });
+async function say(taskId: string, author: string, kind: CommentKind, text: string, taskKey: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  if (!needsLibrary(trimmed)) {
+    await db.taskComment.create({ data: { taskId, author, kind, text: trimmed } });
+    return;
+  }
+  // Текст длиннее лимита: полный материал — в Библиотеку, в ленте — резюме со ссылкой
+  let libraryNoteId: string | null = null;
+  try {
+    const doc = await createNote({ title: buildLibraryTitle(taskKey, author, kind), kind: "knowledge", content: trimmed }, author);
+    libraryNoteId = doc.slug;
+  } catch {
+    // Ошибка сохранения: храним обрезанный текст с пометкой
+    await db.taskComment.create({ data: { taskId, author, kind, text: trimmed.slice(0, 4900) + "\n\n⚠️ Текст обрезан — не удалось сохранить в Библиотеку." } });
+    return;
+  }
+  await db.taskComment.create({ data: { taskId, author, kind, text: buildSummaryText(trimmed, libraryNoteId), libraryNoteId } });
 }
 
 /** Каким видом записи ляжет текст перехода в ленту задачи */
@@ -162,12 +179,12 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   if (force) await log(task.id, actor.name, "forced", null, text.slice(0, 200));
   if (to === "blocked") await log(task.id, actor.name, "blockedOn", task.blockedOn, data.blockedOn as string);
   const extra = from === "done" && task.deployedSha ? `\nБыла выложена в ${task.deployedSha}.` : "";
-  await say(task.id, actor.name, kindFor(from, to, actor, task.claimedBy), text + extra);
+  await say(task.id, actor.name, kindFor(from, to, actor, task.claimedBy), text + extra, key);
   if (to === "done" || to === "cancelled") await releaseDependents(key);
   // После приёмки не-код задачи с указанными следующими шагами — карточка в очередь триажа
   if (to === "done" && task.layer === "none" && task.nextSteps.length > 0) {
     await createNextStepsIntake(key, task.title, task.nextSteps, actor.name).catch(async (err) => {
-      await say(task.id, "system", "note", `⚠️ Не удалось завести карточку следующих шагов: ${String(err).slice(0, 200)}`).catch(() => null);
+      await say(task.id, "system", "note", `⚠️ Не удалось завести карточку следующих шагов: ${String(err).slice(0, 200)}`, key).catch(() => null);
     });
   }
   // task получен до обновления — передаём свежие значения из input для review-перехода
@@ -323,7 +340,7 @@ export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Tas
   if (event === "claim") await log(task.id, agent, "status", "ready", "in_progress");
   if (event === "takeover") {
     await log(task.id, agent, "claimedBy", prev.claimedBy, agent);
-    await say(task.id, "watchdog", "system", `Задачу перехватил ${agent}: аренда ${prev.claimedBy} истекла. Продолжение — с ветки ${task.branch}.`);
+    await say(task.id, "watchdog", "system", `Задачу перехватил ${agent}: аренда ${prev.claimedBy} истекла. Продолжение — с ветки ${task.branch}.`, task.key);
   }
   return task;
 }
@@ -372,12 +389,12 @@ export async function markTriaged(key: string, agent: string, text: string) {
   if (lastRetriage) {
     const freshAnswer = await db.taskComment.findFirst({ where: { taskId: t.id, kind: { notIn: ["system", "triage"] }, createdAt: { gt: lastRetriage.createdAt } } });
     if (freshAnswer) {
-      await say(t.id, agent, "system", "Триаж завершён, но после отправки на разбор пришёл ответ человека — задача остаётся в очереди триажа.");
+      await say(t.id, agent, "system", "Триаж завершён, но после отправки на разбор пришёл ответ человека — задача остаётся в очереди триажа.", key);
       return;
     }
   }
   await db.task.update({ where: { key }, data: { triagedAt: new Date(), triagedBy: agent, triageNote: text.trim().slice(0, 1000) } });
-  await say(t.id, agent, "triage", text);
+  await say(t.id, agent, "triage", text, key);
   await log(t.id, agent, "triaged", null, text.trim().slice(0, 120));
 }
 
@@ -396,7 +413,7 @@ export async function agentNote(key: string, agent: string, kind: CommentKind, t
   const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, claimedBy: true } });
   if (!t) throw new CcError("not_found");
   if (text.trim().length < 2) throw new CcError("text_required");
-  await say(t.id, agent, kind, text);
+  await say(t.id, agent, kind, text, key);
   if (["in_progress", "review"].includes(t.status) && t.claimedBy === agent) await heartbeat(key, agent);
   if (kind === "error" && roleOf(agent) === "deployer") await alertTech(`cc:error:${key}`, html`❌ <b>${key}</b> · ${agent}
 ${text.slice(0, 400)}`, 5);
@@ -438,11 +455,11 @@ export async function testPass(key: string, agent: string, sha: string, text: st
   await log(t.id, agent, "tested", null, safeSha.slice(0, 10));
   if (t.noWork) {
     // Работа не потребовалась: тестировщик подтвердил — задача закрывается как «не потребовалось»
-    await say(t.id, agent, "review", `✅ Подтверждено: работа не потребовалась.\n${text.trim()}`);
+    await say(t.id, agent, "review", `✅ Подтверждено: работа не потребовалась.\n${text.trim()}`, key);
     await transition(key, { to: "cancelled", text: "Тестировщик подтвердил: изменения кода не потребовались.", force: true }, { name: agent, role: "tester", via: "api" });
     return db.task.findUniqueOrThrow({ where: { id: t.id } });
   }
-  await say(t.id, agent, "review", `✅ Протестировано на коммите ${sha.trim().slice(0, 10)}.\n${text.trim()}`);
+  await say(t.id, agent, "review", `✅ Протестировано на коммите ${sha.trim().slice(0, 10)}.\n${text.trim()}`, key);
   return db.task.findUniqueOrThrow({ where: { id: t.id } });
 }
 
@@ -453,7 +470,7 @@ export async function reviewRelease(key: string, agent: string, text: string) {
   if (t.status !== "review" || t.claimedBy !== agent) throw new CcError("not_your_task", t.claimedBy ?? "");
   await db.task.update({ where: { id: t.id }, data: { claimedBy: null, claimUntil: null } });
   await log(t.id, agent, "claimedBy", agent, null);
-  await say(t.id, agent, "note", text);
+  await say(t.id, agent, "note", text, key);
 }
 
 /** Какой статус был у задачи до того, как её взяли в работу: брошенная возвращается туда же */
@@ -506,6 +523,7 @@ export async function runWatchdog(now = new Date()) {
       "system",
       `Аренда истекла: ${t.claimedBy} молчит с ${clock(t.heartbeatAt ?? t.claimUntil)}. Если чат жив, первый же пульс снимет отметку. ` +
         `Если нет — через ${hours} ч задача вернётся в очередь${t.branch ? `, ветка ${t.branch} сохранится` : ""}.`,
+      key,
     );
     await alertTech(`cc:stale:${key}`, html`🪦 <b>${key}</b> похоже брошена: ${t.claimedBy ?? "?"} молчит с ${clock(t.heartbeatAt ?? t.claimUntil)}\n${t.title}\nЧерез ${hours} ч вернётся в очередь сама.`, 12 * 60);
   }
@@ -533,6 +551,7 @@ export async function runWatchdog(now = new Date()) {
       `Сторож вернул задачу в «${STATUSES[back]}»: ${t.claimedBy} молчал с ${clock(t.heartbeatAt ?? t.claimUntil)}. ` +
         (t.branch ? `Ветка ${t.branch} сохранена — продолжать с неё (git log main..origin/${t.branch}).` : "Ветки у задачи не было.") +
         (last ? `\nПоследняя запись исполнителя: «${last.text.slice(0, 400)}»` : "\nОтчётов от исполнителя не было."),
+      key,
     );
     await alertTech(`cc:return:${key}`, html`↩️ <b>${key}</b> возвращена в очередь сторожем: ${t.claimedBy ?? "?"} не отвечал.\n${t.title}`, 60);
   }
@@ -542,7 +561,7 @@ export async function runWatchdog(now = new Date()) {
     const r = await db.task.updateMany({ where: { id: t.id, status: "review", claimedBy: t.claimedBy, claimUntil: t.claimUntil }, data: { claimedBy: null, claimUntil: null } });
     if (!r.count) continue;
     await log(t.id, "watchdog", "claimedBy", t.claimedBy, null);
-    await say(t.id, "watchdog", "system", `${t.claimedBy} держал задачу на проверке и замолчал с ${clock(t.heartbeatAt ?? t.claimUntil)} — аренда снята, задача снова в очереди проверки.`);
+    await say(t.id, "watchdog", "system", `${t.claimedBy} держал задачу на проверке и замолчал с ${clock(t.heartbeatAt ?? t.claimUntil)} — аренда снята, задача снова в очереди проверки.`, key);
   }
 
   for (const key of plan.unblock) {
@@ -637,7 +656,7 @@ export async function approveMockup(key: string, actor: Actor, comment: string |
   });
   await log(t.id, actor.name, "mockupApprovedBy", t.mockupApprovedBy, actor.name);
   const text = `${comment ? `Дизайн утверждён: ${comment.trim().slice(0, 500)}` : "Дизайн утверждён."}\nВ Библиотеке: ${canon.slug} (версия ${canon.version}).`;
-  await say(t.id, actor.name, "note", text);
+  await say(t.id, actor.name, "note", text, key);
   // Если задача заблокирована на дизайне — снять блокировку, вернуть туда, откуда заблокировали
   if (t.status === "blocked" && t.blockedOn === "design") {
     const target = unblockTarget(t.blockedFrom, actor.role);
@@ -647,7 +666,7 @@ export async function approveMockup(key: string, actor: Actor, comment: string |
       const code = e instanceof CcError ? e.code : "transition_error";
       const detail = e instanceof CcError && e.detail ? `: ${e.detail}` : "";
       // Системная запись с кодом отказа — владелец видит причину в ленте
-      await say(t.id, actor.name, "system", `Дизайн утверждён, но вернуть задачу не удалось (${code}${detail}). Передано триажу.`);
+      await say(t.id, actor.name, "system", `Дизайн утверждён, но вернуть задачу не удалось (${code}${detail}). Передано триажу.`, key);
       await log(t.id, actor.name, "unblock_failed", null, `${code}${detail}`);
       // Открытые вопросы → в очередь триажа, чтобы он принял решение
       await retriage(key);
@@ -687,9 +706,9 @@ export async function reblockOn(key: string, newBlockedOn: string, reason: strin
   if (!t) throw new CcError("not_found");
   if (t.status !== "blocked") throw new CcError("wrong_status", t.status);
   const prev = t.blockedOn;
-  await db.task.update({ where: { id: t.id }, data: { blockedOn: newBlockedOn, blockedReason: reason.trim().slice(0, 200) } });
+  await db.task.update({ where: { id: t.id }, data: { blockedOn: newBlockedOn, blockedReason: reason.trim().slice(0, 2000) } });
   await log(t.id, actor.name, "blockedOn", prev, newBlockedOn);
-  await say(t.id, actor.name, "note", `Адресат блокировки изменён: ${prev ?? "—"} → ${newBlockedOn}. ${reason.trim()}`);
+  await say(t.id, actor.name, "note", `Адресат блокировки изменён: ${prev ?? "—"} → ${newBlockedOn}. ${reason.trim()}`, key);
   return db.task.findUniqueOrThrow({ where: { id: t.id } });
 }
 
@@ -701,7 +720,7 @@ export async function returnDesign(key: string, actor: Actor, reason: string) {
   // Сбросить утверждение и ссылку на макет: дизайнер должен сделать новый макет с чистого листа
   await db.task.update({ where: { key }, data: { mockupApprovedBy: null, mockupApprovedAt: null, mockupUrl: null } });
   if (t.status !== "blocked") return transition(key, { to: "blocked", blockedOn: "design", text: `Дизайн возвращён: ${reason.trim()}` }, actor);
-  await say(t.id, actor.name, "note", `Дизайн возвращён: ${reason.trim()}`);
+  await say(t.id, actor.name, "note", `Дизайн возвращён: ${reason.trim()}`, key);
   return db.task.findUniqueOrThrow({ where: { key } });
 }
 

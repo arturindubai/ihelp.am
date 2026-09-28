@@ -53,7 +53,7 @@ node /opt/ihelp.am/scripts/cc.mjs next --agent designer   # следующая �
 
 Текст в поле «Дизайн» — для разработчика. Владелец утверждает **картинку**. Макет обязателен, если у задачи стоит флаг «нужен макет» или появляется новый экран; для правки существующего экрана достаточно текста.
 
-1. Написать экран как HTML-файл в `data/mockups/<КЛЮЧ>/имя.html` (единственная папка, куда дизайнер пишет). Стили — инлайн-CSS с теми же цветами и радиусами, что в `src/app/theme.css` и `DESIGN.md` (скопировать значения токенов оттуда), шрифт системный; текст — настоящий, на русском, как пойдёт в интерфейс; данные правдоподобные (цены в драмах, адреса Еревана). Один файл — один экран; состояния (пусто, ошибка) — отдельными блоками или файлами.
+1. Написать экран как HTML-файл в `data/mockups/<КЛЮЧ>/имя.html` (единственная папка, куда дизайнер пишет). Данные для скриншотов (отзывы, заказы, мастера, визиты) — правдоподобные, написанные для макета прямо в HTML; в `prisma/seed.ts` их не вносить и в репозиторий не коммитить: это роняет гейт выкладки. Стили — инлайн-CSS с теми же цветами и радиусами, что в `src/app/theme.css` и `DESIGN.md` (скопировать значения токенов оттуда), шрифт системный; текст — настоящий, на русском, как пойдёт в интерфейс; данные правдоподобные (цены в драмах, адреса Еревана). Один файл — один экран; состояния (пусто, ошибка) — отдельными блоками или файлами.
 2. Снять скриншоты телефона и компьютера: `node scripts/mockup-shot.mjs data/mockups/<КЛЮЧ>/имя.html` → `имя-phone.png`, `имя-desktop.png`.
 3. Приложить к задаче: `node /opt/ihelp.am/scripts/cc.mjs attach КЛЮЧ --file data/mockups/<КЛЮЧ>/имя-phone.png --mockup` (первый — со ссылкой на макет), затем `attach … --file имя-desktop.png`. После этого задача появляется у владельца на вкладке «Дизайн» → «На согласовании».
 4. В поле «Дизайн» — кратко, что на макете и какие состояния не нарисованы.
@@ -96,7 +96,7 @@ node /opt/ihelp.am/scripts/cc.mjs show КЛЮЧ
 node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --data '{"design":"…"}' --agent designer             # короткий текст
 node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --design-file /opt/ihelp.am/data/tmp/designer/design.md --agent designer  # длинный
 node /opt/ihelp.am/scripts/cc.mjs unblock КЛЮЧ "Дизайн описан в карточке" --agent designer
-node /opt/ihelp.am/scripts/cc.mjs block КЛЮЧ "…" --on product|owner --agent designer
+node /opt/ihelp.am/scripts/cc.mjs block КЛЮЧ "…" --on product --agent designer   # адресат product или owner — в команде один
 node /opt/ihelp.am/scripts/cc.mjs lib --q дизайн                                   # дизайн-канон
 node /opt/ihelp.am/scripts/cc.mjs lib add --title "…" --kind spec --file /opt/ihelp.am/data/tmp/designer/запись.md --agent designer
 node /opt/ihelp.am/scripts/cc.mjs lib update note-… --file /opt/ihelp.am/data/tmp/designer/запись.md --note "…" --agent designer
