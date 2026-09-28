@@ -402,13 +402,31 @@ const OUTCOME_ICON: Record<string, string> = { done: "✓", failed: "✗", timeo
 export type RunFinish = { status: string; summary?: string; turns?: number; log?: string; tokensIn?: number; tokensOut?: number; costUsd?: number };
 
 export async function runFinish(id: string, r: RunFinish) {
-  const status = ["done", "failed", "timeout", "limit", "stopped"].includes(r.status) ? r.status : "failed";
+  let status = ["done", "failed", "timeout", "limit", "stopped"].includes(r.status) ? r.status : "failed";
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+  // Критерий 5: деплоер завершился без ошибки, но задача не перешла в «Сделано» — записываем как ошибку
+  let deployerIncident: string | null = null;
+  if (status === "done") {
+    const peek = await db.workerRun.findUnique({ where: { id }, select: { pool: true, taskKey: true } });
+    if (peek?.pool === "deployer" && peek.taskKey) {
+      const task = await db.task.findUnique({ where: { key: peek.taskKey }, select: { status: true } });
+      if (task && task.status !== "done") {
+        status = "failed";
+        deployerIncident = peek.taskKey;
+      }
+    }
+  }
+
+  const summary = deployerIncident
+    ? `${r.summary?.slice(0, 1800) ?? ""}${r.summary ? "\n" : ""}Задача ${deployerIncident} не перешла в «Сделано» после выкладки.`
+    : r.summary;
+
   const run = await db.workerRun.update({
     where: { id },
     data: {
       status,
-      summary: r.summary?.slice(0, 2000) ?? null,
+      summary: summary?.slice(0, 2000) ?? null,
       turns: num(r.turns),
       log: r.log?.slice(-20000) ?? null,
       tokensIn: num(r.tokensIn),
@@ -421,6 +439,9 @@ export async function runFinish(id: string, r: RunFinish) {
   // Неудачный запуск — сигнал в тех-чат: воркер мог оставить задачу на полпути
   if (status === "failed" || status === "timeout") {
     await alertTech(`workers:${run.pool}:${status}`, html`${OUTCOME_ICON[status]} <b>Воркер ${run.agent}</b> ${status === "timeout" ? "не уложился во время" : "завершился с ошибкой"}${run.taskKey ? ` · ${run.taskKey}` : ""}\n${(r.summary ?? "").slice(0, 300)}`, 30);
+  }
+  if (deployerIncident) {
+    await alertTech(`workers:deployer:notdone:${deployerIncident}`, html`⚠️ <b>Деплоер завершился, но задача не закрыта</b> · ${deployerIncident}\nЗадача осталась в открытом статусе. Нужна ручная команда:\n<code>cc done ${deployerIncident} --sha КОММИТ "доказательство"</code>`, 30);
   }
   return run;
 }
@@ -507,7 +528,12 @@ export async function workersOverview() {
         ...q.holding.map((t) => item(t.key, "holding", new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Yerevan", hour: "2-digit", minute: "2-digit" }).format(t.testHoldUntil!))),
         ...q.noBranch.filter((t) => !q.held.includes(t)).map((t) => item(t.key, "nobranch")),
       ],
-      deployer: [...q.held.filter((t) => t.claimedBy === "deployer").map((t) => item(t.key, "held", "deployer")), ...q.deploy.map((t) => item(t.key, "deploy", byKey.get(t.key)?.testedBy ?? ""))],
+      deployer: [
+        ...q.held.filter((t) => t.claimedBy === "deployer").map((t) => item(t.key, "held", "deployer")),
+        ...q.deploy.map((t) => item(t.key, "deploy", byKey.get(t.key)?.testedBy ?? "")),
+        // Задачи без ветки в репозитории — скорее всего выложены, но cc done не прошла
+        ...q.noBranch.filter((t) => !q.held.some((h) => h.key === t.key)).map((t) => item(t.key, "nobranch")),
+      ],
     },
     deployWindowOpen: hour >= config.deployWindow[0] && hour < config.deployWindow[1],
     readyDev: takeable(dev),

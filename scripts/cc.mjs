@@ -439,7 +439,10 @@ function branchFacts(branch) {
 
 /* ───── команды ───── */
 
-/** Текст для команды: из --text-file, stdin (если подан через pipe) или позиционных аргументов */
+/**
+ * Текст для команды: из --text-file > позиционных аргументов > stdin.
+ * Пустой stdin не перекрывает позиционный аргумент — только непустой и только при отсутствии аргумента.
+ */
 let stdinText = null;
 
 const text = (skipFirst = true) => {
@@ -448,8 +451,9 @@ const text = (skipFirst = true) => {
     if (!fs.existsSync(f)) die(`файл не найден: ${f}`);
     return fs.readFileSync(f, "utf8").trim();
   }
-  if (stdinText !== null) return stdinText;
-  return (skipFirst ? pos.slice(1) : pos).join(" ").trim();
+  const positional = (skipFirst ? pos.slice(1) : pos).join(" ").trim();
+  if (positional) return positional;          // аргумент есть — stdin не нужен
+  return stdinText || "";                     // stdin только при отсутствии аргумента
 };
 
 const needKey = () => {
@@ -459,13 +463,24 @@ const needKey = () => {
 };
 
 async function main() {
-  // Читаем stdin, если подан через pipe и нет --text-file
-  if (!process.stdin.isTTY && typeof flags["text-file"] !== "string") {
+  // Читаем stdin только для команд, принимающих текст, и только когда нет текста в аргументах.
+  // Таймаут 2 секунды: если данных нет — считаем stdin пустым (не зависаем при открытом молчащем stdin).
+  const noKeyCmds = new Set(["intake", "msg"]);
+  const hasTextArg = noKeyCmds.has(cmd) ? pos.length > 0 : pos.length > 1;
+  const textCmds = new Set(["note", "block", "reblock", "unblock", "ready", "cancel", "return", "review", "handoff", "done", "pass", "fail", "triaged", "intake", "msg"]);
+  if (!process.stdin.isTTY && typeof flags["text-file"] !== "string" && textCmds.has(cmd) && !hasTextArg) {
     stdinText = await new Promise((resolve) => {
       let d = "";
+      let resolved = false;
+      const done = (val) => { if (!resolved) { resolved = true; resolve(val); } };
+      const timer = setTimeout(() => done(""), 2000);
       process.stdin.setEncoding("utf8");
-      process.stdin.on("data", (chunk) => (d += chunk));
-      process.stdin.on("end", () => resolve(d.trim()));
+      process.stdin.on("data", (chunk) => {
+        d += chunk;
+        clearTimeout(timer);
+      });
+      process.stdin.on("end", () => done(d.trim()));
+      process.stdin.on("close", () => done(d.trim()));
     });
   }
   switch (cmd) {
