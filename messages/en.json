@@ -94,7 +94,9 @@
       "PACKAGE": "Package"
     },
     "firstOffer": "−{percent}% off the first visit for new customers",
-    "notFound": "Service not found"
+    "notFound": "Service not found",
+    "perVisitSaving": "−{amount} per visit",
+    "packageSaving": "Save {amount}"
   },
   "booking": {
     "title": "Checkout",

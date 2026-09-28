@@ -94,7 +94,9 @@
       "PACKAGE": "Պակետ"
     },
     "firstOffer": "",
-    "notFound": ""
+    "notFound": "",
+    "perVisitSaving": "",
+    "packageSaving": ""
   },
   "booking": {
     "title": "",

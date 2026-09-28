@@ -105,6 +105,7 @@
     "guarantee2": "Отмена за 24 ч",
     "guarantee3": "Проверенные мастера",
     "perVisitSaving": "−{amount} с визита",
+    "packageSaving": "Экономия {amount}",
     "firstVisitBannerTitle": "Скидка новому клиенту",
     "firstVisitBannerText": "−{percent}% от стоимости первого визита"
   },
