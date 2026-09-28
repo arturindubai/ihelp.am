@@ -39,7 +39,7 @@ export const fromMin = (m: number) => `${String(Math.floor(m / 60)).padStart(2, 
 export function packageWarnWindow(now: Date, daysAhead: number): { from: Date; to: Date } {
   const targetYmd = ymd(new Date(now.getTime() + daysAhead * 86400_000));
   return {
-    from: new Date(`${targetYmd}T00:00:00+04:00`),
-    to: new Date(`${targetYmd}T23:59:59.999+04:00`),
+    from: new Date(`${targetYmd}T00:00:00${TZ_OFFSET}`),
+    to: new Date(`${targetYmd}T23:59:59.999${TZ_OFFSET}`),
   };
 }

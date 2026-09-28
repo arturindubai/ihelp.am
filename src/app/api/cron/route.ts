@@ -8,6 +8,7 @@ import { runWatchdog } from "@/server/services/ccWork";
 import { getTick } from "@/server/services/workers";
 import { processQueue, cleanQueue } from "@/server/services/notifyQueue";
 import { findExpiringPackages } from "@/server/services/packages";
+import { runLogWatcher } from "@/server/services/logWatcher";
 import { sendMasterTomorrowSchedule } from "@/server/services/workerNotify";
 import { html, notifyTeam } from "@/server/notify";
 import { alertTech } from "@/server/alerts";
@@ -98,12 +99,13 @@ export async function GET(req: Request) {
   );
 
   // 3а. Предупреждения об истечении пакетов: за 7 и за 2 дня — команда свяжется с клиентом вручную
+  const daysForm = (n: number) => n === 1 ? "день" : n >= 2 && n <= 4 ? "дня" : "дней";
   let pkgWarn = 0;
   await step("pkg-warn", () => daily("pkg-warn", 9, async () => {
     for (const days of [7, 2]) {
       const packages = await findExpiringPackages(now, days);
       for (const p of packages) {
-        await notifyTeam(html`⏳ Пакет '${p.packageName}' клиента ${p.clientName}, ${p.clientPhone} истекает через ${days} дней (${ymd(p.expiresAt)}). Визитов осталось: ${p.remainingVisits}. Свяжитесь с клиентом.`);
+        await notifyTeam(html`⏳ Пакет '${p.packageName}' клиента ${p.clientName}, ${p.clientPhone} истекает через ${days} ${daysForm(days)} (${ymd(p.expiresAt)}). Визитов осталось: ${p.remainingVisits}. Свяжитесь с клиентом.`);
         pkgWarn++;
       }
     }
@@ -172,6 +174,9 @@ export async function GET(req: Request) {
     cleanImages = await cleanUnusedImages(now);
   }), undefined);
 
+  // 5д. Лог-вотчер: ошибки прода становятся входящими карточками IN-N
+  const lw = await step("log-watcher", () => runLogWatcher(), { created: 0, updated: 0, limited: false });
+
   // 6. Бэкапы: отметки пишет контейнер backup (Setting `_backup`)
   const b = await step("backup-state", async () => ((await db.setting.findUnique({ where: { key: "_backup" } }))?.value ?? null) as BackupState | null, null);
   if (b ? now.getTime() - time(b.lastOkAt) > 26 * HOUR : process.uptime() > 26 * 3600) {
@@ -194,5 +199,5 @@ export async function GET(req: Request) {
     console.error("[cron] disk check failed", e);
   }
 
-  return NextResponse.json({ ok: true, resumed, created, expired, pkgWarn, unassigned, masterScheduleSent, cleaned, cleanImages, diskFreePct, cc, nq });
+  return NextResponse.json({ ok: true, resumed, created, expired, pkgWarn, unassigned, masterScheduleSent, cleaned, cleanImages, diskFreePct, cc, nq, lw });
 }

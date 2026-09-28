@@ -1,7 +1,8 @@
 import { getTranslations } from "next-intl/server";
 import { ExternalLink } from "lucide-react";
 import { Link } from "@/i18n/navigation";
-import { designApproved, mockupPendingApprovals } from "@/server/services/ccBoard";
+import { designApproved, mockupPendingApprovals, mockupWaitingDesign } from "@/server/services/ccBoard";
+import { mockupHold, type MockupHold } from "@/lib/cc-design";
 import { workersOverview } from "@/server/services/workers";
 import { PRIORITIES } from "@/lib/backlog-labels";
 import { Card } from "@/components/admin/fields";
@@ -16,11 +17,12 @@ import { cn, dateLabel, timeLabel } from "@/lib/format";
  * дизайны на согласовании у владельца и утверждённые за две недели
  */
 export async function DesignTab({ locale, taskHref }: { locale: string; taskHref: (key: string) => string }) {
-  const [t, tb, tw, pending, approved, w] = await Promise.all([
+  const [t, tb, tw, pending, waiting, approved, w] = await Promise.all([
     getTranslations("admin.cc.designTab"),
     getTranslations("admin.cc.backlog"),
     getTranslations("admin.cc.workers"),
     mockupPendingApprovals(),
+    mockupWaitingDesign(),
     designApproved(),
     workersOverview(),
   ]);
@@ -68,6 +70,38 @@ export async function DesignTab({ locale, taskHref }: { locale: string; taskHref
           ))}
         </ul>
         {queue.length > 8 && <p className="pt-1 text-xs text-muted">{tw("more", { n: queue.length - 8 })}</p>}
+      </Card>
+
+      <Card title={t("waiting", { n: waiting.length })}>
+        <p className="mb-2 text-xs text-muted">{t("waitingHint")}</p>
+        {waiting.length === 0 ? (
+          <p className="text-sm text-muted">{t("waitingEmpty")}</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {waiting.map((x) => {
+              const hold: MockupHold = mockupHold(x);
+              const holdTone =
+                hold === "owner" ? "bg-warn-50 text-warn" :
+                hold === "product" ? "bg-warn-50 text-warn" :
+                hold === "active" ? "bg-ok-50 text-ok" :
+                "bg-surface text-muted";
+              return (
+                <li key={x.key} className="flex items-baseline gap-2 py-1.5 text-sm">
+                  <Link href={taskHref(x.key)} scroll={false} className="flex min-w-0 flex-1 items-baseline gap-2 hover:underline">
+                    <span className="w-20 shrink-0 font-mono text-xs text-muted">{x.key}</span>
+                    <span className="min-w-0 truncate">{x.title}</span>
+                  </Link>
+                  <span className={cn("chip shrink-0 text-[10px]", PRIORITY_TONE[x.priority])} title={PRIORITIES[x.priority]}>
+                    {x.priority.toUpperCase()}
+                  </span>
+                  <span className={cn("chip shrink-0 text-[10px]", holdTone)}>
+                    {t(`waitingHold.${hold}` as "waitingHold.queue")}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </Card>
 
       <Card title={`${t("pending", { n: pending.length })}`}>

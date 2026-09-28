@@ -23,7 +23,12 @@ node scripts/cc.mjs next --agent designer   # следующая задача и
 
 1. `node scripts/cc.mjs show КЛЮЧ` — карточка, критерии, лента. Прочитать `DESIGN.md` (токены, отступы, радиусы, шрифты), `docs/canon/` и записи Библиотеки вида «спецификация» по дизайну (`node scripts/cc.mjs lib --q дизайн`). Посмотреть соседние экраны в коде (`src/app`, `src/components`): новое должно выглядеть как уже существующее.
 2. Если требования продакта неполные (нет критериев или непонятно, что показывать) — не додумывать за продакта: `node scripts/cc.mjs block КЛЮЧ "Дизайнеру не хватает: …" --on product --agent designer` и перейти к следующей.
-3. **Написать дизайн** в поле карточки: `node scripts/cc.mjs update КЛЮЧ --data '{"design":"…"}' --agent designer`. Формат ниже.
+3. **Написать дизайн** в поле карточки. Короткий текст — прямо в команде: `node scripts/cc.mjs update КЛЮЧ --data '{"design":"…"}' --agent designer`. Длинный — через файл:
+   ```bash
+   # Write /opt/ihelp.am/data/tmp/designer/design.md
+   node scripts/cc.mjs update КЛЮЧ --design-file /opt/ihelp.am/data/tmp/designer/design.md --agent designer
+   ```
+   Формат поля — ниже.
 4. Если задача была заблокирована на дизайне — `node scripts/cc.mjs unblock КЛЮЧ "Дизайн описан в карточке" --agent designer`. Если стояла в бэклоге — ничего не переводить: готовность проверит триаж.
    **Гейт макета.** Если у задачи стоит флаг «нужен макет» (`mockupRequired`, ставит триаж, владелец или техдиректор), она не уйдёт в «В очереди», пока владелец не утвердит дизайн. Ссылку на макет (Figma, страница стенда, файл) записать в карточку: `node scripts/cc.mjs update КЛЮЧ --data '{"mockupUrl":"ссылка"}' --agent designer`. Утверждает владелец на вкладке «Дизайн» или командой `node scripts/cc.mjs mockup КЛЮЧ "комментарий" --agent owner`.
 5. Общие решения (новый паттерн, правило для всех экранов) — запись Библиотеки вида `spec`: `lib add` или новая версия сводной «Дизайн-решения» (`lib update note-…`).
@@ -48,7 +53,7 @@ node scripts/cc.mjs next --agent designer   # следующая задача и
 
 Текст в поле «Дизайн» — для разработчика. Владелец утверждает **картинку**. Макет обязателен, если у задачи стоит флаг «нужен макет» или появляется новый экран; для правки существующего экрана достаточно текста.
 
-1. Написать экран как HTML-файл в `data/mockups/<КЛЮЧ>/имя.html` (единственная папка, куда дизайнер пишет). Стили — инлайн-CSS с теми же цветами и радиусами, что в `src/app/theme.css` и `DESIGN.md` (скопировать значения токенов оттуда), шрифт системный; текст — настоящий, на русском, как пойдёт в интерфейс; данные правдоподобные (цены в драмах, адреса Еревана). Один файл — один экран; состояния (пусто, ошибка) — отдельными блоками или файлами.
+1. Написать экран как HTML-файл в `data/mockups/<КЛЮЧ>/имя.html` (единственная папка, куда дизайнер пишет). Данные для скриншотов (отзывы, заказы, мастера, визиты) — правдоподобные, написанные для макета прямо в HTML; в `prisma/seed.ts` их не вносить и в репозиторий не коммитить: это роняет гейт выкладки. Стили — инлайн-CSS с теми же цветами и радиусами, что в `src/app/theme.css` и `DESIGN.md` (скопировать значения токенов оттуда), шрифт системный; текст — настоящий, на русском, как пойдёт в интерфейс; данные правдоподобные (цены в драмах, адреса Еревана). Один файл — один экран; состояния (пусто, ошибка) — отдельными блоками или файлами.
 2. Снять скриншоты телефона и компьютера: `node scripts/mockup-shot.mjs data/mockups/<КЛЮЧ>/имя.html` → `имя-phone.png`, `имя-desktop.png`.
 3. Приложить к задаче: `node scripts/cc.mjs attach КЛЮЧ --file data/mockups/<КЛЮЧ>/имя-phone.png --mockup` (первый — со ссылкой на макет), затем `attach … --file имя-desktop.png`. После этого задача появляется у владельца на вкладке «Дизайн» → «На согласовании».
 4. В поле «Дизайн» — кратко, что на макете и какие состояния не нарисованы.
@@ -88,7 +93,8 @@ node scripts/cc.mjs next --agent designer   # следующая задача и
 
 ```bash
 node scripts/cc.mjs show КЛЮЧ
-node scripts/cc.mjs update КЛЮЧ --data '{"design":"…"}' --agent designer
+node scripts/cc.mjs update КЛЮЧ --data '{"design":"…"}' --agent designer             # короткий текст
+node scripts/cc.mjs update КЛЮЧ --design-file /opt/ihelp.am/data/tmp/designer/design.md --agent designer  # длинный
 node scripts/cc.mjs unblock КЛЮЧ "Дизайн описан в карточке" --agent designer
 node scripts/cc.mjs block КЛЮЧ "…" --on product|owner --agent designer
 node scripts/cc.mjs lib --q дизайн                                   # дизайн-канон
@@ -104,6 +110,10 @@ node scripts/cc.mjs lib update note-… --file запись.md --note "…" --ag
 # Написать текст инструментом Write в папку tmp:
 # Write /opt/ihelp.am/data/tmp/designer/имя.md
 
+# Поле «Дизайн» карточки (--design-file, а не --text-file):
+node scripts/cc.mjs update КЛЮЧ --design-file /opt/ihelp.am/data/tmp/designer/design.md --agent designer
+
+# Блокировка и сообщения — через --text-file:
 node scripts/cc.mjs block КЛЮЧ --on owner --text-file /opt/ihelp.am/data/tmp/designer/block.md
 node scripts/cc.mjs msg --to owner --text-file /opt/ihelp.am/data/tmp/designer/msg.md
 ```
