@@ -309,6 +309,8 @@ model Order {
   source            String        @default("web")
   cancelReason      String?
   expiresAt         DateTime?
+  /// Ключи отправленных клиентских уведомлений на уровне заказа: ["created", "cancelled"]
+  clientNotifiedEvents String[] @default([])
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -351,6 +353,8 @@ model Visit {
   remindedAt      DateTime?
   reviewRequestedAt DateTime?
   masterNote      String?
+  /// Ключи отправленных клиентских уведомлений на уровне визита: ["masterAssigned", "rescheduled:2026-09-28T06:00", "cancelled", "completed"]
+  clientNotifiedEvents String[] @default([])
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   review          Review?

@@ -1068,5 +1068,14 @@
       "hint": "",
       "notifications": ""
     }
+  },
+  "notify": {
+    "order": {
+      "created": "",
+      "masterAssigned": "",
+      "rescheduled": "",
+      "cancelled": "",
+      "completed": ""
+    }
   }
 }

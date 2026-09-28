@@ -1324,8 +1324,7 @@
         "scopeHint": "File or folder paths, one per line, e.g. src/server/services/booking.ts — parallel assignees won't conflict",
         "sourceIntake": "from Intake",
         "mockupRequired": "Mockup required",
-        "mockupUrl": "Mockup link",
-        "delete": "Delete"
+        "mockupUrl": "Mockup link"
       },
       "searchAll": "Search tasks",
       "pages": {
@@ -1854,6 +1853,15 @@
       "label": "Receive promotional offers",
       "hint": "Email and SMS",
       "notifications": "Notifications"
+    }
+  },
+  "notify": {
+    "order": {
+      "created": "✅ Order confirmed\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}\nTotal: {price}\nThank you for choosing iHelp! We will assign a master soon.",
+      "masterAssigned": "👷 Master assigned\nService: {serviceName}, {date} at {time}\nMaster: {masterName}\nFeel free to contact us with any questions.",
+      "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}",
+      "cancelled": "❌ Visit cancelled\nService: {serviceName}, {date}\nWant to reschedule? Place a new order on the website.",
+      "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}"
     }
   }
 }

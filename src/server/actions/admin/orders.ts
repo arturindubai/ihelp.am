@@ -8,6 +8,7 @@ import { getSettings } from "../../settings";
 import { BUSY_STATUSES, generateSubscriptionVisits, loadAvailability } from "../../services/booking";
 import { setCashCollected, setVisitStatus, refreshOrderState } from "../../services/visits";
 import { notifyMasterAssigned, notifyMasterRescheduled, notifyMasterCancelled } from "../../services/workerNotify";
+import { notifyClientMasterAssigned, notifyClientRescheduled, notifyClientCancelled, notifyClientVisitCancelled } from "../../services/bookingNotify";
 import { isMasterFree } from "@/lib/slots";
 import { atYerevan } from "@/lib/time";
 
@@ -37,11 +38,18 @@ export async function adminVisitAction(visitId: string, patch: { status?: VisitS
   if (patch.status && patch.status !== v.status) await setVisitStatus(v.id, patch.status, "админ");
   if (patch.cash !== undefined) await setCashCollected(v.id, patch.cash);
   await audit(u.id, "visit.update", "Visit", v.id, patch);
-  // Уведомления мастеру: назначение нового мастера, перенос даты/времени
+  // Уведомление клиента при отмене визита администратором
+  if (patch.status === "CANCELLED" && patch.status !== v.status) {
+    await notifyClientVisitCancelled(v.id).catch(() => {});
+  }
+  // Уведомления мастеру и клиенту: назначение нового мастера, перенос даты/времени
   if (patch.masterId && patch.masterId !== hadMaster) {
     await notifyMasterAssigned(v.id).catch(() => {});
-  } else if (wasMoved && hadMaster) {
-    await notifyMasterRescheduled(v.id).catch(() => {});
+    await notifyClientMasterAssigned(v.id).catch(() => {});
+  } else if (wasMoved) {
+    // Уведомить клиента при переносе визита в любом случае (с мастером или без)
+    if (hadMaster) await notifyMasterRescheduled(v.id).catch(() => {});
+    await notifyClientRescheduled(v.id).catch(() => {});
   }
   rv(v.orderId);
   return { ok: true };
@@ -62,6 +70,8 @@ export async function adminOrderAction(orderId: string, patch: { status?: OrderS
       const vsToCancel = await db.visit.findMany({ where: { orderId, status: { in: [...BUSY_STATUSES, "UNSCHEDULED"] }, masterId: { not: null } }, select: { id: true } });
       for (const vs of vsToCancel) await notifyMasterCancelled(vs.id).catch(() => {});
       await db.visit.updateMany({ where: { orderId, status: { in: [...BUSY_STATUSES, "UNSCHEDULED"] } }, data: { status: "CANCELLED" } });
+      // Уведомить клиента об отмене заказа
+      await notifyClientCancelled(orderId).catch(() => {});
     }
     if (patch.status === "PAUSED") {
       const until = patch.pausedUntil ? new Date(`${patch.pausedUntil}T00:00:00+04:00`) : null;
