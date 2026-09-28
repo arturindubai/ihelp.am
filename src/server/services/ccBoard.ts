@@ -6,7 +6,6 @@ import { unreadForOwner } from "./ccMessages";
 import { recentErrors } from "../logbuffer";
 import { flowOf, intakeTitle, laneOf, nextIntakeKey, sizeOf, weekStart } from "@/lib/cc-lanes";
 import { CLOSED_STATUSES, LEASE_MIN, OPEN_STATUSES } from "@/lib/cc-flow";
-import { isAgentAuthor } from "@/lib/cc-owner-question";
 import { testedCurrent, workersState } from "@/lib/workers";
 import { Prisma } from "@prisma/client";
 
@@ -40,7 +39,7 @@ export async function ccCounts() {
     db.task.groupBy({ by: ["status"], _count: true }),
     db.task.count({ where: { status: "review", layer: { not: "none" } } }),
     db.task.count({ where: { status: "review", layer: "none" } }),
-    db.task.count({ where: { status: "blocked", blockedOn: { in: ["owner", "product"] } } }),
+    db.task.count({ where: { status: "blocked", blockedOn: { in: ["owner", "product"] }, triagedAt: { not: null } } }),
     unreadForOwner(),
     db.workerRun.count({ where: { status: "running" } }),
     attention(),
@@ -68,7 +67,7 @@ export async function needsYou() {
     db.task.findMany({
       where: { status: "blocked", blockedOn: { in: ["owner", "product"] } },
       orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
-      select: { key: true, title: true, priority: true, blockedOn: true, blockedReason: true, updatedAt: true, triageNote: true, comments: { orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, kind: true, createdAt: true } } },
+      select: { key: true, title: true, priority: true, blockedOn: true, blockedReason: true, updatedAt: true, triageNote: true, triagedAt: true, comments: { orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, kind: true, createdAt: true } } },
     }),
     db.workerRun.findMany({ where: { status: { in: ["failed", "timeout"] }, startedAt: { gte: new Date(Date.now() - 24 * 3600_000) } }, orderBy: { startedAt: "desc" }, take: 10 }),
     getWorkersConfig(),
@@ -81,7 +80,7 @@ export async function needsYou() {
   return {
     owner: owner.map((x) => ({
       ...x,
-      ownerAnswered: x.comments[0] ? !isAgentAuthor(x.comments[0].author) : false,
+      ownerAnswered: x.triagedAt === null,
     })),
     stale: attn.stale,
     stuckReview: attn.review.filter((r) => r.health.stuckReview),
@@ -297,9 +296,7 @@ export async function boardAudit() {
     for (const d of t.depends) if (!by.has(d)) add("deps_unknown", `${t.key}→${d}`);
     if (t.status === "blocked") {
       if (!t.blockedOn || !t.blockedReason?.trim()) add("blocked_no_reason", t.key);
-      const last = t.comments[0];
-      const since = t.events[0]?.createdAt;
-      if (last && since && last.createdAt > since && !isAgentAuthor(last.author)) add("blocked_answered", t.key);
+      if ((t.blockedOn === "owner" || t.blockedOn === "product") && !t.triagedAt) add("blocked_answered", t.key);
       if (t.blockedOn === "deps" && !open.length) add("blocked_deps_closed", t.key);
     }
     if (t.status === "backlog" && !t.triagedAt) add("backlog_untriaged", t.key);
