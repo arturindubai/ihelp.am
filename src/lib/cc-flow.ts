@@ -202,6 +202,21 @@ export function isOwnerQuestion(task: { status: string; blockedOn: string | null
   return task.status === "blocked" && (task.blockedOn === "owner" || task.blockedOn === "product");
 }
 
+/** Дизайнер берёт только фронт/бэк+фронт, задачи с флагом макета или дизайн-исследование (assignee=designer) */
+export function isDesignerTask(t: { layer: string; mockupRequired?: boolean | null; assignee?: string | null }): boolean {
+  return t.layer === "front" || t.layer === "fullstack" || !!t.mockupRequired || t.assignee === "designer";
+}
+
+/** Продакт берёт только задачи с открытыми вопросами к нему */
+export function isProductTask(t: { needs: string[] }): boolean {
+  return t.needs.length > 0;
+}
+
+/** Роли, которым разрешено брать задачи в работу через claim (deployer, watchdog, triage и tester работают иначе) */
+export function canClaimRole(role: Role): boolean {
+  return role !== "deployer" && role !== "watchdog" && role !== "triage" && role !== "tester";
+}
+
 /** Гейт «Сделано»: код-задача — коммит в main и что проверено после выкладки; прочие — доказательство словами или файлом */
 export function doneGate(t: { layer: string }, proof: { sha?: string | null; text?: string | null; attachments?: number }): string | null {
   if (isCodeTask(t.layer) && !SHA_RE.test(proof.sha?.trim() ?? "")) return "sha_required";

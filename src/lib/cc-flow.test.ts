@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  canClaimRole,
   canCreateTask,
   canTransition,
   unblockTarget,
   doneGate,
   inTriageQueue,
+  isDesignerTask,
   isOwnerQuestion,
+  isProductTask,
   isReady,
   needsReason,
   nextStatuses,
@@ -49,6 +52,41 @@ describe("дизайнер", () => {
     expect(canTransition("in_progress", "review", "designer")).toBe(true);
     expect(canTransition("in_progress", "ready", "designer")).toBe(true);
     expect(canTransition("review", "done", "designer")).toBe(false);
+  });
+});
+
+describe("очередь дизайнера: отбор задач", () => {
+  it("готовая код-задача дизайнеру не выдаётся", () => {
+    expect(isDesignerTask({ layer: "back", mockupRequired: false, assignee: null })).toBe(false);
+    expect(isDesignerTask({ layer: "infra", mockupRequired: false, assignee: null })).toBe(false);
+    expect(isDesignerTask({ layer: "none", mockupRequired: false, assignee: null })).toBe(false);
+  });
+  it("фронт-задача и бэк+фронт — дизайнерские", () => {
+    expect(isDesignerTask({ layer: "front", mockupRequired: false, assignee: null })).toBe(true);
+    expect(isDesignerTask({ layer: "fullstack", mockupRequired: false, assignee: null })).toBe(true);
+  });
+  it("задача с флагом макета — дизайнерская независимо от слоя", () => {
+    expect(isDesignerTask({ layer: "back", mockupRequired: true, assignee: null })).toBe(true);
+    expect(isDesignerTask({ layer: "none", mockupRequired: true, assignee: null })).toBe(true);
+  });
+  it("дизайн-исследование (assignee=designer) — тоже задача дизайнера", () => {
+    expect(isDesignerTask({ layer: "none", mockupRequired: false, assignee: "designer" })).toBe(true);
+    expect(isDesignerTask({ layer: "back", mockupRequired: false, assignee: "designer" })).toBe(true);
+  });
+  it("продакт берёт только задачи с открытыми вопросами", () => {
+    expect(isProductTask({ needs: [] })).toBe(false);
+    expect(isProductTask({ needs: ["Ключ API"] })).toBe(true);
+    expect(isProductTask({ needs: ["А", "Б"] })).toBe(true);
+  });
+  it("тестировщик не берёт через claim — только через reviewTake", () => {
+    expect(canClaimRole("tester")).toBe(false);
+    expect(canClaimRole("deployer")).toBe(false);
+    expect(canClaimRole("watchdog")).toBe(false);
+    expect(canClaimRole("triage")).toBe(false);
+    expect(canClaimRole("dev")).toBe(true);
+    expect(canClaimRole("designer")).toBe(true);
+    expect(canClaimRole("nocode")).toBe(true);
+    expect(canClaimRole("product")).toBe(true);
   });
 });
 

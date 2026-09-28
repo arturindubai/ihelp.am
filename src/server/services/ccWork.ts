@@ -4,7 +4,7 @@ import { upsertNote } from "./library";
 import { alertTech } from "../alerts";
 import { html, notifyTech } from "../notify";
 import { BLOCKED_ON_LABELS, STATUSES } from "@/lib/backlog-labels";
-import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, doneGate, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
+import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, doneGate, isDesignerTask, isProductTask, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
 import type { Prisma, Task } from "@prisma/client";
 
 /**
@@ -231,8 +231,9 @@ export type ClaimOptions = {
  */
 export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Task | null> {
   const actor = agentActor(agent);
-  // Деплоер задачи не берёт: кто выкладывает, тот не пишет — иначе пропадает вторая пара глаз
-  if (actor.role === "deployer" || actor.role === "watchdog" || actor.role === "triage") throw new CcError("forbidden_role", actor.role);
+  // Деплоер задачи не берёт: кто выкладывает, тот не пишет — иначе пропадает вторая пара глаз.
+  // Тестировщик берёт только через reviewTake — статус review, не ready.
+  if (actor.role === "deployer" || actor.role === "watchdog" || actor.role === "triage" || actor.role === "tester") throw new CcError("forbidden_role", actor.role);
   const closed = await closedKeys();
   const now = new Date();
 
@@ -267,6 +268,10 @@ export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Tas
         if (t.status !== "ready" && !takeover) throw new CcError("not_ready_status", t.status);
         // Воркер «Продукт и не-код» берёт только задачи без кода: код пишет разработчик, проверяет тестировщик
         if (actor.role === "nocode" && t.layer !== "none") throw new CcError("forbidden_role", "nocode: code task");
+        // Дизайнер берёт только фронт/бэк+фронт, флаг макета или дизайн-исследование (assignee=designer)
+        if (actor.role === "designer" && !isDesignerTask(t)) throw new CcError("forbidden_role", "designer: not a designer task");
+        // Продакт берёт только задачи с открытыми вопросами к нему
+        if (actor.role === "product" && !isProductTask(t)) throw new CcError("forbidden_role", "product: no open needs");
         const missing = t.depends.filter((d) => !closed.has(d));
         if (missing.length && !takeover) throw new CcError("deps_open", missing.join(","));
         const clash = busy.filter((b) => b.key !== t.key && scopeOverlap(t.scope, b.scope).length > 0);
@@ -284,6 +289,8 @@ export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Tas
       if (opts.layer) filter.layer = opts.layer;
       if (opts.priority) filter.priority = opts.priority;
       if (actor.role === "nocode") Object.assign(filter, { layer: "none", needs: { isEmpty: true } });
+      else if (actor.role === "designer") Object.assign(filter, { OR: [{ layer: { in: ["front", "fullstack"] } }, { mockupRequired: true }] });
+      else if (actor.role === "product") Object.assign(filter, { needs: { isEmpty: false } });
       else if (opts.auto) Object.assign(filter, { layer: opts.layer ?? { not: "none" }, owner: { not: "product" }, needs: { isEmpty: true } });
       const candidates = await tx.task.findMany({ where: filter, take: 200 });
       const exclude = new Set<string>();
