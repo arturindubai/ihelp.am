@@ -14,6 +14,11 @@ export interface Slot {
   masterIds: string[];
 }
 
+export interface SlotWithAvailability extends Slot {
+  /** true — есть хотя бы один свободный мастер; false — все заняты */
+  available: boolean;
+}
+
 const overlaps = (a1: number, a2: number, b1: number, b2: number) => a1 < b2 && b1 < a2;
 
 /**
@@ -56,6 +61,55 @@ export function computeSlots(opts: {
   return [...byTime.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([t, ids]) => ({ time: fromMin(t), start: atYerevan(date, fromMin(t)), masterIds: ids }));
+}
+
+/**
+ * Все слоты дня: и свободные, и занятые (где все мастера заняты).
+ * Занятые слоты показываются зачёркнутыми — клиент видит картину загрузки.
+ */
+export function computeAllSlots(opts: {
+  date: string;
+  durationMin: number;
+  bufferMin: number;
+  stepMin: number;
+  notBefore: Date;
+  masters: MasterAvailability[];
+}): SlotWithAvailability[] {
+  const { date, durationMin, stepMin, notBefore, masters } = opts;
+  const wd = String(isoWeekday(date));
+
+  // Потенциальные точки: рабочие часы минус тайм-офф, без учёта занятости
+  const potentialTimes = new Set<number>();
+  for (const m of masters) {
+    const windows = m.workingHours?.[wd] || [];
+    for (const [from, to] of windows) {
+      const startMin = toMin(from);
+      const endMin = toMin(to);
+      for (let t = startMin; t + durationMin <= endMin; t += stepMin) {
+        const start = atYerevan(date, fromMin(t));
+        if (start < notBefore) continue;
+        const s = start.getTime();
+        const e = s + durationMin * 60_000;
+        if (m.timeOff.some((o) => overlaps(s, e, o.from.getTime(), o.to.getTime()))) continue;
+        potentialTimes.add(t);
+      }
+    }
+  }
+
+  const available = computeSlots(opts);
+  const availMap = new Map(available.map((sl) => [toMin(sl.time), sl]));
+
+  return [...potentialTimes]
+    .sort((a, b) => a - b)
+    .map((t) => {
+      const avail = availMap.get(t);
+      return {
+        time: fromMin(t),
+        start: atYerevan(date, fromMin(t)),
+        masterIds: avail?.masterIds ?? [],
+        available: !!avail,
+      };
+    });
 }
 
 /** Проверка, свободен ли конкретный мастер в момент start */

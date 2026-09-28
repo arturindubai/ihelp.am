@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { ArrowLeft, ChevronDown } from "lucide-react";
+import { ArrowLeft, ChevronDown, Check } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { getMastersForService, getServiceReviews, loadServiceRaw, localizeService } from "@/server/services/catalog";
 import { isFirstOrder } from "@/server/services/booking";
@@ -12,6 +12,8 @@ import { Icon } from "@/components/Icon";
 import { Rating, StarRow } from "@/components/Stars";
 import { ServiceConfigurator } from "@/components/service/ServiceConfigurator";
 import { Img } from "@/components/Img";
+
+const RATING_THRESHOLD = 5;
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;
@@ -38,14 +40,23 @@ export default async function ServicePage({ params }: { params: Promise<{ locale
           <ArrowLeft size={18} />
         </Link>
       </div>
-      <h1 className="h1 mt-4">{s.title}</h1>
-      <div className="mt-1 flex flex-wrap items-center gap-2">
-        <Rating value={s.rating} count={s.reviewsCount} label={tc("reviews", { count: s.reviewsCount })} />
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <span className="chip"><Check size={13} />{t("guarantee1")}</span>
+        <span className="chip"><Check size={13} />{t("guarantee2")}</span>
+        <span className="chip"><Check size={13} />{t("guarantee3")}</span>
       </div>
+
+      <h1 className="h1 mt-3">{s.title}</h1>
+      {s.reviewsCount >= RATING_THRESHOLD && (
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <Rating value={s.rating} count={s.reviewsCount} label={tc("reviews", { count: s.reviewsCount })} />
+        </div>
+      )}
       {Number.isFinite(minPrice) && <p className="mt-1 text-sm font-medium">{t("startsAt", { price: amd(minPrice) })}</p>}
       {s.description && <p className="mt-2 text-[15px] text-muted">{s.description}</p>}
 
-      <ServiceConfigurator s={s} rules={settings.pricing} isFirstOrder={first} />
+      <ServiceConfigurator s={s} rules={settings.pricing} isFirstOrder={first} policy={s.policy ?? undefined} />
 
       {s.note?.body && (
         <div className="mt-2 rounded-2xl bg-ok-50 p-4">
@@ -140,12 +151,6 @@ export default async function ServicePage({ params }: { params: Promise<{ locale
         </section>
       )}
 
-      {s.policy && (
-        <section className="mt-8">
-          <h2 className="h2 mb-2">{t("policy")}</h2>
-          <p className="text-sm whitespace-pre-line text-muted">{s.policy}</p>
-        </section>
-      )}
     </div>
   );
 }

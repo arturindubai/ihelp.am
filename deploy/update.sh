@@ -14,15 +14,26 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 
 echo "▶ 1/7 Бэкап перед обновлением"
-if docker compose ps --status running --services | grep -qx backup; then
-  timeout 900 docker compose exec -T backup sh /backup.sh once predeploy
+if [ -z "${PREDEPLOY_DONE:-}" ]; then
+  if docker compose ps --status running --services | grep -qx backup; then
+    backup_label="$(date +%H%M%S)${DEPLOY_KEY:+-$DEPLOY_KEY}"
+    timeout 900 docker compose exec -T backup sh /backup.sh once "$backup_label"
+  else
+    echo "  контейнер backup не запущен — пропускаю"
+  fi
 else
-  echo "  контейнер backup не запущен — пропускаю"
+  echo "  бэкап снят до update.sh (PREDEPLOY_DONE) — пропускаю"
 fi
 
 echo "▶ 2/7 Сохраняю текущие образы для отката (:previous)"
 for s in app migrate; do
-  if docker image inspect "homecare-$s:latest" > /dev/null 2>&1; then docker tag "homecare-$s:latest" "homecare-$s:previous"; fi
+  # Берём образ из контейнера, а не тег :latest — он мог обновиться после сборки без запуска
+  running_id=$(docker inspect --format='{{.Image}}' "homecare-$s-1" 2>/dev/null || true)
+  if [ -n "$running_id" ]; then
+    docker tag "$running_id" "homecare-$s:previous"
+  elif docker image inspect "homecare-$s:latest" > /dev/null 2>&1; then
+    docker tag "homecare-$s:latest" "homecare-$s:previous"
+  fi
 done
 
 echo "▶ 3/7 Сборка (на этом сервере — до 40 минут; лучше вне пиковых часов)"
@@ -34,8 +45,12 @@ if ! deploy/gate.sh; then
   exit 1
 fi
 
-echo "▶ 5/7 Запуск (миграции базы применяются автоматически)"
-docker compose up -d
+echo "▶ 5/7 Запуск на готовом образе (миграции базы применяются автоматически)"
+echo "$(< src/lib/deploy-marker.txt)"
+docker compose up -d --no-build
+# Пересоздаём backup, чтобы получить актуальный /backup.sh (git при merge меняет inode файла)
+echo "  пересоздаём контейнер backup"
+docker compose up -d --no-build --force-recreate backup
 
 echo "▶ 6/7 Ожидание готовности приложения"
 for _ in $(seq 1 60); do
@@ -51,5 +66,6 @@ if ! deploy/smoke.sh "$@"; then
 fi
 
 docker image prune -f > /dev/null
-docker builder prune -f --filter until=720h > /dev/null
+# Кэш сборки ограничиваем 10 ГБ; --keep-storage поддерживается с Docker 20.10
+docker builder prune -f --keep-storage 10g > /dev/null 2>&1 || docker builder prune -f --filter until=168h > /dev/null
 echo "✓ Обновление завершено: $(git log -1 --format='%h %s')"

@@ -1,9 +1,10 @@
 import { getLocale } from "next-intl/server";
 import { loadMessages } from "@/i18n/messages";
+import ruMessages from "@/../messages/ru.json";
 
 /** Страница 404 внутри языкового раздела: тексты берутся из переводов, при сбое — по-русски */
 export default async function NotFound() {
-  let texts = { notFound: "Страница не найдена", toHome: "На главную" };
+  let texts = { notFound: ruMessages.common.notFound, toHome: ruMessages.common.toHome };
   let locale = "ru";
   try {
     locale = await getLocale();

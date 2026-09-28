@@ -69,9 +69,10 @@ const TRANSITIONS: Record<TaskStatusKey, Partial<Record<TaskStatusKey, Role[]>>>
   ready: { backlog: TRIAGE, blocked: ANY, cancelled: PLAN },
   in_progress: { review: WORK, ready: [...WORK, ...PLAN, "watchdog"], blocked: ANY, backlog: PLAN, cancelled: PLAN },
   // Сторож блокирует проверку, когда тестировщик дважды закончил без вердикта (src/server/services/workers.ts)
-  review: { done: RELEASE, ready: [...RELEASE, ...PLAN, "tester"], blocked: [...RELEASE, ...PLAN, "tester", "watchdog"] },
+  review: { done: RELEASE, ready: [...RELEASE, ...PLAN, "tester"], blocked: [...RELEASE, ...PLAN, "tester", "watchdog"], cancelled: PLAN },
   // Разблокировка ведёт туда, откуда задача была заблокирована (unblockTarget): с проверки — на проверку
-  blocked: { ready: ANY, review: ANY, backlog: TRIAGE, cancelled: PLAN },
+  // watchdog добавлен в backlog: плановая разблокировка по blockedUntil возвращает задачу на разбор
+  blocked: { ready: ANY, review: ANY, backlog: [...TRIAGE, "watchdog"], cancelled: PLAN },
   done: { ready: RELEASE },
   cancelled: { backlog: PLAN },
 };
@@ -151,14 +152,55 @@ export const isReady = (items: CheckItem[]) => items.every((i) => i.ok || !i.har
 /** Код-задача: её доказательство готовности — коммит в main, а не слова */
 export const isCodeTask = (layer: string) => layer !== "none";
 
-/** Гейт «На проверке»: у код-задачи есть ветка, у любой — отчёт, по которому деплоер поймёт, что проверять */
-export function reviewGate(t: { layer: string; branch?: string | null }, report: string): string | null {
+/** Гейт «На проверке»: у код-задачи есть ветка, у любой — отчёт; если переданы opts — проверяем releaseNote и ownerSummary */
+export function reviewGate(
+  t: { layer: string; branch?: string | null },
+  report: string,
+  opts?: { releaseNote?: string; ownerSummary?: string },
+): string | null {
   if (isCodeTask(t.layer) && !t.branch?.trim()) return "branch_required";
   if (report.trim().length < 40) return "report_required";
+  if (opts !== undefined) {
+    if (!opts.releaseNote?.trim()) return "release_note_required";
+    if (!opts.ownerSummary?.trim()) return "owner_summary_required";
+  }
   return null;
 }
 
 export const SHA_RE = /^[0-9a-f]{7,40}$/i;
+
+/**
+ * Гейт «В очереди»: задача с открытыми вопросами к продукту не идёт разработчику.
+ * Обойти может только владелец или техдиректор с причиной (force=true).
+ * Аналог reviewGate и doneGate для перехода в «В очереди»
+ */
+export function readyNeedsGate(needs: string[], role: Role, force: boolean): "needs_open" | null {
+  if (needs.length === 0) return null;
+  if (force && (role === "owner" || role === "cto")) return null;
+  return "needs_open";
+}
+
+/** Попадает ли задача в очередь триажа: новые из бэклога и заблокированные на owner/product/design без triagedAt */
+export function inTriageQueue(task: { status: string; triagedAt: Date | null; blockedOn: string | null }): boolean {
+  if (task.triagedAt !== null) return false;
+  if (task.status === "backlog") return true;
+  if (task.status === "blocked" && (task.blockedOn === "owner" || task.blockedOn === "product" || task.blockedOn === "design")) return true;
+  return false;
+}
+
+/**
+ * Ответ владельца в «Нужен ты» всегда возвращает задачу триажу для повторного разбора.
+ * В «В очереди» задача не переходит напрямую — triagedAt сбрасывается, триаж принимает решение.
+ * Функция документирует инвариант: blockedFrom не влияет на решение
+ */
+export function ownerAnswerTarget(_blockedFrom: string | null | undefined): "triage" {
+  return "triage";
+}
+
+/** Является ли задача вопросом к владельцу, требующим ответа в «Нужен ты» */
+export function isOwnerQuestion(task: { status: string; blockedOn: string | null }): boolean {
+  return task.status === "blocked" && (task.blockedOn === "owner" || task.blockedOn === "product");
+}
 
 /** Гейт «Сделано»: код-задача — коммит в main и что проверено после выкладки; прочие — доказательство словами или файлом */
 export function doneGate(t: { layer: string }, proof: { sha?: string | null; text?: string | null; attachments?: number }): string | null {
@@ -211,6 +253,7 @@ export type HealthTask = {
   staleAt: Date | null;
   updatedAt: Date;
   blockedOn: string | null;
+  blockedUntil: Date | null;
   depends: string[];
   rework: number;
   reclaims: number;
@@ -262,11 +305,13 @@ export type WatchdogPlan = {
   stuckReview: string[];
   /** Тестировщик или деплоер держал задачу на проверке и замолчал — снять аренду, статус не трогать */
   releaseLease: string[];
+  /** Наступила дата автоматической разблокировки — вернуть на разбор */
+  unblockScheduled: string[];
 };
 
 /** Решения сторожа по текущему состоянию доски. Применяет их сервис — здесь только логика */
 export function watchdogPlan(tasks: HealthTask[], closedKeys: Set<string>, now = new Date()): WatchdogPlan {
-  const plan: WatchdogPlan = { markStale: [], revive: [], autoReturn: [], phantom: [], unblock: [], stuckReview: [], releaseLease: [] };
+  const plan: WatchdogPlan = { markStale: [], revive: [], autoReturn: [], phantom: [], unblock: [], stuckReview: [], releaseLease: [], unblockScheduled: [] };
   for (const t of tasks) {
     const h = taskHealth(t, closedKeys, now);
     if (h.stale && !t.staleAt) plan.markStale.push(t.key);
@@ -276,6 +321,7 @@ export function watchdogPlan(tasks: HealthTask[], closedKeys: Set<string>, now =
     if (t.status === "blocked" && t.blockedOn === "deps" && t.depends.every((d) => closedKeys.has(d))) plan.unblock.push(t.key);
     if (h.stuckReview) plan.stuckReview.push(t.key);
     if (t.status === "review" && t.claimedBy && (!t.claimUntil || t.claimUntil < now)) plan.releaseLease.push(t.key);
+    if (t.status === "blocked" && t.blockedUntil && t.blockedUntil <= now) plan.unblockScheduled.push(t.key);
   }
   return plan;
 }

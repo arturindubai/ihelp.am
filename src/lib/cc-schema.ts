@@ -25,7 +25,12 @@ export const taskContentSchema = z.object({
   estimate: z.enum(["S", "M", "L"]).nullable().optional(),
   scope: z.array(z.string().max(200)).max(30).optional(),
   mockupRequired: z.boolean().optional(),
-  mockupUrl: z.string().max(500).nullable().optional(),
+  mockupUrl: z
+    .string()
+    .max(500)
+    .refine((v) => !v || /^(https?:\/\/|\/uploads\/)/.test(v), { message: "mockupUrl must start with https?:// or /uploads/" })
+    .nullable()
+    .optional(),
 });
 
 export type TaskContentInput = z.infer<typeof taskContentSchema>;

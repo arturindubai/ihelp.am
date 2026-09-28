@@ -23,7 +23,7 @@ export function LoginClient({
       telegramBot={telegramBot}
       signup={signup}
       onDone={(role) => {
-        const dest = next || (role === "MASTER" ? "/pro" : ["OWNER", "ADMIN", "OPERATOR"].includes(role) ? "/admin" : "/account");
+        const dest = next || (role === "MASTER" ? "/pro" : role === "OPERATOR" ? "/operator" : ["OWNER", "ADMIN"].includes(role) ? "/admin" : "/account");
         router.replace(dest);
         router.refresh();
       }}

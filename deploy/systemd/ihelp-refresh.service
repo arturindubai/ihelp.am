@@ -1,0 +1,16 @@
+# iHelp: ежемесячное обновление базовых образов контейнеров. Запускается таймером ihelp-refresh.timer.
+# Установка: deploy/systemd/install.sh · Лог: journalctl -u ihelp-refresh -n 100
+[Unit]
+Description=iHelp: ежемесячное обновление базовых образов
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/ihelp.am
+Environment=HOME=/root
+ExecStart=/opt/ihelp.am/deploy/refresh-images.sh
+Nice=10
+TimeoutStartSec=3600
+StandardOutput=journal
+StandardError=journal

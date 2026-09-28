@@ -44,7 +44,7 @@ export default async function ReleasesPage({ params }: { params: Promise<{ local
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="font-medium">{x.title}</div>
-                      <p className="mt-0.5 text-sm text-muted">{firstSentence(x.summary)}</p>
+                      <p className="mt-0.5 text-sm text-muted">{x.releaseNote || firstSentence(x.summary)}</p>
                     </div>
                     <span className="shrink-0 text-xs text-muted">{dateLabel(x.doneAt!, locale, { day: "numeric", month: "short" })}</span>
                   </div>

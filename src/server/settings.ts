@@ -30,7 +30,7 @@ export interface Settings {
     telegram: { enabled: boolean; gatewayToken: string };
   };
   /** telegramBotUsername — имя бота без @ (для кнопки «Войти через Telegram»); заполняется при подключении входа через бота */
-  notify: { telegramBotToken: string; telegramChatId: string; techChatId: string; telegramBotUsername: string };
+  notify: { telegramBotToken: string; telegramChatId: string; techChatId: string; telegramBotUsername: string; teamChatId: string; telegramOrderThreadId: string; telegramTechThreadId: string };
   /** Вход через Google (OAuth). Адрес возврата: <APP_URL>/api/auth/google/callback — работает только по https */
   google: { enabled: boolean; clientId: string; clientSecret: string };
   /** Вход через Apple (Sign in with Apple). Адрес возврата: <APP_URL>/api/auth/apple/callback — работает только по https.
@@ -38,6 +38,10 @@ export interface Settings {
   apple: { enabled: boolean; teamId: string; keyId: string; clientId: string; privateKey: string };
   /** Отправка писем через Resend: домен должен быть подтверждён в кабинете сервиса */
   mail: { enabled: boolean; apiKey: string; from: string; replyTo: string };
+  /** Сессии: сроки хранения куки для клиентов и персонала (OPERATOR/ADMIN/OWNER) */
+  auth: { clientSessionDays: number; staffSessionDays: number };
+  /** Вход через Telegram Login Widget на странице входа. Требует /setdomain в @BotFather для ihelp.am */
+  telegramWidget: { enabled: boolean };
   /**
    * Бот команды в Telegram (как бот LIA): задачи владельца → входящие IN-N, «статус», сообщения «Нужен ты».
    * Отдельный от бота входа клиентов (notify.telegramBotToken). Токен вставляется в Control Center → «Ключи»
@@ -86,10 +90,12 @@ export const DEFAULT_SETTINGS: Settings = {
     whatsapp: { enabled: false, phoneNumberId: "", accessToken: "", templateName: "", templateLang: "ru" },
     telegram: { enabled: false, gatewayToken: "" },
   },
-  notify: { telegramBotToken: "", telegramChatId: "", techChatId: "", telegramBotUsername: "" },
+  notify: { telegramBotToken: "", telegramChatId: "", techChatId: "", telegramBotUsername: "", teamChatId: "", telegramOrderThreadId: "", telegramTechThreadId: "" },
   google: { enabled: false, clientId: "", clientSecret: "" },
   apple: { enabled: false, teamId: "", keyId: "", clientId: "", privateKey: "" },
   mail: { enabled: false, apiKey: "", from: "", replyTo: "" },
+  auth: { clientSessionDays: 60, staffSessionDays: 7 },
+  telegramWidget: { enabled: false },
   team: { botToken: "", botUsername: "", members: [], linkCode: "", linkCodeAt: "" },
 };
 

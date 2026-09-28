@@ -123,10 +123,25 @@ async function syncBacklog() {
       scope: t.scope ?? [],
       sort: i,
     };
-    const existing = await db.task.findUnique({ where: { key: t.key }, select: { id: true, source: true } });
+    const existing = await db.task.findUnique({ where: { key: t.key }, select: { id: true, source: true, triagedAt: true } });
     // Задачу, отредактированную в админке, деплой не перезаписывает
     if (existing) {
-      if (existing.source === "code") await db.task.update({ where: { key: t.key }, data: content });
+      if (existing.source === "code") {
+        // У уже разобранных задач (triagedAt != null) поля, которые правит команда, не сбрасываются:
+        // needs, owner, scope, depends, estimate — решения триажа и продакта, а не данные из кода
+        const triaged = !!existing.triagedAt;
+        await db.task.update({
+          where: { key: t.key },
+          data: {
+            ...content,
+            needs: triaged ? undefined : content.needs,
+            owner: triaged ? undefined : content.owner,
+            scope: triaged ? undefined : content.scope,
+            depends: triaged ? undefined : content.depends,
+            estimate: triaged ? undefined : content.estimate,
+          },
+        });
+      }
     }
     else {
       created++;

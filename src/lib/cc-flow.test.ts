@@ -4,11 +4,15 @@ import {
   canTransition,
   unblockTarget,
   doneGate,
+  inTriageQueue,
+  isOwnerQuestion,
   isReady,
   needsReason,
   nextStatuses,
+  ownerAnswerTarget,
   pickNext,
   readiness,
+  readyNeedsGate,
   reviewGate,
   roleOf,
   scopeOverlap,
@@ -33,6 +37,7 @@ const task = (patch: Partial<HealthTask> = {}): HealthTask => ({
   staleAt: null,
   updatedAt: min(-10),
   blockedOn: null,
+  blockedUntil: null,
   depends: [],
   rework: 0,
   reclaims: 0,
@@ -55,6 +60,42 @@ describe("разблокировка", () => {
     expect(unblockTarget("backlog", "dev")).toBe("ready");
     expect(unblockTarget("in_progress", "owner")).toBe("ready");
     expect(unblockTarget(null, "owner")).toBe("ready");
+  });
+
+  // Случай CONTENT-6: заблокирована на дизайне, blockedFrom ready, один открытый вопрос без слова «макет».
+  // После утверждения дизайна owner переходит задачу в ready — но гейт needs_open блокирует.
+  // Задача должна попасть к триажу, а не зависнуть молча.
+  it("CONTENT-6: после утверждения дизайна owner может перейти blocked→ready", () => {
+    expect(canTransition("blocked", "ready", "owner")).toBe(true);
+  });
+  it("CONTENT-6: readyNeedsGate блокирует переход при открытых вопросах без force", () => {
+    expect(readyNeedsGate(["Нужно согласовать текст кнопки"], "owner", false)).toBe("needs_open");
+  });
+  it("CONTENT-6: owner с force может обойти opens вопросы и отправить задачу в очередь", () => {
+    expect(readyNeedsGate(["Нужно согласовать текст кнопки"], "owner", true)).toBeNull();
+  });
+  it("CONTENT-6: роль из агентского имени — dev, из имени человека — тоже dev (не owner)", () => {
+    expect(roleOf("Артур")).toBe("dev");
+    expect(roleOf("owner")).toBe("owner");
+  });
+  // Случай CONTENT-6: заблокирована на дизайне, triagedAt пуст — должна попасть в очередь триажа
+  it("CONTENT-6: задача blocked/design/triagedAt=null попадает в очередь триажа", () => {
+    expect(inTriageQueue({ status: "blocked", blockedOn: "design", triagedAt: null })).toBe(true);
+  });
+  it("уже разобранная задача не попадает в очередь триажа повторно", () => {
+    expect(inTriageQueue({ status: "blocked", blockedOn: "design", triagedAt: new Date() })).toBe(false);
+  });
+  it("blocked/owner и blocked/product тоже в очереди триажа", () => {
+    expect(inTriageQueue({ status: "blocked", blockedOn: "owner", triagedAt: null })).toBe(true);
+    expect(inTriageQueue({ status: "blocked", blockedOn: "product", triagedAt: null })).toBe(true);
+  });
+  it("blocked/tech и blocked/external не попадают в очередь триажа", () => {
+    expect(inTriageQueue({ status: "blocked", blockedOn: "tech", triagedAt: null })).toBe(false);
+    expect(inTriageQueue({ status: "blocked", blockedOn: "external", triagedAt: null })).toBe(false);
+  });
+  it("бэклог без triagedAt попадает в очередь триажа", () => {
+    expect(inTriageQueue({ status: "backlog", blockedOn: null, triagedAt: null })).toBe(true);
+    expect(inTriageQueue({ status: "backlog", blockedOn: null, triagedAt: new Date() })).toBe(false);
   });
 });
 
@@ -95,8 +136,16 @@ describe("переходы", () => {
     expect(canTransition("backlog", "in_progress", "owner")).toBe(false);
     expect(nextStatuses("backlog", "cto")).toEqual(["ready", "blocked", "cancelled"]);
   });
+  it("владелец и CTO могут отклонить задачу с проверки, разработчик — нет", () => {
+    expect(canTransition("review", "cancelled", "owner")).toBe(true);
+    expect(canTransition("review", "cancelled", "cto")).toBe(true);
+    expect(canTransition("review", "cancelled", "product")).toBe(true);
+    expect(canTransition("review", "cancelled", "deployer")).toBe(false);
+    expect(canTransition("review", "cancelled", "dev")).toBe(false);
+  });
   it("возврат на доработку и отмена требуют причины", () => {
     expect(needsReason("review", "ready")).toBe(true);
+    expect(needsReason("review", "cancelled")).toBe(true);
     expect(needsReason("ready", "cancelled")).toBe(true);
     expect(needsReason("backlog", "ready")).toBe(false);
   });
@@ -159,6 +208,15 @@ describe("гейты сдачи", () => {
     expect(reviewGate({ layer: "back", branch: "task/AUTH-1" }, "готово")).toBe("report_required");
     expect(reviewGate({ layer: "back", branch: "task/AUTH-1" }, report)).toBeNull();
     expect(reviewGate({ layer: "none", branch: null }, report)).toBeNull();
+  });
+  it("если opts переданы — требует releaseNote и ownerSummary", () => {
+    const report = "Сделано: вход через бота. Проверено: tsc, vitest, стенд 8082.";
+    const note = "Теперь клиент видит статус заказа в кабинете";
+    const summary = "Сделано: статус заказа; Проверить: кабинет → мои заказы; Риск: нет";
+    expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, {})).toBe("release_note_required");
+    expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note })).toBe("owner_summary_required");
+    expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note, ownerSummary: summary })).toBeNull();
+    expect(reviewGate({ layer: "none", branch: null }, report, { releaseNote: note, ownerSummary: summary })).toBeNull();
   });
   it("«Готово» у код-задачи — только с коммитом и доказательством", () => {
     expect(doneGate({ layer: "back" }, { text: "smoke OK, вход проверен в проде" })).toBe("sha_required");
@@ -231,6 +289,37 @@ describe("здоровье и сторож", () => {
     expect(watchdogPlan([b], new Set(), now).unblock).toEqual([]);
     expect(watchdogPlan([b], new Set(["X"]), now).unblock).toEqual(["B1"]);
   });
+  it("задача с blockedUntil в прошлом попадает в unblockScheduled", () => {
+    const past = task({ key: "S1", status: "blocked", blockedOn: "external", claimedBy: null, claimUntil: null, blockedUntil: min(-1) });
+    const future = task({ key: "S2", status: "blocked", blockedOn: "external", claimedBy: null, claimUntil: null, blockedUntil: min(60 * 24) });
+    const noDate = task({ key: "S3", status: "blocked", blockedOn: "tech", claimedBy: null, claimUntil: null, blockedUntil: null });
+    const plan = watchdogPlan([past, future, noDate], new Set(), now);
+    expect(plan.unblockScheduled).toEqual(["S1"]);
+  });
+});
+
+describe("ответ владельца и гейт needs_open", () => {
+  it("ответ владельца при любом blockedFrom возвращает задачу триажу, не в «В очереди»", () => {
+    expect(ownerAnswerTarget(null)).toBe("triage");
+    expect(ownerAnswerTarget("ready")).toBe("triage");
+    expect(ownerAnswerTarget("backlog")).toBe("triage");
+    expect(ownerAnswerTarget("in_progress")).toBe("triage");
+  });
+  it("гейт needs_open блокирует переход в «В очереди» с открытыми вопросами к продукту", () => {
+    expect(readyNeedsGate([], "triage", false)).toBeNull();
+    expect(readyNeedsGate([], "owner", false)).toBeNull();
+    expect(readyNeedsGate(["Ключ API Stripe"], "triage", false)).toBe("needs_open");
+    expect(readyNeedsGate(["Ключ API Stripe"], "dev", false)).toBe("needs_open");
+    expect(readyNeedsGate(["Ключ API Stripe"], "product", false)).toBe("needs_open");
+    expect(readyNeedsGate(["Ключ API Stripe", "Цена подписки"], "owner", false)).toBe("needs_open");
+  });
+  it("владелец и техдиректор могут обойти гейт needs_open с force=true", () => {
+    expect(readyNeedsGate(["Ключ API Stripe"], "owner", true)).toBeNull();
+    expect(readyNeedsGate(["Ключ API Stripe"], "cto", true)).toBeNull();
+    expect(readyNeedsGate(["Ключ API Stripe"], "product", true)).toBe("needs_open");
+    expect(readyNeedsGate(["Ключ API Stripe"], "triage", true)).toBe("needs_open");
+    expect(readyNeedsGate(["Ключ API Stripe"], "dev", true)).toBe("needs_open");
+  });
 });
 
 describe("запрет воркерам заводить задачи и входящие", () => {
@@ -277,5 +366,26 @@ describe("роли воркеров триажа и «Продукт и не-к�
     expect(canTransition("backlog", "blocked", "triage")).toBe(true);
     expect(canTransition("review", "done", "triage")).toBe(false);
     expect(canTransition("in_progress", "review", "triage")).toBe(false);
+  });
+});
+
+describe("фильтр вопросов к владельцу (needsYou)", () => {
+  it("заблокированная задача на owner или product — вопрос к владельцу", () => {
+    expect(isOwnerQuestion({ status: "blocked", blockedOn: "owner" })).toBe(true);
+    expect(isOwnerQuestion({ status: "blocked", blockedOn: "product" })).toBe(true);
+  });
+  it("задача с blockedOn=external не появляется в «Нужен ты»", () => {
+    expect(isOwnerQuestion({ status: "blocked", blockedOn: "external" })).toBe(false);
+  });
+  it("отменённая задача не появляется в «Нужен ты» даже с blockedOn=owner", () => {
+    expect(isOwnerQuestion({ status: "cancelled", blockedOn: "owner" })).toBe(false);
+    expect(isOwnerQuestion({ status: "cancelled", blockedOn: "product" })).toBe(false);
+  });
+  it("другие статусы и другие blockedOn не являются вопросами к владельцу", () => {
+    expect(isOwnerQuestion({ status: "in_progress", blockedOn: null })).toBe(false);
+    expect(isOwnerQuestion({ status: "blocked", blockedOn: "tech" })).toBe(false);
+    expect(isOwnerQuestion({ status: "blocked", blockedOn: "deps" })).toBe(false);
+    expect(isOwnerQuestion({ status: "blocked", blockedOn: null })).toBe(false);
+    expect(isOwnerQuestion({ status: "done", blockedOn: "owner" })).toBe(false);
   });
 });

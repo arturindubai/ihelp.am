@@ -45,7 +45,7 @@ export async function verifyCodeAction(phoneRaw: string, code: string, locale: s
     const exp = Date.now() + 10 * 60_000;
     return { ok: true as const, needName: true, ticket: `${user.id}.${exp}.${hash(`${user.id}.${exp}`)}`, role: user.role } as const;
   }
-  await createSession(user.id);
+  await createSession(user.id, user.role);
   return { ok: true as const, needName: false, role: user.role } as const;
 }
 
@@ -88,7 +88,7 @@ export async function verifyEmailLoginCodeAction(emailRaw: string, code: string)
   if (!(await verifyOtp(email, code))) return { ok: false as const, error: "code" };
   const user = await verifiedUserByEmail(email);
   if (!user || user.blocked) return { ok: false as const, error: "code" };
-  await createSession(user.id);
+  await createSession(user.id, user.role);
   await audit(user.id, "auth.email", "User", user.id);
   return { ok: true as const, role: user.role };
 }
@@ -124,7 +124,7 @@ export async function finishSignupAction(ticket: string, nameRaw: string, emailR
     const now = new Date();
     const created = await db.user.create({ data: { phone: t.phone, email, emailVerifiedAt: now, name, locale: t.locale, privacyConsentAt: now } });
     const user = await linkMasterRole(created);
-    await createSession(user.id);
+    await createSession(user.id, user.role);
     await audit(user.id, "auth.signup", "User", user.id);
     return { ok: true as const, role: user.role };
   } catch {
@@ -138,13 +138,15 @@ export async function completeSignupAction(ticket: string, name: string) {
   if (!id || !exp || Number(exp) < Date.now() || sig !== hash(`${id}.${exp}`)) return { ok: false };
   const n = name.trim().slice(0, 80);
   if (!n) return { ok: false };
+  let role: string | undefined;
   try {
-    await db.user.update({ where: { id }, data: { name: n } });
+    const updated = await db.user.update({ where: { id }, data: { name: n } });
+    role = updated.role;
   } catch {
     // билет регистрации нового номера имеет тот же вид и подпись, но id пользователя в нём нет — не падаем
     return { ok: false };
   }
-  await createSession(id);
+  await createSession(id, role);
   return { ok: true };
 }
 

@@ -104,12 +104,17 @@ function heads() {
 
 const isActive = (unit) => ["active", "activating", "deactivating", "reloading"].includes(sh("systemctl", ["is-active", unit]).stdout.trim());
 
-/** Итог запуска по JSON claude -p: закончен, ошибка или упёрлись в лимит подписки (та же логика, что runOutcome в src/lib/workers.ts) */
-function outcome(result, killed) {
-  const text = `${result?.result ?? ""} ${result?.subtype ?? ""}`;
+/** Итог запуска по JSON claude -p: закончен, ошибка, упёрлись в лимит или команда записи в карточку отклонена правами */
+function outcome(result, killed, err = "") {
+  const text = `${result?.result ?? ""} ${result?.subtype ?? ""} ${err}`;
   if (/usage limit|limit reached|rate.?limit|out of (extra )?usage|5-hour limit|weekly limit/i.test(text)) return "limit";
   if (!result) return killed ? "timeout" : "failed";
   if (result.subtype === "error_max_turns") return "failed";
+  // Запись в карточку отклонена правилами прав: Bash(node scripts/cc.mjs …) с многострочным текстом не прошёл
+  if (/(cc\.mjs|scripts\/cc).*(note|block|review|triaged|unblock|msg)/i.test(text) &&
+      /(denied|not permitted|not allowed|отклонен|запрещен|недоступн|tool.*blocked|permission)/i.test(text)) {
+    return "permission_blocked";
+  }
   return result.is_error ? "failed" : "done";
 }
 
@@ -152,7 +157,7 @@ async function reconcile(running, stopAll) {
     } catch {}
     const err = readText(path.join(DATA, `${run.id}.err`)).trim();
     const minutes = (Date.now() - Date.parse(run.startedAt)) / 60000;
-    const status = stopped ? "stopped" : outcome(result, minutes >= LIMIT_MIN[run.pool] - 1);
+    const status = stopped ? "stopped" : outcome(result, minutes >= LIMIT_MIN[run.pool] - 1, err);
     const summary = ((result?.result ? String(result.result) : err) || "нет ответа").trim().slice(-1500);
     const logText = [result?.result ? String(result.result) : "", err ? `--- stderr ---\n${err.slice(-8000)}` : ""].filter(Boolean).join("\n\n").slice(-20000);
     const u = result?.usage ?? {};
@@ -169,7 +174,15 @@ async function reconcile(running, stopAll) {
       costUsd: result?.total_cost_usd,
     });
     log(`${status === "done" ? "✓" : "✗"} ${run.agent} ${run.taskKey ?? (run.keys?.join(",") || (run.pool === "triage" ? "обзор" : "—"))}: ${status}`);
-    if (status === "limit") await api({ action: "workers-pause", until: resetAt(result).toISOString(), text: summary.slice(0, 300) });
+    if (status === "limit") {
+      if (run.pool === "dev" && run.model === "opus") {
+        // Лимит Opus не блокирует Sonnet-воркеров: другие пулы продолжают работу
+        await api({ action: "opus-limit", until: resetAt(result).toISOString() });
+        log(`⛔ ${run.agent}: opus на лимите до ${resetAt(result).toISOString().slice(0, 16)}, L-задачи переключатся на sonnet`);
+      } else {
+        await api({ action: "workers-pause", until: resetAt(result).toISOString(), text: summary.slice(0, 300) });
+      }
+    }
     // Вход в подписку пропал или истёк — пауза, пока человек не войдёт заново
     if (/not logged in|\/login|oauth|failed to authenticate|authentication_error|\b401\b/i.test(summary)) {
       await api({ action: "workers-pause", until: new Date(Date.now() + 6 * 3600_000).toISOString(), text: "Воркеры не вошли в Claude. Войти: scripts/claude-login.sh на сервере, затем «Снять паузу» в Control Center → Воркеры." });
@@ -276,8 +289,14 @@ async function main() {
   if (!KEY) return console.log("CC_AGENT_KEY пуст — API Control Center выключено, воркеров не запускаю");
   const h = heads();
   let plan = await api({ action: "dispatch", heads: h });
-  // Кто-то закончил — слот освободился, пауза могла начаться: план пересчитываем сразу, не ждём следующего прохода
-  if (await reconcile(plan.running, plan.config.stopRunning)) plan = await api({ action: "dispatch", heads: h });
+  // Кто-то закончил — слот освободился, пауза могла начаться: план пересчитываем сразу, не ждём следующего прохода.
+  // Действия по кнопке из первого плана сохраняем: их просьбы уже сняты с очереди, второй dispatch их не увидит.
+  if (await reconcile(plan.running, plan.config.stopRunning)) {
+    const byButton = plan.actions.filter((a) => a.requestAt);
+    const plan2 = await api({ action: "dispatch", heads: h });
+    const seenAgents = new Set(byButton.map((a) => `${a.pool}|${a.agent}`));
+    plan = { ...plan2, actions: [...byButton, ...plan2.actions.filter((a) => !seenAgents.has(`${a.pool}|${a.agent}`))] };
+  }
   for (const u of plan.unmet ?? []) log(`· «Запустить сейчас» не выполнено — ${u}`);
   const paused = plan.config.pausedUntil && Date.parse(plan.config.pausedUntil) > Date.now();
   if (!plan.actions.length) return log(paused ? `на паузе до ${plan.config.pausedUntil}` : plan.config.enabled ? "работы нет" : "воркеры выключены в Control Center");
@@ -294,7 +313,15 @@ async function main() {
           log(`${a.agent}: подходящей задачи нет`);
           continue;
         }
-        await spawn("dev", a.agent, out.task, pools.dev.model, { ...extra, dir: out.dir, role: out.role });
+        const isL = out.estimate === "L";
+        let devModel = isL ? (pools.dev.modelForL ?? pools.dev.model) : pools.dev.model;
+        if (devModel === "opus" && plan.config.opusLimitUntil && Date.parse(plan.config.opusLimitUntil) > Date.now()) {
+          log(`· ${a.agent}: ${out.task} размер L, opus на лимите до ${plan.config.opusLimitUntil.slice(0, 16)} — запуск на sonnet`);
+          devModel = "sonnet";
+        } else if (isL && devModel !== pools.dev.model) {
+          log(`· ${a.agent}: ${out.task} размер L → ${devModel}`);
+        }
+        await spawn("dev", a.agent, out.task, devModel, { ...extra, dir: out.dir, role: out.role });
       } else if (a.pool === "nocode") {
         const out = JSON.parse(cc(a.key ? ["take", a.key, "--agent", a.agent, "--json"] : ["next", "--agent", a.agent, "--json"]));
         if (!out.task) {
@@ -314,6 +341,11 @@ async function main() {
         await spawn("designer", "designer", null, pools.designer.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
       } else if (a.pool === "triage") {
         await spawn("triage", "triage", null, pools.triage.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
+        if (a.keys?.length) {
+          const taken = a.keys.length;
+          const remaining = Math.max(0, (plan.triageQueueSize ?? 0) - taken);
+          log(`· триаж: взято ${taken}, осталось ~${remaining}`);
+        }
       }
     } catch (e) {
       log(`! ${a.agent} ${a.key ?? ""}: ${String(e.message ?? e).slice(0, 300)}`);

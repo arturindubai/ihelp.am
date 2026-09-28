@@ -158,6 +158,51 @@ export async function deletePageAction(id: string) {
   return { ok: true };
 }
 
+/* ───── Обещания (SiteFeature) ───── */
+const featureSchema = z.object({ icon: z.string().max(30), title: i18n, body: i18n.nullable().optional(), active: z.boolean(), sort: z.number().int() });
+export type FeaturePayload = z.infer<typeof featureSchema>;
+
+export async function saveFeatureAction(id: string | null, input: FeaturePayload) {
+  const u = await requireSection("content");
+  const p = featureSchema.safeParse(input);
+  if (!p.success) return { ok: false };
+  const d = { ...p.data, body: p.data.body ?? Prisma.DbNull };
+  const r = id ? await db.siteFeature.update({ where: { id }, data: d }) : await db.siteFeature.create({ data: d });
+  await audit(u.id, "feature.save", "SiteFeature", r.id);
+  rAll();
+  return { ok: true };
+}
+
+export async function deleteFeatureAction(id: string) {
+  const u = await requireSection("content");
+  await db.siteFeature.delete({ where: { id } });
+  await audit(u.id, "feature.delete", "SiteFeature", id);
+  rAll();
+  return { ok: true };
+}
+
+/* ───── FAQ (SiteFaq) ───── */
+const faqSchema = z.object({ q: i18n, a: i18n, active: z.boolean(), sort: z.number().int() });
+export type FaqPayload = z.infer<typeof faqSchema>;
+
+export async function saveFaqAction(id: string | null, input: FaqPayload) {
+  const u = await requireSection("content");
+  const p = faqSchema.safeParse(input);
+  if (!p.success) return { ok: false };
+  const r = id ? await db.siteFaq.update({ where: { id }, data: p.data }) : await db.siteFaq.create({ data: p.data });
+  await audit(u.id, "faq.save", "SiteFaq", r.id);
+  rAll();
+  return { ok: true };
+}
+
+export async function deleteFaqAction(id: string) {
+  const u = await requireSection("content");
+  await db.siteFaq.delete({ where: { id } });
+  await audit(u.id, "faq.delete", "SiteFaq", id);
+  rAll();
+  return { ok: true };
+}
+
 /* ───── Тексты интерфейса ───── */
 export async function saveUiStringAction(locale: string, key: string, value: string) {
   const u = await requireSection("translations");
@@ -207,9 +252,19 @@ export async function saveSettingsAction<K extends keyof Settings>(key: K, value
 export async function testNotifyAction() {
   await requireSection("settings");
   const s = await getSettings();
-  await notifyTeam("✅ Тестовое уведомление");
-  if (s.notify.techChatId) await notifyTech("✅ Тестовое уведомление (тех-чат)");
-  return { ok: true };
+  const threadLabel = s.notify.telegramOrderThreadId ? ` (топик ${s.notify.telegramOrderThreadId})` : "";
+  await notifyTeam(`✅ Тестовое уведомление${threadLabel}`);
+  const techLabel = s.notify.telegramTechThreadId ? ` (тех-топик ${s.notify.telegramTechThreadId})` : "";
+  await notifyTech(`✅ Тестовое уведомление (тех-алерт)${techLabel}`);
+  const token = s.team.botToken || s.notify.telegramBotToken;
+  const teamChat = s.notify.teamChatId || s.notify.telegramChatId;
+  const techSeparate = !!s.notify.techChatId;
+  return {
+    ok: true as const,
+    teamConfigured: !!(token && teamChat),
+    techConfigured: !!(token && (s.notify.techChatId || teamChat)),
+    techSeparate,
+  };
 }
 
 /** Подключить вход через Telegram-бота (AUTH-10): регистрирует вебхук на текущем APP_URL */
@@ -247,12 +302,13 @@ export async function testMailAction(to: string) {
   return r.ok ? { ok: true as const } : { ok: false as const, error: r.error };
 }
 
-export async function setRoleAction(phoneRaw: string, role: Role) {
+export async function setRoleAction(phoneRaw: string, role: Role, name?: string) {
   const u = await requireSection("staff");
   const phone = normalizePhone(phoneRaw);
   if (!phone) return { ok: false as const, error: "phone" };
   if (phone === u.phone && role !== "OWNER") return { ok: false as const, error: "self" };
-  const r = await db.user.upsert({ where: { phone }, create: { phone, role }, update: { role } });
+  const namePatch = name ? { name } : {};
+  const r = await db.user.upsert({ where: { phone }, create: { phone, role, ...namePatch }, update: { role, ...namePatch } });
   if (role === "CLIENT") await db.session.deleteMany({ where: { userId: r.id } });
   await audit(u.id, "staff.role", "User", r.id, { role });
   return { ok: true as const };

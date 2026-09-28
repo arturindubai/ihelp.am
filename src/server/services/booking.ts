@@ -5,7 +5,7 @@ import { getSettings } from "../settings";
 import { html, notifyTeam } from "../notify";
 import { calculatePrice } from "@/lib/pricing";
 import { firstOrderUsedBy } from "@/lib/firstOrder";
-import { computeSlots, isMasterFree, type MasterAvailability } from "@/lib/slots";
+import { computeAllSlots, isMasterFree, type MasterAvailability } from "@/lib/slots";
 import { recurrenceDates, type Recurrence } from "@/lib/recurrence";
 import { addDays, atYerevan, hm, isoWeekday, ymd } from "@/lib/time";
 import { amd } from "@/lib/format";
@@ -46,14 +46,14 @@ export async function getSlots(serviceId: string, date: string, durationMin: num
   const from = atYerevan(date, "00:00");
   const to = atYerevan(addDays(date, 1), "12:00");
   const masters = await loadAvailability({ serviceId, from, to, masterIds: masterId ? [masterId] : undefined });
-  return computeSlots({
+  return computeAllSlots({
     date,
     durationMin,
     bufferMin: s.booking.bufferMin,
     stepMin: s.booking.slotStepMin,
     notBefore: new Date(Date.now() + s.booking.leadHours * 3600_000),
     masters,
-  }).map((x) => ({ time: x.time, masterIds: x.masterIds }));
+  }).map((x) => ({ time: x.time, masterIds: x.masterIds, available: x.available }));
 }
 
 /** Выбор мастера: предпочтительный, если свободен; иначе наименее загруженный на этой неделе */

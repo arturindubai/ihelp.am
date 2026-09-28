@@ -102,6 +102,41 @@ export async function ccCommentAction(key: string, text: string) {
   return { ok: true as const };
 }
 
+/**
+ * Отложить вопрос из «Нужен ты»: blockedOn меняется с owner/product на external,
+ * карточка исчезает из секции вопросов, воркеры её не тронут до разблокировки владельцем
+ */
+export async function ccOwnerPostponeAction(key: string, reason?: string) {
+  const u = await requireSection("control");
+  const text = (reason?.trim() || "Отложено владельцем").slice(0, 500);
+  const task = await db.task.findUnique({ where: { key }, select: { key: true, status: true, blockedOn: true } });
+  if (!task) return { ok: false as const, error: "not_found" };
+  if (task.status !== "blocked" || !["owner", "product"].includes(task.blockedOn ?? "")) {
+    return { ok: false as const, error: "invalid_state" };
+  }
+  await db.task.update({ where: { key }, data: { blockedOn: "external", blockedReason: text, updatedAt: new Date() } });
+  await addComment(key, `Отложено: ${text}`, who(u));
+  await audit(u.id, "cc.owner.postpone", "Task", key);
+  rAll();
+  return { ok: true as const };
+}
+
+/**
+ * Ответ владельца на вопрос из вкладки «Нужен ты»: записывается в ленту и возвращает задачу триажу
+ * (сброс triagedAt). Задача не переходит сама в «В очереди» — триаж принимает решение на основе ответа.
+ */
+export async function ccOwnerAnswerAction(key: string, text: string) {
+  const u = await requireSection("control");
+  const t = text.trim();
+  if (t.length < 2) return { ok: false as const, error: "empty" };
+  await addComment(key, `Ответ владельца: ${t}`, who(u));
+  // Сбрасываем triagedAt — задача возвращается в очередь триажа для повторного разбора
+  await retriage(key);
+  await audit(u.id, "cc.owner.answer", "Task", key);
+  rAll();
+  return { ok: true as const };
+}
+
 /** Утверждение макета задачи владельцем в интерфейсе — снимает гейт mockup_required */
 /** «Вернуть дизайнеру»: утверждение снимается, задача блокируется на дизайне с причиной */
 export async function ccReturnDesignAction(key: string, reason: string) {
@@ -116,10 +151,11 @@ export async function ccReturnDesignAction(key: string, reason: string) {
   }
 }
 
-export async function ccApproveMockupAction(key: string, comment: string) {
+export async function ccApproveMockupAction(key: string, comment: string, closeNeeds?: string[]) {
   const u = await requireSection("control");
+  if (u.role !== "OWNER") return { ok: false as const, error: "forbidden" };
   try {
-    await approveMockup(key, who(u), comment.trim() || null);
+    await approveMockup(key, { name: who(u), role: "owner", via: "ui" }, comment.trim() || null, closeNeeds);
     await audit(u.id, "cc.mockup.approve", "Task", key);
     rAll();
     return { ok: true as const };
@@ -185,7 +221,19 @@ const poolSchema = z
 const workersSchema = z.object({
   enabled: z.boolean().optional(),
   dryRun: z.boolean().optional(),
-  pools: z.object({ triage: poolSchema, dev: poolSchema, tester: poolSchema, deployer: poolSchema }).partial().optional(),
+  pools: z
+    .object({
+      triage: poolSchema,
+      product: poolSchema,
+      designer: poolSchema,
+      dev: poolSchema,
+      nocode: poolSchema,
+      tester: poolSchema,
+      deployer: poolSchema,
+    })
+    .strict()
+    .partial()
+    .optional(),
   deployWindow: z.tuple([z.number().int().min(0).max(23), z.number().int().min(1).max(24)]).optional(),
   triageBatch: z.number().int().min(1).max(15).optional(),
   sweepEveryH: z.number().int().min(0).max(168).optional(),
@@ -307,6 +355,48 @@ export async function ccApproveManyAction(keys: string[]) {
     }
   }
   await audit(u.id, "cc.approve", "Task", done.join(","), { failed });
+  rAll();
+  return { ok: true as const, done, failed };
+}
+
+/** «Вернуть все» в Согласованиях: массовый возврат задач дорожки на доработку с причиной */
+export async function ccReturnManyAction(keys: string[], text: string) {
+  const u = await requireSection("control");
+  const list = z.array(z.string().max(30)).max(50).safeParse(keys);
+  const reason = z.string().trim().min(5).max(5000).safeParse(text);
+  if (!list.success || !reason.success) return { ok: false as const, error: "invalid" };
+  const done: string[] = [];
+  const failed: string[] = [];
+  for (const key of list.data) {
+    try {
+      await transition(key, { to: "ready", text: reason.data }, { name: who(u), role: "owner", via: "ui" });
+      done.push(key);
+    } catch {
+      failed.push(key);
+    }
+  }
+  await audit(u.id, "cc.return_many", "Task", done.join(","), { failed });
+  rAll();
+  return { ok: true as const, done, failed };
+}
+
+/** «Отклонить все» в Согласованиях: массовое отклонение задач дорожки с причиной */
+export async function ccRejectManyAction(keys: string[], text: string) {
+  const u = await requireSection("control");
+  const list = z.array(z.string().max(30)).max(50).safeParse(keys);
+  const reason = z.string().trim().min(5).max(5000).safeParse(text);
+  if (!list.success || !reason.success) return { ok: false as const, error: "invalid" };
+  const done: string[] = [];
+  const failed: string[] = [];
+  for (const key of list.data) {
+    try {
+      await transition(key, { to: "cancelled", text: reason.data }, { name: who(u), role: "owner", via: "ui" });
+      done.push(key);
+    } catch {
+      failed.push(key);
+    }
+  }
+  await audit(u.id, "cc.reject_many", "Task", done.join(","), { failed });
   rAll();
   return { ok: true as const, done, failed };
 }

@@ -5,11 +5,12 @@ import { db } from "../db";
 import { getCurrentUser } from "../auth";
 import { getSettings } from "../settings";
 import { html, notifyTeam } from "../notify";
+import { notifyCancelOrderTeam, notifyCancelVisitTeam, notifyRescheduleVisitTeam } from "../services/teamNotify";
 import { headers } from "next/headers";
 import { sendOtp, verifyOtp } from "../otp";
 import { normalizeEmail } from "@/lib/email";
 import { BookingError, scheduleVisit, BUSY_STATUSES } from "../services/booking";
-import { atYerevan, ymd } from "@/lib/time";
+import { atYerevan } from "@/lib/time";
 
 async function me() {
   const u = await getCurrentUser();
@@ -74,7 +75,7 @@ export async function cancelVisitAction(visitId: string) {
   const status = v.order.kind === "SUBSCRIPTION" ? "SKIPPED" : v.order.kind === "PACKAGE" ? "UNSCHEDULED" : "CANCELLED";
   await db.visit.update({ where: { id: v.id }, data: { status, ...(status === "UNSCHEDULED" ? { scheduledAt: null, masterId: null } : {}) } });
   if (v.order.kind === "ONE_TIME") await db.order.update({ where: { id: v.orderId }, data: { status: "CANCELLED", cancelReason: "client" } });
-  await notifyTeam(html`❌ Клиент ${status === "SKIPPED" ? "пропустил" : "отменил"} визит · заказ №${v.order.number} · ${v.scheduledAt ? ymd(v.scheduledAt) : ""}`);
+  await notifyCancelVisitTeam(v.orderId, v.scheduledAt, status === "SKIPPED");
   revalidatePath(`/[locale]/account/orders/${v.orderId}`, "page");
   return { ok: true };
 }
@@ -95,7 +96,7 @@ export async function rescheduleVisitAction(visitId: string, date: string, time:
     if (e instanceof BookingError) return { ok: false, error: e.message };
     throw e;
   }
-  await notifyTeam(html`🔁 Перенос визита · заказ №${v.order.number} → ${date} ${time}`);
+  await notifyRescheduleVisitTeam(v.orderId, date, time);
   return { ok: true };
 }
 
@@ -112,10 +113,7 @@ export async function cancelOrderAction(orderId: string) {
     db.visit.updateMany({ where: { orderId: o.id, status: { in: ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"] } }, data: { status: "CANCELLED" } }),
     db.order.update({ where: { id: o.id }, data: { status: "CANCELLED", cancelReason: "client" } }),
   ]);
-  await notifyTeam(
-    html`❌ Клиент отменил ${o.kind === "SUBSCRIPTION" ? "подписку" : "заказ"} №${o.number}` +
-      (late ? html`\n⚠️ Поздняя отмена: визитов в ближайшие ${s.booking.freeCancelHours} ч — ${late}` : ""),
-  );
+  await notifyCancelOrderTeam(o.id, late, s.booking.freeCancelHours);
   return { ok: true };
 }
 
@@ -153,5 +151,13 @@ export async function reviewAction(visitId: string, rating: number, text: string
   if (exists) return { ok: false };
   await db.review.create({ data: { visitId, userId: u.id, masterId: v.masterId, serviceId: v.order.serviceId, rating: r, text: text.trim().slice(0, 2000) || null, authorName: u.name, status: "PENDING" } });
   await notifyTeam(html`⭐ Новый отзыв ${r}/5 · заказ №${v.order.number} — на модерации`);
+  return { ok: true };
+}
+
+/** Отвязать Telegram-аккаунт от профиля (AUTH-10) */
+export async function unlinkTelegramAction() {
+  const u = await me();
+  await db.user.update({ where: { id: u.id }, data: { telegramId: null, telegramUsername: null } });
+  revalidatePath("/", "layout");
   return { ok: true };
 }

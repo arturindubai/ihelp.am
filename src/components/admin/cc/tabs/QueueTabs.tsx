@@ -9,7 +9,7 @@ import { LANES } from "@/lib/cc-lanes";
 import { Card } from "@/components/admin/fields";
 import { QuickMove } from "@/components/admin/cc/TaskControls";
 import { silentLabel } from "@/components/admin/cc/TaskBadges";
-import { ApprovalButtons, ApproveAllButton, RunWorkerButton } from "@/components/admin/cc/CcControls";
+import { ApprovalButtons, ApproveAllButton, CommentButton, OwnerQuestionCard, RejectAllButton, ReturnAllButton, RunWorkerButton } from "@/components/admin/cc/CcControls";
 import { Empty, LANE_DOT, PRIORITY_TONE, RUN_TONE, TaskLine, ago } from "./shared";
 import { cn } from "@/lib/format";
 
@@ -18,7 +18,7 @@ type Href = (key: string) => string;
 /** «Нужен ты»: всё, что стоит без решения человека — вопросы воркеров и чатов, брошенные задачи, упавшие запуски */
 export async function YouTab({ taskHref }: { taskHref: Href }) {
   const [t, ty, data] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.you"), needsYou()]);
-  const nothing = !data.owner.length && !data.stale.length && !data.stuckReview.length && !data.failedRuns.length && !data.pausedUntil;
+  const nothing = !data.owner.length && !data.stale.length && !data.stuckReview.length && !data.nocodeReview.length && !data.failedRuns.length && !data.pausedUntil && !data.techBlocked.length;
   return (
     <div className="space-y-4">
       {nothing && <Empty>{ty("empty")}</Empty>}
@@ -41,32 +41,15 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
               <Card title={`✋ ${ty("ownerNeedAnswer")} · ${needsAnswer.length}`}>
                 <p className="mb-2 text-xs text-muted">{ty("ownerHint")}</p>
                 <ul className="divide-y divide-line">
-                  {needsAnswer.map((x) => {
-                    const last = x.comments[0];
-                    return (
-                      <TaskLine
-                        key={x.key}
-                        k={x.key}
-                        title={x.title}
-                        priority={x.priority}
-                        href={taskHref(x.key)}
-                        sub={
-                          <>
-                            <span className="text-warn">
-                              {BLOCKED_ON_LABELS[x.blockedOn ?? ""] ?? x.blockedOn}: {x.blockedReason}
-                            </span>
-                            {last && (
-                              <span className="mt-0.5 line-clamp-2 block">
-                                {last.author}: {last.text}
-                              </span>
-                            )}
-                            <span className="block">{ty("since", { ago: ago(t, x.updatedAt) })}</span>
-                          </>
-                        }
-                        right={<span className="text-xs text-brand">{ty("answer")} →</span>}
-                      />
-                    );
-                  })}
+                  {needsAnswer.map((x) => (
+                    <OwnerQuestionCard
+                      key={x.key}
+                      taskKey={x.key}
+                      title={x.title}
+                      blockedReason={x.blockedReason}
+                      taskHref={taskHref(x.key)}
+                    />
+                  ))}
                 </ul>
               </Card>
             )}
@@ -130,6 +113,28 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
           </ul>
         </Card>
       )}
+      {data.nocodeReview.length > 0 && (
+        <Card title={`✅ ${ty("nocodeReview")} · ${data.nocodeReview.length}`}>
+          <p className="mb-2 text-xs text-muted">{ty("nocodeReviewHint")}</p>
+          <ul className="divide-y divide-line">
+            {data.nocodeReview.map((x) => (
+              <li key={x.key} className="flex flex-wrap items-start gap-3 py-3">
+                <Link href={taskHref(x.key)} scroll={false} className="min-w-0 flex-1">
+                  <span className="font-mono text-xs text-muted">{x.key}</span>{" "}
+                  <span className={cn("chip text-[10px]", PRIORITY_TONE[x.priority])}>{PRIORITIES[x.priority]}</span>
+                  <span className="mt-0.5 block font-medium">{x.title}</span>
+                  {x.ownerSummary && <p className="mt-1 line-clamp-3 whitespace-pre-line text-xs">{x.ownerSummary}</p>}
+                  <span className="block text-xs text-muted">
+                    {ago(t, x.updatedAt)}
+                    {x._count.attachments ? ` · 📎 ${x._count.attachments}` : ""}
+                  </span>
+                </Link>
+                <ApprovalButtons taskKey={x.key} />
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
       {data.failedRuns.length > 0 && (
         <Card title={`✗ ${ty("failedRuns")} · ${data.failedRuns.length}`}>
           <ul className="divide-y divide-line text-sm">
@@ -150,6 +155,36 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
           <Link href="/admin/control?tab=workers" className="mt-2 inline-block text-xs text-brand hover:underline">
             {ty("toWorkers")}
           </Link>
+        </Card>
+      )}
+      {data.techBlocked.length > 0 && (
+        <Card title={`🔧 ${ty("techBlocked")} · ${data.techBlocked.length}`}>
+          <p className="mb-2 text-xs text-muted">{ty("techBlockedHint")}</p>
+          <ul className="divide-y divide-line">
+            {data.techBlocked.map((x) => (
+              <TaskLine
+                key={x.key}
+                k={x.key}
+                title={x.title}
+                priority={x.priority}
+                href={taskHref(x.key)}
+                sub={
+                  <>
+                    <span className="text-muted">
+                      {BLOCKED_ON_LABELS[x.blockedOn ?? ""] ?? x.blockedOn}
+                      {x.blockedReason ? `: ${x.blockedReason}` : ""}
+                    </span>
+                    {x.blockedUntil && (
+                      <span className="mt-0.5 block text-muted">
+                        {ty("techBlockedUntil", { date: new Date(x.blockedUntil).toLocaleDateString("ru-RU", { timeZone: "Asia/Yerevan", day: "numeric", month: "short", year: "numeric" }) })}
+                      </span>
+                    )}
+                    <span className="block">{ty("since", { ago: ago(t, x.updatedAt) })}</span>
+                  </>
+                }
+              />
+            ))}
+          </ul>
         </Card>
       )}
     </div>
@@ -257,7 +292,13 @@ export async function ApprovalsTab({ taskHref }: { taskHref: Href }) {
                     </span>
                   </span>
                 }
-                actions={<ApproveAllButton keys={list.map((x) => x.key)} label={ta("approveAll")} />}
+                actions={
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <ApproveAllButton keys={list.map((x) => x.key)} label={ta("approveAll")} />
+                    <ReturnAllButton keys={list.map((x) => x.key)} label={ta("returnAll")} />
+                    <RejectAllButton keys={list.map((x) => x.key)} label={ta("rejectAll")} />
+                  </span>
+                }
               >
                 <ul className="divide-y divide-line">
                   {list.map((x) => {
@@ -268,6 +309,11 @@ export async function ApprovalsTab({ taskHref }: { taskHref: Href }) {
                           <span className="font-mono text-xs text-muted">{x.key}</span>{" "}
                           <span className={cn("chip text-[10px]", PRIORITY_TONE[x.priority])}>{PRIORITIES[x.priority]}</span>
                           <span className="mt-0.5 block font-medium">{x.title}</span>
+                          {x.ownerSummary && (
+                            <span className="mt-1 block whitespace-pre-line text-xs font-medium">
+                              {x.ownerSummary}
+                            </span>
+                          )}
                           {report && (
                             <span className="mt-1 line-clamp-3 block whitespace-pre-line text-xs text-muted">
                               {report.author}: {report.text}
@@ -278,7 +324,10 @@ export async function ApprovalsTab({ taskHref }: { taskHref: Href }) {
                             {x._count.attachments ? ` · 📎 ${x._count.attachments}` : ""}
                           </span>
                         </Link>
-                        <ApprovalButtons taskKey={x.key} />
+                        <div className="flex flex-col items-end gap-1">
+                          <ApprovalButtons taskKey={x.key} />
+                          <CommentButton taskKey={x.key} />
+                        </div>
                       </li>
                     );
                   })}

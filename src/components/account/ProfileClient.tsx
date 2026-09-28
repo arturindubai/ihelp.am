@@ -1,17 +1,17 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { MapPin, Pencil, Trash2, Plus, LogOut } from "lucide-react";
+import { MapPin, Pencil, Trash2, Plus, LogOut, Send } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
-import { confirmProfileEmailAction, sendProfileEmailCodeAction, updateProfileAction } from "@/server/actions/account";
+import { confirmProfileEmailAction, sendProfileEmailCodeAction, unlinkTelegramAction, updateProfileAction } from "@/server/actions/account";
+import { toggleAdsConsentAction } from "@/server/actions/consent";
 import { deleteAddressAction } from "@/server/actions/booking";
 import { logoutAction } from "@/server/actions/auth";
 import { Sheet } from "@/components/ui/Sheet";
 import { AddressForm, addressLine, type AddressRow } from "@/components/booking/AddressForm";
-import { localeNames, type Locale } from "@/i18n/locales";
 import { formatPhone } from "@/lib/phone";
 
-export function ProfileClient({ user, addresses: initial, districts, enabledLocales, emailCodes }: { user: { name: string | null; phone: string; email: string | null; emailVerified: boolean; locale: string }; addresses: AddressRow[]; districts: string[]; enabledLocales: string[]; emailCodes: boolean }) {
+export function ProfileClient({ user, addresses: initial, districts, enabledLocales, emailCodes, telegramLinkEnabled, telegramError }: { user: { name: string | null; phone: string; email: string | null; emailVerified: boolean; locale: string; telegramId: string | null; telegramUsername: string | null; adsConsent: boolean }; addresses: AddressRow[]; districts: string[]; enabledLocales: string[]; emailCodes: boolean; telegramLinkEnabled: boolean; telegramError: string | null }) {
   const t = useTranslations("account");
   const ta = useTranslations("address");
   const tc = useTranslations("common");
@@ -54,7 +54,10 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
           {enabledLocales.length > 1 && (
             <div><label className="label">{t("language")}</label>
               <select className="input" value={form.locale} onChange={(e) => setForm({ ...form, locale: e.target.value })}>
-                {enabledLocales.map((l) => <option key={l} value={l}>{localeNames[l as Locale]}</option>)}
+                {enabledLocales.map((l) => {
+                  const label = ({ ru: t("locales.ru"), en: t("locales.en"), am: t("locales.am") } as Record<string, string>)[l] ?? l;
+                  return <option key={l} value={l}>{label}</option>;
+                })}
               </select>
             </div>
           )}
@@ -62,6 +65,12 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
           <button className="btn-dark w-full" disabled={pending}>{saved ? tc("saved") : tc("save")}</button>
         </form>
       </section>
+
+      {telegramLinkEnabled && (
+        <TelegramSection telegramId={user.telegramId} telegramUsername={user.telegramUsername} error={telegramError} />
+      )}
+
+      <AdsConsentSection initialValue={user.adsConsent} />
 
       <section className="card mt-4 p-4">
         <h2 className="h3 mb-3">{t("addresses")}</h2>
@@ -96,6 +105,77 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
         )}
       </Sheet>
     </div>
+  );
+}
+
+/** Блок привязки Telegram в профиле (AUTH-10): привязать виджетом или отвязать */
+function TelegramSection({ telegramId, telegramUsername, error }: { telegramId: string | null; telegramUsername: string | null; error: string | null }) {
+  const t = useTranslations("account");
+  const tc = useTranslations("common");
+  const [linked, setLinked] = useState(!!telegramId);
+  const [username, setUsername] = useState(telegramUsername);
+  const [pending, start] = useTransition();
+
+  function handleUnlink() {
+    start(async () => {
+      await unlinkTelegramAction();
+      setLinked(false);
+      setUsername(null);
+    });
+  }
+
+  return (
+    <section className="card mt-4 p-4">
+      <h2 className="h3 mb-3">{t("telegramTitle")}</h2>
+      {error === "conflict" && <p className="mb-2 text-sm text-bad">{t("telegramConflict")}</p>}
+      {linked ? (
+        <div className="flex items-center gap-3">
+          <span className="chip bg-ok-50 text-ok flex items-center gap-1.5">
+            <Send size={14} />
+            <span className="truncate max-w-[200px]">{username ? t("telegramLinked", { username }) : t("telegramLinkedNoUsername")}</span>
+          </span>
+          <button className="btn-ghost btn-sm text-bad ml-auto" onClick={handleUnlink} disabled={pending}>{t("telegramDisconnect")}</button>
+        </div>
+      ) : (
+        <a className="btn-outline btn-sm inline-flex items-center gap-2" href="/api/auth/telegram/start?mode=link">
+          <Send size={16} />
+          {t("telegramConnect")}
+        </a>
+      )}
+    </section>
+  );
+}
+
+/** Согласие на рекламные рассылки (LEGAL-2): одиночное действие без кнопки «Сохранить» */
+function AdsConsentSection({ initialValue }: { initialValue: boolean }) {
+  const tc = useTranslations("consent");
+  const [checked, setChecked] = useState(initialValue);
+  const [, start] = useTransition();
+
+  function toggle(next: boolean) {
+    setChecked(next);
+    start(async () => {
+      const r = await toggleAdsConsentAction(next);
+      if (!r.ok) setChecked(!next);
+    });
+  }
+
+  return (
+    <section className="card mt-4 p-4">
+      <h2 className="h3 mb-3">{tc("ads.notifications")}</h2>
+      <label className="flex cursor-pointer items-start gap-3">
+        <input
+          type="checkbox"
+          className="checkbox-brand mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-action)]"
+          checked={checked}
+          onChange={(e) => toggle(e.target.checked)}
+        />
+        <span>
+          <span className="text-sm">{tc("ads.label")}</span>
+          <span className="mt-0.5 block text-xs text-muted">{tc("ads.hint")}</span>
+        </span>
+      </label>
+    </section>
   );
 }
 

@@ -21,7 +21,7 @@ function Section<K extends keyof Settings>({ k, title, value, children, hint }: 
 export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardIntegrated = false, googleRedirect = "", appleRedirect = "" }: { initial: Settings; devMode: boolean; lockedContacts?: Partial<Record<ContactKey, string>>; cardIntegrated?: boolean; googleRedirect?: string; appleRedirect?: string }) {
   const t = useTranslations("admin.settings");
   const [s, setS] = useState(initial);
-  const [sent, setSent] = useState(false);
+  const [sentResult, setSentResult] = useState<{ teamConfigured: boolean; techConfigured: boolean; techSeparate: boolean } | null>(null);
   const [mailTo, setMailTo] = useState("");
   const [mailSent, setMailSent] = useState<string | null>(null);
   const [tgWebhook, setTgWebhook] = useState<string | null>(null);
@@ -79,6 +79,13 @@ export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardInte
       <Section k="payments" title={t("payments")} value={s.payments}>
         <Toggle label={t("cash")} checked={s.payments.cashEnabled} onChange={(v) => set("payments", { cashEnabled: v })} />
         <Toggle label={t("card")} checked={s.payments.cardEnabled} disabled={!cardIntegrated} hint={cardIntegrated ? undefined : t("cardLocked")} onChange={(v) => set("payments", { cardEnabled: v })} />
+      </Section>
+
+      <Section k="auth" title={t("authSessions")} value={s.auth} hint={t("authSessionsHint")}>
+        <div className="grid gap-3 md:grid-cols-2">
+          <NumInput label={t("clientSessionDays")} value={s.auth.clientSessionDays} onChange={(v) => set("auth", { clientSessionDays: v ?? 60 })} />
+          <NumInput label={t("staffSessionDays")} value={s.auth.staffSessionDays} onChange={(v) => set("auth", { staffSessionDays: v ?? 7 })} />
+        </div>
       </Section>
 
       <Section k="otp" title={t("otp")} value={s.otp} hint={`${t("otpHint")}${devMode ? " (OTP_DEV_MODE=true)" : ""}`}>
@@ -145,6 +152,10 @@ export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardInte
         )}
       </Section>
 
+      <Section k="telegramWidget" title={t("telegramWidget")} value={s.telegramWidget} hint={t("telegramWidgetHint")}>
+        <Toggle label={t("telegramWidgetEnabled")} checked={s.telegramWidget.enabled} onChange={(v) => set("telegramWidget", { enabled: v })} />
+      </Section>
+
       <Section k="mail" title={t("mail")} value={s.mail} hint={t("mailHint")}>
         <Toggle label={t("mailEnabled")} checked={s.mail.enabled} onChange={(v) => set("mail", { enabled: v })} />
         <div className="mt-2 grid gap-2 md:grid-cols-2">
@@ -164,14 +175,25 @@ export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardInte
         </button>
       </Section>
 
-      <Section k="notify" title={t("notify")} value={s.notify}>
+      <Section k="notify" title={t("notify")} value={s.notify} hint={t("notifyHint")}>
         <div className="grid gap-3 md:grid-cols-2">
-          <TextInput label={t("botToken")} hint={t("secretHint")} value={s.notify.telegramBotToken} onChange={(v) => set("notify", { telegramBotToken: v })} />
-          <TextInput label={t("chatId")} value={s.notify.telegramChatId} onChange={(v) => set("notify", { telegramChatId: v })} />
+          <TextInput label={t("teamChatId")} hint={t("teamChatHint")} value={s.notify.teamChatId} onChange={(v) => set("notify", { teamChatId: v })} />
           <TextInput label={t("techChatId")} hint={t("techChatHint")} value={s.notify.techChatId} onChange={(v) => set("notify", { techChatId: v })} />
+          <TextInput label={t("telegramOrderThreadId")} hint={t("telegramOrderThreadHint")} value={s.notify.telegramOrderThreadId} onChange={(v) => set("notify", { telegramOrderThreadId: v })} />
+          <TextInput label={t("telegramTechThreadId")} hint={t("telegramTechThreadHint")} value={s.notify.telegramTechThreadId} onChange={(v) => set("notify", { telegramTechThreadId: v })} />
+          <TextInput label={t("botToken")} hint={t("secretHint")} value={s.notify.telegramBotToken} onChange={(v) => set("notify", { telegramBotToken: v })} />
+          <TextInput label={t("chatId")} hint={t("chatIdHint")} value={s.notify.telegramChatId} onChange={(v) => set("notify", { telegramChatId: v })} />
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <button className="btn-outline btn-sm" onClick={async () => { await testNotifyAction(); setSent(true); }}>{sent ? t("testSent") : t("testNotify")}</button>
+          <button
+            className="btn-outline btn-sm"
+            onClick={async () => {
+              const r = await testNotifyAction();
+              setSentResult({ teamConfigured: r.teamConfigured, techConfigured: r.techConfigured, techSeparate: r.techSeparate });
+            }}
+          >
+            {sentResult == null ? t("testNotify") : sentResult.techSeparate ? t("testSentBoth") : sentResult.techConfigured ? t("testSentTeamOnly") : t("testSentNoChatId")}
+          </button>
           <button
             className="btn-outline btn-sm"
             onClick={async () => {

@@ -5,7 +5,7 @@ import { getTick, getWorkersConfig, requestRun } from "./workers";
 import { unreadForOwner } from "./ccMessages";
 import { recentErrors } from "../logbuffer";
 import { flowOf, intakeTitle, laneOf, nextIntakeKey, sizeOf, weekStart } from "@/lib/cc-lanes";
-import { CLOSED_STATUSES, OPEN_STATUSES } from "@/lib/cc-flow";
+import { CLOSED_STATUSES, LEASE_MIN, OPEN_STATUSES } from "@/lib/cc-flow";
 import { testedCurrent, workersState } from "@/lib/workers";
 import { Prisma } from "@prisma/client";
 
@@ -39,7 +39,7 @@ export async function ccCounts() {
     db.task.groupBy({ by: ["status"], _count: true }),
     db.task.count({ where: { status: "review", layer: { not: "none" } } }),
     db.task.count({ where: { status: "review", layer: "none" } }),
-    db.task.count({ where: { status: "blocked", blockedOn: { in: ["owner", "product"] } } }),
+    db.task.count({ where: { status: "blocked", blockedOn: { in: ["owner", "product"] }, triagedAt: { not: null } } }),
     unreadForOwner(),
     db.workerRun.count({ where: { status: "running" } }),
     attention(),
@@ -49,7 +49,7 @@ export async function ccCounts() {
   const n = (s: string) => byStatus.find((r) => r.status === s)?._count ?? 0;
   return {
     backlog: OPEN_STATUSES.reduce((sum, s) => sum + n(s), 0),
-    you: ownerBlocked + attn.stale.length + attn.review.filter((r) => r.health.stuckReview).length + failed,
+    you: ownerBlocked + attn.stale.length + attn.review.filter((r) => r.health.stuckReview).length + failed + reviewNoCode,
     dev: n("in_progress"),
     deployer: reviewCode,
     approvals: reviewNoCode,
@@ -60,33 +60,38 @@ export async function ccCounts() {
   };
 }
 
-const AGENT_PREFIXES = ["system", "triage", "nocode", "dev-", "deployer", "tester"];
-
-/** «Нужен ты»: блокировки на владельце и продукте, брошенные задачи, застрявшая проверка, упавшие запуски, пауза воркеров */
+/** «Нужен ты»: блокировки на владельце и продукте, брошенные задачи, застрявшая проверка, не-код на приёмке, упавшие запуски, пауза воркеров */
 export async function needsYou() {
-  const [attn, owner, failedRuns, config] = await Promise.all([
+  const [attn, owner, failedRuns, config, nocodeReview] = await Promise.all([
     attention(),
     db.task.findMany({
       where: { status: "blocked", blockedOn: { in: ["owner", "product"] } },
       orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
-      select: { key: true, title: true, priority: true, blockedOn: true, blockedReason: true, updatedAt: true, triageNote: true, comments: { orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, kind: true, createdAt: true } } },
+      select: { key: true, title: true, priority: true, blockedOn: true, blockedReason: true, updatedAt: true, triageNote: true, triagedAt: true, comments: { orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, kind: true, createdAt: true } } },
     }),
     db.workerRun.findMany({ where: { status: { in: ["failed", "timeout"] }, startedAt: { gte: new Date(Date.now() - 24 * 3600_000) } }, orderBy: { startedAt: "desc" }, take: 10 }),
     getWorkersConfig(),
+    db.task.findMany({
+      where: { status: "review", layer: "none" },
+      orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
+      select: { key: true, title: true, priority: true, updatedAt: true, ownerSummary: true, _count: { select: { attachments: true } } },
+    }),
   ]);
   return {
     owner: owner.map((x) => ({
       ...x,
-      ownerAnswered: x.comments[0] ? !AGENT_PREFIXES.some((p) => x.comments[0].author.startsWith(p)) : false,
+      ownerAnswered: x.triagedAt === null,
     })),
     stale: attn.stale,
     stuckReview: attn.review.filter((r) => r.health.stuckReview),
+    /** Заблокированы на tech/external — видно техдиректору в «Нужен ты» */
+    techBlocked: attn.tech,
+    nocodeReview,
     failedRuns,
     pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null,
   };
 }
 
-/** Задачи с макетом, ожидающие утверждения владельцем: любой статус кроме завершённых */
 /**
  * Дизайн ждёт утверждения владельцем: есть настоящий макет — картинка во вложениях или ссылка (mockupUrl) —
  * либо стоит флаг «нужен макет». Текстовое описание дизайна само по себе на согласование не выносится
@@ -101,7 +106,12 @@ export async function mockupPendingApprovals() {
   return db.task.findMany({
     where: DESIGN_PENDING,
     orderBy: [{ mockupRequired: "desc" }, { priority: "asc" }, { updatedAt: "asc" }],
-    select: { key: true, title: true, priority: true, status: true, layer: true, updatedAt: true, mockupUrl: true, mockupRequired: true, design: true, _count: { select: { attachments: true } } },
+    select: {
+      key: true, title: true, priority: true, status: true, layer: true, updatedAt: true,
+      mockupUrl: true, mockupRequired: true, design: true, needs: true,
+      _count: { select: { attachments: true } },
+      attachments: { where: { mime: { startsWith: "image/" } }, select: { url: true, fileName: true }, orderBy: { createdAt: "desc" } },
+    },
   });
 }
 
@@ -110,16 +120,20 @@ export async function designApproved(days = 14) {
   return db.task.findMany({
     where: { mockupApprovedAt: { gte: new Date(Date.now() - days * 86400_000) } },
     orderBy: { mockupApprovedAt: "desc" },
-    select: { key: true, title: true, status: true, mockupApprovedAt: true, mockupApprovedBy: true },
+    select: {
+      key: true, title: true, status: true, mockupApprovedAt: true, mockupApprovedBy: true,
+      mockupUrl: true,
+      attachments: { where: { mime: { startsWith: "image/" } }, select: { url: true, fileName: true }, orderBy: { createdAt: "desc" } },
+    },
   });
 }
 
-/** Согласования: не-код на проверке — принимает человек. С последним отчётом, чтобы решать, не открывая карточку */
+/** Согласования: не-код на проверке — принимает человек. С резюме для владельца и последним отчётом */
 export async function approvals() {
   const tasks = await db.task.findMany({
     where: { status: "review", layer: "none" },
     orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
-    select: { key: true, title: true, priority: true, updatedAt: true, _count: { select: { attachments: true } }, comments: { where: { kind: "report" }, orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, createdAt: true } } },
+    select: { key: true, title: true, priority: true, updatedAt: true, ownerSummary: true, _count: { select: { attachments: true } }, comments: { where: { kind: "report" }, orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, createdAt: true } } },
   });
   return tasks.map((t) => ({ ...t, lane: laneOf({ key: t.key, layer: "none" }) }));
 }
@@ -162,7 +176,7 @@ export async function releaseNotes(weeks = 12) {
   const tasks = await db.task.findMany({
     where: { status: "done", doneAt: { gte: new Date(Date.now() - weeks * 7 * 24 * 3600_000) } },
     orderBy: { doneAt: "desc" },
-    select: { key: true, title: true, summary: true, layer: true, deployedSha: true, doneAt: true, epicRef: { select: { title: true } } },
+    select: { key: true, title: true, summary: true, releaseNote: true, layer: true, deployedSha: true, doneAt: true, epicRef: { select: { title: true } } },
   });
   const groups = new Map<number, typeof tasks>();
   for (const t of tasks) {
@@ -236,10 +250,31 @@ export async function intakeHistory(take = 12) {
 
 /* ───────────── Здоровье ───────────── */
 
+/** Порог отображения в панели «Задачи без пульса» на странице Здоровье */
+const STALE_DISPLAY_MIN = 30;
+
+/** Задачи «В работе», от которых не было пульса более 30 минут — для ручного возврата в очередь */
+export async function staleTasksList() {
+  const now = new Date();
+  const tasks = await db.task.findMany({
+    where: { status: "in_progress", claimedBy: { not: null } },
+    select: { key: true, title: true, claimedBy: true, heartbeatAt: true, claimUntil: true },
+  });
+  return tasks
+    .map((t) => {
+      const lastSign = t.heartbeatAt ?? (t.claimUntil ? new Date(t.claimUntil.getTime() - LEASE_MIN * 60_000) : null);
+      const silentMin = lastSign ? Math.floor((now.getTime() - lastSign.getTime()) / 60_000) : null;
+      return { key: t.key, title: t.title, claimedBy: t.claimedBy, silentMin };
+    })
+    .filter((t) => t.silentMin != null && t.silentMin >= STALE_DISPLAY_MIN)
+    .sort((a, b) => (b.silentMin ?? 0) - (a.silentMin ?? 0));
+}
+
+export type StaleTask = Awaited<ReturnType<typeof staleTasksList>>[number];
+
 /** Страница «Здоровье»: сервер, база, память, бэкапы, фоновые задачи, диспетчер и воркеры, каналы, последняя выкладка */
 /** Инварианты доски из канона (docs/canon/PROCESS.md): что потеряно или зависло. Ничего не меняет — только отчёт */
 export async function boardAudit() {
-  const AGENT = /^(triage|dev|nocode|tester|deployer|watchdog|dispatcher|cto|system)/i;
   const [tasks, tick] = await Promise.all([
     db.task.findMany({
       select: {
@@ -261,9 +296,7 @@ export async function boardAudit() {
     for (const d of t.depends) if (!by.has(d)) add("deps_unknown", `${t.key}→${d}`);
     if (t.status === "blocked") {
       if (!t.blockedOn || !t.blockedReason?.trim()) add("blocked_no_reason", t.key);
-      const last = t.comments[0];
-      const since = t.events[0]?.createdAt;
-      if (last && since && last.createdAt > since && !AGENT.test(last.author)) add("blocked_answered", t.key);
+      if ((t.blockedOn === "owner" || t.blockedOn === "product") && !t.triagedAt) add("blocked_answered", t.key);
       if (t.blockedOn === "deps" && !open.length) add("blocked_deps_closed", t.key);
     }
     if (t.status === "backlog" && !t.triagedAt) add("backlog_untriaged", t.key);

@@ -1,11 +1,13 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { pageUser } from "@/server/adminPage";
-import { boardAudit, healthStatus } from "@/server/services/ccBoard";
+import { boardAudit, healthStatus, staleTasksList } from "@/server/services/ccBoard";
+import { otpStats } from "@/server/services/otpStats";
 import { Forbidden } from "@/components/admin/ui";
 import { CcHeader } from "@/components/admin/cc/CcHeader";
 import { SystemPanel } from "@/components/admin/cc/SystemPanel";
 import { ErrorLogPanel } from "@/components/admin/cc/ErrorLogPanel";
+import { HealthPanel } from "@/components/admin/cc/HealthPanel";
 import { Card } from "@/components/admin/fields";
 import { ago } from "@/components/admin/cc/tabs/shared";
 import { cn, dateLabel, timeLabel } from "@/lib/format";
@@ -39,7 +41,7 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
   const { locale } = await params;
   setRequestLocale(locale);
   if (!(await pageUser("control"))) return <Forbidden />;
-  const [t, th, h, audit] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.healthPage"), healthStatus(), boardAudit()]);
+  const [t, th, h, audit, otp, staleTasks] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.healthPage"), healthStatus(), boardAudit(), otpStats(), staleTasksList()]);
   const uptime = h.uptimeSec >= 86400 ? th("uptimeD", { d: Math.floor(h.uptimeSec / 86400), h: Math.floor((h.uptimeSec % 86400) / 3600) }) : th("uptimeH", { h: Math.floor(h.uptimeSec / 3600), m: Math.floor((h.uptimeSec % 3600) / 60) });
   const tickTone: Tone = h.tickAgeMin == null ? "warn" : h.tickAgeMin > 3 ? "bad" : "ok";
   const workersValue = h.workers.state === "stopped" ? th("workersStopped") : h.workers.state === "planned" ? th("workersPlanned", { when: `${dateLabel(new Date(h.workers.pausedUntil!), locale, { day: "numeric", month: "short" })}, ${timeLabel(new Date(h.workers.pausedUntil!))}` }) : h.workers.state === "paused" ? th("workersPaused") : h.workers.enabled ? (h.workers.dryRun ? th("workersDry") : th("workersOn")) : th("workersOff");
@@ -49,6 +51,12 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
     <div className="max-w-6xl">
       <CcHeader page="health" locale={locale} />
       <p className="mb-4 text-sm text-muted">{th("subtitle")}</p>
+      {!h.sys.techChat && (
+        <div className="mb-4 rounded-xl border border-bad bg-bad/10 p-3 text-sm text-bad">
+          <span className="font-medium">{th("alertMissing")}</span>{" "}
+          <Link href="/admin/settings" className="font-medium underline">{th("alertMissingLink")}</Link>
+        </div>
+      )}
 
       <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Metric label={th("server")} value={th("serverOk")} hint={`${th("uptime")}: ${uptime}`} />
@@ -68,6 +76,21 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
         <Metric label={th("workers")} value={workersValue} hint={th("workersRunning", { n: h.workers.running })} tone={h.workers.state === "stopped" ? "bad" : h.workers.pausedUntil ? "warn" : "ok"} href="/admin/control?tab=workers" />
         <Metric label={th("runs24")} value={Object.values(h.runs24).reduce((a, b) => a + b, 0)} hint={th("runs24Hint", { failed, limit: h.runs24.limit ?? 0 })} tone={failed ? "warn" : "ok"} />
         <Metric label={th("orders")} value={`${h.orders24} / ${h.orders7}`} hint={th("ordersHint")} />
+      </div>
+
+      <div className="mb-4 grid gap-3 sm:grid-cols-2">
+        <Metric
+          label={th("otp24h")}
+          value={otp.requests24h}
+          hint={otp.byChannel.length > 0 ? otp.byChannel.map((c) => th("otpByChannel", { channel: c.channel, n: c.count })).join(" · ") : th("otp24hHint")}
+          tone="ok"
+        />
+        <Metric
+          label={th("otpErrors")}
+          value={otp.errorChannels.length === 0 ? th("otpErrorsNone") : otp.errorChannels.length}
+          hint={otp.errorChannels.length > 0 ? otp.errorChannels.map((e) => `${e.channel} ×${e.count}`).join(", ") : th("otpErrorsHint")}
+          tone={otp.errorChannels.length === 0 ? "ok" : "bad"}
+        />
       </div>
 
       <Card title={`${th("audit.title")} · ${audit.total}`} className="mb-4">
@@ -92,6 +115,11 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
         )}
         <p className="mt-2 text-xs text-muted">{th("audit.hint")}</p>
       </Card>
+
+      <div className="mb-4">
+        <HealthPanel tasks={staleTasks} locale={locale} />
+      </div>
+
       <div className="mb-4 grid gap-4 lg:grid-cols-2">
         <SystemPanel system={h.sys} />
         <Card title={th("howTo")}>

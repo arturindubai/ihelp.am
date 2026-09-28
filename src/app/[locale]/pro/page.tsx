@@ -58,6 +58,11 @@ export default async function ProPage({ params, searchParams }: { params: Promis
                 <div>
                   <div className="text-lg font-bold">{hm(v.scheduledAt!)} <span className="text-sm font-normal text-muted">· {durationLabel(v.durationMin, locale)}</span></div>
                   {tab !== "today" && <div className="text-sm text-muted">{dateLabel(v.scheduledAt!, locale)}</div>}
+                  {v.startedAt && (() => {
+                    const diff = Math.round((v.startedAt!.getTime() - v.scheduledAt!.getTime()) / 60_000);
+                    const delay = diff > 0 ? to("visitTiming.lateMin", { n: diff }) : diff < 0 ? to("visitTiming.earlyMin", { n: -diff }) : to("visitTiming.onTime");
+                    return <div className="mt-0.5 text-xs text-muted">{to("visitTiming.scheduled")} {hm(v.scheduledAt!)} → {to("visitTiming.started")} {hm(v.startedAt!)} · <span className={diff > 3 ? "text-bad" : diff < -1 ? "text-ok" : ""}>{delay}</span></div>;
+                  })()}
                 </div>
                 <StatusBadge status={v.status} label={to(`visitStatus.${v.status}`)} className="mt-0" />
               </div>

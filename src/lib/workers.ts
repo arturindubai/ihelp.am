@@ -26,6 +26,8 @@ export type PoolConfig = {
   /** Сколько воркеров пула работают одновременно (деплоер и триаж — всегда один) */
   max: number;
   model: (typeof MODELS)[number];
+  /** Модель для задач размера L — только для пула dev; остальные пулы игнорируют это поле */
+  modelForL: (typeof MODELS)[number];
   /** Сколько запусков пула в сутки, чтобы не съесть лимит подписки */
   dailyCap: number;
   mode: Mode;
@@ -53,6 +55,8 @@ export type WorkersConfig = {
   stopRunning: boolean;
   /** pausedUntil — это «План старт» владельца, а не пауза: в назначенное время диспетчер запускает всех сам */
   plannedStart: boolean;
+  /** Opus на лимите до этого момента: L-задачи в пуле dev переключаются на Sonnet; null — лимит не известен */
+  opusLimitUntil: string | null;
 };
 
 export const DEFAULT_WORKERS: WorkersConfig = {
@@ -60,15 +64,15 @@ export const DEFAULT_WORKERS: WorkersConfig = {
   dryRun: false,
   pools: {
     // Триаж: каждая входящая IN-N — отдельный запуск, пачка бэклога — ещё один; 12 в сутки не хватало и очередь вставала
-    triage: { enabled: true, max: 1, model: "sonnet", dailyCap: 40, mode: "auto", everyMin: 30 },
-    dev: { enabled: true, max: 2, model: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
-    nocode: { enabled: true, max: 1, model: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
+    triage: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 40, mode: "auto", everyMin: 30 },
+    dev: { enabled: true, max: 2, model: "sonnet", modelForL: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
+    nocode: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
     // Продакт: отвечает на вопросы, заблокированные «на продукте», раз в сутки проходит бэклог на качество требований
-    product: { enabled: true, max: 1, model: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
+    product: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
     // Дизайнер: интерфейсные задачи без описания дизайна и вопросы «на дизайне»
-    designer: { enabled: true, max: 1, model: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
-    tester: { enabled: true, max: 1, model: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
-    deployer: { enabled: true, max: 1, model: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
+    designer: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
+    tester: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
+    deployer: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
   },
   deployWindow: [10, 20],
   triageBatch: 6,
@@ -77,6 +81,7 @@ export const DEFAULT_WORKERS: WorkersConfig = {
   pausedReason: null,
   stopRunning: false,
   plannedStart: false,
+  opusLimitUntil: null,
 };
 
 const clamp = (v: unknown, min: number, max: number, fallback: number) => {
@@ -95,6 +100,7 @@ export function normalizeWorkers(raw: unknown): WorkersConfig {
       enabled: typeof src.enabled === "boolean" ? src.enabled : d.enabled,
       max: SINGLE.includes(p) ? 1 : clamp(src.max ?? d.max, 0, 4, d.max),
       model: (MODELS as readonly string[]).includes(String(src.model)) ? (src.model as PoolConfig["model"]) : d.model,
+      modelForL: (MODELS as readonly string[]).includes(String((src as Partial<PoolConfig>).modelForL)) ? ((src as Partial<PoolConfig>).modelForL as PoolConfig["modelForL"]) : d.modelForL,
       dailyCap: clamp(src.dailyCap ?? d.dailyCap, 0, 100, d.dailyCap),
       mode: (MODES as readonly string[]).includes(String(src.mode)) ? (src.mode as Mode) : d.mode,
       everyMin: (EVERY_MIN as readonly number[]).includes(Number(src.everyMin)) ? Number(src.everyMin) : d.everyMin,
@@ -115,6 +121,7 @@ export function normalizeWorkers(raw: unknown): WorkersConfig {
     stopRunning: r.stopRunning === true,
     // Запланированный старт без времени бессмыслен: без pausedUntil — обычная работа
     plannedStart: r.plannedStart === true && typeof r.pausedUntil === "string",
+    opusLimitUntil: typeof r.opusLimitUntil === "string" ? r.opusLimitUntil : null,
   };
 }
 
@@ -202,8 +209,10 @@ export type DispatchState = {
   triageQueue: string[];
   /** Пора пересмотреть весь бэклог */
   sweepDue: boolean;
-  /** Задачи с вопросом к продукту (заблокированы на product), в порядке приоритета */
+  /** Задачи с вопросом к продукту: заблокированы на product ИЛИ «В очереди» с открытыми needs */
   productQueue: string[];
+  /** Ключи задач, которые недавно уже были у продакта и с тех пор не менялись: 60 мин не трогаем повторно */
+  productHold: string[];
   /** Пора продакту пройти бэклог на качество требований */
   productSweepDue: boolean;
   /** Интерфейсные задачи без дизайна и вопросы «на дизайне» */
@@ -268,7 +277,7 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
   const nextTest = () => q.test.find((t) => !taken().has(t.key));
   const nextDeploy = () => q.deploy.find((t) => !taken().has(t.key));
   const triageBatch = () => s.triageQueue.filter((k) => !taken().has(k)).slice(0, config.triageBatch);
-  const productBatch = () => (s.productQueue ?? []).filter((k) => !taken().has(k)).slice(0, config.triageBatch);
+  const productBatch = () => (s.productQueue ?? []).filter((k) => !taken().has(k) && !(s.productHold ?? []).includes(k)).slice(0, config.triageBatch);
   const designerBatch = () => (s.designerQueue ?? []).filter((k) => !taken().has(k)).slice(0, Math.min(3, config.triageBatch));
 
   for (const r of s.requests) {
@@ -321,10 +330,18 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
     }
   }
 
-  if (due("triage")) {
-    const keys = triageBatch();
-    if (keys.length) actions.push({ pool: "triage", agent: "triage", keys });
-    else if (s.sweepDue && config.sweepEveryH > 0) actions.push({ pool: "triage", agent: "triage", sweep: true });
+  // Триаж: при непустой очереди — на каждом проходе (расписание игнорируется); обзор бэклога — только по расписанию
+  {
+    const pc = config.pools["triage"];
+    const canRun = pc.enabled && pc.mode !== "manual" && left("triage") > 0 && free("triage") > 0;
+    if (canRun) {
+      const keys = triageBatch();
+      if (keys.length) {
+        actions.push({ pool: "triage", agent: "triage", keys });
+      } else if (s.sweepDue && config.sweepEveryH > 0 && due("triage")) {
+        actions.push({ pool: "triage", agent: "triage", sweep: true });
+      }
+    }
   }
 
   // Продакт — как триаж: пачка задач с вопросом к продукту, а при пустой очереди раз в сутки обзор требований бэклога
@@ -389,4 +406,51 @@ export function poolForTask(t: { status: string; layer: string; testedSha?: stri
   if (t.status === "ready") return t.layer === "none" ? "nocode" : "dev";
   if (t.status === "review" && t.layer !== "none") return t.testedSha ? "deployer" : "tester";
   return null;
+}
+
+/**
+ * Должна ли задача попасть в очередь дизайнера — чистая функция для тестов и фильтрации.
+ * Зеркало условий DB-запроса в designerQueue (src/server/services/workers.ts).
+ * hasImageAttachments — есть хотя бы один вложенный файл с mime image/*
+ * hasAnyAttachments — есть хотя бы одно вложение (любого типа)
+ */
+export function inDesignerQueue(t: {
+  status: string;
+  blockedOn: string | null;
+  mockupUrl: string | null;
+  mockupRequired: boolean;
+  mockupApprovedBy: string | null;
+  design: string | null;
+  layer: string;
+  hasImageAttachments: boolean;
+  hasAnyAttachments: boolean;
+}): boolean {
+  // Заблокирована на дизайне, но макет ещё не подан (нет mockupUrl)
+  if (t.status === "blocked" && t.blockedOn === "design" && !t.mockupUrl) return true;
+  // Нужен макет, не утверждён и не подан: бэклог, очередь или в работе
+  const open = ["backlog", "ready", "in_progress"];
+  if (open.includes(t.status) && t.mockupRequired && !t.mockupApprovedBy && !t.mockupUrl && !t.hasImageAttachments) return true;
+  // Интерфейсная задача (фронт или бэк+фронт) без описания дизайна, без файлов, без ссылки на макет и без утверждения
+  const isUi = t.layer === "front" || t.layer === "fullstack";
+  if (["backlog", "ready"].includes(t.status) && isUi && !t.design?.trim() && !t.hasAnyAttachments && !t.mockupApprovedBy && !t.mockupUrl) return true;
+  return false;
+}
+
+/**
+ * Исключить задачи дизайнера с 60-минутным остыванием: задача не показывается снова,
+ * если была выдана дизайнеру в течение cooldownMs миллисекунд и с тех пор не обновлялась.
+ * recentSeen: ключ задачи → время последнего показа дизайнеру
+ */
+export function filterDesignerCooldown<T extends { key: string; updatedAt: Date }>(
+  tasks: T[],
+  recentSeen: Map<string, Date>,
+  now: Date,
+  cooldownMs = 60 * 60_000,
+): T[] {
+  return tasks.filter((t) => {
+    const seenAt = recentSeen.get(t.key);
+    if (!seenAt) return true;
+    if (now.getTime() - seenAt.getTime() >= cooldownMs) return true;
+    return t.updatedAt > seenAt;
+  });
 }

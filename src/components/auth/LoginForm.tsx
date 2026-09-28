@@ -242,8 +242,8 @@ function PhoneLogin({ channels, onDone, onBack, onSignup }: { channels: Channel[
           </div>
           <p className="mt-3 text-xs text-muted">
             {t.rich("consent", {
-              privacy: (c) => <Link href="/p/privacy" target="_blank" className="underline">{c}</Link>,
-              offer: (c) => <Link href="/p/offer" target="_blank" className="underline">{c}</Link>,
+              privacy: (c) => <Link href="/p/privacy" target="_blank" className="underline underline-offset-2">{c}</Link>,
+              offer: (c) => <Link href="/p/offer" target="_blank" className="underline underline-offset-2">{c}</Link>,
             })}
           </p>
         </div>

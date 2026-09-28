@@ -6,16 +6,22 @@ import { Link, useRouter } from "@/i18n/navigation";
 import {
   ccApproveManyAction,
   ccApproveMockupAction,
+  ccCommentAction,
   ccReturnDesignAction,
   ccIntakeAction,
   ccMessageToIntakeAction,
+  ccOwnerAnswerAction,
+  ccOwnerPostponeAction,
   ccReadMessageAction,
+  ccRejectManyAction,
+  ccReturnManyAction,
   ccRunWorkerAction,
   ccSendMessageAction,
   ccStopRunAction,
   ccTransitionAction,
 } from "@/server/actions/admin/cc";
 import { cn } from "@/lib/format";
+import { parseVariants } from "@/lib/cc-owner-q";
 
 /** Кнопки и формы пульта Control Center: Intake, запуск и остановка воркеров, согласования, сообщения */
 
@@ -375,15 +381,56 @@ export function ApproveAllButton({ keys, label }: { keys: string[]; label: strin
   );
 }
 
+/** Добавить комментарий в ленту задачи без смены статуса (как note у разработчика) */
+export function CommentButton({ taskKey }: { taskKey: string }) {
+  const t = useTranslations("admin.cc.approvals");
+  const { pending, error, done, run } = useAct();
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button className="btn-outline btn-sm" disabled={pending} onClick={() => setOpen(!open)}>
+        {done ? t("commentDone") : t("comment")}
+      </button>
+      {open && (
+        <form
+          className="flex w-full max-w-sm gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(() => ccCommentAction(taskKey, text), () => (setOpen(false), setText("")));
+          }}
+        >
+          <input className="input h-9 flex-1 py-1 text-sm" value={text} onChange={(e) => setText(e.target.value)} placeholder={t("commentPh")} autoFocus />
+          <button className="btn-dark btn-sm" disabled={pending || text.trim().length < 2}>
+            {t("ok")}
+          </button>
+        </form>
+      )}
+      {error && <span className="text-xs text-bad">{t("failed", { error })}</span>}
+    </div>
+  );
+}
+
 /* ───────────── Макет ───────────── */
 
-/** Утвердить макет задачи: кнопка доступна владельцу, пишет в ленту, снимает гейт «нужен макет» */
-export function MockupApproveButton({ taskKey }: { taskKey: string }) {
+/**
+ * Утвердить макет задачи: показывает открытые вопросы (needs), даёт отметить закрытые.
+ * Если все вопросы сняты — задача возвращается туда, откуда была заблокирована.
+ */
+export function MockupApproveButton({ taskKey, needs = [] }: { taskKey: string; needs?: string[] }) {
   const t = useTranslations("admin.cc.mockup");
   const { pending, error, done, run } = useAct();
   const [showComment, setShowComment] = useState(false);
   const [comment, setComment] = useState("");
+  // Открытые вопросы, которые владелец отметит как закрытые при утверждении
+  const [closed, setClosed] = useState<Set<string>>(new Set());
   if (done) return <p className="text-xs text-ok">{t("approved")}</p>;
+  const toggleNeed = (n: string) =>
+    setClosed((prev) => {
+      const next = new Set(prev);
+      next.has(n) ? next.delete(n) : next.add(n);
+      return next;
+    });
   return (
     <div className="flex flex-col items-end gap-1">
       {!showComment ? (
@@ -395,10 +442,24 @@ export function MockupApproveButton({ taskKey }: { taskKey: string }) {
           className="flex w-full max-w-sm flex-col gap-1.5"
           onSubmit={(e) => {
             e.preventDefault();
-            run(() => ccApproveMockupAction(taskKey, comment), () => (setShowComment(false), setComment("")));
+            run(
+              () => ccApproveMockupAction(taskKey, comment, closed.size > 0 ? [...closed] : undefined),
+              () => { setShowComment(false); setComment(""); setClosed(new Set()); },
+            );
           }}
         >
-          <input className="input h-9 w-full py-1 text-sm" value={comment} onChange={(e) => setComment(e.target.value)} placeholder={t("commentPh")} autoFocus />
+          {needs.length > 0 && (
+            <div className="mb-1 space-y-1 text-xs">
+              <p className="font-medium text-warn">{t("needsOpen")}</p>
+              {needs.map((n) => (
+                <label key={n} className="flex cursor-pointer items-start gap-1.5">
+                  <input type="checkbox" className="mt-0.5 shrink-0" checked={closed.has(n)} onChange={() => toggleNeed(n)} />
+                  <span className={closed.has(n) ? "text-muted line-through" : ""}>{n}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          <input className="input h-9 w-full py-1 text-sm" value={comment} onChange={(e) => setComment(e.target.value)} placeholder={t("commentPh")} autoFocus={needs.length === 0} />
           <div className="flex gap-1.5">
             <button className="btn-primary btn-sm" disabled={pending}>{t("confirm")}</button>
             <button type="button" className="btn-ghost btn-sm" onClick={() => setShowComment(false)}>{t("cancel")}</button>
@@ -407,6 +468,82 @@ export function MockupApproveButton({ taskKey }: { taskKey: string }) {
       )}
       {error && <span className="text-xs text-bad">{t("failed", { error })}</span>}
     </div>
+  );
+}
+
+/** «Вернуть все» по дорожке: запрашивает причину через inline-форму, затем возвращает каждую задачу */
+export function ReturnAllButton({ keys, label }: { keys: string[]; label: string }) {
+  const t = useTranslations("admin.cc.approvals");
+  const { pending, run } = useAct();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [result, setResult] = useState<string | null>(null);
+  return (
+    <span className="inline-flex flex-col items-end gap-1">
+      <button className="btn-outline btn-sm" disabled={pending || keys.length === 0} onClick={() => setOpen(!open)}>
+        {label}
+      </button>
+      {open && (
+        <form
+          className="flex gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(
+              async () => {
+                const r = await ccReturnManyAction(keys, reason);
+                if (r.ok && r.failed.length) setResult(t("returnAllFailed", { keys: r.failed.join(", ") }));
+                return r;
+              },
+              () => (setOpen(false), setReason("")),
+            );
+          }}
+        >
+          <input className="input h-9 w-40 py-1 text-sm" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("returnAllPh")} autoFocus />
+          <button className="btn-dark btn-sm" disabled={pending || reason.trim().length < 5}>
+            {t("ok")}
+          </button>
+        </form>
+      )}
+      {result && <span className="text-xs text-warn">{result}</span>}
+    </span>
+  );
+}
+
+/** «Отклонить все» по дорожке: запрашивает причину через inline-форму, затем отклоняет каждую задачу */
+export function RejectAllButton({ keys, label }: { keys: string[]; label: string }) {
+  const t = useTranslations("admin.cc.approvals");
+  const { pending, run } = useAct();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [result, setResult] = useState<string | null>(null);
+  return (
+    <span className="inline-flex flex-col items-end gap-1">
+      <button className="btn-ghost btn-sm text-bad" disabled={pending || keys.length === 0} onClick={() => setOpen(!open)}>
+        {label}
+      </button>
+      {open && (
+        <form
+          className="flex gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(
+              async () => {
+                const r = await ccRejectManyAction(keys, reason);
+                if (r.ok && r.failed.length) setResult(t("rejectAllFailed", { keys: r.failed.join(", ") }));
+                return r;
+              },
+              () => (setOpen(false), setReason("")),
+            );
+          }}
+        >
+          <input className="input h-9 w-40 py-1 text-sm" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("rejectAllPh")} autoFocus />
+          <button className="btn-danger btn-sm" disabled={pending || reason.trim().length < 5}>
+            {t("ok")}
+          </button>
+        </form>
+      )}
+      {result && <span className="text-xs text-warn">{result}</span>}
+    </span>
   );
 }
 
@@ -437,6 +574,103 @@ export function DesignReturnButton({ taskKey }: { taskKey: string }) {
       )}
       {error && <span className="text-xs text-bad">{t("failed", { error })}</span>}
     </div>
+  );
+}
+
+/* ───────────── Вопросы владельцу ───────────── */
+
+/** Компактная карточка вопроса с вариантами (A/B/C) или полем ввода — в «Нужен ты» */
+export function OwnerQuestionCard({ taskKey, title, blockedReason, taskHref }: { taskKey: string; title: string; blockedReason: string | null; taskHref: string }) {
+  const t = useTranslations("admin.cc.you");
+  const { pending, error, run } = useAct();
+  const [expanded, setExpanded] = useState(false);
+  const [answered, setAnswered] = useState(false);
+  const [replyText, setReplyText] = useState("");
+  const [postponeOpen, setPostponeOpen] = useState(false);
+  const [postponeReason, setPostponeReason] = useState("");
+
+  if (answered) return null;
+
+  const parsed = blockedReason ? parseVariants(blockedReason) : null;
+  const question = parsed?.question || blockedReason || "";
+
+  const answer = (text: string) => run(() => ccOwnerAnswerAction(taskKey, text), () => setAnswered(true));
+  const postpone = () =>
+    run(
+      () => ccOwnerPostponeAction(taskKey, postponeReason || undefined),
+      () => { setAnswered(true); setPostponeOpen(false); setPostponeReason(""); },
+    );
+
+  return (
+    <li className="space-y-2 py-3">
+      <Link href={taskHref} scroll={false} className="flex items-baseline gap-2">
+        <span className="shrink-0 font-mono text-xs text-muted">{taskKey}</span>
+        <span className="font-medium">{title}</span>
+      </Link>
+      {question && (
+        <div className="text-sm">
+          <p className={cn("text-warn", !expanded && "line-clamp-2")}>{question}</p>
+          {question.length > 120 && (
+            <button className="mt-0.5 text-xs text-brand hover:underline" onClick={() => setExpanded(!expanded)}>
+              {expanded ? t("collapse") : t("expand")}
+            </button>
+          )}
+        </div>
+      )}
+      {parsed ? (
+        <div className="flex flex-wrap gap-1.5">
+          {parsed.variants.map((v) => (
+            <button
+              key={v.id}
+              disabled={pending}
+              className="rounded-lg border border-line bg-paper px-3 py-1 text-sm transition-colors hover:border-brand hover:bg-brand hover:text-on-action disabled:opacity-50"
+              onClick={() => answer(t("answerVariant", { id: v.id }))}
+            >
+              {v.id}) {v.text}
+            </button>
+          ))}
+          <button className="btn-ghost btn-sm text-muted" disabled={pending} onClick={() => setPostponeOpen(!postponeOpen)}>
+            {t("postpone")}
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <form
+            className="flex gap-1.5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              answer(replyText);
+            }}
+          >
+            <input className="input h-9 flex-1 py-1 text-sm" value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder={t("replyPh")} autoFocus />
+            <button className="btn-dark btn-sm" disabled={pending || replyText.trim().length < 2}>
+              {t("replySend")}
+            </button>
+          </form>
+          <button className="btn-ghost btn-sm text-muted" disabled={pending} onClick={() => setPostponeOpen(!postponeOpen)}>
+            {t("postpone")}
+          </button>
+        </div>
+      )}
+      {postponeOpen && (
+        <form
+          className="flex gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            postpone();
+          }}
+        >
+          <input className="input h-9 flex-1 py-1 text-sm" value={postponeReason} onChange={(e) => setPostponeReason(e.target.value)} placeholder={t("postponePh")} />
+          <button className="btn-outline btn-sm" disabled={pending}>
+            {t("postponeConfirm")}
+          </button>
+          <button type="button" className="btn-ghost btn-sm" onClick={() => setPostponeOpen(false)}>
+            ×
+          </button>
+        </form>
+      )}
+      {error && <p className="text-xs text-bad">{error}</p>}
+    </li>
   );
 }
 
