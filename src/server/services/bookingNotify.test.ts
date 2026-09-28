@@ -22,9 +22,10 @@ const visitStore = new Map<
   {
     id: string;
     scheduledAt: Date | null;
+    masterId: string | null;
     master: { name: string } | null;
     clientNotifiedEvents: string[];
-    order: { number: number; userId: string; config: unknown; addressSnapshot: unknown };
+    order: { id: string; number: number; userId: string; config: unknown; addressSnapshot: unknown };
   }
 >();
 
@@ -68,7 +69,7 @@ vi.mock("../db", () => ({
 }));
 
 vi.mock("./notifyQueue", () => ({
-  enqueueAndSend: vi.fn().mockResolvedValue(undefined),
+  sendTelegramDirect: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("./mail", () => ({
@@ -86,11 +87,13 @@ vi.mock("../settings", () => ({
   getSettings: vi.fn().mockResolvedValue({
     notify: { telegramBotToken: "tg-token-client" },
     brand: { name: "iHelp" },
+    mail: { enabled: true },
   }),
+  getUiOverrides: vi.fn().mockResolvedValue([]),
 }));
 
 // Импорты мокированных модулей — получаем ссылки на vi.fn()
-import { enqueueAndSend } from "./notifyQueue";
+import { sendTelegramDirect } from "./notifyQueue";
 import { sendMail } from "./mail";
 import { notifyTech } from "../notify";
 
@@ -100,6 +103,7 @@ import {
   notifyClientRescheduled,
   notifyClientCancelled,
   notifyClientVisitCompleted,
+  notifyClientVisitCancelled,
 } from "./bookingNotify";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -129,9 +133,11 @@ function makeVisit(id: string, overrides: Partial<VisitData> = {}) {
   const v: VisitData = {
     id,
     scheduledAt: NOW,
+    masterId: "master-1",
     master: { name: "Иван Петров" },
     clientNotifiedEvents: [],
     order: {
+      id: "order-id-1",
       number: 42,
       userId: "u1",
       config: { service: { title: "Уборка" } },
@@ -157,8 +163,8 @@ beforeEach(() => {
   orderStore.clear();
   visitStore.clear();
   userStore.clear();
-  vi.mocked(enqueueAndSend).mockClear();
-  vi.mocked(sendMail).mockClear();
+  vi.mocked(sendTelegramDirect).mockClear().mockResolvedValue(undefined);
+  vi.mocked(sendMail).mockClear().mockResolvedValue({ ok: true });
   vi.mocked(notifyTech).mockClear();
 });
 
@@ -170,7 +176,7 @@ describe("выбор канала доставки", () => {
     makeOrder("o1");
     makeUser("u1", "telegram");
     await notifyClientOrderCreated("o1");
-    expect(vi.mocked(enqueueAndSend)).toHaveBeenCalledOnce();
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
     expect(vi.mocked(sendMail)).not.toHaveBeenCalled();
     expect(vi.mocked(notifyTech)).not.toHaveBeenCalled();
   });
@@ -179,7 +185,7 @@ describe("выбор канала доставки", () => {
     makeOrder("o1");
     makeUser("u1", "email");
     await notifyClientOrderCreated("o1");
-    expect(vi.mocked(enqueueAndSend)).not.toHaveBeenCalled();
+    expect(vi.mocked(sendTelegramDirect)).not.toHaveBeenCalled();
     expect(vi.mocked(sendMail)).toHaveBeenCalledOnce();
     expect(vi.mocked(notifyTech)).not.toHaveBeenCalled();
   });
@@ -188,9 +194,21 @@ describe("выбор канала доставки", () => {
     makeOrder("o1");
     makeUser("u1", "none");
     await notifyClientOrderCreated("o1");
-    expect(vi.mocked(enqueueAndSend)).not.toHaveBeenCalled();
+    expect(vi.mocked(sendTelegramDirect)).not.toHaveBeenCalled();
     expect(vi.mocked(sendMail)).not.toHaveBeenCalled();
     expect(vi.mocked(notifyTech)).toHaveBeenCalledOnce();
+  });
+
+  it("fallback на email если Telegram выбросил ошибку", async () => {
+    makeOrder("o1");
+    makeUser("u1", "telegram");
+    // Сначала добавляем email чтобы проверить fallback
+    userStore.set("u1", { telegramId: "tg-123", email: "user@example.com", name: "Тест" });
+    vi.mocked(sendTelegramDirect).mockRejectedValueOnce(new Error("telegram down"));
+    await notifyClientOrderCreated("o1");
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+    expect(vi.mocked(sendMail)).toHaveBeenCalledOnce();
+    expect(vi.mocked(notifyTech)).not.toHaveBeenCalled();
   });
 });
 
@@ -203,15 +221,26 @@ describe("защита от повторных уведомлений", () => {
     makeUser("u1", "telegram");
     await notifyClientOrderCreated("o1");
     await notifyClientOrderCreated("o1");
-    expect(vi.mocked(enqueueAndSend)).toHaveBeenCalledOnce();
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
   });
 
-  it("masterAssigned: повторный вызов не отправляет второе сообщение", async () => {
+  it("masterAssigned: повторный вызов с тем же мастером не отправляет второе сообщение", async () => {
     makeVisit("v1");
     makeUser("u1", "telegram");
     await notifyClientMasterAssigned("v1");
     await notifyClientMasterAssigned("v1");
-    expect(vi.mocked(enqueueAndSend)).toHaveBeenCalledOnce();
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+  });
+
+  it("masterAssigned: смена мастера на другого — второе уведомление отправляется", async () => {
+    makeVisit("v1", { masterId: "master-A", master: { name: "Мастер А" } });
+    makeUser("u1", "telegram");
+    await notifyClientMasterAssigned("v1");
+    // Меняем мастера на другого
+    visitStore.get("v1")!.masterId = "master-B";
+    visitStore.get("v1")!.master = { name: "Мастер Б" };
+    await notifyClientMasterAssigned("v1");
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledTimes(2);
   });
 
   it("cancelled: повторный вызов не отправляет второе сообщение", async () => {
@@ -219,7 +248,15 @@ describe("защита от повторных уведомлений", () => {
     makeUser("u1", "telegram");
     await notifyClientCancelled("o1");
     await notifyClientCancelled("o1");
-    expect(vi.mocked(enqueueAndSend)).toHaveBeenCalledOnce();
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+  });
+
+  it("visitCancelled: повторный вызов не отправляет второе сообщение", async () => {
+    makeVisit("v1");
+    makeUser("u1", "telegram");
+    await notifyClientVisitCancelled("v1");
+    await notifyClientVisitCancelled("v1");
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
   });
 
   it("completed: повторный вызов не отправляет второе сообщение", async () => {
@@ -227,7 +264,7 @@ describe("защита от повторных уведомлений", () => {
     makeUser("u1", "telegram");
     await notifyClientVisitCompleted("v1");
     await notifyClientVisitCompleted("v1");
-    expect(vi.mocked(enqueueAndSend)).toHaveBeenCalledOnce();
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
   });
 
   it("rescheduled: одна дата — одно сообщение; другая дата — ещё одно", async () => {
@@ -240,7 +277,7 @@ describe("защита от повторных уведомлений", () => {
     visitStore.get("v1")!.scheduledAt = laterDate;
 
     await notifyClientRescheduled("v1"); // другая дата — отправить
-    expect(vi.mocked(enqueueAndSend)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -252,7 +289,7 @@ describe("подстановка переменных", () => {
     makeOrder("o1");
     makeUser("u1", "telegram");
     await notifyClientOrderCreated("o1");
-    const text = vi.mocked(enqueueAndSend).mock.calls[0][1];
+    const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
     expect(text).toContain("Уборка");
     expect(text).toContain("2026-09-28");
     expect(text).toContain("֏");
@@ -262,7 +299,7 @@ describe("подстановка переменных", () => {
     makeVisit("v1");
     makeUser("u1", "telegram");
     await notifyClientMasterAssigned("v1");
-    const text = vi.mocked(enqueueAndSend).mock.calls[0][1];
+    const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
     expect(text).toContain("Иван Петров");
   });
 
@@ -270,16 +307,16 @@ describe("подстановка переменных", () => {
     makeOrder("o1");
     makeUser("u1", "telegram");
     await notifyClientCancelled("o1");
-    const text = vi.mocked(enqueueAndSend).mock.calls[0][1];
+    const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
     expect(text).toContain("2026-09-28");
   });
 
-  it("completed — текст содержит имя мастера и ссылку", async () => {
+  it("completed — текст содержит имя мастера и ссылку на заказ по id", async () => {
     makeVisit("v1");
     makeUser("u1", "telegram");
     await notifyClientVisitCompleted("v1");
-    const text = vi.mocked(enqueueAndSend).mock.calls[0][1];
+    const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
     expect(text).toContain("Иван Петров");
-    expect(text).toContain("/account/orders/");
+    expect(text).toContain("/account/orders/order-id-1");
   });
 });

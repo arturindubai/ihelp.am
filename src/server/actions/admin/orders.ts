@@ -8,7 +8,7 @@ import { getSettings } from "../../settings";
 import { BUSY_STATUSES, generateSubscriptionVisits, loadAvailability } from "../../services/booking";
 import { setCashCollected, setVisitStatus, refreshOrderState } from "../../services/visits";
 import { notifyMasterAssigned, notifyMasterRescheduled, notifyMasterCancelled } from "../../services/workerNotify";
-import { notifyClientMasterAssigned, notifyClientRescheduled, notifyClientCancelled } from "../../services/bookingNotify";
+import { notifyClientMasterAssigned, notifyClientRescheduled, notifyClientCancelled, notifyClientVisitCancelled } from "../../services/bookingNotify";
 import { isMasterFree } from "@/lib/slots";
 import { atYerevan } from "@/lib/time";
 
@@ -38,12 +38,17 @@ export async function adminVisitAction(visitId: string, patch: { status?: VisitS
   if (patch.status && patch.status !== v.status) await setVisitStatus(v.id, patch.status, "админ");
   if (patch.cash !== undefined) await setCashCollected(v.id, patch.cash);
   await audit(u.id, "visit.update", "Visit", v.id, patch);
+  // Уведомление клиента при отмене визита администратором
+  if (patch.status === "CANCELLED" && patch.status !== v.status) {
+    await notifyClientVisitCancelled(v.id).catch(() => {});
+  }
   // Уведомления мастеру и клиенту: назначение нового мастера, перенос даты/времени
   if (patch.masterId && patch.masterId !== hadMaster) {
     await notifyMasterAssigned(v.id).catch(() => {});
     await notifyClientMasterAssigned(v.id).catch(() => {});
-  } else if (wasMoved && hadMaster) {
-    await notifyMasterRescheduled(v.id).catch(() => {});
+  } else if (wasMoved) {
+    // Уведомить клиента при переносе визита в любом случае (с мастером или без)
+    if (hadMaster) await notifyMasterRescheduled(v.id).catch(() => {});
     await notifyClientRescheduled(v.id).catch(() => {});
   }
   rv(v.orderId);
