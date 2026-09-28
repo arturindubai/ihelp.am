@@ -289,8 +289,14 @@ async function main() {
   if (!KEY) return console.log("CC_AGENT_KEY пуст — API Control Center выключено, воркеров не запускаю");
   const h = heads();
   let plan = await api({ action: "dispatch", heads: h });
-  // Кто-то закончил — слот освободился, пауза могла начаться: план пересчитываем сразу, не ждём следующего прохода
-  if (await reconcile(plan.running, plan.config.stopRunning)) plan = await api({ action: "dispatch", heads: h });
+  // Кто-то закончил — слот освободился, пауза могла начаться: план пересчитываем сразу, не ждём следующего прохода.
+  // Действия по кнопке из первого плана сохраняем: их просьбы уже сняты с очереди, второй dispatch их не увидит.
+  if (await reconcile(plan.running, plan.config.stopRunning)) {
+    const byButton = plan.actions.filter((a) => a.requestAt);
+    const plan2 = await api({ action: "dispatch", heads: h });
+    const seenAgents = new Set(byButton.map((a) => `${a.pool}|${a.agent}`));
+    plan = { ...plan2, actions: [...byButton, ...plan2.actions.filter((a) => !seenAgents.has(`${a.pool}|${a.agent}`))] };
+  }
   for (const u of plan.unmet ?? []) log(`· «Запустить сейчас» не выполнено — ${u}`);
   const paused = plan.config.pausedUntil && Date.parse(plan.config.pausedUntil) > Date.now();
   if (!plan.actions.length) return log(paused ? `на паузе до ${plan.config.pausedUntil}` : plan.config.enabled ? "работы нет" : "воркеры выключены в Control Center");
