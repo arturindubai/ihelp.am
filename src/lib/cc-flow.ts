@@ -69,7 +69,8 @@ const TRANSITIONS: Record<TaskStatusKey, Partial<Record<TaskStatusKey, Role[]>>>
   ready: { backlog: TRIAGE, blocked: ANY, cancelled: PLAN },
   in_progress: { review: WORK, ready: [...WORK, ...PLAN, "watchdog"], blocked: ANY, backlog: PLAN, cancelled: PLAN },
   // Сторож блокирует проверку, когда тестировщик дважды закончил без вердикта (src/server/services/workers.ts)
-  review: { done: RELEASE, ready: [...RELEASE, ...PLAN, "tester"], blocked: [...RELEASE, ...PLAN, "tester", "watchdog"], cancelled: PLAN },
+  // tester: закрывает noWork-задачи как «не потребовалось» через cancelled
+  review: { done: RELEASE, ready: [...RELEASE, ...PLAN, "tester"], blocked: [...RELEASE, ...PLAN, "tester", "watchdog"], cancelled: [...PLAN, "tester"] },
   // Разблокировка ведёт туда, откуда задача была заблокирована (unblockTarget): с проверки — на проверку
   // watchdog добавлен в backlog: плановая разблокировка по blockedUntil возвращает задачу на разбор
   blocked: { ready: ANY, review: ANY, backlog: [...TRIAGE, "watchdog"], cancelled: PLAN },
@@ -152,17 +153,19 @@ export const isReady = (items: CheckItem[]) => items.every((i) => i.ok || !i.har
 /** Код-задача: её доказательство готовности — коммит в main, а не слова */
 export const isCodeTask = (layer: string) => layer !== "none";
 
-/** Гейт «На проверке»: у код-задачи есть ветка, у любой — отчёт; если переданы opts — проверяем releaseNote и ownerSummary */
+/** Гейт «На проверке»: у код-задачи есть ветка, у любой — отчёт; если переданы opts — проверяем releaseNote, ownerSummary и nextSteps */
 export function reviewGate(
   t: { layer: string; branch?: string | null },
   report: string,
-  opts?: { releaseNote?: string; ownerSummary?: string },
+  opts?: { releaseNote?: string; ownerSummary?: string; nextSteps?: string[] | null; noWork?: boolean },
 ): string | null {
-  if (isCodeTask(t.layer) && !t.branch?.trim()) return "branch_required";
+  if (!opts?.noWork && isCodeTask(t.layer) && !t.branch?.trim()) return "branch_required";
   if (report.trim().length < 40) return "report_required";
   if (opts !== undefined) {
     if (!opts.releaseNote?.trim()) return "release_note_required";
     if (!opts.ownerSummary?.trim()) return "owner_summary_required";
+    // Для не-код задачи исполнитель обязан явно указать следующие шаги (или что их нет)
+    if (!isCodeTask(t.layer) && opts.nextSteps === undefined) return "next_steps_required";
   }
   return null;
 }
@@ -180,6 +183,14 @@ export function readyNeedsGate(needs: string[], role: Role, force: boolean): "ne
   return "needs_open";
 }
 
+/** Попадает ли задача в очередь триажа: новые из бэклога и заблокированные на owner/product/design без triagedAt */
+export function inTriageQueue(task: { status: string; triagedAt: Date | null; blockedOn: string | null }): boolean {
+  if (task.triagedAt !== null) return false;
+  if (task.status === "backlog") return true;
+  if (task.status === "blocked" && (task.blockedOn === "owner" || task.blockedOn === "product" || task.blockedOn === "design")) return true;
+  return false;
+}
+
 /**
  * Ответ владельца в «Нужен ты» всегда возвращает задачу триажу для повторного разбора.
  * В «В очереди» задача не переходит напрямую — triagedAt сбрасывается, триаж принимает решение.
@@ -195,8 +206,8 @@ export function isOwnerQuestion(task: { status: string; blockedOn: string | null
 }
 
 /** Гейт «Сделано»: код-задача — коммит в main и что проверено после выкладки; прочие — доказательство словами или файлом */
-export function doneGate(t: { layer: string }, proof: { sha?: string | null; text?: string | null; attachments?: number }): string | null {
-  if (isCodeTask(t.layer) && !SHA_RE.test(proof.sha?.trim() ?? "")) return "sha_required";
+export function doneGate(t: { layer: string; noWork?: boolean }, proof: { sha?: string | null; text?: string | null; attachments?: number }): string | null {
+  if (isCodeTask(t.layer) && !t.noWork && !SHA_RE.test(proof.sha?.trim() ?? "")) return "sha_required";
   if ((proof.text?.trim().length ?? 0) < 10 && !(proof.attachments && !isCodeTask(t.layer))) return "proof_required";
   return null;
 }

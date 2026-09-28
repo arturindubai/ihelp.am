@@ -36,11 +36,9 @@ check "ключ шифрования настроек задан" docker exec ho
 
 echo "Уведомления"
 tech_alert_ok() {
-  docker compose exec -T db psql -U app -d homeservices -tAc \
-    "SELECT (COALESCE(value->>'telegramBotToken','') != '') AND (COALESCE(value->>'techChatId','') != '' OR COALESCE(value->>'teamChatId','') != '' OR COALESCE(value->>'telegramChatId','') != '') FROM (SELECT (value::jsonb) AS value FROM \"Setting\" WHERE key='notify') t" \
-    2>/dev/null | grep -q "^t"
+  curl -s -m 20 "$BASE/api/health?check=alert" | grep -q '"ok":true'
 }
-warn "адресат тех-алертов задан" tech_alert_ok
+warn "адресат тех-алертов задан (нет — красная плашка в Здоровье)" tech_alert_ok
 
 echo "Страницы ($BASE)"
 check "/api/health → {\"ok\":true}" [ "$(curl -s -m 20 "$BASE/api/health")" = '{"ok":true}' ]
@@ -50,6 +48,27 @@ check "/api/cron без секрета → 403" [ "$(http_code "$BASE/api/cron")
 og="$(curl -s -m 20 "$BASE/ru" | grep -oE '<meta property="og:image" content="[^"]+"' | head -n 1 | sed -E 's/.*content="([^"]+)"/\1/; s/&amp;/\&/g')"
 og_ok() { [ -n "$og" ] && [ "$(curl -s -o /dev/null -m 30 -w '%{http_code} %{content_type}' "$BASE/${og#*://*/}")" = "200 image/png" ]; }
 check "превью ссылок (og:image) → PNG" og_ok
+
+echo "Control Center"
+# Ключ агента читается без вывода в лог: env_val возвращает значение, не эхо
+cc_api_ok() {
+  local key response http_code body
+  key="$(env_val CC_AGENT_KEY)"
+  [ -z "$key" ] && return 1
+  response=$(curl -s -m 20 -w '\n%{http_code}' -H "x-cc-key: $key" "$BASE/api/cc")
+  http_code=$(echo "$response" | tail -n1)
+  body=$(echo "$response" | head -n-1)
+  [ "$http_code" = "200" ] || return 1
+  # Список задач непустой: JSON содержит хотя бы один объект задачи
+  echo "$body" | grep -q '"tasks":\[{'
+}
+check "API воркеров: список задач (200, не пуст)" cc_api_ok
+db_schema_ok() {
+  # Проверяет, что все поля Task, Epic, WorkerRun из schema.prisma реально есть в базе.
+  # Если миграция добавила столбец с неверным именем, запрос упадёт с ERROR: column "..." does not exist.
+  node scripts/check-migrations.mjs --db >/dev/null 2>&1
+}
+check "схема Prisma и база согласованы (Task, Epic, WorkerRun)" db_schema_ok
 
 echo "Логи приложения"
 # Первые 60 секунд после запуска контейнера — не должно быть MISSING_MESSAGE (next-intl) или
@@ -75,6 +94,13 @@ check "X-Robots-Tag: ${robots:-noindex, nofollow}" [ "$(curl -sI -m 20 "$BASE/ru
 
 echo "Бэкапы"
 check "бэкап базы моложе 26 часов" [ -n "$(find backups -maxdepth 1 -name 'db-*.sql.gz' -mmin -1560 2> /dev/null | head -n 1)" ]
+backup_script_ok() {
+  local host_sum cont_sum
+  host_sum=$(md5sum deploy/backup.sh 2>/dev/null | cut -d' ' -f1) || return 1
+  cont_sum=$(docker exec homecare-backup-1 md5sum /backup.sh 2>/dev/null | cut -d' ' -f1) || return 1
+  [ "$host_sum" = "$cont_sum" ]
+}
+check "скрипт бэкапа совпадает с репозиторием" backup_script_ok
 
 neighbors=("$@")
 if [ ${#neighbors[@]} -eq 0 ]; then read -r -a neighbors <<< "$(env_val NEIGHBORS | tr -d '"')"; fi

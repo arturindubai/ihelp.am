@@ -1,7 +1,6 @@
 import "server-only";
 import { db } from "../db";
-import { alertTech } from "../alerts";
-import { html } from "../notify";
+import { html, notifyTech } from "../notify";
 
 /**
  * Сообщения Control Center (вкладка «Сообщения», как Notify в LIA). Владелец пишет роли или всем воркерам —
@@ -18,9 +17,8 @@ export async function sendMessage(m: { to: string; from: string; text: string; t
   const msg = await db.ccMessage.create({ data: { toRole: m.to, fromAgent: m.from.slice(0, 60), text, taskKey: m.taskKey?.trim().toUpperCase() || null } });
   // Владельцу — сразу в тех-чат, чтобы вопрос воркера не ждал, пока кто-то откроет админку
   if (m.to === "owner") {
-    await alertTech(`cc:msg:${msg.id}`, html`✉️ <b>${m.from}</b>${m.taskKey ? ` · ${m.taskKey}` : ""}\n${text.slice(0, 600)}`, 1).catch(() => null);
-    const { notifyMembers } = await import("./teamBot");
-    await notifyMembers(html`✉️ <b>${m.from}</b>${m.taskKey ? ` · ${m.taskKey}` : ""}\n${text.slice(0, 1500)}`).catch(() => null);
+    // notifyTech доставит в тех-чат; если чат не задан — в личные сообщения членам команды
+    await notifyTech(html`✉️ <b>${m.from}</b>${m.taskKey ? ` · ${m.taskKey}` : ""}\n${text.slice(0, 1500)}`).catch(() => null);
   }
   return msg;
 }
