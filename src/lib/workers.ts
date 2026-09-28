@@ -193,8 +193,8 @@ export type RunRequest = { pool: Pool; key?: string | null; at: string; by: stri
 
 export type DispatchState = {
   config: WorkersConfig;
-  /** Работающие сейчас запуски: пул и имя агента */
-  running: { pool: Pool; agent: string }[];
+  /** Работающие сейчас запуски: пул, имя агента и задачи пула-пачки (product, designer) */
+  running: { pool: Pool; agent: string; keys?: string[] }[];
   /** Агенты, держащие задачу в статусе «В работе» (claimedBy при status=in_progress); исключаются из выбора имён */
   claimedAgents?: { pool: Pool; agent: string }[];
   /** Для диспетчера: задачи in_progress с арендой — чтобы при agent_busy проверить, истекла ли аренда */
@@ -274,6 +274,7 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
   if (config.stopRunning) return [];
   if (config.pausedUntil && Date.parse(config.pausedUntil) > now.getTime()) return [];
   const actions: DispatchAction[] = [];
+  // Уникальные имена агентов пула: для freeName (нельзя переиспользовать имя, даже если запусков несколько)
   const names = (p: Pool) => [
     ...new Set([
       ...s.running.filter((r) => r.pool === p).map((r) => r.agent),
@@ -281,14 +282,27 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
       ...actions.filter((a) => a.pool === p).map((a) => a.agent),
     ]),
   ];
-  const free = (p: Pool) => config.pools[p].max - names(p).length;
+  // Число занятых слотов: считаем экземпляры, а не уникальные имена (защита от старых записей
+  // с одинаковыми именами у нескольких запусков — при лимите 2 три «designer» не дают четвёртого)
+  const instanceCount = (p: Pool) => {
+    const runSet = new Set(s.running.filter((r) => r.pool === p).map((r) => r.agent));
+    const claimedOnly = new Set((s.claimedAgents ?? []).filter((r) => r.pool === p && !runSet.has(r.agent)).map((r) => r.agent));
+    return s.running.filter((r) => r.pool === p).length + claimedOnly.size + actions.filter((a) => a.pool === p).length;
+  };
+  const free = (p: Pool) => config.pools[p].max - instanceCount(p);
   const taken = () => new Set(actions.flatMap((a) => [a.key ?? "", ...(a.keys ?? [])]));
   const q = reviewQueues(s.review, s.heads, now);
   const nextTest = () => q.test.find((t) => !taken().has(t.key));
   const nextDeploy = () => q.deploy.find((t) => !taken().has(t.key));
   const triageBatch = () => s.triageQueue.filter((k) => !taken().has(k)).slice(0, config.triageBatch);
-  const productBatch = () => (s.productQueue ?? []).filter((k) => !taken().has(k) && !(s.productHold ?? []).includes(k)).slice(0, config.triageBatch);
-  const designerBatch = () => (s.designerQueue ?? []).filter((k) => !taken().has(k)).slice(0, Math.min(3, config.triageBatch));
+  const productBatch = () => {
+    const runKeys = new Set((s.running ?? []).filter((r) => r.pool === "product").flatMap((r) => r.keys ?? []));
+    return (s.productQueue ?? []).filter((k) => !taken().has(k) && !runKeys.has(k) && !(s.productHold ?? []).includes(k)).slice(0, config.triageBatch);
+  };
+  const designerBatch = () => {
+    const runKeys = new Set((s.running ?? []).filter((r) => r.pool === "designer").flatMap((r) => r.keys ?? []));
+    return (s.designerQueue ?? []).filter((k) => !taken().has(k) && !runKeys.has(k)).slice(0, Math.min(3, config.triageBatch));
+  };
 
   for (const r of s.requests) {
     // Входящие IN-N не ждут пачку бэклога: у триажа для них второй, быстрый слот
@@ -305,10 +319,12 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
       if (t && !taken().has(t.key)) actions.push({ pool: "deployer", agent: "deployer", key: t.key, ...base });
     } else if (r.pool === "product") {
       const keys = r.key ? [r.key] : productBatch();
-      actions.push(keys.length ? { pool: "product", agent: "product", keys, ...base } : { pool: "product", agent: "product", sweep: true, ...base });
+      const agent = freeName("product", names("product"));
+      actions.push(keys.length ? { pool: "product", agent, keys, ...base } : { pool: "product", agent, sweep: true, ...base });
     } else if (r.pool === "designer") {
       const keys = r.key ? [r.key] : designerBatch();
-      actions.push(keys.length ? { pool: "designer", agent: "designer", keys, ...base } : { pool: "designer", agent: "designer", sweep: true, ...base });
+      const agent = freeName("designer", names("designer"));
+      actions.push(keys.length ? { pool: "designer", agent, keys, ...base } : { pool: "designer", agent, sweep: true, ...base });
     } else {
       const keys = r.key ? [r.key] : triageBatch();
       const agent = names("triage").includes("triage") ? freeName("triage", names("triage")) : "triage";
@@ -357,14 +373,16 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
   // Продакт — как триаж: пачка задач с вопросом к продукту, а при пустой очереди раз в сутки обзор требований бэклога
   if (due("product")) {
     const keys = productBatch();
-    if (keys.length) actions.push({ pool: "product", agent: "product", keys });
-    else if (s.productSweepDue && config.sweepEveryH > 0) actions.push({ pool: "product", agent: "product", sweep: true });
+    const agentP = freeName("product", names("product"));
+    if (keys.length) actions.push({ pool: "product", agent: agentP, keys });
+    else if (s.productSweepDue && config.sweepEveryH > 0) actions.push({ pool: "product", agent: agentP, sweep: true });
   }
   // Дизайнер — так же: до трёх интерфейсных задач за запуск, при пустой очереди раз в сутки обзор
   if (due("designer")) {
     const keys = designerBatch();
-    if (keys.length) actions.push({ pool: "designer", agent: "designer", keys });
-    else if (s.designerSweepDue && config.sweepEveryH > 0) actions.push({ pool: "designer", agent: "designer", sweep: true });
+    const agentD = freeName("designer", names("designer"));
+    if (keys.length) actions.push({ pool: "designer", agent: agentD, keys });
+    else if (s.designerSweepDue && config.sweepEveryH > 0) actions.push({ pool: "designer", agent: agentD, sweep: true });
   }
 
   // Разработчики и «Продукт и не-код» — по числу готовых задач своего вида; запущенные по просьбе уже заняли часть

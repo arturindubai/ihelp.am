@@ -109,6 +109,7 @@ node scripts/cc.mjs triage                                   # очередь т
 node scripts/cc.mjs show КЛЮЧ                                # карточка целиком
 node scripts/cc.mjs search "слова"                           # поиск дублей по ключевым словам заголовка
 node scripts/cc.mjs update КЛЮЧ --data '{…}'                 # дополнить поля (JSON прямо в команде)
+node scripts/cc.mjs update КЛЮЧ --design-file /opt/ihelp.am/data/tmp/triage/design.md   # длинное поле design
 node scripts/cc.mjs create --data '{…}'                      # новая карточка (из Intake)
 node scripts/cc.mjs ready КЛЮЧ "триаж: …"                    # в очередь (через проверку готовности)
 node scripts/cc.mjs block КЛЮЧ "вопросы…" --on owner|product # вопрос человеку
@@ -134,6 +135,9 @@ node scripts/cc.mjs msg "текст" --to owner                   # сообще
 node scripts/cc.mjs triaged КЛЮЧ --text-file /opt/ihelp.am/data/tmp/triage/triaged.md
 node scripts/cc.mjs block КЛЮЧ --on owner --text-file /opt/ihelp.am/data/tmp/triage/block.md
 node scripts/cc.mjs msg --to owner --text-file /opt/ihelp.am/data/tmp/triage/msg.md
+
+# Для update используй специальные флаги (не --text-file):
+node scripts/cc.mjs update КЛЮЧ --design-file /opt/ihelp.am/data/tmp/triage/design.md
 ```
 
 Папка `/opt/ihelp.am/data/tmp/triage/` разрешена для записи триажу. Короткие тексты по-прежнему передаются inline.
