@@ -322,12 +322,17 @@ export function StaffManager({ staff }: { staff: StaffItem[] }) {
             <div className="p-4 text-sm text-muted text-center">{t("empty")}</div>
           )}
           {staff.map((s) => (
-            <button
+            <div
               key={s.id}
-              className={`w-full text-left flex items-center gap-3 p-3 text-sm transition-colors hover:bg-surface ${selectedId === s.id ? "bg-brand-50" : ""}`}
-              onClick={() => setSelectedId(s.id === selectedId ? null : s.id)}
+              className={`flex items-center gap-3 p-3 text-sm transition-colors ${selectedId === s.id ? "bg-brand-50" : "hover:bg-surface"}`}
             >
-              <div className="min-w-0 flex-1">
+              <div
+                role="button"
+                tabIndex={0}
+                className="min-w-0 flex-1 cursor-pointer"
+                onClick={() => setSelectedId(s.id === selectedId ? null : s.id)}
+                onKeyDown={(e) => e.key === "Enter" && setSelectedId(s.id === selectedId ? null : s.id)}
+              >
                 <div className="truncate font-medium text-ink">{s.name || "—"}</div>
                 <div className="truncate text-xs text-muted">{s.phone}</div>
                 <div className="text-xs text-muted">{t("lastLogin")} {s.lastLoginAt ?? t("lastLoginNever")}</div>
@@ -337,12 +342,12 @@ export function StaffManager({ staff }: { staff: StaffItem[] }) {
                 <button
                   className="text-xs text-bad hover:underline"
                   disabled={pending}
-                  onClick={(e) => { e.stopPropagation(); revoke(s.phone, s.label); }}
+                  onClick={() => revoke(s.phone, s.label)}
                 >
                   {t("revokeAccess")}
                 </button>
               </div>
-            </button>
+            </div>
           ))}
         </div>
 
