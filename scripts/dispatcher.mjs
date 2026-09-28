@@ -347,9 +347,9 @@ async function main() {
         cc(["lock", a.key, "--agent", "deployer"]);
         await spawn("deployer", "deployer", a.key, pools.deployer.model, extra);
       } else if (a.pool === "product") {
-        await spawn("product", "product", null, pools.product.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
+        await spawn("product", a.agent, null, pools.product.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
       } else if (a.pool === "designer") {
-        await spawn("designer", "designer", null, pools.designer.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
+        await spawn("designer", a.agent, null, pools.designer.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
       } else if (a.pool === "triage") {
         await spawn("triage", "triage", null, pools.triage.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
         if (a.keys?.length) {

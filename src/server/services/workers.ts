@@ -313,7 +313,7 @@ async function todayCounts() {
 export async function dispatchState(heads: Record<string, string>): Promise<DispatchState> {
   const config = await getWorkersConfig();
   const [running, today, review, readyForDev, readyForNocode, triage, sweep, lastStart, requests, product, productSweep, productHold, designer, designerSweep, inProgress] = await Promise.all([
-    db.workerRun.findMany({ where: { status: "running" }, select: { pool: true, agent: true } }),
+    db.workerRun.findMany({ where: { status: "running" }, select: { pool: true, agent: true, keys: true } }),
     todayCounts(),
     reviewTasks(),
     readyForAutoDev(),
@@ -331,7 +331,7 @@ export async function dispatchState(heads: Record<string, string>): Promise<Disp
   ]);
   return {
     config,
-    running: running.map((r) => ({ pool: r.pool as Pool, agent: r.agent })),
+    running: running.map((r) => ({ pool: r.pool as Pool, agent: r.agent, keys: r.keys })),
     claimedAgents: inProgress.map((t) => ({ pool: (t.layer === "none" ? "nocode" : "dev") as Pool, agent: t.claimedBy! })),
     today,
     review,
