@@ -381,7 +381,16 @@
     "note": "",
     "client": "",
     "stats": "",
-    "schedule": ""
+    "schedule": "",
+    "settingsTab": "Կարգավորումներ",
+    "settings": {
+      "notifyTitle": "Ծանուցումներ",
+      "receiveNotify": "Ստանալ ծանուցումներ այցի մասին",
+      "notifyOff": "Դուք չեք ստանա ծանուցումներ այցերի մասին",
+      "notConnected": "Telegram-ը կապված չէ:",
+      "writeBot": "Գրել բոտին",
+      "saveError": "Չհաջողվեց պահել: Կրկին փորձեք:"
+    }
   },
   "operator": {
     "title": "",

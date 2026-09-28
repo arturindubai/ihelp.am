@@ -50,11 +50,11 @@ export async function notifyMasterAssigned(visitId: string): Promise<void> {
     where: { id: visitId },
     select: {
       scheduledAt: true,
-      master: { select: { staffChatId: true } },
+      master: { select: { staffChatId: true, notifyEnabled: true } },
       order: { select: { config: true, addressSnapshot: true, user: { select: { name: true, phone: true } } } },
     },
   });
-  if (!v?.master?.staffChatId || !v.scheduledAt) return;
+  if (!v?.master?.staffChatId || !v.master.notifyEnabled || !v.scheduledAt) return;
   const text = fill(tmpl.assigned, {
     clientName: v.order.user.name || v.order.user.phone,
     serviceName: serviceTitle(v.order.config),
@@ -71,11 +71,11 @@ export async function notifyMasterRescheduled(visitId: string): Promise<void> {
     where: { id: visitId },
     select: {
       scheduledAt: true,
-      master: { select: { staffChatId: true } },
+      master: { select: { staffChatId: true, notifyEnabled: true } },
       order: { select: { config: true } },
     },
   });
-  if (!v?.master?.staffChatId || !v.scheduledAt) return;
+  if (!v?.master?.staffChatId || !v.master.notifyEnabled || !v.scheduledAt) return;
   const text = fill(tmpl.rescheduled, {
     serviceName: serviceTitle(v.order.config),
     date: ymd(v.scheduledAt),
@@ -91,11 +91,11 @@ export async function notifyMasterCancelled(visitId: string): Promise<void> {
     where: { id: visitId },
     select: {
       scheduledAt: true,
-      master: { select: { staffChatId: true } },
+      master: { select: { staffChatId: true, notifyEnabled: true } },
       order: { select: { config: true } },
     },
   });
-  if (!v?.master?.staffChatId || !v.scheduledAt) return;
+  if (!v?.master?.staffChatId || !v.master.notifyEnabled || !v.scheduledAt) return;
   const text = fill(tmpl.cancelled, {
     serviceName: serviceTitle(v.order.config),
     date: ymd(v.scheduledAt),
@@ -116,6 +116,7 @@ export async function sendMasterTomorrowSchedule(now: Date): Promise<number> {
       scheduledAt: { gte: from, lte: to },
       status: { in: ["SCHEDULED", "CONFIRMED"] },
       masterId: { not: null },
+      master: { notifyEnabled: true },
     },
     select: {
       scheduledAt: true,

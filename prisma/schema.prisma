@@ -232,6 +232,8 @@ model Master {
   sort           Int       @default(0)
   /// Telegram chat ID в @ihelp_staff_bot — заполняется при первом /start мастера боту
   staffChatId    String?
+  /// Получать уведомления о визитах и вечернее расписание — мастер может выключить в кабинете
+  notifyEnabled  Boolean   @default(true)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
