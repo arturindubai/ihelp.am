@@ -1,11 +1,13 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import type { VisitStatus } from "@prisma/client";
 import { requireRole } from "../auth";
 import { db } from "../db";
 import { setVisitStatus } from "../services/visits";
 import { notifyMasterAssigned } from "../services/workerNotify";
 import { audit } from "../audit";
+import { assignMasterToVisit } from "../services/operatorService";
 
 const OPERATOR_ROLES = ["OPERATOR", "ADMIN", "OWNER"] as const;
 
@@ -17,12 +19,24 @@ async function checkAccess() {
 
 const ALLOWED_STATUSES: VisitStatus[] = ["UNSCHEDULED", "SCHEDULED", "CONFIRMED", "ON_WAY", "IN_PROGRESS", "DONE", "CANCELLED", "SKIPPED", "NO_SHOW"];
 
+const assignSchema = z.object({
+  visitId: z.string().min(1),
+  masterId: z.string().min(1).nullable(),
+});
+
 export async function operatorAssignMasterAction(visitId: string, masterId: string | null) {
+  const parsed = assignSchema.safeParse({ visitId, masterId });
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+
   const u = await checkAccess();
-  const v = await db.visit.findUniqueOrThrow({ where: { id: visitId } });
-  await db.visit.update({ where: { id: visitId }, data: { masterId } });
-  await audit(u.id, "visit.assignMaster", "Visit", visitId, { from: v.masterId, to: masterId });
-  if (masterId && masterId !== v.masterId) {
+  const prevMasterId = (await db.visit.findUniqueOrThrow({ where: { id: visitId }, select: { masterId: true } })).masterId;
+
+  // Проверка занятости мастера — в сервисе (BUG-6); уведомление мастеру — только после успешного назначения (NOTIFY-2A)
+  const result = await assignMasterToVisit(visitId, masterId);
+  if (!result.ok) return result;
+
+  await audit(u.id, "visit.assignMaster", "Visit", visitId, { from: prevMasterId, to: masterId });
+  if (masterId && masterId !== prevMasterId) {
     await notifyMasterAssigned(visitId).catch(() => {});
   }
   rv();

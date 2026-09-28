@@ -41,9 +41,11 @@ model User {
   lastLoginAt DateTime?
   /// Когда пользователь получил код из формы с уведомлением о политике конфиденциальности
   privacyConsentAt DateTime?
-  /// Telegram-аккаунт для входа через виджет (AUTH-10): id и username, nullable, привязывается из профиля
+  /// Telegram-аккаунт для входа через виджет (AUTH-10): id и username, nullable, привязывается из профиле
   telegramId       String?   @unique
   telegramUsername String?
+  /// Согласие на рекламные рассылки (LEGAL-2): null — не давал, дата — дал; отзывается в профиле
+  adsConsentAt     DateTime?
 
   sessions    Session[]
   addresses   Address[]
@@ -566,6 +568,10 @@ model Task {
   releaseNote   String?
   /// Резюме для владельца: что сделано, что проверить, риск — до трёх строк
   ownerSummary  String?
+  /// Следующие шаги после приёмки: триаж заведёт карточки с зависимостью от этой. Пустой массив = «ничего дальше»
+  nextSteps     String[]  @default([]) @map("next_steps")
+  /// Код-задача, по которой работа оказалась не нужна: сдана без коммита, уходит на подтверждение тестировщику
+  noWork        Boolean   @default(false) @map("no_work")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

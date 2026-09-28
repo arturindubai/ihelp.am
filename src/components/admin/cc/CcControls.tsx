@@ -413,13 +413,24 @@ export function CommentButton({ taskKey }: { taskKey: string }) {
 
 /* ───────────── Макет ───────────── */
 
-/** Утвердить макет задачи: кнопка доступна владельцу, пишет в ленту, снимает гейт «нужен макет» */
-export function MockupApproveButton({ taskKey }: { taskKey: string }) {
+/**
+ * Утвердить макет задачи: показывает открытые вопросы (needs), даёт отметить закрытые.
+ * Если все вопросы сняты — задача возвращается туда, откуда была заблокирована.
+ */
+export function MockupApproveButton({ taskKey, needs = [] }: { taskKey: string; needs?: string[] }) {
   const t = useTranslations("admin.cc.mockup");
   const { pending, error, done, run } = useAct();
   const [showComment, setShowComment] = useState(false);
   const [comment, setComment] = useState("");
+  // Открытые вопросы, которые владелец отметит как закрытые при утверждении
+  const [closed, setClosed] = useState<Set<string>>(new Set());
   if (done) return <p className="text-xs text-ok">{t("approved")}</p>;
+  const toggleNeed = (n: string) =>
+    setClosed((prev) => {
+      const next = new Set(prev);
+      next.has(n) ? next.delete(n) : next.add(n);
+      return next;
+    });
   return (
     <div className="flex flex-col items-end gap-1">
       {!showComment ? (
@@ -431,10 +442,24 @@ export function MockupApproveButton({ taskKey }: { taskKey: string }) {
           className="flex w-full max-w-sm flex-col gap-1.5"
           onSubmit={(e) => {
             e.preventDefault();
-            run(() => ccApproveMockupAction(taskKey, comment), () => (setShowComment(false), setComment("")));
+            run(
+              () => ccApproveMockupAction(taskKey, comment, closed.size > 0 ? [...closed] : undefined),
+              () => { setShowComment(false); setComment(""); setClosed(new Set()); },
+            );
           }}
         >
-          <input className="input h-9 w-full py-1 text-sm" value={comment} onChange={(e) => setComment(e.target.value)} placeholder={t("commentPh")} autoFocus />
+          {needs.length > 0 && (
+            <div className="mb-1 space-y-1 text-xs">
+              <p className="font-medium text-warn">{t("needsOpen")}</p>
+              {needs.map((n) => (
+                <label key={n} className="flex cursor-pointer items-start gap-1.5">
+                  <input type="checkbox" className="mt-0.5 shrink-0" checked={closed.has(n)} onChange={() => toggleNeed(n)} />
+                  <span className={closed.has(n) ? "text-muted line-through" : ""}>{n}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          <input className="input h-9 w-full py-1 text-sm" value={comment} onChange={(e) => setComment(e.target.value)} placeholder={t("commentPh")} autoFocus={needs.length === 0} />
           <div className="flex gap-1.5">
             <button className="btn-primary btn-sm" disabled={pending}>{t("confirm")}</button>
             <button type="button" className="btn-ghost btn-sm" onClick={() => setShowComment(false)}>{t("cancel")}</button>

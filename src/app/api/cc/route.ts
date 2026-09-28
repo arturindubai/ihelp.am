@@ -99,6 +99,8 @@ const full = (t: Task) => ({
   mockupApprovedAt: t.mockupApprovedAt,
   releaseNote: t.releaseNote,
   ownerSummary: t.ownerSummary,
+  nextSteps: t.nextSteps,
+  noWork: t.noWork,
 });
 
 export async function GET(req: Request) {
@@ -251,7 +253,7 @@ export async function POST(req: Request) {
         if (!key) return json({ error: "key_required" }, 400);
         const role = roleOf(agent);
         if (!["owner", "cto", "product"].includes(role)) return json({ error: "forbidden_role", detail: role }, 403);
-        const task = await approveMockup(key, agent, text || null);
+        const task = await approveMockup(key, agentActor(agent), text || null);
         return json({ ok: true, task: brief(task) });
       }
       // Триаж: отметка «карточка разобрана» с вердиктом в ленте
@@ -313,7 +315,8 @@ export async function POST(req: Request) {
         }
         const blockedUntilRaw = str(body.blockedUntil);
         const blockedUntil = blockedUntilRaw ? (() => { const d = new Date(blockedUntilRaw); return isNaN(d.getTime()) ? undefined : d; })() : undefined;
-        const input: TransitionInput = { to, text, force: body.force === true, blockedOn: str(body.on), blockedUntil, sha: str(body.sha), branch: str(body.branch), releaseNote: str(body.releaseNote), ownerSummary: str(body.ownerSummary) };
+        const nextSteps = Array.isArray(body.nextSteps) ? (body.nextSteps as unknown[]).filter((s) => typeof s === "string").map(String) : undefined;
+        const input: TransitionInput = { to, text, force: body.force === true, blockedOn: str(body.on), blockedUntil, sha: str(body.sha), branch: str(body.branch), releaseNote: str(body.releaseNote), ownerSummary: str(body.ownerSummary), nextSteps, noWork: body.noWork === true };
         const task = await transition(key, input, actor);
         return json({ ok: true, status: task.status, task: brief(task) });
       }

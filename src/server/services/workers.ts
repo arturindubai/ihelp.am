@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "../db";
 import { alertTech } from "../alerts";
-import { html } from "../notify";
+import { html, notifyTech } from "../notify";
 import { CLOSED_STATUSES, pickNext, scopeOverlap } from "@/lib/cc-flow";
 import { transition, WATCHDOG } from "./ccWork";
 import { controlPatch, filterDesignerCooldown, normalizeWorkers, planDispatch, POOLS, reviewQueues, yerevanHour, type DispatchAction, type DispatchState, type Pool, type RunRequest, type WorkersCommand, type WorkersConfig } from "@/lib/workers";
@@ -110,7 +110,7 @@ const STAGE_ORDER = ["launch", "public", "growth", "later", "baseline"];
 /** Карточки, ждущие триажа: новые из бэклога и заблокированные на владельце, где человек ответил, — по приоритету и этапу */
 export async function triageQueue() {
   const rows = await db.task.findMany({
-    where: { triagedAt: null, OR: [{ status: "backlog" }, { status: "blocked", blockedOn: { in: ["owner", "product"] } }] },
+    where: { triagedAt: null, OR: [{ status: "backlog" }, { status: "blocked", blockedOn: { in: ["owner", "product", "design"] } }] },
     select: { key: true, title: true, priority: true, stage: true, status: true, sort: true, source: true },
   });
   return rows.sort(
@@ -231,7 +231,7 @@ export async function designerQueue() {
         // Заблокирована на дизайне, но макет ещё не подан (mockupUrl не задан)
         { status: "blocked", blockedOn: "design", mockupUrl: null },
         { status: open, mockupRequired: true, mockupApprovedBy: null, mockupUrl: null, attachments: { none: { mime: { startsWith: "image/" } } } },
-        { status: { in: ["backlog", "ready"] }, layer: "front", mockupApprovedBy: null, mockupUrl: null, OR: [{ design: null }, { design: "" }], attachments: { none: {} } },
+        { status: { in: ["backlog", "ready"] }, layer: { in: ["front", "fullstack"] }, mockupApprovedBy: null, mockupUrl: null, OR: [{ design: null }, { design: "" }], attachments: { none: {} } },
       ],
     },
     select: { key: true, title: true, priority: true, stage: true, status: true, sort: true, source: true, blockedOn: true, blockedReason: true, mockupRequired: true, updatedAt: true },
@@ -360,7 +360,10 @@ export async function dispatchPlan(heads: Record<string, string>) {
   // Разобранные просьбы снимаем. Остаются пришедшие за время прохода и те, чей пул сейчас занят, —
   // их выполнит один из следующих проходов, когда слот освободится (но не позже чем через 30 минут)
   const unmet = state.requests.filter((r) => !actions.some((a) => a.requestAt === r.at));
-  const busy = (r: RunRequest) => state.running.filter((x) => x.pool === r.pool).length >= state.config.pools[r.pool].max;
+  // «Занят» — это и уже работающие запуски, и только что запланированные в этом проходе:
+  // без учёта actions вторая просьба к пулу с одним слотом снималась с ложной причиной «нет работы»
+  const busy = (r: RunRequest) =>
+    state.running.filter((x) => x.pool === r.pool).length + actions.filter((a) => a.pool === r.pool).length >= state.config.pools[r.pool].max;
   const waiting = new Set(unmet.filter(busy).map((r) => `${r.pool}|${r.at}`));
   const pending = await getRequests();
   const seen = new Set(state.requests.map((r) => `${r.pool}|${r.at}`));
@@ -402,13 +405,31 @@ const OUTCOME_ICON: Record<string, string> = { done: "✓", failed: "✗", timeo
 export type RunFinish = { status: string; summary?: string; turns?: number; log?: string; tokensIn?: number; tokensOut?: number; costUsd?: number };
 
 export async function runFinish(id: string, r: RunFinish) {
-  const status = ["done", "failed", "timeout", "limit", "stopped"].includes(r.status) ? r.status : "failed";
+  let status = ["done", "failed", "timeout", "limit", "stopped"].includes(r.status) ? r.status : "failed";
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+  // Критерий 5: деплоер завершился без ошибки, но задача не перешла в «Сделано» — записываем как ошибку
+  let deployerIncident: string | null = null;
+  if (status === "done") {
+    const peek = await db.workerRun.findUnique({ where: { id }, select: { pool: true, taskKey: true } });
+    if (peek?.pool === "deployer" && peek.taskKey) {
+      const task = await db.task.findUnique({ where: { key: peek.taskKey }, select: { status: true } });
+      if (task && task.status !== "done") {
+        status = "failed";
+        deployerIncident = peek.taskKey;
+      }
+    }
+  }
+
+  const summary = deployerIncident
+    ? `${r.summary?.slice(0, 1800) ?? ""}${r.summary ? "\n" : ""}Задача ${deployerIncident} не перешла в «Сделано» после выкладки.`
+    : r.summary;
+
   const run = await db.workerRun.update({
     where: { id },
     data: {
       status,
-      summary: r.summary?.slice(0, 2000) ?? null,
+      summary: summary?.slice(0, 2000) ?? null,
       turns: num(r.turns),
       log: r.log?.slice(-20000) ?? null,
       tokensIn: num(r.tokensIn),
@@ -421,6 +442,9 @@ export async function runFinish(id: string, r: RunFinish) {
   // Неудачный запуск — сигнал в тех-чат: воркер мог оставить задачу на полпути
   if (status === "failed" || status === "timeout") {
     await alertTech(`workers:${run.pool}:${status}`, html`${OUTCOME_ICON[status]} <b>Воркер ${run.agent}</b> ${status === "timeout" ? "не уложился во время" : "завершился с ошибкой"}${run.taskKey ? ` · ${run.taskKey}` : ""}\n${(r.summary ?? "").slice(0, 300)}`, 30);
+  }
+  if (deployerIncident) {
+    await alertTech(`workers:deployer:notdone:${deployerIncident}`, html`⚠️ <b>Деплоер завершился, но задача не закрыта</b> · ${deployerIncident}\nЗадача осталась в открытом статусе. Нужна ручная команда:\n<code>cc done ${deployerIncident} --sha КОММИТ "доказательство"</code>`, 30);
   }
   return run;
 }
@@ -449,7 +473,7 @@ export async function workersControl(command: WorkersCommand, at: Date | null, b
     start: html`▶ <b>Воркеры запущены</b> — ${by}. Все пулы включены в режиме «Авто».`,
     plan: html`⏰ <b>Старт воркеров запланирован на ${yerevanClock(at ?? new Date())}</b> — ${by}. До этого времени пауза, дальше диспетчер запустит всех сам.`,
   }[command];
-  await alertTech(`workers:control:${command}`, text, 0);
+  await notifyTech(text);
   console.log(`[workers] ${by}: ${command}${at ? ` в ${at.toISOString()}` : ""}`);
   return next;
 }
@@ -507,7 +531,12 @@ export async function workersOverview() {
         ...q.holding.map((t) => item(t.key, "holding", new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Yerevan", hour: "2-digit", minute: "2-digit" }).format(t.testHoldUntil!))),
         ...q.noBranch.filter((t) => !q.held.includes(t)).map((t) => item(t.key, "nobranch")),
       ],
-      deployer: [...q.held.filter((t) => t.claimedBy === "deployer").map((t) => item(t.key, "held", "deployer")), ...q.deploy.map((t) => item(t.key, "deploy", byKey.get(t.key)?.testedBy ?? ""))],
+      deployer: [
+        ...q.held.filter((t) => t.claimedBy === "deployer").map((t) => item(t.key, "held", "deployer")),
+        ...q.deploy.map((t) => item(t.key, "deploy", byKey.get(t.key)?.testedBy ?? "")),
+        // Задачи без ветки в репозитории — скорее всего выложены, но cc done не прошла
+        ...q.noBranch.filter((t) => !q.held.some((h) => h.key === t.key)).map((t) => item(t.key, "nobranch")),
+      ],
     },
     deployWindowOpen: hour >= config.deployWindow[0] && hour < config.deployWindow[1],
     readyDev: takeable(dev),

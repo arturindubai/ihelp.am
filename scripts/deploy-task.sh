@@ -84,7 +84,8 @@ ${tail_txt}" --error
 }
 
 echo "▶ deploy/update.sh"
-deploy/update.sh >> "$log" 2>&1 || fail "deploy/update.sh завершился с ошибкой"
+# DEPLOY_KEY передаётся для метки бэкапа; PREDEPLOY_DONE=1 — если бэкап уже снят при миграции
+DEPLOY_KEY="$KEY" PREDEPLOY_DONE="${backup_file:+1}" deploy/update.sh >> "$log" 2>&1 || fail "deploy/update.sh завершился с ошибкой"
 grep -q '^SMOKE OK' "$log" || fail "smoke-тест не подтвердил SMOKE OK"
 if grep -q '^deploy/Caddyfile$' <<< "$changed"; then
   # Caddyfile подключён к контейнеру файлом: без перезапуска Caddy работает со старой версией
@@ -105,7 +106,15 @@ if grep -q '^prisma/migrations/' <<< "$changed"; then
     migr=" Миграция применена, бэкап снят (см. лог)."
   fi
 fi
-cc done "$KEY" --sha "$merge" "Автовыкладка ${merge:0:10}: SMOKE OK (${checks} проверок, соседних сайтов отвечают: ${neighbors}).${migr} ${tested_label} Слияние ${pushed}. Лог: /opt/ihelp.am/${log}"
+done_text="Автовыкладка ${merge:0:10}: SMOKE OK (${checks} проверок, соседних сайтов отвечают: ${neighbors}).${migr} ${tested_label} Слияние ${pushed}. Лог: /opt/ihelp.am/${log}"
+if ! cc done "$KEY" --sha "$merge" "$done_text"; then
+  # Прод уже выложен, но закрыть задачу не удалось — записываем ошибку и уходим с ненулевым кодом.
+  # cc note --error с агентом deployer автоматически отправляет тех-алерт (ccWork.ts).
+  cc note "$KEY" "cc done не прошла после выкладки коммита ${merge:0:10}: задача не закрыта, нужен человек. Лог: /opt/ihelp.am/${log}" --error 2>/dev/null || true
+  echo "✗ cc done не прошла — задача выложена, но не закрыта в Control Center. Нужна ручная команда:"
+  echo "  cc done $KEY --sha $merge \"$done_text\""
+  exit 1
+fi
 [ "$pushed" = "отправлено в origin/main" ] || cc note "$KEY" "$pushed" --error
 echo "▶ Уборка рабочих копий и образов стендов"
 node scripts/cc.mjs gc --agent "$AGENT" 2>&1 | tee -a "$log" || true

@@ -1,6 +1,15 @@
 import "server-only";
 import { getSettings, type Settings } from "./settings";
 import { enqueueAndSend } from "./services/notifyQueue";
+import { hasAlertRecipient as _hasAlertRecipient } from "@/lib/alertRoute";
+
+/**
+ * Есть ли хотя бы один адресат для тех-алертов.
+ * Единая проверка: используется в notifyTech, /api/health?check=alert и systemStatus.
+ */
+export function hasAlertRecipient(s: Settings): boolean {
+  return _hasAlertRecipient(s.notify, s.team);
+}
 
 export { html } from "@/lib/html";
 
@@ -105,8 +114,14 @@ export async function notifyTech(text: string) {
     chatId = process.env.ALERT_CHAT_ID?.trim() ?? "";
     via = "tech-fallback";
   }
-  if (!token || !chatId) {
-    console.error("[notify:tech] не отправлено: настройки недоступны, запасной бот не задан |", text);
+  if (!token) {
+    console.error("[notify:tech] не отправлено: токен бота не задан |", text);
+    return;
+  }
+  if (!chatId) {
+    // Чат не задан — доставляем в личные сообщения всем привязанным членам команды
+    const { notifyMembers } = await import("./services/teamBot");
+    await notifyMembers(text).catch((e) => console.error("[notify:tech] members:", e));
     return;
   }
   await post(token, chatId, text, via, threadId);

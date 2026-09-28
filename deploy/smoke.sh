@@ -36,11 +36,9 @@ check "ключ шифрования настроек задан" docker exec ho
 
 echo "Уведомления"
 tech_alert_ok() {
-  docker compose exec -T db psql -U app -d homeservices -tAc \
-    "SELECT (COALESCE(value->>'telegramBotToken','') != '') AND (COALESCE(value->>'techChatId','') != '' OR COALESCE(value->>'teamChatId','') != '' OR COALESCE(value->>'telegramChatId','') != '') FROM (SELECT (value::jsonb) AS value FROM \"Setting\" WHERE key='notify') t" \
-    2>/dev/null | grep -q "^t"
+  curl -s -m 20 "$BASE/api/health?check=alert" | grep -q '"ok":true'
 }
-warn "адресат тех-алертов задан" tech_alert_ok
+warn "адресат тех-алертов задан (нет — красная плашка в Здоровье)" tech_alert_ok
 
 echo "Страницы ($BASE)"
 check "/api/health → {\"ok\":true}" [ "$(curl -s -m 20 "$BASE/api/health")" = '{"ok":true}' ]
@@ -75,6 +73,13 @@ check "X-Robots-Tag: ${robots:-noindex, nofollow}" [ "$(curl -sI -m 20 "$BASE/ru
 
 echo "Бэкапы"
 check "бэкап базы моложе 26 часов" [ -n "$(find backups -maxdepth 1 -name 'db-*.sql.gz' -mmin -1560 2> /dev/null | head -n 1)" ]
+backup_script_ok() {
+  local host_sum cont_sum
+  host_sum=$(md5sum deploy/backup.sh 2>/dev/null | cut -d' ' -f1) || return 1
+  cont_sum=$(docker exec homecare-backup-1 md5sum /backup.sh 2>/dev/null | cut -d' ' -f1) || return 1
+  [ "$host_sum" = "$cont_sum" ]
+}
+check "скрипт бэкапа совпадает с репозиторием" backup_script_ok
 
 neighbors=("$@")
 if [ ${#neighbors[@]} -eq 0 ]; then read -r -a neighbors <<< "$(env_val NEIGHBORS | tr -d '"')"; fi

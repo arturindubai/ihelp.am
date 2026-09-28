@@ -6,6 +6,7 @@ import { routing } from "@/i18n/routing";
 import { localeIso, tr } from "@/i18n/locales";
 import { getSettings } from "@/server/settings";
 import { ServiceWorker } from "@/components/ServiceWorker";
+import { CookieBanner } from "@/components/CookieBanner";
 import "../globals.css";
 
 // Google Sans загружается через CSS @import из Google Fonts (globals.css).
@@ -73,7 +74,10 @@ export default async function LocaleLayout({ children, params }: { children: Rea
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&display=swap" />
       </head>
       <body className="min-h-dvh antialiased">
-        <NextIntlClientProvider messages={messages}>{children}</NextIntlClientProvider>
+        <NextIntlClientProvider messages={messages}>
+          {children}
+          <CookieBanner />
+        </NextIntlClientProvider>
         <ServiceWorker />
       </body>
     </html>

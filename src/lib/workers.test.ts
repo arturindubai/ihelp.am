@@ -277,6 +277,38 @@ describe("продакт: задачи ready с opens needs и холд на 60 
   });
 });
 
+describe("две просьбы к одному пулу", () => {
+  const at1 = "2026-09-24T06:00:00Z";
+  const at2 = "2026-09-24T06:01:00Z";
+  it("пул с одним слотом: первая просьба идёт в план, вторая не создаёт лишнего действия", () => {
+    const s = state({
+      requests: [
+        { pool: "designer" as const, key: "DSN-1", at: at1, by: "owner" },
+        { pool: "designer" as const, key: "DSN-3", at: at2, by: "owner" },
+      ],
+    });
+    const actions = planDispatch(s, noon);
+    const da = actions.filter((a) => a.pool === "designer");
+    expect(da).toHaveLength(1);
+    expect(da[0]).toMatchObject({ pool: "designer", requestAt: at1 });
+  });
+  it("после запуска первой просьбы слот занят — вторая не порождает лишнего действия", () => {
+    const s = state({
+      running: [{ pool: "designer" as const, agent: "designer" }],
+      requests: [{ pool: "designer" as const, key: "DSN-3", at: at2, by: "owner" }],
+    });
+    expect(planDispatch(s, noon).filter((a) => a.pool === "designer")).toHaveLength(0);
+  });
+  it("когда слот снова свободен — вторая просьба выполняется", () => {
+    const s = state({
+      requests: [{ pool: "designer" as const, key: "DSN-3", at: at2, by: "owner" }],
+    });
+    const actions = planDispatch(s, noon).filter((a) => a.pool === "designer");
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ requestAt: at2 });
+  });
+});
+
 describe("быстрый слот триажа для входящих", () => {
   const at = "2026-09-24T07:59:00Z";
   it("входящая IN-N по просьбе запускается, даже когда триаж занят пачкой бэклога", () => {
@@ -386,11 +418,17 @@ describe("отбор очереди дизайнера", () => {
     expect(inDesignerQueue({ ...base, status: "backlog", layer: "front" })).toBe(true);
     expect(inDesignerQueue({ ...base, status: "ready", layer: "front" })).toBe(true);
   });
+  it("задача бэк+фронт без описания дизайна и без файлов — в очереди", () => {
+    expect(inDesignerQueue({ ...base, status: "backlog", layer: "fullstack" })).toBe(true);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "fullstack" })).toBe(true);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "fullstack", design: "Экран..." })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "fullstack", hasAnyAttachments: true })).toBe(false);
+  });
   it("задача фронта с описанием дизайна или файлами — не в очереди", () => {
     expect(inDesignerQueue({ ...base, status: "ready", layer: "front", design: "Экран списка..." })).toBe(false);
     expect(inDesignerQueue({ ...base, status: "ready", layer: "front", hasAnyAttachments: true })).toBe(false);
   });
-  it("бэк-задача без дизайна не в очереди дизайнера — только front", () => {
+  it("бэк-задача без дизайна не в очереди дизайнера — только front и fullstack", () => {
     expect(inDesignerQueue({ ...base, status: "backlog", layer: "back" })).toBe(false);
     expect(inDesignerQueue({ ...base, status: "backlog", layer: "none" })).toBe(false);
   });

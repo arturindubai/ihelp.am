@@ -26,6 +26,8 @@ const HELP = `cc — Control Center из командной строки (docs/D
   pulse КЛЮЧ                                    пульс вручную (обычно его шлёт хук Claude Code)
   note КЛЮЧ "текст" [--error]                   запись в ленту: ход работы или ошибка
   review КЛЮЧ "отчёт"                           сдать на проверку: ветка должна быть отправлена
+                                                  (не-код: обязательны --next "шаг1; шаг2" или --no-next)
+                                                  (код без изменений: --no-work — уходит тестировщику)
   handoff КЛЮЧ "что сделано и что осталось"     передать задачу — вернуть в очередь с веткой
   block КЛЮЧ "причина" --on owner|product|design|tech|external|deps [--until YYYY-MM-DD]
   unblock КЛЮЧ "что изменилось"
@@ -94,7 +96,7 @@ for (let i = 0; i < argv.length; i++) {
   if (a.startsWith("--")) {
     const name = a.slice(2);
     const next = argv[i + 1];
-    if (next !== undefined && !next.startsWith("--") && !["error", "json", "force", "auto"].includes(name)) {
+    if (next !== undefined && !next.startsWith("--") && !["error", "json", "force", "auto", "no-next", "no-work"].includes(name)) {
       flags[name] = next;
       i++;
     } else flags[name] = true;
@@ -192,7 +194,8 @@ function hint(code) {
     deps_open: "\n  Сначала должны закрыться зависимости.",
     scope_conflict: "\n  Эти файлы уже меняет другая задача в работе — возьмите другую или договоритесь в ленте.",
     claimed: "\n  Задачу держит другой исполнитель с живой арендой.",
-    branch_required: "\n  Отправьте ветку: git push -u origin task/<КЛЮЧ>.",
+    branch_required: "\n  Отправьте ветку: git push -u origin task/<КЛЮЧ>.\n  Если работа оказалась не нужна, используйте флаг --no-work.",
+    next_steps_required: "\n  Укажите следующие шаги: --next \"шаг 1; шаг 2\" или --no-next если продолжения нет.",
     report_required: "\n  Отчёт от 40 символов: что сделано, как проверено, как проверить деплоеру.",
     not_ready: "\n  Не выполнены обязательные пункты готовности — см. show КЛЮЧ.",
     mockup_required: "\n  Макет не утверждён — утвердите в Control Center (Согласования) командой: node scripts/cc.mjs mockup КЛЮЧ.",
@@ -258,9 +261,10 @@ function ensureWorktree(key, branch) {
   } catch {}
   const list = tryGit(["worktree", "list", "--porcelain"], ROOT) ?? "";
   if (list.split("\n").includes(`worktree ${dir}`)) return { dir, created: false };
-  // Ветка уже где-то открыта — второй worktree на ту же ветку git не даст, и это правильно
-  const busy = list.split("\n\n").find((b) => b.includes(`branch refs/heads/${branch}`));
-  if (busy) die(`ветка ${branch} уже открыта в ${busy.split("\n")[0].replace("worktree ", "")} — работайте там или закройте ту копию`);
+  // Ветка уже где-то открыта — второй worktree на ту же ветку git не даст, и это правильно.
+  // Сравниваем строку целиком: b.includes("task/DEV-2") нашёл бы блок task/DEV-25 как подстроку.
+  const busy = list.split("\n\n").find((b) => b.split("\n").includes(`branch refs/heads/${branch}`));
+  if (busy) throw new Error(`ветка ${branch} уже открыта в ${busy.split("\n")[0].replace("worktree ", "")} — работайте там или закройте ту копию`);
   tryGit(["fetch", "-q", "origin"], ROOT);
   fs.mkdirSync(WT, { recursive: true });
   if (tryGit(["rev-parse", "--verify", "-q", `refs/heads/${branch}`], ROOT)) git(["worktree", "add", dir, branch], ROOT);
@@ -301,7 +305,10 @@ function finishSteps(role, t, agent, dir) {
     return `1. Результат — в карточке: файлы проекта не правь, ветку не создавай. Материал (инструкция, тексты, расчёт, таблица, ссылки на источники) — в отчёте сдачи.
 2. Шаги, которые может сделать только человек (аккаунт, оплата, пароль, DNS у регистратора), не делай: node scripts/cc.mjs block ${k} "Что сделать: 1) … 2) … Зачем: …" --on owner --agent ${agent}. После ответа задача вернётся в очередь.
 3. Ход работы — note ${k} "…"; не успеваешь — handoff ${k} "что готово, что осталось".
-4. Сдать: node scripts/cc.mjs review ${k} "Сделано: … Материал: … Что сделать владельцу: … Как проверить: … Источники: …" --agent ${agent} — задача уйдёт владельцу в «Согласования».
+4. Сдать: node scripts/cc.mjs review ${k} "Сделано: … Материал: … Что сделать владельцу: … Как проверить: … Источники: …" \\
+     --next "следующий шаг 1; следующий шаг 2"   (или --no-next, если продолжения нет) \\
+     --release "Что изменилось для людей" --summary "Сделано: …; Проверить: …; Риск: …" --agent ${agent}
+   Задача уйдёт владельцу в «Согласования». Если следующие шаги указаны — после принятия триаж заведёт карточки.
 Не мёрджить, не выкладывать, не ставить «Сделано».`;
   if (role === "deployer")
     return `1. Прочитай карточку, отчёт разработчика и отметку тестировщика (лента), диф: git diff origin/main...origin/task/${k}.
@@ -312,7 +319,10 @@ function finishSteps(role, t, agent, dir) {
   return `1. Работай в рабочей копии ${dir ?? `.claude/worktrees/${k}`} (ветка task/${k}); основную копию /opt/ihelp.am не переключать.
 2. Непонятно зачем или критерии не проверяемы — не угадывай: node scripts/cc.mjs block ${k} "вопрос, варианты, предложение" --on product|owner|design|tech --agent ${agent}
 3. Проверка: scripts/check.sh; интерфейс — scripts/stand.sh up и node scripts/stand-shot.mjs /ru/… (потом scripts/stand.sh down).
+   Если задача меняет package.json — сначала scripts/lock-update.sh, затем коммитить package-lock.json.
 4. Коммиты «${k}: что сделано», git push -u origin task/${k}.
+   Если нужно обновиться от main — только git merge origin/main. git rebase запрещён: перезаписывает историю и требует force-push.
+   Если команда или инструмент отклонены из-за прав — сразу: node scripts/cc.mjs block ${k} "Нужны права: …" --on tech --agent ${agent}
 5. Сдать — оба поля обязательны:
    node scripts/cc.mjs review ${k} "Сделано: … Проверено: … Проверить: … Миграции: … Риски и что не сделано: …" \\
      --release "Что изменилось для людей: 1–2 предложения простым языком" \\
@@ -366,7 +376,16 @@ async function takeTask(key) {
   const t = r.task;
   const branch = t.branch || `task/${t.key}`;
   // Задача без кода у воркера «Продукт и не-код»: результат — в карточке, рабочая копия с веткой не нужна
-  const { dir, created } = agent.startsWith("nocode") && t.layer === "none" ? { dir: ROOT, created: false } : ensureWorktree(t.key, branch);
+  let dir, created;
+  try {
+    ({ dir, created } = agent.startsWith("nocode") && t.layer === "none" ? { dir: ROOT, created: false } : ensureWorktree(t.key, branch));
+  } catch (err) {
+    // Рабочую копию создать не удалось — снимаем аренду, возвращаем задачу в очередь, пишем в ленту.
+    const reason = err?.message || String(err);
+    await api("POST", null, { action: "handoff", agent, key: t.key, text: `Аренда снята автоматически: создать рабочую копию не удалось — ${reason}` }, true);
+    await api("POST", null, { action: "note", agent, key: t.key, text: `Аренда снята автоматически: создать рабочую копию не удалось — ${reason}`, kind: "error" }, true);
+    die(reason);
+  }
   writeState(t.key, { agent, branch, dir, takenAt: new Date().toISOString() });
   if (flags.json) return console.log(JSON.stringify({ task: t.key, agent, dir, branch, role: roleForTask(t), estimate: t.estimate ?? null }));
   if (auto) console.log(`Ваше имя агента: ${agent} — используйте его во всех командах этого чата (--agent ${agent}).\n`);
@@ -377,7 +396,7 @@ async function takeTask(key) {
 ────────────────────────────────────────
 ✓ ${t.key} взята: ${agent}, аренда ${Math.round((new Date(t.claimUntil) - Date.now()) / 60000)} мин, пульс продлевает её сам (хук Claude Code).
   Рабочая копия: ${dir}${created ? " (создана)" : " (уже была)"} — перейди в неё инструментом EnterWorktree (path=${dir})
-  Ветка: ${branch}${ahead ? `\n  В ветке уже есть работа — продолжай с неё:\n${ahead.split("\n").map((l) => `    ${l}`).join("\n")}` : ""}`);
+  Ветка: ${branch}${ahead ? `\n  В ветке уже есть работа — продолжай с неё:\n${ahead.split("\n").map((l) => `    ${l}`).join("\n")}\n  Нужно подтянуть main: git merge origin/main (не rebase — он запрещён для отправленных веток)` : ""}`);
 }
 
 /** Тестировщик: держит задачу «На проверке» и получает рабочую копию ровно на последнем коммите ветки */
@@ -439,7 +458,10 @@ function branchFacts(branch) {
 
 /* ───── команды ───── */
 
-/** Текст для команды: из --text-file, stdin (если подан через pipe) или позиционных аргументов */
+/**
+ * Текст для команды: из --text-file > позиционных аргументов > stdin.
+ * Пустой stdin не перекрывает позиционный аргумент — только непустой и только при отсутствии аргумента.
+ */
 let stdinText = null;
 
 const text = (skipFirst = true) => {
@@ -448,8 +470,9 @@ const text = (skipFirst = true) => {
     if (!fs.existsSync(f)) die(`файл не найден: ${f}`);
     return fs.readFileSync(f, "utf8").trim();
   }
-  if (stdinText !== null) return stdinText;
-  return (skipFirst ? pos.slice(1) : pos).join(" ").trim();
+  const positional = (skipFirst ? pos.slice(1) : pos).join(" ").trim();
+  if (positional) return positional;          // аргумент есть — stdin не нужен
+  return stdinText || "";                     // stdin только при отсутствии аргумента
 };
 
 const needKey = () => {
@@ -459,13 +482,24 @@ const needKey = () => {
 };
 
 async function main() {
-  // Читаем stdin, если подан через pipe и нет --text-file
-  if (!process.stdin.isTTY && typeof flags["text-file"] !== "string") {
+  // Читаем stdin только для команд, принимающих текст, и только когда нет текста в аргументах.
+  // Таймаут 2 секунды: если данных нет — считаем stdin пустым (не зависаем при открытом молчащем stdin).
+  const noKeyCmds = new Set(["intake", "msg"]);
+  const hasTextArg = noKeyCmds.has(cmd) ? pos.length > 0 : pos.length > 1;
+  const textCmds = new Set(["note", "block", "reblock", "unblock", "ready", "cancel", "return", "review", "handoff", "done", "pass", "fail", "triaged", "intake", "msg"]);
+  if (!process.stdin.isTTY && typeof flags["text-file"] !== "string" && textCmds.has(cmd) && !hasTextArg) {
     stdinText = await new Promise((resolve) => {
       let d = "";
+      let resolved = false;
+      const done = (val) => { if (!resolved) { resolved = true; resolve(val); } };
+      const timer = setTimeout(() => done(""), 2000);
       process.stdin.setEncoding("utf8");
-      process.stdin.on("data", (chunk) => (d += chunk));
-      process.stdin.on("end", () => resolve(d.trim()));
+      process.stdin.on("data", (chunk) => {
+        d += chunk;
+        clearTimeout(timer);
+      });
+      process.stdin.on("end", () => done(d.trim()));
+      process.stdin.on("close", () => done(d.trim()));
     });
   }
   switch (cmd) {
@@ -585,10 +619,31 @@ async function main() {
           `  До трёх строк: что сделано, что проверить самому, риск.`,
         );
       // Задача без кода сдаётся отчётом: ветки и коммитов нет, принимает владелец в «Согласованиях»
-      if ((await api("GET", { key: k })).task.layer === "none") {
-        await api("POST", null, { action: "review", agent: agentFor(k), key: k, text: text(), releaseNote, ownerSummary });
+      const taskData = (await api("GET", { key: k })).task;
+      if (taskData.layer === "none") {
+        // Для не-код задач обязательно указать следующие шаги или явное «ничего»
+        const noNext = flags["no-next"] === true;
+        const nextRaw = typeof flags.next === "string" ? flags.next.trim() : "";
+        if (!noNext && !nextRaw)
+          die(
+            `Укажите следующие шаги после приёмки:\n` +
+            `  --next "шаг 1; шаг 2"   или   --no-next (если продолжения нет)\n` +
+            `  Пример: --next "создать макет; разработать форму регистрации"\n` +
+            `  При нескольких шагах разделите точкой с запятой.`,
+          );
+        const nextSteps = noNext ? [] : nextRaw.split(/\s*;\s*/).map((s) => s.trim()).filter(Boolean);
+        await api("POST", null, { action: "review", agent: agentFor(k), key: k, text: text(), releaseNote, ownerSummary, nextSteps });
         dropState(k);
-        console.log(`✓ ${k} на проверке: задача без кода — её примет владелец в «Согласованиях».`);
+        const nextMsg = nextSteps.length ? `\n  После приёмки триаж заведёт ${nextSteps.length} карточку(-ки): ${nextSteps.slice(0, 2).join("; ")}${nextSteps.length > 2 ? "…" : ""}` : "";
+        console.log(`✓ ${k} на проверке: задача без кода — её примет владелец в «Согласованиях».${nextMsg}`);
+        return;
+      }
+      // Код-задача, по которой работа оказалась не нужна: сдаётся без коммита
+      const noWork = flags["no-work"] === true;
+      if (noWork) {
+        await api("POST", null, { action: "review", agent: agentFor(k), key: k, text: text(), releaseNote, ownerSummary, noWork: true });
+        dropState(k);
+        console.log(`✓ ${k} на проверке как «не потребовалось»: уходит тестировщику на подтверждение.`);
         return;
       }
       const st = readState(k);

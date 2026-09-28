@@ -5,6 +5,7 @@ import { alertTech } from "../alerts";
 import { html, notifyTech } from "../notify";
 import { BLOCKED_ON_LABELS, STATUSES } from "@/lib/backlog-labels";
 import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, doneGate, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
+import { nextIntakeKey, intakeTitle } from "@/lib/cc-lanes";
 import type { Prisma, Task } from "@prisma/client";
 
 /**
@@ -70,6 +71,10 @@ export type TransitionInput = {
   releaseNote?: string;
   /** Резюме для владельца: что сделано, что проверить, риск */
   ownerSummary?: string;
+  /** Следующие шаги после приёмки: триаж заведёт карточки с зависимостью от этой */
+  nextSteps?: string[];
+  /** Код-задача, по которой работа оказалась не нужна: сдаётся без коммита, уходит на подтверждение тестировщику */
+  noWork?: boolean;
 };
 
 /** Смена статуса с проверкой прав, гейтов и записью в историю. Возвращает обновлённую задачу */
@@ -109,19 +114,21 @@ export async function transition(key: string, input: TransitionInput, actor: Act
     const branch = input.branch?.trim() || task.branch;
     const extra =
       input.releaseNote !== undefined || input.ownerSummary !== undefined
-        ? { releaseNote: input.releaseNote, ownerSummary: input.ownerSummary }
+        ? { releaseNote: input.releaseNote, ownerSummary: input.ownerSummary, nextSteps: input.nextSteps, noWork: input.noWork }
         : undefined;
     // Возврат на проверку после блокировки: отчёт уже в ленте, нужна только ветка
-    const gate = from === "blocked" ? (isCodeTask(task.layer) && !branch?.trim() ? "branch_required" : null) : reviewGate({ layer: task.layer, branch }, text, extra);
+    const gate = from === "blocked" ? (isCodeTask(task.layer) && !branch?.trim() && !input.noWork ? "branch_required" : null) : reviewGate({ layer: task.layer, branch }, text, extra);
     if (gate && !force) throw new CcError(gate);
     if (branch) data.branch = branch;
     if (input.releaseNote?.trim()) data.releaseNote = input.releaseNote.trim().slice(0, 500);
     if (input.ownerSummary?.trim()) data.ownerSummary = input.ownerSummary.trim().slice(0, 800);
+    if (Array.isArray(input.nextSteps)) data.nextSteps = input.nextSteps.map((s) => s.trim()).filter(Boolean).slice(0, 20);
+    if (input.noWork) data.noWork = true;
   }
   // Из блокировки обратно в бэклог — на новый разбор триажем: ответ человека мог всё изменить
   if (from === "blocked" && to === "backlog") Object.assign(data, { triagedAt: null, triagedBy: null });
   if (to === "done") {
-    const gate = doneGate({ layer: task.layer }, { sha: input.sha, text, attachments: task._count.attachments });
+    const gate = doneGate({ layer: task.layer, noWork: task.noWork }, { sha: input.sha, text, attachments: task._count.attachments });
     if (gate && !force) throw new CcError(gate);
     data.deployedSha = input.sha?.trim() || null;
     data.proof = text.slice(0, 2000) || null;
@@ -157,6 +164,12 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   const extra = from === "done" && task.deployedSha ? `\nБыла выложена в ${task.deployedSha}.` : "";
   await say(task.id, actor.name, kindFor(from, to, actor, task.claimedBy), text + extra);
   if (to === "done" || to === "cancelled") await releaseDependents(key);
+  // После приёмки не-код задачи с указанными следующими шагами — карточка в очередь триажа
+  if (to === "done" && task.layer === "none" && task.nextSteps.length > 0) {
+    await createNextStepsIntake(key, task.title, task.nextSteps, actor.name).catch(async (err) => {
+      await say(task.id, "system", "note", `⚠️ Не удалось завести карточку следующих шагов: ${String(err).slice(0, 200)}`).catch(() => null);
+    });
+  }
   // task получен до обновления — передаём свежие значения из input для review-перехода
   const taskForBot = {
     ...task,
@@ -372,7 +385,8 @@ export async function markTriaged(key: string, agent: string, text: string) {
 export async function retriage(key: string) {
   const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, blockedOn: true, triagedAt: true } });
   if (!t || !t.triagedAt) return;
-  if (t.status !== "backlog" && !(t.status === "blocked" && (t.blockedOn === "owner" || t.blockedOn === "product"))) return;
+  // blockedOn=design добавлен: утверждение дизайна с открытыми вопросами должно попасть к триажу
+  if (t.status !== "backlog" && !(t.status === "blocked" && (t.blockedOn === "owner" || t.blockedOn === "product" || t.blockedOn === "design"))) return;
   await db.task.update({ where: { id: t.id }, data: { triagedAt: null } });
   // Событие retriage нужно markTriaged(), чтобы не затереть свежий ответ человека
   await db.taskEvent.create({ data: { taskId: t.id, actor: "system", field: "retriage", from: null, to: "pending" } });
@@ -410,17 +424,24 @@ export async function reviewTake(key: string, agent: string) {
   return db.task.findUniqueOrThrow({ where: { id: t.id } });
 }
 
-/** Тестировщик: проверка пройдена на конкретном коммите ветки. Новый коммит в ветке потребует новой проверки */
+/** Тестировщик: проверка пройдена. Для noWork-задач SHA не требуется; задача сразу отменяется как «не потребовалось» */
 export async function testPass(key: string, agent: string, sha: string, text: string) {
   if (roleOf(agent) !== "tester") throw new CcError("forbidden_role", roleOf(agent));
-  if (!SHA_RE.test(sha.trim())) throw new CcError("sha_required");
   if (text.trim().length < 40) throw new CcError("report_required");
-  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, claimedBy: true } });
+  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, claimedBy: true, noWork: true } });
   if (!t) throw new CcError("not_found");
   if (t.status !== "review") throw new CcError("wrong_status", t.status);
   if (t.claimedBy !== agent) throw new CcError("not_your_task", t.claimedBy ?? "");
-  await db.task.update({ where: { id: t.id }, data: { testedSha: sha.trim(), testedBy: agent, testedAt: new Date(), claimedBy: null, claimUntil: null } });
-  await log(t.id, agent, "tested", null, sha.trim().slice(0, 10));
+  if (!t.noWork && !SHA_RE.test(sha.trim())) throw new CcError("sha_required");
+  const safeSha = t.noWork ? "no-work" : sha.trim();
+  await db.task.update({ where: { id: t.id }, data: { testedSha: safeSha, testedBy: agent, testedAt: new Date(), claimedBy: null, claimUntil: null } });
+  await log(t.id, agent, "tested", null, safeSha.slice(0, 10));
+  if (t.noWork) {
+    // Работа не потребовалась: тестировщик подтвердил — задача закрывается как «не потребовалось»
+    await say(t.id, agent, "review", `✅ Подтверждено: работа не потребовалась.\n${text.trim()}`);
+    await transition(key, { to: "cancelled", text: "Тестировщик подтвердил: изменения кода не потребовались.", force: true }, { name: agent, role: "tester", via: "api" });
+    return db.task.findUniqueOrThrow({ where: { id: t.id } });
+  }
   await say(t.id, agent, "review", `✅ Протестировано на коммите ${sha.trim().slice(0, 10)}.\n${text.trim()}`);
   return db.task.findUniqueOrThrow({ where: { id: t.id } });
 }
@@ -570,28 +591,40 @@ export async function taskReadiness(key: string) {
  * это канон, от него строят разработчики. Утвердить можно любую задачу с описанием дизайна, макетом или файлами;
  * повторное утверждение после правок — новая версия той же записи
  */
-export async function approveMockup(key: string, actor: string, comment: string | null) {
+/**
+ * closeNeeds — список вопросов из needs, которые владелец явно снял при утверждении.
+ * Все пункты со словом «макет» убираются автоматически.
+ */
+export async function approveMockup(key: string, actor: Actor, comment: string | null, closeNeeds?: string[]) {
   const t = await db.task.findUnique({ where: { key }, include: { attachments: { select: { fileName: true, url: true } } } });
   if (!t) throw new CcError("not_found");
   if (!t.design?.trim() && !t.mockupUrl && !t.attachments.length) throw new CcError("no_design");
   const now = new Date();
-  const canon = await designToCanon(t, actor, comment);
-  // Убрать пункты про макет из needs: триаж или владелец мог записать «Нужен макет» в список нужного
-  const needsClean = t.needs.filter((n) => !/макет/i.test(n));
+  const canon = await designToCanon(t, actor.name, comment);
+  // Убрать пункты про макет и явно закрытые вопросы
+  const toClose = new Set(closeNeeds ?? []);
+  const needsClean = t.needs.filter((n) => !/макет/i.test(n) && !toClose.has(n));
   await db.task.update({
     where: { key },
-    data: { mockupApprovedBy: actor, mockupApprovedAt: now, ...(needsClean.length !== t.needs.length ? { needs: needsClean } : {}) },
+    data: { mockupApprovedBy: actor.name, mockupApprovedAt: now, ...(needsClean.length !== t.needs.length ? { needs: needsClean } : {}) },
   });
-  await log(t.id, actor, "mockupApprovedBy", t.mockupApprovedBy, actor);
+  await log(t.id, actor.name, "mockupApprovedBy", t.mockupApprovedBy, actor.name);
   const text = `${comment ? `Дизайн утверждён: ${comment.trim().slice(0, 500)}` : "Дизайн утверждён."}\nВ Библиотеке: ${canon.slug} (версия ${canon.version}).`;
-  await say(t.id, actor, "note", text);
+  await say(t.id, actor.name, "note", text);
   // Если задача заблокирована на дизайне — снять блокировку, вернуть туда, откуда заблокировали
   if (t.status === "blocked" && t.blockedOn === "design") {
-    const actorObj = agentActor(actor);
-    const target = unblockTarget(t.blockedFrom, actorObj.role);
-    await transition(key, { to: target, text: "Дизайн утверждён, задача возвращена." }, actorObj).catch((e) => {
-      console.warn(`[cc] approveMockup: не удалось снять блокировку ${key}: ${(e as Error).message}`);
-    });
+    const target = unblockTarget(t.blockedFrom, actor.role);
+    try {
+      await transition(key, { to: target, text: "Дизайн утверждён, задача возвращена." }, actor);
+    } catch (e) {
+      const code = e instanceof CcError ? e.code : "transition_error";
+      const detail = e instanceof CcError && e.detail ? `: ${e.detail}` : "";
+      // Системная запись с кодом отказа — владелец видит причину в ленте
+      await say(t.id, actor.name, "system", `Дизайн утверждён, но вернуть задачу не удалось (${code}${detail}). Передано триажу.`);
+      await log(t.id, actor.name, "unblock_failed", null, `${code}${detail}`);
+      // Открытые вопросы → в очередь триажа, чтобы он принял решение
+      await retriage(key);
+    }
   }
   // Если задача в бэклоге — снова на разбор: утверждение макета могло снять последний блокер
   if (t.status === "backlog") await retriage(key);
@@ -643,4 +676,41 @@ export async function returnDesign(key: string, actor: Actor, reason: string) {
   if (t.status !== "blocked") return transition(key, { to: "blocked", blockedOn: "design", text: `Дизайн возвращён: ${reason.trim()}` }, actor);
   await say(t.id, actor.name, "note", `Дизайн возвращён: ${reason.trim()}`);
   return db.task.findUniqueOrThrow({ where: { key } });
+}
+
+/**
+ * Создаёт intake-карточку IN-N с указанием следующих шагов после принятия задачи.
+ * Не импортирует из ccBoard.ts (цикл: ccBoard → cc.ts → ccWork.ts), поэтому реализация встроена.
+ */
+async function createNextStepsIntake(doneKey: string, doneTitle: string, steps: string[], by: string) {
+  if (!steps.length) return;
+  const existing = (await db.task.findMany({ where: { key: { startsWith: "IN-" } }, select: { key: true } })).map((t) => t.key);
+  const sort = ((await db.task.aggregate({ _max: { sort: true } }))._max.sort ?? 0) + 1;
+  const text = `Следующие шаги после приёмки ${doneKey} «${doneTitle}»:\n${steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}`;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const key = nextIntakeKey(existing);
+    try {
+      const task = await db.task.create({
+        data: {
+          key,
+          title: intakeTitle(text),
+          summary: text.slice(0, 2000),
+          area: "product",
+          layer: "none",
+          priority: "p2",
+          stage: "later",
+          owner: "product",
+          source: "intake",
+          createdBy: by,
+          status: "backlog",
+          depends: [doneKey],
+          sort,
+        },
+      });
+      await db.taskEvent.create({ data: { taskId: task.id, actor: by, field: "created", from: null, to: key } });
+      return task;
+    } catch {
+      existing.push(key);
+    }
+  }
 }
