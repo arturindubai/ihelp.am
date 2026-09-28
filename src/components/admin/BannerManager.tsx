@@ -86,6 +86,11 @@ export function BannerManager({ banners }: Props) {
 
   const now = new Date();
 
+  const editingBanner = edit?.id ? banners.find((b) => b.id === edit.id) : null;
+  const statsViews = editingBanner?.data.views ?? 0;
+  const statsClicks = editingBanner?.data.clicks ?? 0;
+  const statsCtr = statsViews > 0 ? (statsClicks / statsViews) * 100 : null;
+
   const tabs: { key: string; label: string; count: number }[] = [
     { key: "ALL", label: `${t("banners.tabs.all")} (${banners.length})`, count: banners.length },
     ...PLACEMENTS.map((pl) => {
@@ -341,6 +346,33 @@ export function BannerManager({ banners }: Props) {
               </div>
               <NumInput label={t("common.sort")} value={d.sort} onChange={(v) => up({ sort: v ?? 0 })} className="max-w-[120px]" />
             </div>
+
+            {/* секция: Статистика (только для существующих баннеров) */}
+            {edit?.id && (
+              <div className="rounded-xl bg-surface p-3">
+                <p className="label mb-2">{t("banners.stats")}</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-[10px] bg-paper p-2 text-center">
+                    <div className="text-[11px] text-muted">{t("banners.views")}</div>
+                    <div className="text-sm font-semibold text-ink">{statsViews}</div>
+                  </div>
+                  <div className="rounded-[10px] bg-paper p-2 text-center">
+                    <div className="text-[11px] text-muted">{t("banners.clicks")}</div>
+                    <div className="text-sm font-semibold text-ink">{statsClicks}</div>
+                  </div>
+                  <div className="rounded-[10px] bg-paper p-2 text-center">
+                    <div className="text-[11px] text-muted">{t("banners.ctr")}</div>
+                    <div
+                      className={`text-sm font-semibold ${
+                        statsCtr === null ? "text-muted" : statsCtr > 3 ? "text-ok" : statsCtr < 1 ? "text-warn" : "text-ink"
+                      }`}
+                    >
+                      {statsCtr === null ? "—" : `${statsCtr.toFixed(1)}%`}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </Sheet>

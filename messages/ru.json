@@ -786,6 +786,7 @@
       "clicks": "Кликов",
       "ctr": "CTR",
       "generate": "Сгенерировать",
+      "stats": "Статистика",
       "placements": {
         "CAROUSEL_HOME": "Главная — карусель",
         "HERO_HOME": "Главная — hero",
