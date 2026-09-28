@@ -5,7 +5,10 @@ import { getSettings } from "@/server/settings";
 import { generateSubscriptionVisitsSafe, resumeSubscription } from "@/server/services/booking";
 import { cleanUnusedImages } from "@/server/services/cleanup";
 import { runWatchdog } from "@/server/services/ccWork";
+import { getTick } from "@/server/services/workers";
 import { processQueue, cleanQueue } from "@/server/services/notifyQueue";
+import { runLogWatcher } from "@/server/services/logWatcher";
+import { sendMasterTomorrowSchedule } from "@/server/services/workerNotify";
 import { html, notifyTeam } from "@/server/notify";
 import { alertTech } from "@/server/alerts";
 import { ymd } from "@/lib/time";
@@ -101,6 +104,12 @@ export async function GET(req: Request) {
     if (unassigned) await notifyTeam(html`⚠️ Визитов без мастера на ближайшие сутки: ${unassigned}`);
   }), undefined);
 
+  // 4a. Расписание мастерам на завтра — каждому личным сообщением около 20:00 по Еревану
+  let masterScheduleSent = 0;
+  await step("master-tomorrow", () => daily("master-tomorrow", 20, async () => {
+    masterScheduleSent = await sendMasterTomorrowSchedule(now);
+  }), undefined);
+
   // 5. Очистка: коды входа (с IP) старше 7 дней и истёкшие сессии — персональные данные не храним дольше нужного
   let cleaned = { otp: 0, sessions: 0 };
   await step("cleanup", () => daily("cleanup", 4, async () => {
@@ -111,6 +120,30 @@ export async function GET(req: Request) {
 
   // 5а. Сторож Control Center: брошенные задачи, возврат в очередь, снятие блокировок по зависимостям (docs/DEV_SYSTEM.md)
   const cc = await step("cc-watchdog", () => runWatchdog(now), null);
+
+  // 5а'. Задачи «На проверке» без ветки в репозитории: скорее всего выложены, но cc done не прошла
+  await step("cc-review-no-branch", async () => {
+    const tick = await getTick();
+    const heads = tick?.heads ?? {};
+    if (!Object.keys(heads).length) return; // диспетчер ещё не прогнался — heads неизвестны
+    const reviewTasks = await db.task.findMany({
+      where: { status: "review", layer: { not: "none" } },
+      select: { key: true, branch: true },
+    });
+    const noBranchKeys = reviewTasks
+      .filter((t) => {
+        const br = t.branch || `task/${t.key}`;
+        return !heads[br];
+      })
+      .map((t) => t.key);
+    if (noBranchKeys.length) {
+      await alertTech(
+        "cc:review:no-branch",
+        html`⚠️ <b>На проверке без ветки в репозитории: ${noBranchKeys.join(", ")}</b>\nВозможно выложены, но cc done не прошла. Проверить вкладку деплоера или: <code>cc done КЛЮЧ --sha КОММИТ "доказательство"</code>`,
+        15,
+      );
+    }
+  }, undefined);
 
   // 5б. Очередь уведомлений: повторные попытки для не доставленных сообщений
   const nq = await step("notify-queue", () => processQueue(), { sent: 0, failed: 0 });
@@ -126,6 +159,9 @@ export async function GET(req: Request) {
   await step("clean-images", () => daily("clean-images", 3, async () => {
     cleanImages = await cleanUnusedImages(now);
   }), undefined);
+
+  // 5д. Лог-вотчер: ошибки прода становятся входящими карточками IN-N
+  const lw = await step("log-watcher", () => runLogWatcher(), { created: 0, updated: 0, limited: false });
 
   // 6. Бэкапы: отметки пишет контейнер backup (Setting `_backup`)
   const b = await step("backup-state", async () => ((await db.setting.findUnique({ where: { key: "_backup" } }))?.value ?? null) as BackupState | null, null);
@@ -149,5 +185,5 @@ export async function GET(req: Request) {
     console.error("[cron] disk check failed", e);
   }
 
-  return NextResponse.json({ ok: true, resumed, created, expired, unassigned, cleaned, cleanImages, diskFreePct, cc, nq });
+  return NextResponse.json({ ok: true, resumed, created, expired, unassigned, masterScheduleSent, cleaned, cleanImages, diskFreePct, cc, nq, lw });
 }

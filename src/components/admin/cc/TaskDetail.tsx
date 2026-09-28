@@ -375,7 +375,7 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
                       <ExternalLink size={11} /> {t("mockup.link")}
                     </a>
                   )}
-                  <MockupApproveButton taskKey={task.key} />
+                  <MockupApproveButton taskKey={task.key} needs={task.needs} />
                 </>
               )}
             </Card>

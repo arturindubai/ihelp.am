@@ -15,9 +15,8 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-30 border-b border-line/70 bg-paper/95 backdrop-blur">
         <div className="container-w flex h-14 items-center gap-3">
-          <Link href="/" className="flex items-center gap-2 font-bold tracking-tight">
+          <Link href="/" className="flex items-center font-bold tracking-tight">
             <Logo />
-            <span className="text-lg">{s.brand.name}</span>
           </Link>
           <div className="ml-auto flex items-center gap-2">
             <Suspense>

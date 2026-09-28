@@ -18,9 +18,10 @@ type Props = {
   searchPlaceholder: string;
   comingSoonLabel: string;
   categories: Category[];
+  slogan: string;
 };
 
-export function HeroSection({ heroTitle, searchPlaceholder, comingSoonLabel, categories }: Props) {
+export function HeroSection({ heroTitle, searchPlaceholder, comingSoonLabel, categories, slogan }: Props) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -31,23 +32,32 @@ export function HeroSection({ heroTitle, searchPlaceholder, comingSoonLabel, cat
   }
 
   return (
-    <section>
-      <h1 className="h1 mt-0.5">{heroTitle}</h1>
+    <section className="lg:grid lg:grid-cols-12 lg:items-start lg:gap-8">
+      <div className="lg:col-span-5">
+        <h1 className="h1 mt-0.5">{heroTitle}</h1>
+        <p className="mt-2 hidden text-sm text-muted lg:block">{slogan}</p>
+        <form onSubmit={handleSearch} className="relative mt-4">
+          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={18} />
+          <input
+            ref={inputRef}
+            type="search"
+            placeholder={searchPlaceholder}
+            className="w-full rounded-xl bg-surface py-3 pl-9 pr-4 text-sm text-ink placeholder:text-muted outline-none focus:ring-2 focus:ring-brand"
+          />
+        </form>
+      </div>
 
-      <form onSubmit={handleSearch} className="relative mt-4">
-        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={18} />
-        <input
-          ref={inputRef}
-          type="search"
-          placeholder={searchPlaceholder}
-          className="w-full rounded-xl bg-surface py-3 pl-9 pr-4 text-sm text-ink placeholder:text-muted outline-none focus:ring-2 focus:ring-brand"
-        />
-      </form>
-
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {categories.map((c) => {
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:col-span-7 lg:mt-0 lg:gap-2">
+        {categories.map((c, i) => {
+          const isFirst = i === 0;
           const tile = (
-            <div className={`relative aspect-square overflow-hidden rounded-2xl${c.comingSoon ? " opacity-60" : ""}`}>
+            <div
+              className={`relative overflow-hidden rounded-2xl${c.comingSoon ? " opacity-60" : ""}${
+                isFirst
+                  ? " aspect-square lg:aspect-auto lg:h-full"
+                  : " aspect-square"
+              }`}
+            >
               <Img
                 src={c.image || "/img/cat-cleaning.svg"}
                 fill
@@ -66,11 +76,17 @@ export function HeroSection({ heroTitle, searchPlaceholder, comingSoonLabel, cat
             </div>
           );
           return c.href ? (
-            <Link key={c.slug} href={c.href}>
+            <Link
+              key={c.slug}
+              href={c.href}
+              className={isFirst ? "block lg:col-span-2 lg:row-span-2" : undefined}
+            >
               {tile}
             </Link>
           ) : (
-            <div key={c.slug}>{tile}</div>
+            <div key={c.slug} className={isFirst ? "lg:col-span-2 lg:row-span-2" : undefined}>
+              {tile}
+            </div>
           );
         })}
       </div>

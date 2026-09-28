@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Установка зависимостей
+        run: npm ci
+
+      - name: Генерация клиента Prisma
+        run: npx prisma generate
+
+      - name: Проверка типов
+        run: npx tsc --noEmit
+
+      - name: Тесты
+        run: npx vitest run

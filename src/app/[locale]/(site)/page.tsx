@@ -11,6 +11,8 @@ import { PopularServices } from "@/components/home/PopularServices";
 import { HowItWorks } from "@/components/home/HowItWorks";
 import { Promises } from "@/components/home/Promises";
 import { FaqSection } from "@/components/home/FaqSection";
+import { ReviewsSection } from "@/components/home/ReviewsSection";
+import { StickyOrderButton } from "@/components/home/StickyOrderButton";
 
 export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
@@ -27,15 +29,19 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           searchPlaceholder={t("heroSearch")}
           comingSoonLabel={tc("comingSoon")}
           categories={data.categories}
+          slogan={t("slogan")}
         />
 
         <PromoCarousel banners={data.banners} />
 
         <PopularServices services={data.services} />
 
-        <HowItWorks />
+        <div className="md:grid md:grid-cols-12 md:gap-8">
+          <div className="md:col-span-4"><HowItWorks /></div>
+          <div className="md:col-span-8"><Promises features={data.features} /></div>
+        </div>
 
-        <Promises features={data.features} />
+        <ReviewsSection reviews={data.reviews} />
 
         <FaqSection faq={data.faq} />
 
@@ -51,6 +57,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
         )}
         {!user && <div className="h-2" />}
       </div>
+      <StickyOrderButton label={t("stickyOrder")} />
     </div>
   );
 }

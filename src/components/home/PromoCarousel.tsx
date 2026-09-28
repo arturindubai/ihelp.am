@@ -19,11 +19,11 @@ export function PromoCarousel({ banners }: Props) {
   if (banners.length === 0) return null;
 
   return (
-    <div className="no-scrollbar -mx-4 mt-4 flex snap-x gap-3 overflow-x-auto px-4">
+    <div className="no-scrollbar -mx-4 mt-4 flex snap-x gap-3 overflow-x-auto px-4 md:mx-0 md:overflow-visible md:px-0">
       {banners.map((b) => {
         const inner = (
           <div
-            className="relative flex h-40 w-[86vw] max-w-[440px] shrink-0 snap-start flex-col justify-end overflow-hidden rounded-2xl p-4 text-inverse"
+            className="relative flex h-40 w-[86vw] max-w-[440px] shrink-0 snap-start flex-col justify-end overflow-hidden rounded-2xl p-4 text-inverse md:w-auto md:min-w-[280px] md:max-w-sm md:flex-1"
             style={{ background: b.bg || "var(--color-ink)" }}
           >
             {b.image && (
