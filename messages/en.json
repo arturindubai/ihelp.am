@@ -1417,7 +1417,9 @@
         "postponeConfirm": "Postpone",
         "stale": "Stale or without assignee",
         "stuckReview": "Review stuck",
-        "failedRuns": "Failed worker runs in the last 24 hours"
+        "failedRuns": "Failed worker runs in the last 24 hours",
+        "alertMissing": "⚠️ Tech alerts are not delivered: no recipient configured.",
+        "alertMissingLink": "Configure notifications"
       },
       "devTab": {
         "empty": "Nothing is being worked on now",
@@ -1564,7 +1566,7 @@
         "runs24Hint": "errors {failed} · hit limit {limit}",
         "orders": "Orders",
         "ordersHint": "per day / per week",
-        "alertMissing": "Tech alerts are not delivered: no chat configured. Critical errors, backup failures, and stale tasks are written to log only.",
+        "alertMissing": "Tech alerts are not delivered: no recipient configured. Critical errors, backup failures, and stale tasks are written to log only.",
         "alertMissingLink": "Configure in Notifications",
         "howTo": "If something's wrong",
         "audit": {

@@ -4,6 +4,8 @@ import { annotate, attention, getAppErrors, systemStatus } from "./cc";
 import { getTick, getWorkersConfig, requestRun } from "./workers";
 import { unreadForOwner } from "./ccMessages";
 import { recentErrors } from "../logbuffer";
+import { getSettings } from "../settings";
+import { hasAlertRecipient } from "../notify";
 import { flowOf, intakeTitle, laneOf, nextIntakeKey, sizeOf, weekStart } from "@/lib/cc-lanes";
 import { CLOSED_STATUSES, LEASE_MIN, OPEN_STATUSES } from "@/lib/cc-flow";
 import { isAgentAuthor } from "@/lib/cc-owner-question";
@@ -61,9 +63,9 @@ export async function ccCounts() {
   };
 }
 
-/** «Нужен ты»: блокировки на владельце и продукте, брошенные задачи, застрявшая проверка, не-код на приёмке, упавшие запуски, пауза воркеров */
+/** «Нужен ты»: блокировки на владельце и продукте, брошенные задачи, застрявшая проверка, не-код на приёмке, упавшие запуски, пауза воркеров, нет адресата алертов */
 export async function needsYou() {
-  const [attn, owner, failedRuns, config, nocodeReview] = await Promise.all([
+  const [attn, owner, failedRuns, config, nocodeReview, settings] = await Promise.all([
     attention(),
     db.task.findMany({
       where: { status: "blocked", blockedOn: { in: ["owner", "product"] } },
@@ -77,6 +79,7 @@ export async function needsYou() {
       orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
       select: { key: true, title: true, priority: true, updatedAt: true, ownerSummary: true, _count: { select: { attachments: true } } },
     }),
+    getSettings(),
   ]);
   return {
     owner: owner.map((x) => ({
@@ -90,6 +93,7 @@ export async function needsYou() {
     nocodeReview,
     failedRuns,
     pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null,
+    alertMissing: !hasAlertRecipient(settings),
   };
 }
 
