@@ -197,8 +197,8 @@ export type DispatchState = {
   running: { pool: Pool; agent: string }[];
   /** Агенты, держащие задачу в статусе «В работе» (claimedBy при status=in_progress); исключаются из выбора имён */
   claimedAgents?: { pool: Pool; agent: string }[];
-  /** Для диспетчера: задачи in_progress с арендой — чтобы при agent_busy проверить, истекла ли аренда */
-  inProgressClaims?: { key: string; agent: string; claimUntil: string | null }[];
+  /** Для диспетчера: задачи in_progress с пульсом — чтобы при agent_busy проверить, работает ли исполнитель */
+  inProgressClaims?: { key: string; agent: string; claimUntil: string | null; heartbeatAt: string | null }[];
   /** Запусков пула за сегодня (по Еревану) */
   today: Record<Pool, number>;
   /** Задачи «На проверке» */
