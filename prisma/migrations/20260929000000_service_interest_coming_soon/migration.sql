@@ -15,6 +15,6 @@ INSERT INTO "Category" ("id", "slug", "title", "image", "sort", "active", "comin
 VALUES
   (gen_random_uuid()::text, 'chef',        '{"ru":"Повар на дом","en":"Personal chef","am":""}',           '/img/cat-chef.svg',     6, true, true, NOW(), NOW()),
   (gen_random_uuid()::text, 'massage',     '{"ru":"Массаж на дом","en":"Home massage","am":""}',            '/img/cat-massage.svg',  7, true, true, NOW(), NOW()),
-  (gen_random_uuid()::text, 'moving',      '{"ru":"Грузчики и переезды","en":"Moving services","am":""}',   '/img/cat-moving.svg',   8, true, true, NOW(), NOW()),
+  (gen_random_uuid()::text, 'moving',      '{"ru":"Переезд и грузчики","en":"Moving & Movers","am":""}',    '/img/cat-moving.svg',   8, true, true, NOW(), NOW()),
   (gen_random_uuid()::text, 'dry-cleaning','{"ru":"Химчистка","en":"Dry cleaning","am":""}',                '/img/cat-dry.svg',      9, true, true, NOW(), NOW())
 ON CONFLICT ("slug") DO NOTHING;

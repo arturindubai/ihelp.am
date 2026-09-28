@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useTranslations } from "next-intl";
 import { CheckCircle } from "lucide-react";
+import { Link } from "@/i18n/navigation";
 import { submitServiceInterest } from "@/server/actions/catalog";
 
 type Props = {
@@ -15,10 +17,12 @@ type Props = {
     notifySuccess: string;
     notifyAlready: string;
     notifyInvalid: string;
+    notifyTooMany: string;
   };
 };
 
 export function NotifyForm({ serviceSlug, t }: Props) {
+  const tc = useTranslations("catalog");
   const [contact, setContact] = useState("");
   const [status, setStatus] = useState<"idle" | "ok" | "already">("idle");
   const [error, setError] = useState("");
@@ -53,6 +57,8 @@ export function NotifyForm({ serviceSlug, t }: Props) {
       const result = await submitServiceInterest(serviceSlug, contact);
       if (result === "invalid") {
         setError(t.notifyInvalid);
+      } else if (result === "too_many") {
+        setError(t.notifyTooMany);
       } else {
         setStatus(result);
       }
@@ -95,6 +101,16 @@ export function NotifyForm({ serviceSlug, t }: Props) {
       >
         {t.notifyButton}
       </button>
+
+      <p className="mt-2 text-center text-xs text-muted">
+        {tc.rich("notifyConsent", {
+          privacy: (c) => (
+            <Link href="/p/privacy" target="_blank" className="underline underline-offset-2">
+              {c}
+            </Link>
+          ),
+        })}
+      </p>
     </form>
   );
 }

@@ -834,9 +834,11 @@ model ServiceInterest {
   id          String   @id @default(cuid())
   serviceSlug String
   contact     String
+  ip          String?
   createdAt   DateTime @default(now())
 
   @@unique([serviceSlug, contact])
   @@index([serviceSlug])
+  @@index([ip, createdAt])
   @@map("service_interest")
 }

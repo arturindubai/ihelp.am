@@ -22,6 +22,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ local
     notifySuccess: t("notifySuccess"),
     notifyAlready: t("notifyAlready"),
     notifyInvalid: t("notifyInvalid"),
+    notifyTooMany: t("notifyTooMany"),
   };
 
   return (

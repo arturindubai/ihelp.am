@@ -368,7 +368,9 @@
     "notifyButton": "Notify me",
     "notifySuccess": "You're on the list! We'll message you when booking opens.",
     "notifyAlready": "We already have your contact",
-    "notifyInvalid": "Enter a phone number or e-mail"
+    "notifyInvalid": "Enter a phone number or e-mail",
+    "notifyTooMany": "Too many requests, please try again later",
+    "notifyConsent": "By clicking the button, you agree to your contact being processed to notify you at launch. <privacy>Privacy policy</privacy>"
   },
   "pro": {
     "title": "Pro cabinet",
