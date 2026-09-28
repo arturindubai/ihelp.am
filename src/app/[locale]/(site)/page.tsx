@@ -27,15 +27,17 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           searchPlaceholder={t("heroSearch")}
           comingSoonLabel={tc("comingSoon")}
           categories={data.categories}
+          slogan={t("slogan")}
         />
 
         <PromoCarousel banners={data.banners} />
 
         <PopularServices services={data.services} />
 
-        <HowItWorks />
-
-        <Promises features={data.features} />
+        <div className="md:grid md:grid-cols-12 md:gap-8">
+          <div className="md:col-span-4"><HowItWorks /></div>
+          <div className="md:col-span-8"><Promises features={data.features} /></div>
+        </div>
 
         <FaqSection faq={data.faq} />
 
