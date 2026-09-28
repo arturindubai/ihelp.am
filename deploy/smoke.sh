@@ -70,6 +70,36 @@ db_schema_ok() {
 }
 check "схема Prisma и база согласованы (Task, Epic, WorkerRun)" db_schema_ok
 
+echo "Счётчики данных (выкладка не должна создавать записи)"
+check_data_counts() {
+  [ -f /tmp/ihelp-predeploy-counts.txt ] || return 0
+  local ok=1
+  while IFS=: read -r name before; do
+    [ -z "$name" ] && continue
+    case "$name" in
+      Review)     sql="SELECT COUNT(*) FROM \"Review\"";;
+      Order)      sql="SELECT COUNT(*) FROM \"Order\"";;
+      UserClient) sql="SELECT COUNT(*) FROM \"User\" WHERE role = 'CLIENT'";;
+      *) continue;;
+    esac
+    after=$(docker exec homecare-db-1 psql -U app -d homeservices -tAc "$sql" 2>/dev/null | tr -d '[:space:]')
+    if [ "$before" = "?" ]; then
+      echo "  ⚠ $name: счётчик до выкладки неизвестен — пропускаю"
+    elif [ "$before" != "$after" ]; then
+      echo "  ✗ $name: до выкладки $before, после $after — выкладка создала записи!"
+      ok=0
+    else
+      echo "  ✓ $name: $after (без изменений)"
+    fi
+  done < /tmp/ihelp-predeploy-counts.txt
+  return $((1 - ok))
+}
+if [ -f /tmp/ihelp-predeploy-counts.txt ]; then
+  check "счётчики Review/Order/User не изменились" check_data_counts
+else
+  echo "  ⚠ /tmp/ihelp-predeploy-counts.txt не найден — запускать через deploy/update.sh"
+fi
+
 echo "Логи приложения"
 # Первые 60 секунд после запуска контейнера — не должно быть MISSING_MESSAGE (next-intl) или
 # необработанных исключений Node.js, которые сигнализируют о пропавших ключах перевода / багах.
