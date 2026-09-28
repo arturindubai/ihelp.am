@@ -183,8 +183,9 @@ async function reconcile(running, stopAll) {
         await api({ action: "workers-pause", until: resetAt(result).toISOString(), text: summary.slice(0, 300) });
       }
     }
-    // Вход в подписку пропал или истёк — пауза, пока человек не войдёт заново
-    if (/not logged in|\/login|oauth|failed to authenticate|authentication_error|\b401\b/i.test(summary)) {
+    // Вход в подписку пропал или истёк — пауза, пока человек не войдёт заново.
+    // Только для ошибочного запуска: успешный может упоминать OAuth и /login по делу (src/lib/login-pause.ts)
+    if (["failed", "timeout"].includes(status) && /not logged in|\/login|oauth|failed to authenticate|authentication_error|\b401\b/i.test(summary)) {
       await api({ action: "workers-pause", until: new Date(Date.now() + 6 * 3600_000).toISOString(), text: "Воркеры не вошли в Claude. Войти: scripts/claude-login.sh на сервере, затем «Снять паузу» в Control Center → Воркеры." });
     }
     if (!run.taskKey) continue;
