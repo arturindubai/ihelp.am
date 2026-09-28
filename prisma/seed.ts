@@ -173,21 +173,6 @@ const DURATIONS: { h: number; price: number; hint?: [string, string]; schedule: 
 
 const HOURS = Object.fromEntries([1, 2, 3, 4, 5, 6].map((d) => [String(d), [["09:00", "19:00"]]]));
 
-async function seedDemoReviews(serviceId?: string) {
-  if (await db.review.count({ where: { status: "APPROVED" } })) return;
-  const svcId = serviceId ?? (await db.service.findFirst({ where: { active: true } }))?.id;
-  if (!svcId) return;
-  const demoReviews: { authorName: string; rating: number; text: string }[] = [
-    { authorName: "Мария С.", rating: 5, text: "Мастер пришёл вовремя, убрал всё до блеска. Очень довольна, закажу снова!" },
-    { authorName: "Александр К.", rating: 5, text: "Отличный сервис! Цена соответствует качеству, буду рекомендовать друзьям." },
-    { authorName: "Наталья В.", rating: 4, text: "Хорошая работа, мастер вежливый и аккуратный. Всё сделано в срок." },
-    { authorName: "Давид Г.", rating: 5, text: "Пользуюсь подпиской уже три месяца. Один и тот же мастер — это очень удобно." },
-  ];
-  for (const r of demoReviews) {
-    await db.review.create({ data: { ...r, status: "APPROVED", serviceId: svcId } });
-  }
-}
-
 async function main() {
   // Настройки: владелец
   const ownerPhone = process.env.ADMIN_PHONE || "+37400000000";
@@ -202,8 +187,6 @@ async function main() {
   const SEED_FLAG = "_seed";
   if ((await db.setting.findUnique({ where: { key: SEED_FLAG } })) || (await db.service.count())) {
     await db.setting.upsert({ where: { key: SEED_FLAG }, create: { key: SEED_FLAG, value: { at: new Date().toISOString() } }, update: {} });
-    // Демо-отзывы добавляем независимо от SEED_FLAG — нужны при пересоздании стенда
-    await seedDemoReviews();
     console.log("Seed: demo data already applied, skipped. Owner phone:", ownerPhone);
     return;
   }
@@ -341,8 +324,6 @@ async function main() {
       update: {},
     });
   }
-
-  await seedDemoReviews(svc.id);
 
   if (!(await db.banner.count())) {
     await db.banner.create({
