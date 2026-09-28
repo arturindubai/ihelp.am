@@ -6,6 +6,7 @@ import { generateSubscriptionVisitsSafe, resumeSubscription } from "@/server/ser
 import { cleanUnusedImages } from "@/server/services/cleanup";
 import { runWatchdog } from "@/server/services/ccWork";
 import { processQueue, cleanQueue } from "@/server/services/notifyQueue";
+import { findExpiringPackages } from "@/server/services/packages";
 import { html, notifyTeam } from "@/server/notify";
 import { alertTech } from "@/server/alerts";
 import { ymd } from "@/lib/time";
@@ -94,6 +95,18 @@ export async function GET(req: Request) {
     0,
   );
 
+  // 3а. Предупреждения об истечении пакетов: за 7 и за 2 дня — команда свяжется с клиентом вручную
+  let pkgWarn = 0;
+  await step("pkg-warn", () => daily("pkg-warn", 9, async () => {
+    for (const days of [7, 2]) {
+      const packages = await findExpiringPackages(now, days);
+      for (const p of packages) {
+        await notifyTeam(html`⏳ Пакет '${p.packageName}' клиента ${p.clientName}, ${p.clientPhone} истекает через ${days} дней (${ymd(p.expiresAt)}). Визитов осталось: ${p.remainingVisits}. Свяжитесь с клиентом.`);
+        pkgWarn++;
+      }
+    }
+  }), undefined);
+
   // 4. Визиты завтра без мастера — предупреждение команде раз в день после 18:00
   let unassigned = 0;
   await step("unassigned", () => daily("unassigned", 18, async () => {
@@ -149,5 +162,5 @@ export async function GET(req: Request) {
     console.error("[cron] disk check failed", e);
   }
 
-  return NextResponse.json({ ok: true, resumed, created, expired, unassigned, cleaned, cleanImages, diskFreePct, cc, nq });
+  return NextResponse.json({ ok: true, resumed, created, expired, pkgWarn, unassigned, cleaned, cleanImages, diskFreePct, cc, nq });
 }
