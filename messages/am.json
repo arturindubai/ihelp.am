@@ -360,7 +360,10 @@
     "newService": "Նոր ծառայություն",
     "comingSoonTitle": "Շուտով կբացենք",
     "comingSoonText": "Պատրաստում ենք ծառայություններ: Գրեք մեզ՝ ձեր հարցերին կպատասխանենք",
-    "writeWhatsApp": "Գրել WhatsApp-ում"
+    "writeWhatsApp": "Գրել WhatsApp-ում",
+    "badgeNew": "Նոր",
+    "arrivalToday": "այսօր",
+    "arrivalWithin": "{n} ժ-ի ընթացքում"
   },
   "pro": {
     "title": "",

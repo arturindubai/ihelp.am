@@ -360,7 +360,10 @@
     "newService": "New service",
     "comingSoonTitle": "Opening soon",
     "comingSoonText": "We're preparing services and pros. Write to us — we'll answer your questions",
-    "writeWhatsApp": "Write on WhatsApp"
+    "writeWhatsApp": "Write on WhatsApp",
+    "badgeNew": "New",
+    "arrivalToday": "today",
+    "arrivalWithin": "within {n} h"
   },
   "pro": {
     "title": "Pro cabinet",
@@ -651,7 +654,9 @@
       "categoryHasServices": "Category has services — move or delete them first",
       "openOnSite": "Open on website",
       "rating": "Rating",
-      "bookings": "Bookings"
+      "bookings": "Bookings",
+      "isNew": "\"New\" badge",
+      "arrivalHours": "Arrival time, h (0 = today, empty — don't show)"
     },
     "masters": {
       "title": "Pros",

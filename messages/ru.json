@@ -379,7 +379,10 @@
     "newService": "Новая услуга",
     "comingSoonTitle": "Скоро откроем",
     "comingSoonText": "Готовим услуги и мастеров. Напишите нам — ответим на вопросы",
-    "writeWhatsApp": "Написать в WhatsApp"
+    "writeWhatsApp": "Написать в WhatsApp",
+    "badgeNew": "Новое",
+    "arrivalToday": "сегодня",
+    "arrivalWithin": "в течение {n} ч"
   },
   "pro": {
     "title": "Кабинет мастера",
@@ -682,7 +685,9 @@
       "categoryHasServices": "В категории есть услуги — сначала перенесите или удалите их",
       "openOnSite": "Открыть на сайте",
       "rating": "Рейтинг",
-      "bookings": "Заказов"
+      "bookings": "Заказов",
+      "isNew": "Бейдж «Новое»",
+      "arrivalHours": "Срок выезда, ч (0 = сегодня, пусто — не показывать)"
     },
     "masters": {
       "title": "Мастера",

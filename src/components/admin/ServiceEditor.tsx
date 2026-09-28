@@ -66,6 +66,8 @@ export function ServiceEditor({ id, initial, categories, masters, rules }: { id:
               <div><label className="label">{t("services.category")}</label><select className="input" value={s.categoryId} onChange={(e) => up({ categoryId: e.target.value })}>{categories.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}</select></div>
               <NumInput label={t("common.sort")} value={s.sort} onChange={(v) => up({ sort: v ?? 0 })} />
               <div className="pt-6"><Toggle label={t("common.active")} checked={s.active} onChange={(v) => up({ active: v })} /></div>
+              <div className="pt-6"><Toggle label={t("services.isNew")} checked={s.isNew ?? false} onChange={(v) => up({ isNew: v })} /></div>
+              <NumInput label={t("services.arrivalHours")} value={s.arrivalHours ?? null} onChange={(v) => up({ arrivalHours: v ?? null })} />
               <ImageInput label={t("common.image")} value={s.image} onChange={(v) => up({ image: v })} />
               <ImageInput label={t("services.banner")} value={s.bannerImage} onChange={(v) => up({ bannerImage: v })} />
             </div>
