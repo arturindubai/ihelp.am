@@ -1903,7 +1903,9 @@
       "masterAssigned": "👷 Master assigned\nService: {serviceName}, {date} at {time}\nMaster: {masterName}\nFeel free to contact us with any questions.",
       "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}",
       "cancelled": "❌ Visit cancelled\nService: {serviceName}, {date}\nWant to reschedule? Place a new order on the website.",
-      "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}"
+      "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}",
+      "reminder24h": "⏰ Reminder — visit tomorrow\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}\nMaster: {masterName}\nSee you tomorrow!",
+      "reminder2h": "⏰ Your visit is in 2 hours\nService: {serviceName}\nTime: {time}\nAddress: {address}\nMaster: {masterName}\nYour master is on the way!"
     }
   }
 }

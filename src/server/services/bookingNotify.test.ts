@@ -25,6 +25,7 @@ const visitStore = new Map<
     masterId: string | null;
     master: { name: string } | null;
     clientNotifiedEvents: string[];
+    status: string;
     order: { id: string; number: number; userId: string; config: unknown; addressSnapshot: unknown };
   }
 >();
@@ -51,6 +52,20 @@ vi.mock("../db", () => ({
     visit: {
       findUnique: vi.fn().mockImplementation(({ where }: { where: { id: string } }) =>
         Promise.resolve(visitStore.get(where.id) ?? null),
+      ),
+      findMany: vi.fn().mockImplementation(
+        ({ where }: { where: { status?: { in?: string[] }; scheduledAt?: { gte?: Date; lte?: Date } } }) => {
+          const statusFilter = where?.status?.in ?? null;
+          const gte = where?.scheduledAt?.gte ?? null;
+          const lte = where?.scheduledAt?.lte ?? null;
+          const results = [...visitStore.values()].filter((v) => {
+            if (statusFilter && !statusFilter.includes(v.status)) return false;
+            if (gte && v.scheduledAt && v.scheduledAt < gte) return false;
+            if (lte && v.scheduledAt && v.scheduledAt > lte) return false;
+            return true;
+          });
+          return Promise.resolve(results);
+        },
       ),
       update: vi.fn().mockImplementation(
         ({ where, data }: { where: { id: string }; data: { clientNotifiedEvents?: { push: string } } }) => {
@@ -104,6 +119,7 @@ import {
   notifyClientCancelled,
   notifyClientVisitCompleted,
   notifyClientVisitCancelled,
+  sendVisitReminders,
 } from "./bookingNotify";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -136,6 +152,7 @@ function makeVisit(id: string, overrides: Partial<VisitData> = {}) {
     masterId: "master-1",
     master: { name: "Иван Петров" },
     clientNotifiedEvents: [],
+    status: "SCHEDULED",
     order: {
       id: "order-id-1",
       number: 42,
@@ -318,5 +335,84 @@ describe("подстановка переменных", () => {
     const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
     expect(text).toContain("Иван Петров");
     expect(text).toContain("/account/orders/order-id-1");
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// sendVisitReminders
+
+describe("sendVisitReminders", () => {
+  const now = new Date("2026-09-28T10:00:00Z");
+
+  it("отправляет reminder24h визиту через 24 часа", async () => {
+    const scheduledAt = new Date(now.getTime() + 24 * 3_600_000); // ровно +24ч — в окне 22–26ч
+    makeVisit("v1", { scheduledAt });
+    makeUser("u1", "telegram");
+
+    const result = await sendVisitReminders(now);
+
+    expect(result.sent).toBe(1);
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+    const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
+    expect(text).toContain("завтра");
+  });
+
+  it("отправляет reminder2h визиту через 2 часа", async () => {
+    const scheduledAt = new Date(now.getTime() + 2 * 3_600_000); // +2ч — в окне 1.5–2.5ч
+    makeVisit("v1", { scheduledAt });
+    makeUser("u1", "telegram");
+
+    const result = await sendVisitReminders(now);
+
+    expect(result.sent).toBe(1);
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+    const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
+    expect(text).toContain("2 час");
+  });
+
+  it("не отправляет повторное напоминание (идемпотентность)", async () => {
+    const scheduledAt = new Date(now.getTime() + 24 * 3_600_000);
+    makeVisit("v1", { scheduledAt });
+    makeUser("u1", "telegram");
+
+    await sendVisitReminders(now);
+    await sendVisitReminders(now);
+
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+  });
+
+  it("не отправляет напоминание отменённому визиту", async () => {
+    const scheduledAt = new Date(now.getTime() + 24 * 3_600_000);
+    makeVisit("v1", { scheduledAt, status: "CANCELLED" });
+    makeUser("u1", "telegram");
+
+    const result = await sendVisitReminders(now);
+
+    expect(result.sent).toBe(0);
+    expect(vi.mocked(sendTelegramDirect)).not.toHaveBeenCalled();
+  });
+
+  it("не отправляет напоминание визиту вне окна (через 30 часов)", async () => {
+    const scheduledAt = new Date(now.getTime() + 30 * 3_600_000); // +30ч — вне любых окон
+    makeVisit("v1", { scheduledAt });
+    makeUser("u1", "telegram");
+
+    const result = await sendVisitReminders(now);
+
+    expect(result.sent).toBe(0);
+    expect(vi.mocked(sendTelegramDirect)).not.toHaveBeenCalled();
+  });
+
+  it("текст reminder24h содержит название услуги, дату и адрес", async () => {
+    const scheduledAt = new Date(now.getTime() + 24 * 3_600_000);
+    makeVisit("v1", { scheduledAt });
+    makeUser("u1", "telegram");
+
+    await sendVisitReminders(now);
+
+    const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
+    expect(text).toContain("Уборка");
+    expect(text).toContain("Пушкина");
+    expect(text).toContain("Иван Петров");
   });
 });

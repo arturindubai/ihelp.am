@@ -1117,7 +1117,9 @@
       "masterAssigned": "",
       "rescheduled": "",
       "cancelled": "",
-      "completed": ""
+      "completed": "",
+      "reminder24h": "",
+      "reminder2h": ""
     }
   }
 }

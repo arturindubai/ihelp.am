@@ -311,6 +311,73 @@ export async function notifyClientVisitCancelled(visitId: string): Promise<void>
   }
 }
 
+const HOUR_MS = 3_600_000;
+
+/**
+ * 6. Напоминания клиентам: за 24 часа (окно 22–26 ч) и за 2 часа (окно 1.5–2.5 ч).
+ * Дедупликация через clientNotifiedEvents: ключи "reminder24h" и "reminder2h".
+ * Отменённые визиты исключены статусным фильтром (SCHEDULED/CONFIRMED).
+ */
+export async function sendVisitReminders(now: Date): Promise<{ sent: number }> {
+  const windows = [
+    { key: "reminder24h" as const, minMs: 22 * HOUR_MS, maxMs: 26 * HOUR_MS },
+    { key: "reminder2h" as const, minMs: 90 * 60_000, maxMs: 150 * 60_000 },
+  ];
+
+  let sent = 0;
+
+  for (const { key, minMs, maxMs } of windows) {
+    const from = new Date(now.getTime() + minMs);
+    const to = new Date(now.getTime() + maxMs);
+
+    const visits = await db.visit.findMany({
+      where: {
+        status: { in: ["SCHEDULED", "CONFIRMED"] },
+        scheduledAt: { gte: from, lte: to },
+      },
+      select: {
+        id: true,
+        scheduledAt: true,
+        clientNotifiedEvents: true,
+        master: { select: { name: true } },
+        order: {
+          select: {
+            number: true,
+            userId: true,
+            config: true,
+            addressSnapshot: true,
+          },
+        },
+      },
+    });
+
+    for (const visit of visits) {
+      if (visit.clientNotifiedEvents.includes(key)) continue;
+      if (!visit.scheduledAt) continue;
+
+      const ok = await markVisitEvent(visit.id, key);
+      if (!ok) continue;
+
+      try {
+        const tmpl = await getOrderTemplates();
+        const text = fill(tmpl[key], {
+          serviceName: serviceTitle(visit.order.config),
+          date: ymd(visit.scheduledAt),
+          time: hm(visit.scheduledAt),
+          address: addrLine(visit.order.addressSnapshot),
+          masterName: visit.master ? tr(visit.master.name, "ru") : "—",
+        });
+        await sendToClient(visit.order.userId, text, `Напоминание — заказ №${visit.order.number}`, `client:${key}`);
+        sent++;
+      } catch (e) {
+        console.error(`[bookingNotify:${key}] ошибка для визита ${visit.id}`, e);
+      }
+    }
+  }
+
+  return { sent };
+}
+
 /** 5. Визит завершён (статус DONE) */
 export async function notifyClientVisitCompleted(visitId: string): Promise<void> {
   const ok = await markVisitEvent(visitId, "completed");

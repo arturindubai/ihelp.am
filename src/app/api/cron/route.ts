@@ -9,6 +9,7 @@ import { getTick } from "@/server/services/workers";
 import { processQueue, cleanQueue } from "@/server/services/notifyQueue";
 import { runLogWatcher } from "@/server/services/logWatcher";
 import { sendMasterTomorrowSchedule } from "@/server/services/workerNotify";
+import { sendVisitReminders } from "@/server/services/bookingNotify";
 import { html, notifyTeam } from "@/server/notify";
 import { alertTech } from "@/server/alerts";
 import { ymd } from "@/lib/time";
@@ -104,6 +105,9 @@ export async function GET(req: Request) {
     if (unassigned) await notifyTeam(html`⚠️ Визитов без мастера на ближайшие сутки: ${unassigned}`);
   }), undefined);
 
+  // 4а. Напоминания клиентам за 24 и 2 часа до визита (каждые 15 минут, дедупликация через clientNotifiedEvents)
+  const reminders = await step("reminders", () => sendVisitReminders(now), { sent: 0 });
+
   // 4a. Расписание мастерам на завтра — каждому личным сообщением около 20:00 по Еревану
   let masterScheduleSent = 0;
   await step("master-tomorrow", () => daily("master-tomorrow", 20, async () => {
@@ -185,5 +189,5 @@ export async function GET(req: Request) {
     console.error("[cron] disk check failed", e);
   }
 
-  return NextResponse.json({ ok: true, resumed, created, expired, unassigned, masterScheduleSent, cleaned, cleanImages, diskFreePct, cc, nq, lw });
+  return NextResponse.json({ ok: true, resumed, created, expired, unassigned, reminders, masterScheduleSent, cleaned, cleanImages, diskFreePct, cc, nq, lw });
 }

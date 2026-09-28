@@ -2005,7 +2005,9 @@
       "masterAssigned": "👷 Мастер назначен\nУслуга: {serviceName}, {date} в {time}\nМастер: {masterName}\nЕсли есть вопросы — напишите нам.",
       "rescheduled": "🔄 Визит перенесён\nУслуга: {serviceName}\nНовая дата: {date}, {time}\nАдрес прежний: {address}",
       "cancelled": "❌ Визит отменён\nУслуга: {serviceName}, {date}\nЕсли хотите перенести — оформите новый заказ на сайте.",
-      "completed": "⭐ Как прошёл визит?\n{masterName} завершил работу. Ваш отзыв помогает другим клиентам и мотивирует мастера.\nОставить отзыв: {reviewLink}"
+      "completed": "⭐ Как прошёл визит?\n{masterName} завершил работу. Ваш отзыв помогает другим клиентам и мотивирует мастера.\nОставить отзыв: {reviewLink}",
+      "reminder24h": "⏰ Напоминание — завтра визит\nУслуга: {serviceName}\nДата: {date}, {time}\nАдрес: {address}\nМастер: {masterName}\nДо встречи!",
+      "reminder2h": "⏰ Через 2 часа визит\nУслуга: {serviceName}\nВремя: {time}\nАдрес: {address}\nМастер: {masterName}\nОжидайте мастера!"
     }
   },
   "cookies": {
