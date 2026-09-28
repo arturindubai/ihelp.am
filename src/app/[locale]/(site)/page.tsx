@@ -7,6 +7,7 @@ import { getCurrentUser } from "@/server/auth";
 import { tr } from "@/i18n/locales";
 import { HeroSection } from "@/components/home/HeroSection";
 import { PromoCarousel } from "@/components/home/PromoCarousel";
+import { PromoSlot } from "@/components/PromoSlot";
 import { PopularServices } from "@/components/home/PopularServices";
 import { HowItWorks } from "@/components/home/HowItWorks";
 import { Promises } from "@/components/home/Promises";
@@ -32,6 +33,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           slogan={t("slogan")}
         />
 
+        <PromoSlot placement="HERO_HOME" locale={locale} />
         <PromoCarousel banners={data.banners} />
 
         <PopularServices services={data.services} />

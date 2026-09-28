@@ -729,11 +729,57 @@
       "rulesHint": "The promo code applies to the first paid visit. Without the 'stackable' flag the client gets the best discount."
     },
     "banners": {
-      "title": "Home page banners",
-      "newBanner": "New banner",
+      "title": "Banners",
+      "newBanner": "+ New banner",
       "link": "Link",
-      "promoCode": "Promo code on banner",
-      "bg": "Background color"
+      "promoCode": "Promo code",
+      "bg": "Background color",
+      "empty": "No banners for this placement",
+      "placement": "Placement",
+      "type": "Type",
+      "audience": "Audience",
+      "segment": "Segment",
+      "startsAt": "Show from",
+      "endsAt": "Show until",
+      "views": "Views",
+      "clicks": "Clicks",
+      "ctr": "CTR",
+      "generate": "Generate",
+      "placements": {
+        "CAROUSEL_HOME": "Home — carousel",
+        "HERO_HOME": "Home — hero",
+        "CATALOG": "Catalog",
+        "SERVICE": "Service page",
+        "CHECKOUT": "Checkout",
+        "SUCCESS": "Success",
+        "EMAIL": "Email",
+        "MASTER_CABINET": "Master cabinet"
+      },
+      "types": {
+        "PROMO": "Promo",
+        "ANNOUNCEMENT": "Announcement",
+        "UPSELL": "Upsell",
+        "CROSS_SELL": "Cross-sell"
+      },
+      "audiences": {
+        "ALL": "Everyone",
+        "LOGGED_IN": "Logged in only",
+        "GUESTS": "Guests only"
+      },
+      "segments": {
+        "ALL": "All",
+        "NEW": "New",
+        "RETURNING": "Returning"
+      },
+      "tabs": {
+        "all": "All"
+      },
+      "status": {
+        "active": "Active",
+        "paused": "Paused",
+        "scheduled": "Scheduled",
+        "expired": "Expired"
+      }
     },
     "pages": {
       "title": "Pages",

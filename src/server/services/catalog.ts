@@ -8,7 +8,7 @@ export type LText = string;
 export async function getHome(locale: string) {
   const [categories, banners, services, features, faq, reviews] = await Promise.all([
     db.category.findMany({ where: { active: true }, orderBy: { sort: "asc" }, include: { services: { where: { active: true }, orderBy: { sort: "asc" }, select: { slug: true } } } }),
-    db.banner.findMany({ where: { active: true }, orderBy: { sort: "asc" } }),
+    db.banner.findMany({ where: { active: true, placement: "CAROUSEL_HOME" }, orderBy: { sort: "asc" } }),
     db.service.findMany({ where: { active: true, category: { active: true } }, orderBy: { sort: "asc" }, include: { groups: { where: { active: true, isDuration: true }, include: { options: { where: { active: true } } } }, plans: { where: { active: true } } } }),
     db.siteFeature.findMany({ where: { active: true }, orderBy: { sort: "asc" } }),
     db.siteFaq.findMany({ where: { active: true }, orderBy: { sort: "asc" } }),
