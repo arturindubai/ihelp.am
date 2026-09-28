@@ -252,8 +252,13 @@
       "ticket": "Link expired. Please open the bot and start registration again",
       "name": "Please enter your name",
       "exists": "This phone or email is already registered — please sign in",
-      "email_taken": "This email is already used by another account"
+      "email_taken": "This email is already used by another account",
+      "google_signup_phone_taken": "This phone number is already linked to another account",
+      "google_signup_ticket_expired": "Registration link expired — please sign in with Google again"
     },
+    "googleSignupTitle": "Sign up with Google",
+    "googleSignupEmailConfirmed": "Email {email} confirmed by Google",
+    "googleSignupPhoneHint": "Enter your phone number to complete registration",
     "noChannels": "Sign-in is temporarily unavailable",
     "smsText": "{brand}: sign-in code {code}",
     "google": "Sign in with Google",

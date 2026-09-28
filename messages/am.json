@@ -252,8 +252,13 @@
       "ticket": "",
       "name": "",
       "exists": "",
-      "email_taken": ""
+      "email_taken": "",
+      "google_signup_phone_taken": "",
+      "google_signup_ticket_expired": ""
     },
+    "googleSignupTitle": "",
+    "googleSignupEmailConfirmed": "",
+    "googleSignupPhoneHint": "",
     "noChannels": "",
     "smsText": "",
     "google": "",

@@ -264,8 +264,13 @@
       "ticket": "Ссылка устарела. Откройте бота и начните регистрацию заново",
       "name": "Укажите имя",
       "exists": "Этот номер или email уже зарегистрирован — войдите в аккаунт",
-      "email_taken": "Этот email уже используется другим аккаунтом"
+      "email_taken": "Этот email уже используется другим аккаунтом",
+      "google_signup_phone_taken": "Этот телефон уже привязан к другому аккаунту",
+      "google_signup_ticket_expired": "Ссылка на регистрацию устарела — войдите через Google ещё раз"
     },
+    "googleSignupTitle": "Регистрация через Google",
+    "googleSignupEmailConfirmed": "Email {email} подтверждён Google",
+    "googleSignupPhoneHint": "Введите номер телефона, чтобы завершить регистрацию",
     "noChannels": "Вход временно недоступен",
     "smsText": "{brand}: код для входа {code}",
     "google": "Войти через Google",
