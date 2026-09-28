@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { db } from "@/server/db";
+import { getMasterPublicProfile } from "@/server/services/pages/catalog";
 import { tr } from "@/i18n/locales";
 import { dateLabel } from "@/lib/format";
 import { Link } from "@/i18n/navigation";
@@ -10,10 +10,7 @@ import { Img } from "@/components/Img";
 export default async function MasterPage({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
-  const m = await db.master.findFirst({
-    where: { slug, active: true },
-    include: { skills: { where: { active: true } }, reviews: { where: { status: "APPROVED" }, orderBy: { createdAt: "desc" }, take: 30, include: { service: true } } },
-  });
+  const m = await getMasterPublicProfile(slug);
   if (!m) notFound();
   const [t, tc] = await Promise.all([getTranslations("master"), getTranslations("common")]);
   const langs = m.languages.map((l) => (tc.has(`langNames.${l}`) ? tc(`langNames.${l}`) : l)).join(", ");

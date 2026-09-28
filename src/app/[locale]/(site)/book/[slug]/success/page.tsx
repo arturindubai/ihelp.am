@@ -2,9 +2,9 @@ import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { CheckCircle2, Phone, MessageCircle } from "lucide-react";
 import { Link, redirect } from "@/i18n/navigation";
-import { db } from "@/server/db";
 import { getCurrentUser } from "@/server/auth";
 import { envContacts } from "@/server/contacts";
+import { getOrderForSuccess } from "@/server/services/pages/catalog";
 import { tr } from "@/i18n/locales";
 import { amd, dateLabel } from "@/lib/format";
 import { contactLink } from "@/lib/contacts";
@@ -21,13 +21,7 @@ export default async function BookSuccessPage({ params, searchParams }: { params
   if (!user) return redirect({ href: `/login?next=/book/${slug}/success?orderId=${orderId}`, locale });
 
   const [order, t, ta] = await Promise.all([
-    db.order.findFirst({
-      where: { id: orderId, userId: user.id },
-      include: {
-        service: true,
-        visits: { where: { index: 1 }, include: { master: true }, take: 1 },
-      },
-    }),
+    getOrderForSuccess(orderId, user.id),
     getTranslations("booking"),
     getTranslations("address"),
   ]);
