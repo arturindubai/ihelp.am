@@ -2,11 +2,9 @@ import { getTranslations, getLocale } from "next-intl/server";
 import { ChevronRight } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { amd, durationLabel } from "@/lib/format";
+import { RATING_THRESHOLD } from "@/lib/constants";
 import { Rating } from "./Stars";
 import { Img } from "@/components/Img";
-
-// Рейтинг показываем только при наличии достаточного числа отзывов
-const RATING_THRESHOLD = 3;
 
 type ServiceCardProps = {
   slug: string;

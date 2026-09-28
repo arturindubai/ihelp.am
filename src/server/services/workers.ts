@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "../db";
 import { alertTech } from "../alerts";
-import { html } from "../notify";
+import { html, notifyTech } from "../notify";
 import { CLOSED_STATUSES, pickNext, scopeOverlap } from "@/lib/cc-flow";
 import { transition, WATCHDOG } from "./ccWork";
 import { controlPatch, filterDesignerCooldown, normalizeWorkers, planDispatch, POOLS, reviewQueues, yerevanHour, type DispatchAction, type DispatchState, type Pool, type RunRequest, type WorkersCommand, type WorkersConfig } from "@/lib/workers";
@@ -231,7 +231,7 @@ export async function designerQueue() {
         // Заблокирована на дизайне, но макет ещё не подан (mockupUrl не задан)
         { status: "blocked", blockedOn: "design", mockupUrl: null },
         { status: open, mockupRequired: true, mockupApprovedBy: null, mockupUrl: null, attachments: { none: { mime: { startsWith: "image/" } } } },
-        { status: { in: ["backlog", "ready"] }, layer: "front", mockupApprovedBy: null, mockupUrl: null, OR: [{ design: null }, { design: "" }], attachments: { none: {} } },
+        { status: { in: ["backlog", "ready"] }, layer: { in: ["front", "fullstack"] }, mockupApprovedBy: null, mockupUrl: null, OR: [{ design: null }, { design: "" }], attachments: { none: {} } },
       ],
     },
     select: { key: true, title: true, priority: true, stage: true, status: true, sort: true, source: true, blockedOn: true, blockedReason: true, mockupRequired: true, updatedAt: true },
@@ -312,7 +312,7 @@ async function todayCounts() {
 
 export async function dispatchState(heads: Record<string, string>): Promise<DispatchState> {
   const config = await getWorkersConfig();
-  const [running, today, review, readyForDev, readyForNocode, triage, sweep, lastStart, requests, product, productSweep, productHold, designer, designerSweep] = await Promise.all([
+  const [running, today, review, readyForDev, readyForNocode, triage, sweep, lastStart, requests, product, productSweep, productHold, designer, designerSweep, inProgress] = await Promise.all([
     db.workerRun.findMany({ where: { status: "running" }, select: { pool: true, agent: true } }),
     todayCounts(),
     reviewTasks(),
@@ -327,10 +327,12 @@ export async function dispatchState(heads: Record<string, string>): Promise<Disp
     productHoldKeys(),
     designerQueue(),
     sweepDue(config, "designer"),
+    db.task.findMany({ where: { status: "in_progress", claimedBy: { not: null } }, select: { claimedBy: true, layer: true, claimUntil: true, key: true } }),
   ]);
   return {
     config,
     running: running.map((r) => ({ pool: r.pool as Pool, agent: r.agent })),
+    claimedAgents: inProgress.map((t) => ({ pool: (t.layer === "none" ? "nocode" : "dev") as Pool, agent: t.claimedBy! })),
     today,
     review,
     readyForDev,
@@ -345,6 +347,7 @@ export async function dispatchState(heads: Record<string, string>): Promise<Disp
     designerSweepDue: designerSweep,
     lastStart,
     requests: requests.filter((r) => Date.now() - Date.parse(r.at) < 30 * 60_000),
+    inProgressClaims: inProgress.map((t) => ({ key: t.key, agent: t.claimedBy!, claimUntil: t.claimUntil?.toISOString() ?? null })),
   };
 }
 
@@ -360,7 +363,10 @@ export async function dispatchPlan(heads: Record<string, string>) {
   // Разобранные просьбы снимаем. Остаются пришедшие за время прохода и те, чей пул сейчас занят, —
   // их выполнит один из следующих проходов, когда слот освободится (но не позже чем через 30 минут)
   const unmet = state.requests.filter((r) => !actions.some((a) => a.requestAt === r.at));
-  const busy = (r: RunRequest) => state.running.filter((x) => x.pool === r.pool).length >= state.config.pools[r.pool].max;
+  // «Занят» — это и уже работающие запуски, и только что запланированные в этом проходе:
+  // без учёта actions вторая просьба к пулу с одним слотом снималась с ложной причиной «нет работы»
+  const busy = (r: RunRequest) =>
+    state.running.filter((x) => x.pool === r.pool).length + actions.filter((a) => a.pool === r.pool).length >= state.config.pools[r.pool].max;
   const waiting = new Set(unmet.filter(busy).map((r) => `${r.pool}|${r.at}`));
   const pending = await getRequests();
   const seen = new Set(state.requests.map((r) => `${r.pool}|${r.at}`));
@@ -378,6 +384,7 @@ export async function dispatchPlan(heads: Record<string, string>) {
       .filter((r) => !waiting.has(`${r.pool}|${r.at}`))
       .map((r) => `${r.pool}${r.key ? ` ${r.key}` : ""}: ${state.config.stopRunning ? "идёт остановка" : state.config.pausedUntil && Date.parse(state.config.pausedUntil) > Date.now() ? `воркеры на паузе (${state.config.pausedReason ?? "лимит подписки или вход"})` : "нет подходящей работы (задача не в нужном статусе или без отправленной ветки)"}`),
     triageQueueSize: state.triageQueue.length,
+    inProgressClaims: state.inProgressClaims ?? [],
   };
 }
 
@@ -470,7 +477,7 @@ export async function workersControl(command: WorkersCommand, at: Date | null, b
     start: html`▶ <b>Воркеры запущены</b> — ${by}. Все пулы включены в режиме «Авто».`,
     plan: html`⏰ <b>Старт воркеров запланирован на ${yerevanClock(at ?? new Date())}</b> — ${by}. До этого времени пауза, дальше диспетчер запустит всех сам.`,
   }[command];
-  await alertTech(`workers:control:${command}`, text, 0);
+  await notifyTech(text);
   console.log(`[workers] ${by}: ${command}${at ? ` в ${at.toISOString()}` : ""}`);
   return next;
 }

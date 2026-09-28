@@ -5,6 +5,7 @@ import { alertTech } from "../alerts";
 import { html, notifyTech } from "../notify";
 import { BLOCKED_ON_LABELS, STATUSES } from "@/lib/backlog-labels";
 import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, doneGate, isDesignerTask, isProductTask, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
+import { nextIntakeKey, intakeTitle } from "@/lib/cc-lanes";
 import type { Prisma, Task } from "@prisma/client";
 
 /**
@@ -70,6 +71,10 @@ export type TransitionInput = {
   releaseNote?: string;
   /** Резюме для владельца: что сделано, что проверить, риск */
   ownerSummary?: string;
+  /** Следующие шаги после приёмки: триаж заведёт карточки с зависимостью от этой */
+  nextSteps?: string[];
+  /** Код-задача, по которой работа оказалась не нужна: сдаётся без коммита, уходит на подтверждение тестировщику */
+  noWork?: boolean;
 };
 
 /** Смена статуса с проверкой прав, гейтов и записью в историю. Возвращает обновлённую задачу */
@@ -109,19 +114,21 @@ export async function transition(key: string, input: TransitionInput, actor: Act
     const branch = input.branch?.trim() || task.branch;
     const extra =
       input.releaseNote !== undefined || input.ownerSummary !== undefined
-        ? { releaseNote: input.releaseNote, ownerSummary: input.ownerSummary }
+        ? { releaseNote: input.releaseNote, ownerSummary: input.ownerSummary, nextSteps: input.nextSteps, noWork: input.noWork }
         : undefined;
     // Возврат на проверку после блокировки: отчёт уже в ленте, нужна только ветка
-    const gate = from === "blocked" ? (isCodeTask(task.layer) && !branch?.trim() ? "branch_required" : null) : reviewGate({ layer: task.layer, branch }, text, extra);
+    const gate = from === "blocked" ? (isCodeTask(task.layer) && !branch?.trim() && !input.noWork ? "branch_required" : null) : reviewGate({ layer: task.layer, branch }, text, extra);
     if (gate && !force) throw new CcError(gate);
     if (branch) data.branch = branch;
     if (input.releaseNote?.trim()) data.releaseNote = input.releaseNote.trim().slice(0, 500);
     if (input.ownerSummary?.trim()) data.ownerSummary = input.ownerSummary.trim().slice(0, 800);
+    if (Array.isArray(input.nextSteps)) data.nextSteps = input.nextSteps.map((s) => s.trim()).filter(Boolean).slice(0, 20);
+    if (input.noWork) data.noWork = true;
   }
   // Из блокировки обратно в бэклог — на новый разбор триажем: ответ человека мог всё изменить
   if (from === "blocked" && to === "backlog") Object.assign(data, { triagedAt: null, triagedBy: null });
   if (to === "done") {
-    const gate = doneGate({ layer: task.layer }, { sha: input.sha, text, attachments: task._count.attachments });
+    const gate = doneGate({ layer: task.layer, noWork: task.noWork }, { sha: input.sha, text, attachments: task._count.attachments });
     if (gate && !force) throw new CcError(gate);
     data.deployedSha = input.sha?.trim() || null;
     data.proof = text.slice(0, 2000) || null;
@@ -157,6 +164,12 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   const extra = from === "done" && task.deployedSha ? `\nБыла выложена в ${task.deployedSha}.` : "";
   await say(task.id, actor.name, kindFor(from, to, actor, task.claimedBy), text + extra);
   if (to === "done" || to === "cancelled") await releaseDependents(key);
+  // После приёмки не-код задачи с указанными следующими шагами — карточка в очередь триажа
+  if (to === "done" && task.layer === "none" && task.nextSteps.length > 0) {
+    await createNextStepsIntake(key, task.title, task.nextSteps, actor.name).catch(async (err) => {
+      await say(task.id, "system", "note", `⚠️ Не удалось завести карточку следующих шагов: ${String(err).slice(0, 200)}`).catch(() => null);
+    });
+  }
   // task получен до обновления — передаём свежие значения из input для review-перехода
   const taskForBot = {
     ...task,
@@ -418,17 +431,24 @@ export async function reviewTake(key: string, agent: string) {
   return db.task.findUniqueOrThrow({ where: { id: t.id } });
 }
 
-/** Тестировщик: проверка пройдена на конкретном коммите ветки. Новый коммит в ветке потребует новой проверки */
+/** Тестировщик: проверка пройдена. Для noWork-задач SHA не требуется; задача сразу отменяется как «не потребовалось» */
 export async function testPass(key: string, agent: string, sha: string, text: string) {
   if (roleOf(agent) !== "tester") throw new CcError("forbidden_role", roleOf(agent));
-  if (!SHA_RE.test(sha.trim())) throw new CcError("sha_required");
   if (text.trim().length < 40) throw new CcError("report_required");
-  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, claimedBy: true } });
+  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, claimedBy: true, noWork: true } });
   if (!t) throw new CcError("not_found");
   if (t.status !== "review") throw new CcError("wrong_status", t.status);
   if (t.claimedBy !== agent) throw new CcError("not_your_task", t.claimedBy ?? "");
-  await db.task.update({ where: { id: t.id }, data: { testedSha: sha.trim(), testedBy: agent, testedAt: new Date(), claimedBy: null, claimUntil: null } });
-  await log(t.id, agent, "tested", null, sha.trim().slice(0, 10));
+  if (!t.noWork && !SHA_RE.test(sha.trim())) throw new CcError("sha_required");
+  const safeSha = t.noWork ? "no-work" : sha.trim();
+  await db.task.update({ where: { id: t.id }, data: { testedSha: safeSha, testedBy: agent, testedAt: new Date(), claimedBy: null, claimUntil: null } });
+  await log(t.id, agent, "tested", null, safeSha.slice(0, 10));
+  if (t.noWork) {
+    // Работа не потребовалась: тестировщик подтвердил — задача закрывается как «не потребовалось»
+    await say(t.id, agent, "review", `✅ Подтверждено: работа не потребовалась.\n${text.trim()}`);
+    await transition(key, { to: "cancelled", text: "Тестировщик подтвердил: изменения кода не потребовались.", force: true }, { name: agent, role: "tester", via: "api" });
+    return db.task.findUniqueOrThrow({ where: { id: t.id } });
+  }
   await say(t.id, agent, "review", `✅ Протестировано на коммите ${sha.trim().slice(0, 10)}.\n${text.trim()}`);
   return db.task.findUniqueOrThrow({ where: { id: t.id } });
 }
@@ -663,4 +683,41 @@ export async function returnDesign(key: string, actor: Actor, reason: string) {
   if (t.status !== "blocked") return transition(key, { to: "blocked", blockedOn: "design", text: `Дизайн возвращён: ${reason.trim()}` }, actor);
   await say(t.id, actor.name, "note", `Дизайн возвращён: ${reason.trim()}`);
   return db.task.findUniqueOrThrow({ where: { key } });
+}
+
+/**
+ * Создаёт intake-карточку IN-N с указанием следующих шагов после принятия задачи.
+ * Не импортирует из ccBoard.ts (цикл: ccBoard → cc.ts → ccWork.ts), поэтому реализация встроена.
+ */
+async function createNextStepsIntake(doneKey: string, doneTitle: string, steps: string[], by: string) {
+  if (!steps.length) return;
+  const existing = (await db.task.findMany({ where: { key: { startsWith: "IN-" } }, select: { key: true } })).map((t) => t.key);
+  const sort = ((await db.task.aggregate({ _max: { sort: true } }))._max.sort ?? 0) + 1;
+  const text = `Следующие шаги после приёмки ${doneKey} «${doneTitle}»:\n${steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}`;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const key = nextIntakeKey(existing);
+    try {
+      const task = await db.task.create({
+        data: {
+          key,
+          title: intakeTitle(text),
+          summary: text.slice(0, 2000),
+          area: "product",
+          layer: "none",
+          priority: "p2",
+          stage: "later",
+          owner: "product",
+          source: "intake",
+          createdBy: by,
+          status: "backlog",
+          depends: [doneKey],
+          sort,
+        },
+      });
+      await db.taskEvent.create({ data: { taskId: task.id, actor: by, field: "created", from: null, to: key } });
+      return task;
+    } catch {
+      existing.push(key);
+    }
+  }
 }

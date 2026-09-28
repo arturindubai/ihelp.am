@@ -56,3 +56,30 @@ describe("pricing — tariff grid from unit economics", () => {
     expect(r.first.price).toBe(25000);
   });
 });
+
+describe("banner — выбор процента плашки скидки", () => {
+  it("разовый тариф: first.percent равен firstVisitDiscount (10)", () => {
+    const r = calculatePrice({ lines: [dur(2, 16000)], plan: { kind: "ONE_TIME", discountPercent: 0 }, isFirstOrder: true });
+    expect(r.first.percent).toBe(10);
+  });
+
+  it("подписка: first.percent равен firstVisitCommittedDiscount (25), а не разовому 10", () => {
+    const r = calculatePrice({ lines: [dur(2, 16000)], plan: { kind: "SUBSCRIPTION", discountPercent: 5 }, isFirstOrder: true });
+    expect(r.first.percent).toBe(25);
+  });
+
+  it("пакет ≥4 визитов — обязательство: first.percent = 25", () => {
+    const r = calculatePrice({ lines: [dur(2, 16000)], plan: { kind: "PACKAGE", discountPercent: 0, packageVisits: 4 }, isFirstOrder: true });
+    expect(r.first.percent).toBe(25);
+  });
+
+  it("пакет <4 визитов — без обязательства: first.percent = 10", () => {
+    const r = calculatePrice({ lines: [dur(2, 16000)], plan: { kind: "PACKAGE", discountPercent: 0, packageVisits: 2 }, isFirstOrder: true });
+    expect(r.first.percent).toBe(10);
+  });
+
+  it("не первый заказ: first.percent совпадает с planPct (нет скидки первого визита)", () => {
+    const r = calculatePrice({ lines: [dur(2, 16000)], plan: { kind: "SUBSCRIPTION", discountPercent: 5 }, isFirstOrder: false });
+    expect(r.first.percent).toBe(5);
+  });
+});

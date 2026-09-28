@@ -4,9 +4,10 @@ import { annotate, attention, getAppErrors, systemStatus } from "./cc";
 import { getTick, getWorkersConfig, requestRun } from "./workers";
 import { unreadForOwner } from "./ccMessages";
 import { recentErrors } from "../logbuffer";
+import { getSettings } from "../settings";
+import { hasAlertRecipient } from "../notify";
 import { flowOf, intakeTitle, laneOf, nextIntakeKey, sizeOf, weekStart } from "@/lib/cc-lanes";
 import { CLOSED_STATUSES, LEASE_MIN, OPEN_STATUSES } from "@/lib/cc-flow";
-import { isAgentAuthor } from "@/lib/cc-owner-question";
 import { testedCurrent, workersState } from "@/lib/workers";
 import { Prisma } from "@prisma/client";
 
@@ -40,7 +41,7 @@ export async function ccCounts() {
     db.task.groupBy({ by: ["status"], _count: true }),
     db.task.count({ where: { status: "review", layer: { not: "none" } } }),
     db.task.count({ where: { status: "review", layer: "none" } }),
-    db.task.count({ where: { status: "blocked", blockedOn: { in: ["owner", "product"] } } }),
+    db.task.count({ where: { status: "blocked", blockedOn: { in: ["owner", "product"] }, triagedAt: { not: null } } }),
     unreadForOwner(),
     db.workerRun.count({ where: { status: "running" } }),
     attention(),
@@ -61,14 +62,14 @@ export async function ccCounts() {
   };
 }
 
-/** «Нужен ты»: блокировки на владельце и продукте, брошенные задачи, застрявшая проверка, не-код на приёмке, упавшие запуски, пауза воркеров */
+/** «Нужен ты»: блокировки на владельце и продукте, брошенные задачи, застрявшая проверка, не-код на приёмке, упавшие запуски, пауза воркеров, нет адресата алертов */
 export async function needsYou() {
-  const [attn, owner, failedRuns, config, nocodeReview] = await Promise.all([
+  const [attn, owner, failedRuns, config, nocodeReview, settings] = await Promise.all([
     attention(),
     db.task.findMany({
       where: { status: "blocked", blockedOn: { in: ["owner", "product"] } },
       orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
-      select: { key: true, title: true, priority: true, blockedOn: true, blockedReason: true, updatedAt: true, triageNote: true, comments: { orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, kind: true, createdAt: true } } },
+      select: { key: true, title: true, priority: true, blockedOn: true, blockedReason: true, updatedAt: true, triageNote: true, triagedAt: true, comments: { orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, kind: true, createdAt: true } } },
     }),
     db.workerRun.findMany({ where: { status: { in: ["failed", "timeout"] }, startedAt: { gte: new Date(Date.now() - 24 * 3600_000) } }, orderBy: { startedAt: "desc" }, take: 10 }),
     getWorkersConfig(),
@@ -77,11 +78,12 @@ export async function needsYou() {
       orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
       select: { key: true, title: true, priority: true, updatedAt: true, ownerSummary: true, _count: { select: { attachments: true } } },
     }),
+    getSettings(),
   ]);
   return {
     owner: owner.map((x) => ({
       ...x,
-      ownerAnswered: x.comments[0] ? !isAgentAuthor(x.comments[0].author) : false,
+      ownerAnswered: x.triagedAt === null,
     })),
     stale: attn.stale,
     stuckReview: attn.review.filter((r) => r.health.stuckReview),
@@ -90,6 +92,7 @@ export async function needsYou() {
     nocodeReview,
     failedRuns,
     pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null,
+    alertMissing: !hasAlertRecipient(settings),
   };
 }
 
@@ -116,25 +119,48 @@ export async function mockupPendingApprovals() {
   });
 }
 
-/** Утверждённые дизайны за две недели — со ссылкой на запись канона в Библиотеке */
+/** Утверждённые дизайны за две недели — со статусом задачи и первым открытым блокером */
 export async function designApproved(days = 14) {
-  return db.task.findMany({
+  const tasks = await db.task.findMany({
     where: { mockupApprovedAt: { gte: new Date(Date.now() - days * 86400_000) } },
     orderBy: { mockupApprovedAt: "desc" },
     select: {
-      key: true, title: true, status: true, mockupApprovedAt: true, mockupApprovedBy: true,
-      mockupUrl: true,
+      key: true, title: true, status: true, layer: true, mockupApprovedAt: true, mockupApprovedBy: true,
+      mockupUrl: true, blockedOn: true, blockedReason: true, depends: true, claimedBy: true,
       attachments: { where: { mime: { startsWith: "image/" } }, select: { url: true, fileName: true }, orderBy: { createdAt: "desc" } },
     },
   });
+
+  const depKeys = [...new Set(tasks.flatMap((t) => t.depends))];
+  const depMap =
+    depKeys.length > 0
+      ? new Map(
+          (
+            await db.task.findMany({
+              where: { key: { in: depKeys } },
+              select: { key: true, status: true, layer: true, blockedOn: true },
+            })
+          ).map((d) => [d.key, d]),
+        )
+      : new Map<string, { key: string; status: string; layer: string; blockedOn: string | null }>();
+
+  return tasks.map((t) => {
+    const openDeps = t.depends
+      .map((d) => depMap.get(d))
+      .filter(
+        (d): d is { key: string; status: string; layer: string; blockedOn: string | null } =>
+          !!d && d.status !== "done" && d.status !== "cancelled",
+      );
+    return { ...t, openDeps };
+  });
 }
 
-/** Согласования: не-код на проверке — принимает человек. С резюме для владельца и последним отчётом */
+/** Согласования: не-код на проверке — принимает человек. С резюме для владельца, последним отчётом и следующими шагами */
 export async function approvals() {
   const tasks = await db.task.findMany({
     where: { status: "review", layer: "none" },
     orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
-    select: { key: true, title: true, priority: true, updatedAt: true, ownerSummary: true, _count: { select: { attachments: true } }, comments: { where: { kind: "report" }, orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, createdAt: true } } },
+    select: { key: true, title: true, priority: true, updatedAt: true, ownerSummary: true, nextSteps: true, _count: { select: { attachments: true } }, comments: { where: { kind: "report" }, orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, createdAt: true } } },
   });
   return tasks.map((t) => ({ ...t, lane: laneOf({ key: t.key, layer: "none" }) }));
 }
@@ -297,9 +323,7 @@ export async function boardAudit() {
     for (const d of t.depends) if (!by.has(d)) add("deps_unknown", `${t.key}→${d}`);
     if (t.status === "blocked") {
       if (!t.blockedOn || !t.blockedReason?.trim()) add("blocked_no_reason", t.key);
-      const last = t.comments[0];
-      const since = t.events[0]?.createdAt;
-      if (last && since && last.createdAt > since && !isAgentAuthor(last.author)) add("blocked_answered", t.key);
+      if ((t.blockedOn === "owner" || t.blockedOn === "product") && !t.triagedAt) add("blocked_answered", t.key);
       if (t.blockedOn === "deps" && !open.length) add("blocked_deps_closed", t.key);
     }
     if (t.status === "backlog" && !t.triagedAt) add("backlog_untriaged", t.key);

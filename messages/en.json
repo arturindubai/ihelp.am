@@ -50,6 +50,7 @@
   },
   "home": {
     "hello": "Hello{name, select, empty {} other {, {name}}}",
+    "slogan": "Apartment cleaning in Yerevan — price calculated instantly. Subscription: same master every time.",
     "title": "What service do you need?",
     "categories": "Categories",
     "popular": "Popular",
@@ -63,7 +64,9 @@
     "why3": "Reschedule or cancel in just a few clicks",
     "whatsapp": "Have questions?",
     "whatsappSub": "Write to us — we'll reply quickly",
-    "writeUs": "Contact us"
+    "writeUs": "Contact us",
+    "reviewsTitle": "Client reviews",
+    "stickyOrder": "Book a service"
   },
   "service": {
     "startsAt": "from {price} per visit",
@@ -379,6 +382,27 @@
     "client": "Client",
     "stats": "My stats",
     "schedule": "My schedule"
+  },
+  "operator": {
+    "title": "Operator panel",
+    "today": "Today",
+    "all": "All",
+    "noMaster": "No pro",
+    "noOrdersToday": "No orders today",
+    "noOrders": "No orders",
+    "noOrdersUnassigned": "All orders assigned",
+    "assignMaster": "Assign pro",
+    "changeMaster": "Change pro",
+    "changeStatus": "Change status",
+    "noMasterChip": "No pro",
+    "noMastersAvail": "No available pros",
+    "selectMaster": "Select pro",
+    "loadMore": "Load more",
+    "loadError": "Failed to load. Refresh →",
+    "saving": "Saving…",
+    "toSite": "To website",
+    "masterBusy": "Pro is busy at this time, please choose another",
+    "error": "Failed to assign pro"
   },
   "footer": {
     "offer": "Terms",
@@ -841,6 +865,11 @@
       "rolesHint": "Operator — orders, schedule, clients, reviews. Administrator — everything except staff and settings. Owner — full access.",
       "addStaff": "Add staff member",
       "namePlaceholder": "Name (optional)",
+      "emailPlaceholder": "Email (optional)",
+      "emailHint": "Staff can sign in with a code or via Google using this email",
+      "emailSave": "Save email",
+      "emailTaken": "This email is already linked to another account",
+      "emailInvalid": "Invalid email format",
       "revokeAccess": "Revoke access",
       "revokeConfirm": "Revoke access for {label}? Role will change to Client and all sessions will be terminated.",
       "lastLogin": "Last login:",
@@ -1357,7 +1386,8 @@
         "approvedEmpty": "Nothing approved yet",
         "canon": "Library record",
         "designSnippet": "Design: {text}",
-        "files": "files: {n}"
+        "files": "files: {n}",
+        "approvedAgent": "by {agent}"
       },
       "backlog": {
         "strip": {
@@ -1417,7 +1447,9 @@
         "postponeConfirm": "Postpone",
         "stale": "Stale or without assignee",
         "stuckReview": "Review stuck",
-        "failedRuns": "Failed worker runs in the last 24 hours"
+        "failedRuns": "Failed worker runs in the last 24 hours",
+        "alertMissing": "⚠️ Tech alerts are not delivered: no recipient configured.",
+        "alertMissingLink": "Configure notifications"
       },
       "devTab": {
         "empty": "Nothing is being worked on now",
@@ -1451,7 +1483,9 @@
         "failed": "Failed: {error}",
         "approveAll": "Accept all",
         "approveAllConfirm": "Accept all tasks in this lane ({n})?",
-        "approveAllFailed": "Not accepted (failed gate): {keys}"
+        "approveAllFailed": "Not accepted (failed gate): {keys}",
+        "afterAccept": "After acceptance will be created:",
+        "afterAcceptMore": "and {count} more"
       },
       "plans": {
         "empty": "No epics yet",
@@ -1564,7 +1598,7 @@
         "runs24Hint": "errors {failed} · hit limit {limit}",
         "orders": "Orders",
         "ordersHint": "per day / per week",
-        "alertMissing": "Tech alerts are not delivered: no chat configured. Critical errors, backup failures, and stale tasks are written to log only.",
+        "alertMissing": "Tech alerts are not delivered: no recipient configured. Critical errors, backup failures, and stale tasks are written to log only.",
         "alertMissingLink": "Configure in Notifications",
         "howTo": "If something's wrong",
         "audit": {
