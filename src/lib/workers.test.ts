@@ -418,11 +418,17 @@ describe("отбор очереди дизайнера", () => {
     expect(inDesignerQueue({ ...base, status: "backlog", layer: "front" })).toBe(true);
     expect(inDesignerQueue({ ...base, status: "ready", layer: "front" })).toBe(true);
   });
+  it("задача бэк+фронт без описания дизайна и без файлов — в очереди", () => {
+    expect(inDesignerQueue({ ...base, status: "backlog", layer: "fullstack" })).toBe(true);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "fullstack" })).toBe(true);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "fullstack", design: "Экран..." })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "fullstack", hasAnyAttachments: true })).toBe(false);
+  });
   it("задача фронта с описанием дизайна или файлами — не в очереди", () => {
     expect(inDesignerQueue({ ...base, status: "ready", layer: "front", design: "Экран списка..." })).toBe(false);
     expect(inDesignerQueue({ ...base, status: "ready", layer: "front", hasAnyAttachments: true })).toBe(false);
   });
-  it("бэк-задача без дизайна не в очереди дизайнера — только front", () => {
+  it("бэк-задача без дизайна не в очереди дизайнера — только front и fullstack", () => {
     expect(inDesignerQueue({ ...base, status: "backlog", layer: "back" })).toBe(false);
     expect(inDesignerQueue({ ...base, status: "backlog", layer: "none" })).toBe(false);
   });

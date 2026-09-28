@@ -313,7 +313,10 @@ function finishSteps(role, t, agent, dir) {
   return `1. Работай в рабочей копии ${dir ?? `.claude/worktrees/${k}`} (ветка task/${k}); основную копию /opt/ihelp.am не переключать.
 2. Непонятно зачем или критерии не проверяемы — не угадывай: node scripts/cc.mjs block ${k} "вопрос, варианты, предложение" --on product|owner|design|tech --agent ${agent}
 3. Проверка: scripts/check.sh; интерфейс — scripts/stand.sh up и node scripts/stand-shot.mjs /ru/… (потом scripts/stand.sh down).
+   Если задача меняет package.json — сначала scripts/lock-update.sh, затем коммитить package-lock.json.
 4. Коммиты «${k}: что сделано», git push -u origin task/${k}.
+   Если нужно обновиться от main — только git merge origin/main. git rebase запрещён: перезаписывает историю и требует force-push.
+   Если команда или инструмент отклонены из-за прав — сразу: node scripts/cc.mjs block ${k} "Нужны права: …" --on tech --agent ${agent}
 5. Сдать — оба поля обязательны:
    node scripts/cc.mjs review ${k} "Сделано: … Проверено: … Проверить: … Миграции: … Риски и что не сделано: …" \\
      --release "Что изменилось для людей: 1–2 предложения простым языком" \\
@@ -387,7 +390,7 @@ async function takeTask(key) {
 ────────────────────────────────────────
 ✓ ${t.key} взята: ${agent}, аренда ${Math.round((new Date(t.claimUntil) - Date.now()) / 60000)} мин, пульс продлевает её сам (хук Claude Code).
   Рабочая копия: ${dir}${created ? " (создана)" : " (уже была)"} — перейди в неё инструментом EnterWorktree (path=${dir})
-  Ветка: ${branch}${ahead ? `\n  В ветке уже есть работа — продолжай с неё:\n${ahead.split("\n").map((l) => `    ${l}`).join("\n")}` : ""}`);
+  Ветка: ${branch}${ahead ? `\n  В ветке уже есть работа — продолжай с неё:\n${ahead.split("\n").map((l) => `    ${l}`).join("\n")}\n  Нужно подтянуть main: git merge origin/main (не rebase — он запрещён для отправленных веток)` : ""}`);
 }
 
 /** Тестировщик: держит задачу «На проверке» и получает рабочую копию ровно на последнем коммите ветки */
