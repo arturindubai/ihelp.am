@@ -1,8 +1,8 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { CalendarDays, ChevronRight, LayoutDashboard, Briefcase } from "lucide-react";
 import { Link, redirect } from "@/i18n/navigation";
-import { db } from "@/server/db";
 import { getCurrentUser, STAFF_ROLES } from "@/server/auth";
+import { getAccountAddresses } from "@/server/services/pages/account";
 import { getSettings } from "@/server/settings";
 import { emailCodesAvailable } from "@/server/otp";
 import { ProfileClient } from "@/components/account/ProfileClient";
@@ -13,7 +13,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
   setRequestLocale(locale);
   const user = await getCurrentUser();
   if (!user) return redirect({ href: "/login?next=/account", locale });
-  const [addresses, settings, t, tn] = await Promise.all([db.address.findMany({ where: { userId: user.id }, orderBy: { createdAt: "asc" } }), getSettings(), getTranslations("account"), getTranslations("nav")]);
+  const [addresses, settings, t, tn] = await Promise.all([getAccountAddresses(user.id), getSettings(), getTranslations("account"), getTranslations("nav")]);
   const telegramLinkEnabled = settings.telegramWidget.enabled && !!settings.notify.telegramBotToken && !!settings.notify.telegramBotUsername;
   const telegramError = telegram_error && ["state", "failed", "conflict", "off"].includes(telegram_error) ? telegram_error : null;
   return (
