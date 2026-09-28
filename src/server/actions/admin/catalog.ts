@@ -16,7 +16,7 @@ const revalidateAll = () => revalidatePath("/", "layout");
 
 export async function saveCategoryAction(input: unknown) {
   const u = await requireSection("services");
-  const p = z.object({ id: z.string().optional(), slug, title: i18nReq, description: i18n.nullable().optional(), image: img, sort: z.number().int(), active: z.boolean(), comingSoon: z.boolean() }).safeParse(input);
+  const p = z.object({ id: z.string().optional(), slug, title: i18nReq, description: i18n.nullable().optional(), image: img, sort: z.number().int(), active: z.boolean(), comingSoon: z.boolean(), showFormats: z.boolean().optional().default(false) }).safeParse(input);
   if (!p.success) return { ok: false as const, error: p.error.issues[0]?.path.join(".") };
   const { id, ...d } = p.data;
   const data = { ...d, description: J(d.description) };

@@ -112,6 +112,7 @@ model Category {
   sort        Int        @default(0)
   active      Boolean    @default(true)
   comingSoon  Boolean    @default(false)
+  showFormats Boolean    @default(false)
   services    Service[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt

@@ -360,7 +360,24 @@
     "newService": "Նոր ծառայություն",
     "comingSoonTitle": "Շուտով կբացենք",
     "comingSoonText": "Պատրաստում ենք ծառայություններ: Գրեք մեզ՝ ձեր հարցերին կպատասխանենք",
-    "writeWhatsApp": "Գրել WhatsApp-ում"
+    "writeWhatsApp": "Գրել WhatsApp-ում",
+    "formatsTitle": "Ընտրեք մաքրման ձևաչափ",
+    "formatOnce": {
+      "title": "Միանվագ այց",
+      "desc": "Մեկ այց — երբ անհրաժեշտ է",
+      "cta": "Պատվիրել"
+    },
+    "formatRegular": {
+      "title": "Կանոնավոր մաքրություն",
+      "desc": "Կանոնավոր այցեր բաժանորդագրության զեղչով",
+      "badge": "Ձեռնտու",
+      "cta": "Բաժանորդագրվել"
+    },
+    "formatPack": {
+      "title": "Այցերի փաթեթ",
+      "desc": "Մի քանի այց կանխավճարով — ավելի էժան",
+      "cta": "Գնել փաթեթ"
+    }
   },
   "pro": {
     "title": "",
@@ -591,6 +608,7 @@
       "newService": "",
       "category": "",
       "comingSoon": "",
+      "showFormats": "",
       "tabs": {
         "main": "",
         "options": "",

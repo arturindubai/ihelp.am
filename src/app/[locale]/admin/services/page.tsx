@@ -15,7 +15,7 @@ export default async function AdminServices({ params }: { params: Promise<{ loca
       <PageHead title={t("services.title")} />
       <CatalogList
         categories={cats.map((c) => ({
-          id: c.id, slug: c.slug, title: c.title as Record<string, string>, description: (c.description as Record<string, string>) || null, image: c.image, sort: c.sort, active: c.active, comingSoon: c.comingSoon,
+          id: c.id, slug: c.slug, title: c.title as Record<string, string>, description: (c.description as Record<string, string>) || null, image: c.image, sort: c.sort, active: c.active, comingSoon: c.comingSoon, showFormats: c.showFormats,
           services: c.services.map((s) => ({ id: s.id, slug: s.slug, title: tr(s.title, locale), image: s.image, active: s.active, orders: s._count.orders, rating: s.rating, reviews: s.reviewsCount })),
         }))}
       />

@@ -9,7 +9,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { I18nInput, ImageInput, NumInput, TextInput, Toggle, type I18n } from "./fields";
 import { Img } from "@/components/Img";
 
-type Cat = { id?: string; slug: string; title: I18n; description: I18n | null; image: string | null; sort: number; active: boolean; comingSoon: boolean; services?: Svc[] };
+type Cat = { id?: string; slug: string; title: I18n; description: I18n | null; image: string | null; sort: number; active: boolean; comingSoon: boolean; showFormats: boolean; services?: Svc[] };
 type Svc = { id: string; slug: string; title: string; image: string | null; active: boolean; orders: number; rating: number; reviews: number };
 
 export function CatalogList({ categories }: { categories: Cat[] }) {
@@ -32,7 +32,7 @@ export function CatalogList({ categories }: { categories: Cat[] }) {
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
-        <button className="btn-dark" onClick={() => { setErr(undefined); setEdit({ slug: "", title: {}, description: null, image: null, sort: categories.length + 1, active: true, comingSoon: false }); }}><Plus size={18} /> {t("services.newCategory")}</button>
+        <button className="btn-dark" onClick={() => { setErr(undefined); setEdit({ slug: "", title: {}, description: null, image: null, sort: categories.length + 1, active: true, comingSoon: false, showFormats: false }); }}><Plus size={18} /> {t("services.newCategory")}</button>
       </div>
       {info && <p className="rounded-lg bg-warn-50 p-2 text-sm text-warn">{info}</p>}
       {categories.map((c) => (
@@ -89,6 +89,7 @@ export function CatalogList({ categories }: { categories: Cat[] }) {
             <NumInput label={t("common.sort")} value={edit.sort} onChange={(v) => setEdit({ ...edit, sort: v ?? 0 })} />
             <Toggle label={t("common.active")} checked={edit.active} onChange={(v) => setEdit({ ...edit, active: v })} />
             <Toggle label={t("services.comingSoon")} checked={edit.comingSoon} onChange={(v) => setEdit({ ...edit, comingSoon: v })} />
+            <Toggle label={t("services.showFormats")} checked={edit.showFormats} onChange={(v) => setEdit({ ...edit, showFormats: v })} />
             {err && <p className="text-sm text-bad">{err}</p>}
           </div>
         )}

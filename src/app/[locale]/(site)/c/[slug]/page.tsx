@@ -5,6 +5,7 @@ import { getCategory, getCategories } from "@/server/services/catalog";
 import { getSettings } from "@/server/settings";
 import { contactLink } from "@/lib/contacts";
 import { ServiceCard } from "@/components/ServiceCard";
+import { FormatCards } from "@/components/FormatCards";
 import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/format";
 
@@ -37,6 +38,8 @@ export default async function CategoryPage({ params }: { params: Promise<{ local
           </Link>
         ))}
       </div>
+
+      <FormatCards showFormats={c.showFormats} formats={c.formats} />
 
       {c.comingSoon ? (
         <div className="mt-16 flex flex-col items-center gap-4 pb-16 text-center">

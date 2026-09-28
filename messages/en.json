@@ -360,7 +360,24 @@
     "newService": "New service",
     "comingSoonTitle": "Opening soon",
     "comingSoonText": "We're preparing services and pros. Write to us — we'll answer your questions",
-    "writeWhatsApp": "Write on WhatsApp"
+    "writeWhatsApp": "Write on WhatsApp",
+    "formatsTitle": "Choose a cleaning format",
+    "formatOnce": {
+      "title": "One-time visit",
+      "desc": "A single pro visit — whenever you need it",
+      "cta": "Book now"
+    },
+    "formatRegular": {
+      "title": "Regular cleaning",
+      "desc": "Recurring visits with a subscription discount",
+      "badge": "Best value",
+      "cta": "Subscribe"
+    },
+    "formatPack": {
+      "title": "Visit pack",
+      "desc": "Pay for several visits upfront — cheaper per visit",
+      "cta": "Buy pack"
+    }
   },
   "pro": {
     "title": "Pro cabinet",
@@ -591,6 +608,7 @@
       "newService": "New service",
       "category": "Category",
       "comingSoon": "Show as 'Coming soon'",
+      "showFormats": "Show cleaning formats",
       "tabs": {
         "main": "Main",
         "options": "Options & pricing",
