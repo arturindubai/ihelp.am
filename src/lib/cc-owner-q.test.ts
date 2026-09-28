@@ -45,4 +45,28 @@ describe("parseVariants", () => {
     expect(parseVariants("Нужно уточнить детали реализации")).toBeNull();
     expect(parseVariants("1) Первое 2) Второе")).toBeNull();
   });
+
+  it("парсит кириллические варианты А/Б/В", () => {
+    const r = parseVariants("Какой подход? А) Быстрый Б) Надёжный В) Оба");
+    expect(r).not.toBeNull();
+    expect(r!.question).toBe("Какой подход?");
+    expect(r!.variants).toHaveLength(3);
+    expect(r!.variants[0]).toEqual({ id: "А", text: "Быстрый" });
+    expect(r!.variants[1]).toEqual({ id: "Б", text: "Надёжный" });
+    expect(r!.variants[2]).toEqual({ id: "В", text: "Оба" });
+  });
+
+  it("парсит строчные кириллические варианты и нормализует к верхнему регистру", () => {
+    const r = parseVariants("Выбрать? а) вариант 1 б) вариант 2");
+    expect(r).not.toBeNull();
+    expect(r!.variants[0]).toEqual({ id: "А", text: "вариант 1" });
+    expect(r!.variants[1]).toEqual({ id: "Б", text: "вариант 2" });
+  });
+
+  it("парсит строчные латинские варианты и нормализует к верхнему регистру", () => {
+    const r = parseVariants("Делаем? a) да b) нет");
+    expect(r).not.toBeNull();
+    expect(r!.variants[0]).toEqual({ id: "A", text: "да" });
+    expect(r!.variants[1]).toEqual({ id: "B", text: "нет" });
+  });
 });

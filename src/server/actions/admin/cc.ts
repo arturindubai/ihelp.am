@@ -137,6 +137,44 @@ export async function ccOwnerAnswerAction(key: string, text: string) {
   return { ok: true as const };
 }
 
+/**
+ * Пакетный ответ владельца на сгруппированный вопрос: один ответ закрывает все задачи карточки.
+ * Используется из новой вкладки «Нужен ты», где несколько задач с одинаковым вопросом → одна карточка.
+ */
+export async function ccOwnerAnswerManyAction(keys: string[], text: string) {
+  const u = await requireSection("control");
+  const t = text.trim();
+  if (t.length < 2) return { ok: false as const, error: "empty" };
+  if (!keys.length) return { ok: false as const, error: "empty" };
+  for (const key of keys) {
+    await addComment(key, `Ответ владельца: ${t}`, who(u));
+    await retriage(key);
+    await audit(u.id, "cc.owner.answer", "Task", key);
+  }
+  rAll();
+  return { ok: true as const };
+}
+
+/**
+ * Отложить группу вопросов на 3 дня: задачи переводятся в blockedOn: external с blockedUntil.
+ * Сторож вернёт их на разбор через 3 дня автоматически.
+ */
+export async function ccOwnerPostpone3DaysAction(keys: string[]) {
+  const u = await requireSection("control");
+  if (!keys.length) return { ok: false as const, error: "empty" };
+  const until = new Date(Date.now() + 3 * 24 * 3600_000);
+  const untilStr = until.toLocaleDateString("ru-RU", { timeZone: "Asia/Yerevan", day: "numeric", month: "long" });
+  for (const key of keys) {
+    const task = await db.task.findUnique({ where: { key }, select: { status: true, blockedOn: true } });
+    if (!task || task.status !== "blocked" || !["owner", "product"].includes(task.blockedOn ?? "")) continue;
+    await db.task.update({ where: { key }, data: { blockedOn: "external", blockedReason: `Отложено до ${untilStr}`, blockedUntil: until, updatedAt: new Date() } });
+    await addComment(key, `Отложено на 3 дня (до ${untilStr})`, who(u));
+    await audit(u.id, "cc.owner.postpone", "Task", key);
+  }
+  rAll();
+  return { ok: true as const };
+}
+
 /** Утверждение макета задачи владельцем в интерфейсе — снимает гейт mockup_required */
 /** «Вернуть дизайнеру»: утверждение снимается, задача блокируется на дизайне с причиной */
 export async function ccReturnDesignAction(key: string, reason: string) {

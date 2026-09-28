@@ -685,7 +685,7 @@ export async function reblockOn(key: string, newBlockedOn: string, reason: strin
   if (!t) throw new CcError("not_found");
   if (t.status !== "blocked") throw new CcError("wrong_status", t.status);
   const prev = t.blockedOn;
-  await db.task.update({ where: { id: t.id }, data: { blockedOn: newBlockedOn, blockedReason: reason.trim().slice(0, 200) } });
+  await db.task.update({ where: { id: t.id }, data: { blockedOn: newBlockedOn, blockedReason: reason.trim().slice(0, 2000) } });
   await log(t.id, actor.name, "blockedOn", prev, newBlockedOn);
   await say(t.id, actor.name, "note", `Адресат блокировки изменён: ${prev ?? "—"} → ${newBlockedOn}. ${reason.trim()}`);
   return db.task.findUniqueOrThrow({ where: { id: t.id } });
