@@ -383,6 +383,27 @@
     "stats": "My stats",
     "schedule": "My schedule"
   },
+  "operator": {
+    "title": "Operator panel",
+    "today": "Today",
+    "all": "All",
+    "noMaster": "No pro",
+    "noOrdersToday": "No orders today",
+    "noOrders": "No orders",
+    "noOrdersUnassigned": "All orders assigned",
+    "assignMaster": "Assign pro",
+    "changeMaster": "Change pro",
+    "changeStatus": "Change status",
+    "noMasterChip": "No pro",
+    "noMastersAvail": "No available pros",
+    "selectMaster": "Select pro",
+    "loadMore": "Load more",
+    "loadError": "Failed to load. Refresh →",
+    "saving": "Saving…",
+    "toSite": "To website",
+    "masterBusy": "Pro is busy at this time, please choose another",
+    "error": "Failed to assign pro"
+  },
   "footer": {
     "offer": "Terms",
     "privacy": "Privacy",
