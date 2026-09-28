@@ -1,7 +1,7 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { redirect, Link } from "@/i18n/navigation";
-import { db } from "@/server/db";
 import { getCurrentUser } from "@/server/auth";
+import { getMasterByUserId, getProVisits } from "@/server/services/pages/pro";
 import { tr } from "@/i18n/locales";
 import { addDays, atYerevan, ymd, hm } from "@/lib/time";
 import { amd, cn, dateLabel, durationLabel } from "@/lib/format";
@@ -17,7 +17,7 @@ export default async function ProPage({ params, searchParams }: { params: Promis
   const user = await getCurrentUser();
   if (!user) return redirect({ href: "/login?next=/pro", locale });
   const [t, to, tc, ta] = await Promise.all([getTranslations("pro"), getTranslations("order"), getTranslations("common"), getTranslations("address")]);
-  const master = await db.master.findUnique({ where: { userId: user.id } });
+  const master = await getMasterByUserId(user.id);
   if (!master) return <div className="container-m py-10 text-center text-muted">{t("notLinked")}</div>;
 
   const today = ymd(new Date());
@@ -25,11 +25,7 @@ export default async function ProPage({ params, searchParams }: { params: Promis
     tab === "today" ? { gte: atYerevan(today, "00:00"), lt: atYerevan(addDays(today, 1), "00:00") }
     : tab === "upcoming" ? { gte: atYerevan(addDays(today, 1), "00:00"), lt: atYerevan(addDays(today, 15), "00:00") }
     : { gte: atYerevan(addDays(today, -30), "00:00"), lt: atYerevan(addDays(today, 1), "00:00") };
-  const visits = await db.visit.findMany({
-    where: { masterId: master.id, scheduledAt: range, status: tab === "done" ? "DONE" : { in: ["SCHEDULED", "CONFIRMED", "ON_WAY", "IN_PROGRESS", "DONE"] } },
-    orderBy: { scheduledAt: tab === "done" ? "desc" : "asc" },
-    include: { order: { include: { user: true, service: true } } },
-  });
+  const visits = await getProVisits(master.id, range, tab);
   const cashToday = tab === "today" ? visits.filter((v) => v.order.paymentMethod === "CASH" && v.cashCollected).reduce((s, v) => s + v.price, 0) : 0;
 
   const tabs = [["today", t("today")], ["upcoming", t("upcoming")], ["done", t("done")]];
