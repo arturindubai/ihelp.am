@@ -1907,5 +1907,11 @@
       "cancelled": "❌ Visit cancelled\nService: {serviceName}, {date}\nWant to reschedule? Place a new order on the website.",
       "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}"
     }
+  },
+  "push": {
+    "title": "Visit notifications",
+    "body": "Allow notifications to stay updated on your bookings",
+    "allow": "Allow",
+    "dismiss": "Not now"
   }
 }
