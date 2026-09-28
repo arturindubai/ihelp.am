@@ -16,6 +16,9 @@
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
+  "overrides": {
+    "postcss": "^8.5.28"
+  },
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "clsx": "^2.1.1",
