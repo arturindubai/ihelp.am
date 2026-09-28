@@ -70,7 +70,9 @@
     "ctaSubtitle": "Мы на связи в WhatsApp",
     "whatsapp": "Остались вопросы?",
     "whatsappSub": "Напишите нам — ответим быстро",
-    "writeUs": "Написать"
+    "writeUs": "Написать",
+    "reviewsTitle": "Отзывы клиентов",
+    "stickyOrder": "Заказать услугу"
   },
   "service": {
     "startsAt": "от {price} за визит",

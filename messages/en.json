@@ -64,7 +64,9 @@
     "why3": "Reschedule or cancel in just a few clicks",
     "whatsapp": "Have questions?",
     "whatsappSub": "Write to us — we'll reply quickly",
-    "writeUs": "Contact us"
+    "writeUs": "Contact us",
+    "reviewsTitle": "Client reviews",
+    "stickyOrder": "Book a service"
   },
   "service": {
     "startsAt": "from {price} per visit",
