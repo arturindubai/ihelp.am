@@ -84,7 +84,8 @@ ${tail_txt}" --error
 }
 
 echo "▶ deploy/update.sh"
-deploy/update.sh >> "$log" 2>&1 || fail "deploy/update.sh завершился с ошибкой"
+# DEPLOY_KEY передаётся для метки бэкапа; PREDEPLOY_DONE=1 — если бэкап уже снят при миграции
+DEPLOY_KEY="$KEY" PREDEPLOY_DONE="${backup_file:+1}" deploy/update.sh >> "$log" 2>&1 || fail "deploy/update.sh завершился с ошибкой"
 grep -q '^SMOKE OK' "$log" || fail "smoke-тест не подтвердил SMOKE OK"
 if grep -q '^deploy/Caddyfile$' <<< "$changed"; then
   # Caddyfile подключён к контейнеру файлом: без перезапуска Caddy работает со старой версией

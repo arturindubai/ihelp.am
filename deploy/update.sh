@@ -14,10 +14,15 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 
 echo "▶ 1/7 Бэкап перед обновлением"
-if docker compose ps --status running --services | grep -qx backup; then
-  timeout 900 docker compose exec -T backup sh /backup.sh once predeploy
+if [ -z "${PREDEPLOY_DONE:-}" ]; then
+  if docker compose ps --status running --services | grep -qx backup; then
+    backup_label="$(date +%H%M%S)${DEPLOY_KEY:+-$DEPLOY_KEY}"
+    timeout 900 docker compose exec -T backup sh /backup.sh once "$backup_label"
+  else
+    echo "  контейнер backup не запущен — пропускаю"
+  fi
 else
-  echo "  контейнер backup не запущен — пропускаю"
+  echo "  бэкап снят до update.sh (PREDEPLOY_DONE) — пропускаю"
 fi
 
 echo "▶ 2/7 Сохраняю текущие образы для отката (:previous)"
@@ -43,6 +48,9 @@ fi
 echo "▶ 5/7 Запуск на готовом образе (миграции базы применяются автоматически)"
 echo "$(< src/lib/deploy-marker.txt)"
 docker compose up -d --no-build
+# Пересоздаём backup, чтобы получить актуальный /backup.sh (git при merge меняет inode файла)
+echo "  пересоздаём контейнер backup"
+docker compose up -d --no-build --force-recreate backup
 
 echo "▶ 6/7 Ожидание готовности приложения"
 for _ in $(seq 1 60); do
