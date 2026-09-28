@@ -1111,6 +1111,11 @@
       "notifications": ""
     }
   },
+  "cart": {
+    "itemsCount": "{count, plural, one {# ծառայություն} other {# ծառայություն}}",
+    "total": "{amount} ֏",
+    "checkout": "Ձևակերպել"
+  },
   "notify": {
     "order": {
       "created": "",

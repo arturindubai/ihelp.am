@@ -1899,6 +1899,11 @@
       "notifications": "Notifications"
     }
   },
+  "cart": {
+    "itemsCount": "{count, plural, one {# item} other {# items}}",
+    "total": "{amount} ֏",
+    "checkout": "Book now"
+  },
   "notify": {
     "order": {
       "created": "✅ Order confirmed\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}\nTotal: {price}\nThank you for choosing iHelp! We will assign a master soon.",

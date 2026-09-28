@@ -2010,6 +2010,11 @@
       "completed": "⭐ Как прошёл визит?\n{masterName} завершил работу. Ваш отзыв помогает другим клиентам и мотивирует мастера.\nОставить отзыв: {reviewLink}"
     }
   },
+  "cart": {
+    "itemsCount": "{count, plural, one {# позиция} few {# позиции} other {# позиций}}",
+    "total": "{amount} ֏",
+    "checkout": "Оформить"
+  },
   "cookies": {
     "title": "Мы используем cookies",
     "text": "Мы используем файлы cookie для работы сайта и аналитики. Подробнее — в {policyLink}.",
