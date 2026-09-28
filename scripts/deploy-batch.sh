@@ -51,7 +51,7 @@ DRY_ORIG_DIR=""
 
 cleanup_dryrun() {
   [ -z "$DRY_TMPWT" ] && return
-  cd /tmp 2>/dev/null || true
+  cd "$DRY_ORIG_DIR" 2>/dev/null || cd / 2>/dev/null || true
   git -C "$DRY_ORIG_DIR" worktree remove --force "$DRY_TMPWT" 2>/dev/null || true
   rm -rf "$DRY_TMPWT"
   [ -n "${DRY_LOG:-}" ] && rm -f "$DRY_LOG" || true
@@ -62,7 +62,8 @@ if [ -n "$DRY_RUN" ]; then
   echo "▶ [DRY-RUN] Проверка пачки [${KEYS[*]}] без выкладки"
   git fetch -q origin || stop "Нет связи с GitHub"
   DRY_ORIG_DIR="$(pwd -P)"
-  DRY_TMPWT=$(mktemp -d /tmp/dryrun-batch-XXXXXX)
+  mkdir -p "$DRY_ORIG_DIR/data/tmp"
+  DRY_TMPWT=$(mktemp -d "$DRY_ORIG_DIR/data/tmp/dryrun-batch-XXXXXX")
   git worktree add --detach -q "$DRY_TMPWT" origin/main 2>/dev/null \
     || { rm -rf "$DRY_TMPWT"; stop "Не удалось создать временную рабочую копию"; }
   trap cleanup_dryrun EXIT
@@ -72,7 +73,7 @@ if [ -n "$DRY_RUN" ]; then
   # Открываем dummy fd 9 — чтобы exec 9>&- в путях ниже не давал ошибку
   exec 9>/dev/null
   prev=$(git rev-parse HEAD)
-  DRY_LOG=$(mktemp /tmp/dryrun-log-XXXXXX.log)
+  DRY_LOG=$(mktemp "$DRY_ORIG_DIR/data/tmp/dryrun-log-XXXXXX.log")
   log="$DRY_LOG"
   echo "▶ [DRY-RUN] Временная копия: $DRY_TMPWT (origin/main @${prev:0:10})"
 else
@@ -241,15 +242,35 @@ ${tail_txt:-(см. лог /opt/ihelp.am/${log})}" >> "$log" 2>&1 || true
     return 1
   fi
 
-  local half=$(( ${#BATCH_MERGED[@]} / 2 ))
-  local rest=$(( ${#BATCH_MERGED[@]} - half ))
+  # Сохраняем набор до рекурсии — вложенные do_merges перезаписывают BATCH_MERGED
+  local merged=("${BATCH_MERGED[@]}")
+  local half=$(( ${#merged[@]} / 2 ))
+  local rest=$(( ${#merged[@]} - half ))
   echo "▶ Делим пополам, пробуем первые $half задач" | tee -a "$log"
-  if find_deployable "${BATCH_MERGED[@]:0:$half}"; then
+
+  if find_deployable "${merged[@]:0:$half}"; then
+    # Первая половина нашла рабочий поднабор — пробуем добавить вторую половину одной пачкой
+    local second=("${merged[@]:$half}")
+    if [ ${#second[@]} -gt 0 ]; then
+      echo "▶ Расширяем пачку [${BATCH_RESULT[*]}] + вторые ${#second[@]} задач [${second[*]}]" | tee -a "$log"
+      local saved_result=("${BATCH_RESULT[@]}")
+      do_merges "${BATCH_RESULT[@]}" "${second[@]}"
+      if [ ${#BATCH_MERGED[@]} -gt 0 ] && scripts/check.sh >> "$log" 2>&1; then
+        echo "CHECK OK для расширенной пачки [${BATCH_MERGED[*]}]" | tee -a "$log"
+        BATCH_RESULT=("${BATCH_MERGED[@]}")
+      else
+        git reset -q --hard "$prev"
+        echo "▶ Расширенная пачка не прошла, восстанавливаем [${saved_result[*]}]" | tee -a "$log"
+        BATCH_RESULT=("${saved_result[@]}")
+        do_merges "${BATCH_RESULT[@]}"
+      fi
+    fi
     return 0
   fi
-  # Первая половина не прошла (задачи возвращены или конфликты); пробуем вторые $rest задач
+
+  # Первая половина полностью не прошла — пробуем вторые $rest задач
   echo "▶ Первая половина не прошла, пробуем вторые $rest задач" | tee -a "$log"
-  find_deployable "${BATCH_MERGED[@]:$half}"
+  find_deployable "${merged[@]:$half}"
 }
 
 find_deployable "${VALID_KEYS[@]}"
@@ -269,7 +290,7 @@ if [ ${#BATCH_RESULT[@]} -eq 0 ]; then
     [ ${#SKIP_KEYS[@]} -gt 0 ] && echo "▶ [DRY-RUN] Пропущено: [${SKIP_KEYS[*]}]"
     echo "▶ [DRY-RUN] ═══════════════════════════════════════════════════════"
     exec 9>&- 2>/dev/null || true
-    exit 1
+    exit 0
   fi
   for KEY in "${VALID_KEYS[@]}"; do
     cc note "$KEY" "Пачковая выкладка не начата: check.sh провалился на всём наборе. Задача остаётся на проверке." --error >> "$log" 2>&1 || true
