@@ -1,8 +1,10 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { db } from "../db";
 import { getCurrentUser } from "../auth";
 import { setCashCollected, setVisitStatus } from "../services/visits";
+import { audit } from "../audit";
 import { tr } from "@/i18n/locales";
 
 async function myVisit(visitId: string) {
@@ -38,12 +40,17 @@ export async function proNoteAction(visitId: string, note: string) {
   return { ok: true };
 }
 
+const notifySettingsSchema = z.object({ notifyEnabled: z.boolean() });
+
 export async function proNotifySettingsAction(notifyEnabled: boolean) {
+  const parsed = notifySettingsSchema.safeParse({ notifyEnabled });
+  if (!parsed.success) return { ok: false, error: "invalid" };
   const u = await getCurrentUser();
   if (!u) return { ok: false, error: "auth" };
   const m = await db.master.findUnique({ where: { userId: u.id } });
   if (!m) return { ok: false, error: "forbidden" };
-  await db.master.update({ where: { id: m.id }, data: { notifyEnabled } });
+  await db.master.update({ where: { id: m.id }, data: { notifyEnabled: parsed.data.notifyEnabled } });
+  await audit(u.id, "update", "Master", m.id, { notifyEnabled: parsed.data.notifyEnabled });
   revalidatePath("/[locale]/pro", "page");
   return { ok: true };
 }
