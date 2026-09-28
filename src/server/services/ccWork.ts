@@ -319,7 +319,7 @@ export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Tas
       if (opts.layer) filter.layer = opts.layer;
       if (opts.priority) filter.priority = opts.priority;
       if (actor.role === "nocode") Object.assign(filter, { layer: "none", needs: { isEmpty: true } });
-      else if (actor.role === "designer") Object.assign(filter, { OR: [{ mockupRequired: true, mockupApprovedBy: null, mockupUrl: null }, { assignee: "designer" }, { layer: { in: ["front", "fullstack"] }, OR: [{ design: null }, { design: "" }], attachments: { none: {} } }] });
+      else if (actor.role === "designer") Object.assign(filter, { OR: [{ mockupRequired: true, mockupApprovedBy: null, mockupUrl: null }, { assignee: "designer" }, { needsDesign: true, OR: [{ design: null }, { design: "" }], attachments: { none: {} } }] });
       else if (actor.role === "product") Object.assign(filter, { needs: { isEmpty: false } });
       else if (opts.auto) Object.assign(filter, { layer: opts.layer ?? { not: "none" }, owner: { not: "product" }, needs: { isEmpty: true } });
       const candidates = await tx.task.findMany({ where: filter, take: 200 });

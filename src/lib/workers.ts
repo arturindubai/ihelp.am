@@ -474,15 +474,16 @@ export function inDesignerQueue(t: {
   layer: string;
   hasImageAttachments: boolean;
   hasAnyAttachments: boolean;
+  /** Нужно описание дизайна: ставит триаж при разборе. true — задача идёт к дизайнеру */
+  needsDesign?: boolean | null;
 }): boolean {
   // Заблокирована на дизайне, но макет ещё не подан (нет mockupUrl)
   if (t.status === "blocked" && t.blockedOn === "design" && !t.mockupUrl) return true;
   // Нужен макет, не утверждён и не подан: бэклог, очередь или в работе
   const open = ["backlog", "ready", "in_progress"];
   if (open.includes(t.status) && t.mockupRequired && !t.mockupApprovedBy && !t.mockupUrl && !t.hasImageAttachments) return true;
-  // Интерфейсная задача (фронт или бэк+фронт) без описания дизайна, без файлов, без ссылки на макет и без утверждения
-  const isUi = t.layer === "front" || t.layer === "fullstack";
-  if (["backlog", "ready"].includes(t.status) && isUi && !t.design?.trim() && !t.hasAnyAttachments && !t.mockupApprovedBy && !t.mockupUrl) return true;
+  // Задача с флагом «нужно описание дизайна» без описания, без файлов и без утверждённого макета
+  if (["backlog", "ready"].includes(t.status) && t.needsDesign === true && !t.design?.trim() && !t.hasAnyAttachments && !t.mockupApprovedBy && !t.mockupUrl) return true;
   return false;
 }
 

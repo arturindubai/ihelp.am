@@ -95,6 +95,11 @@ export async function WorkersTab({ locale, taskHref }: { locale: string; taskHre
                 {p === "triage" && lastTriageBatch !== null && ` · ${tw("lastBatch", { n: lastTriageBatch })}`}
                 {p === "deployer" && ` · ${data.deployWindowOpen ? tw("windowOpen") : tw("windowClosed", { from: data.config.deployWindow[0], to: data.config.deployWindow[1] })}`}
               </div>
+              {p === "designer" && capOut && queue.length > 0 && (
+                <div key="capWaiting" className="mt-1 rounded-lg bg-warn-50 px-3 py-2 text-xs text-warn">
+                  {tw("capWaiting", { n: queue.length })}
+                </div>
+              )}
 
               {running.length > 0 && (
                 <ul key="running" className="mt-3 space-y-1.5">
