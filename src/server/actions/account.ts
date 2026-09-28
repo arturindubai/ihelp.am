@@ -113,6 +113,9 @@ export async function cancelOrderAction(orderId: string) {
   // Визиты внутри срока бесплатной отмены отмечаем отдельно — команде нужно знать о поздней отмене.
   const limit = new Date(Date.now() + s.booking.freeCancelHours * 3600_000);
   const late = o.visits.filter((v) => ["SCHEDULED", "CONFIRMED"].includes(v.status) && v.scheduledAt && v.scheduledAt <= limit).length;
+  // Уведомить мастеров ДО транзакции отмены
+  const vsToNotify = o.visits.filter((v) => ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"].includes(v.status) && v.masterId);
+  for (const v of vsToNotify) await notifyMasterCancelled(v.id).catch(() => {});
   await db.$transaction([
     db.visit.updateMany({ where: { orderId: o.id, status: { in: ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"] } }, data: { status: "CANCELLED" } }),
     db.order.update({ where: { id: o.id }, data: { status: "CANCELLED", cancelReason: "client" } }),
