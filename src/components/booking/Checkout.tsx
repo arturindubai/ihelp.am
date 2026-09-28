@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Banknote, CreditCard, Tag, Check, UsersRound, ArrowLeft, Phone } from "lucide-react";
+import { Banknote, CreditCard, Tag, Check, UsersRound, ArrowLeft, Phone, ChevronLeft, ChevronRight } from "lucide-react";
 import { useRouter, Link } from "@/i18n/navigation";
 import { calculatePrice, type PricePromo, type PricingRules } from "@/lib/pricing";
 import { amd, cn, dateLabel, durationLabel } from "@/lib/format";
@@ -16,6 +16,15 @@ import { contactLink } from "@/lib/contacts";
 type Line = { groupTitle: string; optionTitle: string; price: number; discountable: boolean; durationMin: number };
 type Plan = { id: string; kind: "ONE_TIME" | "SUBSCRIPTION" | "PACKAGE"; title: string; discountPercent: number; packageVisits: number | null; visitsPerWeek: number | null } | null;
 type MasterCard = { id: string; name: string; photo: string | null; rating: number; reviewsCount: number; experienceYears: number; languages: string[] };
+
+function calDaysInMonth(year: number, month: number) {
+  return new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+}
+
+function calFirstWeekday(year: number, month: number) {
+  const d = new Date(Date.UTC(year, month, 1)).getUTCDay();
+  return d === 0 ? 7 : d;
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -54,7 +63,7 @@ export function Checkout(props: {
   const [addressId, setAddressId] = useState(props.addresses.find((a) => a.isDefault)?.id || props.addresses[0]?.id || "");
   const [addrOpen, setAddrOpen] = useState(false);
   const today = ymd(new Date());
-  const days = useMemo(() => Array.from({ length: Math.min(props.horizonDays, 7) }, (_, i) => addDays(today, i)), [today, props.horizonDays]);
+  const days = useMemo(() => Array.from({ length: props.horizonDays }, (_, i) => addDays(today, i)), [today, props.horizonDays]);
   const [date, setDate] = useState(days[0]);
   const [slotsState, setSlotsState] = useState<{ date: string; list: { time: string; masterIds: string[]; available: boolean }[] } | null>(null);
   const slots = slotsState?.date === date ? slotsState.list : null;
@@ -75,6 +84,14 @@ export function Checkout(props: {
 
   const multiDays = props.plan?.kind === "SUBSCRIPTION" && (props.plan.visitsPerWeek || 0) > 1;
   const wdNames = t("weekdaysShort").split(",");
+  const isCalendarMode = props.horizonDays > 14;
+  const calWdNames = t("weekdaysMin").split(",");
+  const [autoSkipped, setAutoSkipped] = useState(0);
+  const [calMonth, setCalMonth] = useState(() => {
+    const [y, m] = today.split("-").map(Number);
+    return { year: y, month: m - 1 };
+  });
+  const [noSlotsDates, setNoSlotsDates] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setTime(undefined);
@@ -83,17 +100,24 @@ export function Checkout(props: {
     startSlots(async () => {
       const r = await slotsAction(props.service.id, d, props.durationMin);
       setSlots(r, d);
+      if (r.length === 0) setNoSlotsDates((prev) => { const s = new Set(prev); s.add(d); return s; });
     });
     if (multiDays) setWeekdays((w) => (w.includes(isoWeekday(date)) ? w : [...w, isoWeekday(date)].sort()));
   }, [date, props.service.id, props.durationMin, multiDays]);
 
-  const [autoSkipped, setAutoSkipped] = useState(0);
   useEffect(() => {
     if (slots && !slots.some((s) => s.available) && autoSkipped < 7 && date === days[autoSkipped]) {
       setAutoSkipped((n) => n + 1);
       if (days[autoSkipped + 1]) setDate(days[autoSkipped + 1]);
     }
   }, [slots, date, days, autoSkipped]);
+
+  useEffect(() => {
+    if (isCalendarMode) {
+      const [y, m] = date.split("-").map(Number);
+      setCalMonth({ year: y, month: m - 1 });
+    }
+  }, [date, isCalendarMode]);
 
   const slot = slots?.find((s) => s.time === time);
   const price = calculatePrice({ lines: props.lines, plan: props.plan ? { kind: props.plan.kind, discountPercent: props.plan.discountPercent, packageVisits: props.plan.packageVisits } : null, isFirstOrder: props.isFirstOrder, promo, rules: props.rules });
@@ -153,6 +177,30 @@ export function Checkout(props: {
   const payNowLabel = props.plan?.kind === "SUBSCRIPTION" ? t("payFirst") : t("payNow");
   const selectedAddress = addresses.find((a) => a.id === addressId);
 
+  const horizonEnd = days.length > 0 ? days[days.length - 1] : today;
+  const calMonthStr = `${calMonth.year}-${String(calMonth.month + 1).padStart(2, "0")}-01`;
+  const calMonthDate = atYerevan(calMonthStr, "12:00");
+  const todayYear = parseInt(today.slice(0, 4));
+  const todayMonthIdx = parseInt(today.slice(5, 7)) - 1;
+  const canPrevMonth = calMonth.year > todayYear || (calMonth.year === todayYear && calMonth.month > todayMonthIdx);
+  const nextMonthYear = calMonth.month === 11 ? calMonth.year + 1 : calMonth.year;
+  const nextMonthIdx = calMonth.month === 11 ? 0 : calMonth.month + 1;
+  const nextMonthFirstStr = `${nextMonthYear}-${String(nextMonthIdx + 1).padStart(2, "0")}-01`;
+  const canNextMonth = nextMonthFirstStr <= horizonEnd;
+  const calCells = useMemo<(string | null)[]>(() => {
+    if (!isCalendarMode) return [];
+    const empties = calFirstWeekday(calMonth.year, calMonth.month) - 1;
+    const total = calDaysInMonth(calMonth.year, calMonth.month);
+    return [
+      ...Array(empties).fill(null),
+      ...Array.from({ length: total }, (_, i) => {
+        const day = String(i + 1).padStart(2, "0");
+        const mo = String(calMonth.month + 1).padStart(2, "0");
+        return `${calMonth.year}-${mo}-${day}`;
+      }),
+    ];
+  }, [calMonth, isCalendarMode]);
+
   return (
     <div>
       {/* Sticky header */}
@@ -187,32 +235,101 @@ export function Checkout(props: {
 
         {/* Дата и время */}
         <Section title={t("dateTime")}>
-          {/* Лента дней */}
-          <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1">
-            {days.map((d) => {
-              const dt = atYerevan(d, "12:00");
-              const on = d === date;
-              return (
+          {/* Лента дней (horizonDays ≤ 14) / Календарь (horizonDays > 14) */}
+          {isCalendarMode ? (
+            <div>
+              <div className="mb-3 flex items-center justify-between">
                 <button
-                  key={d}
-                  ref={(el) => { if (el && on && el.parentElement) el.parentElement.scrollLeft = Math.max(0, el.offsetLeft - 16); }}
-                  onClick={() => setDate(d)}
-                  className={cn(
-                    "flex min-h-[64px] min-w-[44px] flex-col items-center justify-center rounded-xl border px-2 text-center transition",
-                    on ? "border-action bg-action text-on-action" : "border-line bg-paper"
-                  )}
+                  disabled={!canPrevMonth}
+                  onClick={() => setCalMonth((m) => m.month === 0 ? { year: m.year - 1, month: 11 } : { year: m.year, month: m.month - 1 })}
+                  aria-label={t("calMonthNav.prev")}
+                  className={cn("flex size-8 items-center justify-center rounded-full bg-surface transition", !canPrevMonth && "cursor-not-allowed opacity-40")}
                 >
-                  <span className={cn("text-xs capitalize", on ? "text-on-action/80" : "text-muted")}>{dateLabel(dt, locale, { weekday: "short" })}</span>
-                  <span className="text-lg font-bold">{dateLabel(dt, locale, { day: "numeric" })}</span>
-                  <span className={cn("text-[10px]", on ? "text-on-action/80" : "text-muted")}>{dateLabel(dt, locale, { month: "short" })}</span>
+                  <ChevronLeft size={16} />
                 </button>
-              );
-            })}
-          </div>
+                <span className="text-[15px] font-semibold capitalize">
+                  {dateLabel(calMonthDate, locale, { month: "long", year: "numeric" })}
+                </span>
+                <button
+                  disabled={!canNextMonth}
+                  onClick={() => setCalMonth((m) => m.month === 11 ? { year: m.year + 1, month: 0 } : { year: m.year, month: m.month + 1 })}
+                  aria-label={t("calMonthNav.next")}
+                  className={cn("flex size-8 items-center justify-center rounded-full bg-surface transition", !canNextMonth && "cursor-not-allowed opacity-40")}
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+              <div className="mb-0.5 grid grid-cols-7 py-1 text-center text-xs uppercase text-muted">
+                {calWdNames.map((n) => <div key={n}>{n}</div>)}
+              </div>
+              <div className="grid grid-cols-7 gap-0.5">
+                {calCells.map((d, i) => {
+                  if (!d) return <div key={`e${i}`} />;
+                  const inHorizon = d >= today && d <= horizonEnd;
+                  const isSelected = d === date;
+                  const isToday = d === today;
+                  const hasNoSlots = noSlotsDates.has(d);
+                  return (
+                    <button
+                      key={d}
+                      disabled={!inHorizon}
+                      onClick={() => setDate(d)}
+                      className={cn(
+                        "relative flex aspect-square items-center justify-center rounded-xl text-sm font-medium transition",
+                        isSelected
+                          ? "border border-action bg-action text-on-action"
+                          : !inHorizon
+                          ? "cursor-not-allowed text-muted opacity-40"
+                          : isToday
+                          ? "border border-action bg-paper font-bold"
+                          : hasNoSlots
+                          ? "border border-line bg-paper text-muted"
+                          : "border border-line bg-paper hover:bg-surface",
+                        !isSelected && inHorizon && isToday && hasNoSlots && "text-muted",
+                      )}
+                    >
+                      {parseInt(d.slice(8))}
+                      {hasNoSlots && !isSelected && (
+                        <span className="absolute bottom-1 left-1/2 size-1 -translate-x-1/2 rounded-full bg-muted" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1">
+              {days.map((d) => {
+                const dt = atYerevan(d, "12:00");
+                const on = d === date;
+                return (
+                  <button
+                    key={d}
+                    ref={(el) => { if (el && on && el.parentElement) el.parentElement.scrollLeft = Math.max(0, el.offsetLeft - 16); }}
+                    onClick={() => setDate(d)}
+                    className={cn(
+                      "flex min-h-[64px] min-w-[44px] flex-col items-center justify-center rounded-xl border px-2 text-center transition",
+                      on ? "border-action bg-action text-on-action" : "border-line bg-paper"
+                    )}
+                  >
+                    <span className={cn("text-xs capitalize", on ? "text-on-action/80" : "text-muted")}>{dateLabel(dt, locale, { weekday: "short" })}</span>
+                    <span className="text-lg font-bold">{dateLabel(dt, locale, { day: "numeric" })}</span>
+                    <span className={cn("text-[10px]", on ? "text-on-action/80" : "text-muted")}>{dateLabel(dt, locale, { month: "short" })}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Слоты */}
           <div className="mt-3">
-            <p className="mb-2 text-sm font-medium text-muted">{t("availableTime")}</p>
+            {isCalendarMode ? (
+              <p className="mb-2 text-sm font-medium">
+                {t("selectedDate", { date: dateLabel(atYerevan(date, "12:00"), locale, { day: "numeric", month: "long", weekday: "long" }) })}
+              </p>
+            ) : (
+              <p className="mb-2 text-sm font-medium text-muted">{t("availableTime")}</p>
+            )}
             {slotRace && (
               <div className="mb-2 rounded-xl bg-bad-50 px-3 py-2 text-sm text-bad">{t("errors.slot_taken")}</div>
             )}

@@ -158,6 +158,12 @@
     "successStep3": "",
     "successHelp": "",
     "toOrder": "",
+    "calMonthNav": {
+      "prev": "",
+      "next": ""
+    },
+    "weekdaysMin": "",
+    "selectedDate": "{date}",
     "errors": {
       "slot_taken": "",
       "no_address": "",

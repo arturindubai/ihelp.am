@@ -158,6 +158,12 @@
     "successStep3": "Rate the pro — it helps us improve the service",
     "successHelp": "Need help with your order?",
     "toOrder": "Go to my orders",
+    "calMonthNav": {
+      "prev": "Previous month",
+      "next": "Next month"
+    },
+    "weekdaysMin": "Mo,Tu,We,Th,Fr,Sa,Su",
+    "selectedDate": "{date}",
     "errors": {
       "slot_taken": "This time was just taken — please choose another",
       "no_address": "Please enter an address",
