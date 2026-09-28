@@ -60,6 +60,7 @@ fi
 
 echo "▶ 4b/7 Счётчики до выкладки (для smoke-теста)"
 if docker compose ps --status running --services 2>/dev/null | grep -qx db; then
+  mkdir -p data/tmp
   predeploy_counts=""
   for table in Review Order; do
     count=$(docker compose exec -T db psql -U app -d homeservices -tAc "SELECT COUNT(*) FROM \"$table\"" 2>/dev/null | tr -d '[:space:]' || echo "?")
@@ -67,8 +68,8 @@ if docker compose ps --status running --services 2>/dev/null | grep -qx db; then
   done
   client_count=$(docker compose exec -T db psql -U app -d homeservices -tAc "SELECT COUNT(*) FROM \"User\" WHERE role = 'CLIENT'" 2>/dev/null | tr -d '[:space:]' || echo "?")
   predeploy_counts="${predeploy_counts}UserClient:${client_count}"$'\n'
-  printf '%s' "$predeploy_counts" > /tmp/ihelp-predeploy-counts.txt
-  echo "  сохранены в /tmp/ihelp-predeploy-counts.txt"
+  printf '%s' "$predeploy_counts" > data/tmp/predeploy-counts.txt
+  echo "  сохранены в data/tmp/predeploy-counts.txt"
 else
   echo "  БД не запущена — пропускаю"
 fi
@@ -88,7 +89,7 @@ done
 
 echo "▶ 7/7 Smoke-тест"
 trap - ERR
-if ! deploy/smoke.sh "$@"; then
+if ! PREDEPLOY_COUNTS_FILE=data/tmp/predeploy-counts.txt deploy/smoke.sh "$@"; then
   echo "✗ Smoke-тест не прошёл. Логи: docker compose logs --tail 100 app migrate. Откат: deploy/rollback.sh"
   exit 1
 fi

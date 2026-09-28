@@ -71,33 +71,53 @@ db_schema_ok() {
 check "схема Prisma и база согласованы (Task, Epic, WorkerRun)" db_schema_ok
 
 echo "Счётчики данных (выкладка не должна создавать записи)"
-check_data_counts() {
-  [ -f /tmp/ihelp-predeploy-counts.txt ] || return 0
-  local ok=1
-  while IFS=: read -r name before; do
-    [ -z "$name" ] && continue
-    case "$name" in
-      Review)     sql="SELECT COUNT(*) FROM \"Review\"";;
-      Order)      sql="SELECT COUNT(*) FROM \"Order\"";;
-      UserClient) sql="SELECT COUNT(*) FROM \"User\" WHERE role = 'CLIENT'";;
-      *) continue;;
-    esac
-    after=$(docker exec homecare-db-1 psql -U app -d homeservices -tAc "$sql" 2>/dev/null | tr -d '[:space:]')
-    if [ "$before" = "?" ]; then
-      echo "  ⚠ $name: счётчик до выкладки неизвестен — пропускаю"
-    elif [ "$before" != "$after" ]; then
-      echo "  ✗ $name: до выкладки $before, после $after — выкладка создала записи!"
-      ok=0
-    else
-      echo "  ✓ $name: $after (без изменений)"
+# Сверка выполняется только при запуске через deploy/update.sh — тот передаёт PREDEPLOY_COUNTS_FILE.
+# Прямой запуск smoke.sh (тестировщик, вручную, rollback.sh) сверку пропускает.
+counts_file="${PREDEPLOY_COUNTS_FILE:-}"
+if [ -n "$counts_file" ] && [ -f "$counts_file" ]; then
+  send_tech_alert() {
+    local msg="$1"
+    local token chat_id
+    token=$(grep -E '^ALERT_BOT_TOKEN=' .env 2>/dev/null | tail -n1 | cut -d= -f2-)
+    chat_id=$(grep -E '^ALERT_CHAT_ID=' .env 2>/dev/null | tail -n1 | cut -d= -f2-)
+    [ -n "$token" ] && [ -n "$chat_id" ] || return 0
+    curl -s -m 10 "https://api.telegram.org/bot${token}/sendMessage" \
+      --data-urlencode "chat_id=${chat_id}" \
+      --data-urlencode "text=${msg}" \
+      --data-urlencode "parse_mode=HTML" > /dev/null || true
+  }
+  file_age=$(( $(date +%s) - $(stat -c %Y "$counts_file") ))
+  if [ "$file_age" -gt 1200 ]; then
+    echo "  ⚠ файл счётчиков устарел (${file_age}с > 20 мин) — пропускаю"
+    rm -f "$counts_file"
+  else
+    mismatches=""
+    while IFS=: read -r name before; do
+      [ -z "$name" ] && continue
+      case "$name" in
+        Review)     sql="SELECT COUNT(*) FROM \"Review\"";;
+        Order)      sql="SELECT COUNT(*) FROM \"Order\"";;
+        UserClient) sql="SELECT COUNT(*) FROM \"User\" WHERE role = 'CLIENT'";;
+        *) continue;;
+      esac
+      after=$(docker exec homecare-db-1 psql -U app -d homeservices -tAc "$sql" 2>/dev/null | tr -d '[:space:]')
+      if [ "$before" = "?" ]; then
+        echo "  ⚠ $name: счётчик до выкладки неизвестен — пропускаю"
+      elif [ "$before" != "$after" ]; then
+        echo "  ! $name: до выкладки $before, после $after"
+        mismatches="${mismatches}${name}: было ${before}, стало ${after}; "
+      else
+        echo "  ✓ $name: $after (без изменений)"
+      fi
+    done < "$counts_file"
+    rm -f "$counts_file"
+    if [ -n "$mismatches" ]; then
+      echo "  ⚠ счётчики изменились: возможно клиент зарегистрировался во время выкладки или seed создал записи"
+      send_tech_alert "⚠ iHelp выкладка: счётчики изменились — ${mismatches}Проверить вручную."
     fi
-  done < /tmp/ihelp-predeploy-counts.txt
-  return $((1 - ok))
-}
-if [ -f /tmp/ihelp-predeploy-counts.txt ]; then
-  check "счётчики Review/Order/User не изменились" check_data_counts
+  fi
 else
-  echo "  ⚠ /tmp/ihelp-predeploy-counts.txt не найден — запускать через deploy/update.sh"
+  echo "  ⚠ сверка пропущена (только при запуске через deploy/update.sh)"
 fi
 
 echo "Логи приложения"
