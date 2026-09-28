@@ -86,6 +86,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
 
 Уборка:
   gc                                            убрать worktree закрытых задач, влитые ветки task/* и стенды Docker старше 3 дней
+  pool <имя>                                    статус пула воркеров: exit 0 — включён, exit 1 — выключен (--json для деталей)
 
 Имя агента: --agent, иначе переменная CC_AGENT, иначе то, с которым задачу брали на этом сервере.`;
 
@@ -711,8 +712,41 @@ async function main() {
     case "done": {
       const k = needKey();
       if (!flags.sha) die("нужен коммит в main: --sha <коммит>");
-      const r = await api("POST", null, { action: "done", agent: agentFor(k), key: k, sha: String(flags.sha), text: text() });
+      const sha = String(flags.sha);
+      // Проверяем, что SHA содержит файлы задачи — нельзя закрывать задачу чужим коммитом (критерии 4, 5)
+      const taskInfo = await api("GET", { key: k });
+      const scope = (taskInfo.task?.scope ?? []).filter(Boolean);
+      if (scope.length > 0 && /^[0-9a-f]{7,40}$/i.test(sha)) {
+        tryGit(["fetch", "-q", "origin"], ROOT);
+        // git diff --name-only SHA^1 SHA показывает файлы, изменённые в этом коммите (работает и для merge-коммитов)
+        const changedRaw = tryGit(["diff", "--name-only", `${sha}^1`, sha], ROOT) ?? "";
+        const changed = new Set(changedRaw.split("\n").filter(Boolean));
+        const normS = (s) => s.replace(/\/$/, "");
+        const hasTaskFile = scope.some((s) => {
+          const ns = normS(s);
+          return [...changed].some((c) => c === ns || c.startsWith(ns + "/") || normS(c) === ns || ns.startsWith(normS(c) + "/"));
+        });
+        if (!hasTaskFile) {
+          die(`Коммит ${sha.slice(0, 10)} не затрагивает файлы задачи ${k}: ${scope.slice(0, 3).join(", ")}.\nЭто коммит другой задачи — нельзя закрывать им ${k}. Проверьте SHA.`);
+        }
+      }
+      const r = await api("POST", null, { action: "done", agent: agentFor(k), key: k, sha, text: text() });
       console.log(`✓ ${k} → ${STATUS[r.status] ?? r.status}`);
+      return;
+    }
+    case "pool": {
+      // Статус пула воркеров: pool tester → exit 0 если включён, 1 если выключен
+      const poolName = (pos[0] ?? "").toLowerCase();
+      if (!poolName) die("укажите имя пула: pool tester");
+      const r = await api("GET", { resource: "workers" });
+      const pool = r.config?.pools?.[poolName];
+      if (!pool) die(`Пул «${poolName}» не найден`);
+      if (flags.json) {
+        console.log(JSON.stringify({ pool: poolName, enabled: pool.enabled, max: pool.max, mode: pool.mode }));
+      } else {
+        console.log(pool.enabled ? "enabled" : "disabled");
+      }
+      if (!pool.enabled) process.exit(1);
       return;
     }
     case "create":
