@@ -249,6 +249,12 @@ export function Checkout(props: {
             </div>
           </div>
 
+          {/* Политика отмены — ненавязчивый намёк при выборе времени */}
+          <p className="mt-2 flex items-center gap-1 text-xs text-muted">
+            <Check size={12} className="shrink-0 text-ok" />
+            {t("freeCancel", { hours: String(props.freeCancelHours) })}
+          </p>
+
           {multiDays && (
             <div className="mt-4">
               <div className="mb-1 text-sm font-medium">{t("pickDays")}</div>
