@@ -70,6 +70,45 @@ db_schema_ok() {
 }
 check "схема Prisma и база согласованы (Task, Epic, WorkerRun)" db_schema_ok
 
+echo "Счётчики данных (выкладка не должна создавать записи)"
+# Сверка выполняется только при запуске через deploy/update.sh — тот передаёт PREDEPLOY_COUNTS_FILE.
+# Прямой запуск smoke.sh (тестировщик, вручную, rollback.sh) сверку пропускает.
+counts_file="${PREDEPLOY_COUNTS_FILE:-}"
+if [ -n "$counts_file" ] && [ -f "$counts_file" ]; then
+  file_age=$(( $(date +%s) - $(stat -c %Y "$counts_file") ))
+  if [ "$file_age" -gt 1200 ]; then
+    echo "  ⚠ файл счётчиков устарел (${file_age}с > 20 мин) — пропускаю"
+    rm -f "$counts_file"
+  else
+    mismatches=""
+    while IFS=: read -r name before; do
+      [ -z "$name" ] && continue
+      case "$name" in
+        Review)     sql="SELECT COUNT(*) FROM \"Review\"";;
+        Order)      sql="SELECT COUNT(*) FROM \"Order\"";;
+        UserClient) sql="SELECT COUNT(*) FROM \"User\" WHERE role = 'CLIENT'";;
+        *) continue;;
+      esac
+      after=$(docker exec homecare-db-1 psql -U app -d homeservices -tAc "$sql" 2>/dev/null | tr -d '[:space:]')
+      if [ "$before" = "?" ]; then
+        echo "  ⚠ $name: счётчик до выкладки неизвестен — пропускаю"
+      elif [ "$before" != "$after" ]; then
+        echo "  ! $name: до выкладки $before, после $after"
+        mismatches="${mismatches}${name}: было ${before}, стало ${after}; "
+      else
+        echo "  ✓ $name: $after (без изменений)"
+      fi
+    done < "$counts_file"
+    rm -f "$counts_file"
+    if [ -n "$mismatches" ]; then
+      echo "  ⚠ счётчики изменились: возможно клиент зарегистрировался во время выкладки или seed создал записи"
+      echo "  ⚠ тех-алерт: проверьте вручную (отправка алерта через приложение — отдельная задача)"
+    fi
+  fi
+else
+  echo "  ⚠ сверка пропущена (только при запуске через deploy/update.sh)"
+fi
+
 echo "Логи приложения"
 # Первые 60 секунд после запуска контейнера — не должно быть MISSING_MESSAGE (next-intl) или
 # необработанных исключений Node.js, которые сигнализируют о пропавших ключах перевода / багах.

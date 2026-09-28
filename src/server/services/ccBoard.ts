@@ -64,12 +64,12 @@ export async function ccCounts() {
 
 /** «Нужен ты»: блокировки на владельце и продукте, брошенные задачи, застрявшая проверка, не-код на приёмке, упавшие запуски, пауза воркеров, нет адресата алертов */
 export async function needsYou() {
-  const [attn, owner, failedRuns, config, nocodeReview, settings] = await Promise.all([
+  const [attn, owner, failedRuns, config, nocodeReview, settings, ownerPostponed] = await Promise.all([
     attention(),
     db.task.findMany({
       where: { status: "blocked", blockedOn: { in: ["owner", "product"] } },
       orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
-      select: { key: true, title: true, priority: true, blockedOn: true, blockedReason: true, updatedAt: true, triageNote: true, triagedAt: true, comments: { orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, kind: true, createdAt: true } } },
+      select: { key: true, title: true, priority: true, blockedOn: true, blockedReason: true, updatedAt: true, triageNote: true, triagedAt: true, comments: { orderBy: { createdAt: "desc" }, take: 5, select: { author: true, text: true, kind: true, createdAt: true } } },
     }),
     db.workerRun.findMany({ where: { status: { in: ["failed", "timeout"] }, startedAt: { gte: new Date(Date.now() - 24 * 3600_000) } }, orderBy: { startedAt: "desc" }, take: 10 }),
     getWorkersConfig(),
@@ -79,12 +79,21 @@ export async function needsYou() {
       select: { key: true, title: true, priority: true, updatedAt: true, ownerSummary: true, _count: { select: { attachments: true } } },
     }),
     getSettings(),
+    db.task.findMany({
+      where: { status: "blocked", blockedOn: "external" },
+      orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
+      select: { key: true, title: true, priority: true, blockedReason: true, blockedUntil: true, updatedAt: true },
+    }),
   ]);
   return {
     owner: owner.map((x) => ({
       ...x,
       ownerAnswered: x.triagedAt === null,
+      /** Полный текст причины: для reblockOn старых задач восстанавливаем из ленты, если было обрезано до 200 знаков */
+      fullReason: recoverFullReason(x.blockedReason, x.comments),
     })),
+    /** Задачи, отложенные владельцем (blockedOn: external) */
+    ownerPostponed,
     stale: attn.stale,
     stuckReview: attn.review.filter((r) => r.health.stuckReview),
     /** Заблокированы на tech/external — видно техдиректору в «Нужен ты» */
@@ -97,24 +106,56 @@ export async function needsYou() {
 }
 
 /**
- * Дизайн ждёт утверждения владельцем: есть настоящий макет — картинка во вложениях или ссылка (mockupUrl) —
- * либо стоит флаг «нужен макет». Текстовое описание дизайна само по себе на согласование не выносится
+ * Восстанавливает полный текст причины блокировки из ленты задачи для задач, заблокированных через reblock
+ * до исправления ошибки обрезки до 200 знаков. Проверяет только задачи с признаком обрезки (ровно 200 знаков).
  */
+function recoverFullReason(blockedReason: string | null, comments: { text: string }[]): string | null {
+  if (!blockedReason || blockedReason.length !== 200) return blockedReason;
+  const reblockComment = comments.find((c) => c.text.startsWith("Адресат блокировки изменён:"));
+  if (reblockComment) {
+    const match = reblockComment.text.match(/^Адресат блокировки изменён:.+?\. ([\s\S]+)/);
+    if (match && match[1].trim().length > blockedReason.length) return match[1].trim();
+  }
+  return blockedReason;
+}
+
+/** Дизайн на согласовании: есть настоящий макет (ссылка или картинка), дизайн не утверждён */
 const DESIGN_PENDING: Prisma.TaskWhereInput = {
   status: { notIn: ["done", "cancelled"] },
   mockupApprovedBy: null,
-  OR: [{ mockupRequired: true }, { mockupUrl: { not: null } }, { attachments: { some: { mime: { startsWith: "image/" } } } }],
+  OR: [{ mockupUrl: { not: null } }, { attachments: { some: { mime: { startsWith: "image/" } } } }],
+};
+
+/** Ждут макета от дизайнера: флаг «нужен макет», но реального макета ещё нет */
+const WAITING_MOCKUP: Prisma.TaskWhereInput = {
+  status: { notIn: ["done", "cancelled"] },
+  mockupApprovedBy: null,
+  mockupRequired: true,
+  mockupUrl: null,
+  attachments: { none: { mime: { startsWith: "image/" } } },
 };
 
 export async function mockupPendingApprovals() {
   return db.task.findMany({
     where: DESIGN_PENDING,
-    orderBy: [{ mockupRequired: "desc" }, { priority: "asc" }, { updatedAt: "asc" }],
+    orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
     select: {
       key: true, title: true, priority: true, status: true, layer: true, updatedAt: true,
       mockupUrl: true, mockupRequired: true, design: true, needs: true,
       _count: { select: { attachments: true } },
       attachments: { where: { mime: { startsWith: "image/" } }, select: { url: true, fileName: true }, orderBy: { createdAt: "desc" } },
+    },
+  });
+}
+
+/** Задачи, ожидающие макета от дизайнера: флаг «нужен макет», но картинки и ссылки ещё нет */
+export async function mockupWaitingDesign() {
+  return db.task.findMany({
+    where: WAITING_MOCKUP,
+    orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
+    select: {
+      key: true, title: true, priority: true, status: true,
+      blockedOn: true, claimedBy: true,
     },
   });
 }
