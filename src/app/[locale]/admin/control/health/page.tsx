@@ -82,7 +82,7 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
         <Metric
           label={th("mergeConflicts")}
           value={`${mergeStats.conflicts} / ${mergeStats.total}`}
-          hint={th("mergeConflictsHint", { pct: mergeStats.pct, days: mergeStats.days })}
+          hint={th("mergeConflictsHint", { pct: mergeStats.pct, days: mergeStats.days, total: mergeStats.total })}
           tone={mergeStats.pct >= 20 ? "bad" : mergeStats.pct >= 10 ? "warn" : "ok"}
         />
         <Metric
