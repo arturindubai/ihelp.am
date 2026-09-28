@@ -67,7 +67,7 @@ export async function WorkersTab({ locale, taskHref }: { locale: string; taskHre
           const pc = data.config.pools[p];
           const queue = queueOf(p);
           const running = data.running.filter((r) => r.pool === p);
-          const capOut = data.today[p] >= pc.dailyCap;
+          const capOut = pc.dailyCap !== null && data.today[p] >= pc.dailyCap;
           const paused = !!data.config.pausedUntil && Date.parse(data.config.pausedUntil) > Date.now();
           const takeable = p === "dev" ? data.readyDev : p === "nocode" ? data.readyNocode : p === "tester" ? queue.filter((q) => q.reason === "test" || q.reason === "retest").length : p === "deployer" ? queue.filter((q) => q.reason === "deploy").length : queue.length;
           return (
@@ -80,7 +80,7 @@ export async function WorkersTab({ locale, taskHref }: { locale: string; taskHre
                     {pc.model}
                   </span>
                   <span key="state" className={cn("chip text-[10px]", running.length ? "bg-brand-50 text-brand" : !pc.enabled || pc.mode === "manual" ? "bg-surface text-muted" : paused || capOut ? "bg-warn-50 text-warn" : "bg-ok-50 text-ok")}>
-                    {running.length ? tw("poolRunning", { n: running.length }) : !pc.enabled ? tw("poolOff") : pc.mode === "manual" ? tw("modes.manual") : paused ? tw("poolPaused") : capOut ? tw("poolCapOut", { n: data.today[p], cap: pc.dailyCap }) : tw("poolIdle")}
+                    {running.length ? tw("poolRunning", { n: running.length }) : !pc.enabled ? tw("poolOff") : pc.mode === "manual" ? tw("modes.manual") : paused ? tw("poolPaused") : capOut ? tw("poolCapOut", { n: data.today[p], cap: pc.dailyCap ?? 0 }) : tw("poolIdle")}
                   </span>
                 </span>
               }
@@ -90,7 +90,7 @@ export async function WorkersTab({ locale, taskHref }: { locale: string; taskHre
               <p key="hint" className="mb-3 text-xs text-muted">{tw(`poolHints.${p}`)}</p>
               <PoolSettings key="settings" pool={p} initial={pc} />
               <div key="today" className="mt-2 text-xs text-muted">
-                {tw("todayOf", { n: data.today[p], cap: pc.dailyCap })}
+                {pc.dailyCap === null ? tw("todayNoCap", { n: data.today[p] }) : tw("todayOf", { n: data.today[p], cap: pc.dailyCap })}
                 {data.lastStart[p] && ` · ${tw("lastStart", { ago: ago(t, data.lastStart[p]) })}`}
                 {p === "triage" && lastTriageBatch !== null && ` · ${tw("lastBatch", { n: lastTriageBatch })}`}
                 {p === "deployer" && ` · ${data.deployWindowOpen ? tw("windowOpen") : tw("windowClosed", { from: data.config.deployWindow[0], to: data.config.deployWindow[1] })}`}
