@@ -64,6 +64,21 @@ export async function sendOtp(phone: string, channel: OtpChannel, ip?: string, l
   const channels: OtpChannel[] = channel === "EMAIL" ? (emailCodesAvailable(s) ? ["EMAIL"] : []) : await availableChannels(s);
   if (!channels.includes(channel)) return { ok: false, error: "channel_unavailable" };
 
+  // Для Telegram: проверяем доступность ДО создания кода, чтобы не тратить лимиты на номера без Telegram
+  if (channel === "TELEGRAM" && s.otp.telegram.enabled && s.otp.telegram.gatewayToken) {
+    try {
+      const r = await fetch("https://gatewayapi.telegram.org/checkSendAbility", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${s.otp.telegram.gatewayToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ phone_number: phone }),
+      });
+      const j = await r.json();
+      if (j.ok && !j.result?.ok) return { ok: false, error: "telegram_unavailable" };
+    } catch {
+      // При недоступности API проверку пропускаем, попытка отправки покажет ошибку ниже
+    }
+  }
+
   const last = await db.otpCode.findFirst({ where: { phone }, orderBy: { createdAt: "desc" } });
   if (last) {
     const wait = s.otp.resendSec - Math.floor((Date.now() - last.createdAt.getTime()) / 1000);

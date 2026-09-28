@@ -189,6 +189,7 @@
     "title": "Sign in or register",
     "phone": "Phone number",
     "getCodeVia": "Get code via",
+    "telegramUnavailable": "This number is not linked to Telegram. Please choose another method:",
     "consent": "By getting the code, you agree to the processing of your personal data (phone number, email) for identification and sign-in to iHelp. More details: <privacy>privacy policy</privacy> and <offer>terms of service</offer>.",
     "channel": {
       "SMS": "SMS",
@@ -235,6 +236,7 @@
       "too_many": "Too many attempts. Please try later.",
       "channel_unavailable": "This method is currently unavailable",
       "delivery_failed": "Failed to send the code. Please try another method.",
+      "telegram_unavailable": "This number is not linked to Telegram. Please try another method.",
       "blocked": "Account blocked",
       "google_off": "Google sign-in is currently disabled",
       "google_state": "Sign-in session expired, please try again",

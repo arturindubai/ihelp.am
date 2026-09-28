@@ -181,6 +181,7 @@ function PhoneLogin({ channels, onDone, onBack, onSignup }: { channels: Channel[
   const [resendIn, setResendIn] = useState(0);
   const [role, setRole] = useState("CLIENT");
   const [ticket, setTicket] = useState("");
+  const [telegramUnavailable, setTelegramUnavailable] = useState(false);
   const [pending, start] = useTransition();
   const codeRef = useRef<HTMLInputElement>(null);
 
@@ -197,7 +198,13 @@ function PhoneLogin({ channels, onDone, onBack, onSignup }: { channels: Channel[
     setChannel(ch);
     start(async () => {
       const r = await sendCodeAction(phone, ch, locale);
-      if (!r.ok) return setError(errText(r.error, "retryIn" in r ? r.retryIn : undefined));
+      if (!r.ok) {
+        if (r.error === "telegram_unavailable" && channels.some((c) => c !== "TELEGRAM")) {
+          setTelegramUnavailable(true);
+          return;
+        }
+        return setError(errText(r.error, "retryIn" in r ? r.retryIn : undefined));
+      }
       setNormalized(r.phone!);
       setDevCode(r.devCode);
       setCodeLength(r.codeLength);
@@ -229,12 +236,13 @@ function PhoneLogin({ channels, onDone, onBack, onSignup }: { channels: Channel[
           <BackLink onBack={onBack} />
           <label className="label" htmlFor="phone">{t("phone")}</label>
           <input id="phone" className="input text-lg tracking-wide" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          <p className="mt-4 mb-2 text-sm font-medium">{t("getCodeVia")}</p>
+          <p className="mt-4 mb-2 text-sm font-medium">{t(telegramUnavailable ? "telegramUnavailable" : "getCodeVia")}</p>
           <div className="grid gap-2">
-            {channels.map((ch) => {
+            {channels.filter((ch) => !telegramUnavailable || ch !== "TELEGRAM").map((ch) => {
               const I = ICONS[ch];
+              const isFirst = channels.find((c) => !telegramUnavailable || c !== "TELEGRAM") === ch;
               return (
-                <button key={ch} disabled={pending} onClick={() => send(ch)} className={ch === channels[0] ? "btn-primary" : "btn-outline"}>
+                <button key={ch} disabled={pending} onClick={() => send(ch)} className={isFirst ? "btn-primary" : "btn-outline"}>
                   <I size={18} /> {t(`channel.${ch}`)}
                 </button>
               );
