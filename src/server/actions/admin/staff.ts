@@ -27,6 +27,7 @@ export async function saveStaffPermissionsAction(userId: string, payload: { adde
   const target = await db.user.findUnique({ where: { id: userId } });
   if (!target) return { ok: false as const, error: "notfound" };
   if (target.id === me.id) return { ok: false as const, error: "self" };
+  if (target.role !== "OPERATOR" && target.role !== "ADMIN") return { ok: false as const, error: "invalid_role" };
 
   const delta = { added: parsed.data.added, removed: parsed.data.removed };
   await db.user.update({ where: { id: userId }, data: { sectionDelta: delta } });
@@ -42,7 +43,10 @@ const loginSchema = z.object({
   telegramId: z.string().nullable().optional(),
 });
 
-/** Обновить способы входа сотрудника (телефон, почта, Telegram). Сессии НЕ завершаются. */
+/** Обновить способы входа сотрудника (телефон, почта, Telegram).
+ *  Цель — только OPERATOR, ADMIN, MASTER; способы входа OWNER меняет только сам.
+ *  При смене телефона или почты сессии цели завершаются.
+ */
 export async function saveStaffLoginAction(userId: string, payload: { phone?: string | null; email?: string | null; telegramId?: string | null }) {
   const me = await requireSection("staff");
   if (!userId) return { ok: false as const, error: "invalid" };
@@ -52,8 +56,12 @@ export async function saveStaffLoginAction(userId: string, payload: { phone?: st
 
   const target = await db.user.findUnique({ where: { id: userId } });
   if (!target) return { ok: false as const, error: "notfound" };
+  if (target.role !== "OPERATOR" && target.role !== "ADMIN" && target.role !== "MASTER") {
+    return { ok: false as const, error: "invalid_role" };
+  }
 
   const data: Record<string, unknown> = {};
+  let terminateSessions = false;
 
   if (parsed.data.phone !== undefined) {
     if (parsed.data.phone === null || parsed.data.phone.trim() === "") {
@@ -63,6 +71,7 @@ export async function saveStaffLoginAction(userId: string, payload: { phone?: st
     const phone = normalizePhone(parsed.data.phone);
     if (!phone) return { ok: false as const, error: "phone_invalid" };
     data.phone = phone;
+    terminateSessions = true;
   }
 
   if (parsed.data.email !== undefined) {
@@ -75,6 +84,7 @@ export async function saveStaffLoginAction(userId: string, payload: { phone?: st
       data.email = email;
       data.emailVerifiedAt = new Date();
     }
+    terminateSessions = true;
   }
 
   if (parsed.data.telegramId !== undefined) {
@@ -85,6 +95,7 @@ export async function saveStaffLoginAction(userId: string, payload: { phone?: st
 
   try {
     await db.user.update({ where: { id: userId }, data });
+    if (terminateSessions) await db.session.deleteMany({ where: { userId } });
     await audit(me.id, "staff.login", "User", userId, { fields: Object.keys(data) });
     revalidatePath("/", "layout");
     return { ok: true as const };

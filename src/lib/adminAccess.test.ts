@@ -80,3 +80,31 @@ describe("DELEGATABLE_SECTIONS", () => {
     expect(DELEGATABLE_SECTIONS).not.toContain("staff");
   });
 });
+
+describe("статический анализ: маршруты используют sectionsForUser, а не sectionsFor(u.role)", () => {
+  const ROUTES = [
+    "src/app/api/cc/library/route.ts",
+    "src/app/api/cc/upload/route.ts",
+    "src/app/api/upload/route.ts",
+  ];
+
+  it("ни один маршрут не содержит sectionsFor(u.role)", () => {
+    const fs = require("fs") as typeof import("fs");
+    const path = require("path") as typeof import("path");
+    const root = path.resolve(__dirname, "../..");
+    for (const rel of ROUTES) {
+      const content = fs.readFileSync(path.resolve(root, rel), "utf8");
+      expect(content, rel).not.toMatch(/sectionsFor\(u\.role\)/);
+    }
+  });
+
+  it("каждый маршрут вызывает sectionsForUser(u)", () => {
+    const fs = require("fs") as typeof import("fs");
+    const path = require("path") as typeof import("path");
+    const root = path.resolve(__dirname, "../..");
+    for (const rel of ROUTES) {
+      const content = fs.readFileSync(path.resolve(root, rel), "utf8");
+      expect(content, rel).toMatch(/sectionsForUser\(u\)/);
+    }
+  });
+});
