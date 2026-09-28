@@ -9,6 +9,7 @@ import path from "path";
 import { PrismaClient } from "@prisma/client";
 import { BACKLOG } from "../src/server/backlog";
 import { EPIC_SEED } from "../src/server/epics";
+import { computeEpicStatus } from "../src/lib/cc-flow";
 import { REPO_DOC_ROOTS, kindOfPath, titleOf } from "../src/lib/library";
 const db = new PrismaClient();
 
@@ -157,6 +158,24 @@ async function syncBacklog() {
   console.log(`Backlog: ${BACKLOG.length} tasks (${created} new)${extra.length ? `, not in code: ${extra.map((e) => e.key).join(", ")}` : ""}`);
 }
 
+/**
+ * Пересчитывает статус всех code-эпиков по текущим задачам.
+ * Запускается после syncBacklog: деплой не перезаписывает вручную выставленный статус у ui-эпиков.
+ */
+async function refreshAllEpicStatuses() {
+  const epics = await db.epic.findMany({ where: { source: "code" }, select: { key: true } });
+  const counts = await db.task.groupBy({ by: ["epicKey", "status"], _count: true, where: { epicKey: { not: null } } });
+  let updated = 0;
+  for (const e of epics) {
+    const rows = counts.filter((c) => c.epicKey === e.key);
+    const statuses = rows.flatMap((r) => Array(r._count).fill(r.status) as string[]);
+    const newStatus = computeEpicStatus(statuses);
+    await db.epic.update({ where: { key: e.key }, data: { status: newStatus } });
+    updated++;
+  }
+  console.log(`Epics статусы: обновлено ${updated}`);
+}
+
 const t = (ru: string, en = "", am = "") => ({ ru, en, am });
 
 const sched = (items: [string, string, string, number][]) => items.map(([icon, ru, en, minutes]) => ({ icon, title: t(ru, en), minutes }));
@@ -182,6 +201,7 @@ async function main() {
   // удалённые в админке демо-мастера, баннер, категории и страницы возвращались бы после обновления.
   await syncEpics();
   await syncBacklog();
+  await refreshAllEpicStatuses();
   await syncLibrary().catch((e) => console.error("Library: снимок документов не удался —", (e as Error).message));
 
   const SEED_FLAG = "_seed";
