@@ -140,7 +140,7 @@ export async function GET(req: Request) {
         blocking: data.blocking.map((b) => ({ key: b.key, title: b.title, status: b.status })),
         readiness: data.readiness,
         health: data.health,
-        comments: task.comments.map((c) => ({ kind: c.kind, author: c.author, text: c.text, at: c.createdAt })),
+        comments: task.comments.map((c) => ({ kind: c.kind, author: c.author, text: c.text, at: c.createdAt, libraryNoteId: c.libraryNoteId ?? null })),
         events: task.events.slice(0, 50).map((e) => ({ actor: e.actor, field: e.field, from: e.from, to: e.to, at: e.createdAt })),
         attachments: task.attachments.map((a) => ({ fileName: a.fileName, url: a.url, size: a.size })),
       });

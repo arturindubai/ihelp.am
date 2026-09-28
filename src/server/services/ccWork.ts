@@ -1,11 +1,12 @@
 import "server-only";
 import { db } from "../db";
-import { upsertNote } from "./library";
+import { upsertNote, createNote } from "./library";
 import { alertTech } from "../alerts";
 import { html, notifyTech } from "../notify";
 import { BLOCKED_ON_LABELS, STATUSES } from "@/lib/backlog-labels";
 import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, doneGate, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
 import { nextIntakeKey, intakeTitle } from "@/lib/cc-lanes";
+import { needsLibrary, buildSummaryText } from "@/lib/cc-overflow";
 import type { Prisma, Task } from "@prisma/client";
 
 /**
@@ -41,7 +42,23 @@ async function log(taskId: string, actor: string, field: string, from: string | 
 }
 
 async function say(taskId: string, author: string, kind: CommentKind, text: string) {
-  if (text.trim()) await db.taskComment.create({ data: { taskId, author, kind, text: text.trim().slice(0, 5000) } });
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  if (!needsLibrary(trimmed)) {
+    await db.taskComment.create({ data: { taskId, author, kind, text: trimmed } });
+    return;
+  }
+  // Текст длиннее лимита: полный материал — в Библиотеку, в ленте — резюме со ссылкой
+  let libraryNoteId: string | null = null;
+  try {
+    const doc = await createNote({ title: `Полный текст записи задачи`, kind: "knowledge", content: trimmed }, author);
+    libraryNoteId = doc.slug;
+  } catch {
+    // Ошибка сохранения: храним обрезанный текст с пометкой
+    await db.taskComment.create({ data: { taskId, author, kind, text: trimmed.slice(0, 4900) + "\n\n⚠️ Текст обрезан — не удалось сохранить в Библиотеку." } });
+    return;
+  }
+  await db.taskComment.create({ data: { taskId, author, kind, text: buildSummaryText(trimmed, libraryNoteId), libraryNoteId } });
 }
 
 /** Каким видом записи ляжет текст перехода в ленту задачи */

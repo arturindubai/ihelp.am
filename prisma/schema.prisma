@@ -640,15 +640,17 @@ model Attachment {
 
 /// Комментарий или отчёт по задаче
 model TaskComment {
-  id        String   @id @default(cuid())
-  taskId    String
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  id             String   @id @default(cuid())
+  taskId         String
+  task           Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   /// note — заметка человека, progress — ход работы, report — отчёт о сдаче, handoff — передача задачи,
   /// review — замечания проверки, error — ошибка (тест, сборка, выкладка), system — запись сторожа или системы
-  kind      String   @default("note")
-  author    String
-  text      String
-  createdAt DateTime @default(now())
+  kind           String   @default("note")
+  author         String
+  text           String
+  /// slug записи Библиотеки, если текст превысил лимит и полный материал сохранён там
+  libraryNoteId  String?
+  createdAt      DateTime @default(now())
 
   @@index([taskId, createdAt])
 }

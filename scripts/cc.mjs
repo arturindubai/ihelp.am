@@ -459,6 +459,15 @@ function branchFacts(branch) {
 
 /* ───── команды ───── */
 
+const COMMENT_LIMIT = 5000;
+
+/** Если текст длиннее лимита — сообщить об этом до отправки (полный текст сохранится в Библиотеке) */
+function warnIfLong(str) {
+  if (str.length > COMMENT_LIMIT) {
+    console.log(`ℹ Длина текста: ${str.length} знаков (лимит ${COMMENT_LIMIT}) — полный текст сохранится в Библиотеке, в ленте будет резюме со ссылкой.`);
+  }
+}
+
 /**
  * Текст для команды: из --text-file > позиционных аргументов > stdin.
  * Пустой stdin не перекрывает позиционный аргумент — только непустой и только при отсутствии аргумента.
@@ -598,6 +607,7 @@ async function main() {
     case "note": {
       const k = needKey();
       if (!text()) die("нужен текст записи");
+      warnIfLong(text());
       await api("POST", null, { action: "note", agent: agentFor(k), key: k, text: text(), kind: flags.error ? "error" : "progress" });
       console.log(`✓ запись добавлена в ${k}`);
       return;
@@ -605,6 +615,7 @@ async function main() {
     case "review": {
       const k = needKey();
       if (text().length < 40) die("отчёт от 40 символов: что сделано, как проверено (tsc, vitest, стенд), как проверить деплоеру, риски");
+      warnIfLong(text());
       const releaseNote = typeof flags.release === "string" ? flags.release.trim() : "";
       const ownerSummary = typeof flags.summary === "string" ? flags.summary.trim() : "";
       if (!releaseNote)
@@ -658,6 +669,7 @@ async function main() {
     case "handoff": {
       const k = needKey();
       if (text().length < 20) die("опишите передачу: что сделано, что осталось, где остановились, подводные камни");
+      warnIfLong(text());
       const st = readState(k);
       const facts = st?.branch ? `\nВетка: ${st.branch}${tryGit(["rev-parse", "--verify", "-q", `refs/remotes/origin/${st.branch}`], ROOT) ? " (отправлена)" : " (НЕ отправлена — работа только на этом сервере)"}` : "";
       await api("POST", null, { action: "handoff", agent: agentFor(k), key: k, text: text() + facts });
@@ -670,6 +682,7 @@ async function main() {
       if (!flags.on) die("укажите, кто разблокирует: --on owner|product|design|tech|external|deps");
       const until = typeof flags.until === "string" ? flags.until : undefined;
       if (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) die("--until ожидает дату в формате YYYY-MM-DD, например --until 2026-10-10");
+      warnIfLong(text());
       await api("POST", null, { action: "block", agent: agentFor(k), key: k, text: text(), on: flags.on, ...(until ? { blockedUntil: until } : {}) });
       dropState(k);
       console.log(`✓ ${k} заблокирована (${flags.on})${until ? `, авторазблокировка ${until}` : ""}. Аренда снята, ветка сохранена.`);
