@@ -45,6 +45,8 @@ export type WorkersConfig = {
   deployWindow: [number, number];
   /** Сколько карточек триаж разбирает за один запуск */
   triageBatch: number;
+  /** Размер пачки выкладки: сколько протестированных задач деплоер сливает и собирает за один раз; 1 — по одной (старое поведение), максимум 5 */
+  deployBatch: number;
   /** Раз в столько часов триаж пересматривает весь бэклог и готовые задачи; 0 — не пересматривать */
   sweepEveryH: number;
   /** Пауза после исчерпанного лимита подписки или отказа входа: до этого момента никого не запускаем */
@@ -76,6 +78,7 @@ export const DEFAULT_WORKERS: WorkersConfig = {
   },
   deployWindow: [10, 20],
   triageBatch: 6,
+  deployBatch: 1,
   sweepEveryH: 24,
   pausedUntil: null,
   pausedReason: null,
@@ -115,6 +118,7 @@ export function normalizeWorkers(raw: unknown): WorkersConfig {
     pools,
     deployWindow: [from, to],
     triageBatch: clamp(r.triageBatch ?? DEFAULT_WORKERS.triageBatch, 1, 15, DEFAULT_WORKERS.triageBatch),
+    deployBatch: clamp(r.deployBatch ?? DEFAULT_WORKERS.deployBatch, 1, 5, DEFAULT_WORKERS.deployBatch),
     sweepEveryH: clamp(r.sweepEveryH ?? DEFAULT_WORKERS.sweepEveryH, 0, 168, DEFAULT_WORKERS.sweepEveryH),
     pausedUntil: typeof r.pausedUntil === "string" ? r.pausedUntil : null,
     pausedReason: typeof r.pausedReason === "string" ? r.pausedReason.slice(0, 300) : null,
@@ -344,8 +348,23 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
 
   const hour = yerevanHour(now);
   if (due("deployer") && hour >= config.deployWindow[0] && hour < config.deployWindow[1]) {
-    const t = nextDeploy();
-    if (t) actions.push({ pool: "deployer", agent: "deployer", key: t.key });
+    const batchSize = config.deployBatch ?? 1;
+    if (batchSize <= 1) {
+      const t = nextDeploy();
+      if (t) actions.push({ pool: "deployer", agent: "deployer", key: t.key });
+    } else {
+      const batchKeys: string[] = [];
+      for (let i = 0; i < batchSize; i++) {
+        const t = q.deploy.find((x) => !taken().has(x.key) && !batchKeys.includes(x.key));
+        if (!t) break;
+        batchKeys.push(t.key);
+      }
+      if (batchKeys.length === 1) {
+        actions.push({ pool: "deployer", agent: "deployer", key: batchKeys[0] });
+      } else if (batchKeys.length > 1) {
+        actions.push({ pool: "deployer", agent: "deployer", keys: batchKeys });
+      }
+    }
   }
 
   if (due("tester")) {

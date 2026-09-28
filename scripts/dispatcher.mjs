@@ -258,6 +258,8 @@ ${ask}
       ? `Задача ${key} уже взята за тобой. Текущая папка — её рабочая копия (ветка task/${key}). Доведи задачу до review: сделано, scripts/check.sh зелёный, интерфейс — на стенде со скриншотами, коммиты «${key}: …», git push -u origin task/${key}, честный отчёт. Не успеваешь — закоммить, отправь ветку и сделай handoff с состоянием.`
       : pool === "tester"
         ? `Задача ${key} на проверке и держится за тобой. Текущая папка — её код на коммите ${extra.sha}. Это копия ветки: скриптов и команд последней версии в ней может не быть, поэтому все инструменты бери из основной копии по полному пути и запускай из текущей папки: bash /opt/ihelp.am/scripts/check.sh · bash /opt/ihelp.am/scripts/stand.sh up|down · node /opt/ihelp.am/scripts/stand-shot.mjs /ru/… · node /opt/ihelp.am/scripts/cc.mjs pass|fail|block … --agent ${agent}. Проверь по брифингу и поставь вердикт: pass или fail — без вердикта проверка не засчитывается и запуск повторится. Код не правь.`
+        : extra.keys && extra.keys.length > 1
+        ? `Задачи ${extra.keys.join(", ")} протестированы и держатся за тобой на время пачковой выкладки. Текущая папка — основная копия /opt/ihelp.am: руками в ней ничего не меняй. Для каждой задачи: show → проверить ленту, отметку тестировщика и диф. Стоп-условие для отдельной задачи — ручные шаги в «Готовности к деплою», секреты в коде, изменение цен, оплаты или прав без явного решения владельца в ленте, пустой отчёт тестировщика: тогда return с причиной (задача выйдет из пачки). Задачи с миграцией базы или правками скриптов выкладки/диспетчера скрипт выложит отдельно сам. Иначе — одна команда: scripts/deploy-batch.sh ${extra.keys.join(" ")}. Она сама закроет задачи или вернёт их.`
         : `Задача ${key} протестирована и держится за тобой на время выкладки. Текущая папка — основная копия /opt/ihelp.am: руками в ней ничего не меняй. Проверь карточку, ленту, отметку тестировщика и диф. Стоп-условия — ручные шаги в «Готовности к деплою», удаляющая миграция, секреты в коде, изменение цен, оплаты или прав без явного решения владельца в ленте, пустой отчёт тестировщика: тогда block --on owner или return с причиной. Иначе — одна команда: scripts/deploy-task.sh ${key}. Она сама закроет задачу или вернёт её.`;
   return `${common}\n\n${role}\n\n${brief}`;
 }
@@ -344,8 +346,15 @@ async function main() {
         const out = JSON.parse(cc(["test", a.key, "--agent", a.agent, "--json"]));
         await spawn("tester", a.agent, a.key, pools.tester.model, { ...extra, dir: out.dir, sha: out.sha });
       } else if (a.pool === "deployer") {
-        cc(["lock", a.key, "--agent", "deployer"]);
-        await spawn("deployer", "deployer", a.key, pools.deployer.model, extra);
+        if (a.keys && a.keys.length > 1) {
+          // Пачковая выкладка: заблокировать все задачи и передать деплоеру список
+          for (const k of a.keys) cc(["lock", k, "--agent", "deployer"]);
+          await spawn("deployer", "deployer", a.keys[0], pools.deployer.model, { ...extra, keys: a.keys });
+        } else {
+          const singleKey = a.key ?? a.keys?.[0];
+          cc(["lock", singleKey, "--agent", "deployer"]);
+          await spawn("deployer", "deployer", singleKey, pools.deployer.model, extra);
+        }
       } else if (a.pool === "product") {
         await spawn("product", a.agent, null, pools.product.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
       } else if (a.pool === "designer") {
