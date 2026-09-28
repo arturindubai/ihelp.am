@@ -383,6 +383,27 @@
     "stats": "My stats",
     "schedule": "My schedule"
   },
+  "operator": {
+    "title": "Operator panel",
+    "today": "Today",
+    "all": "All",
+    "noMaster": "No pro",
+    "noOrdersToday": "No orders today",
+    "noOrders": "No orders",
+    "noOrdersUnassigned": "All orders assigned",
+    "assignMaster": "Assign pro",
+    "changeMaster": "Change pro",
+    "changeStatus": "Change status",
+    "noMasterChip": "No pro",
+    "noMastersAvail": "No available pros",
+    "selectMaster": "Select pro",
+    "loadMore": "Load more",
+    "loadError": "Failed to load. Refresh →",
+    "saving": "Saving…",
+    "toSite": "To website",
+    "masterBusy": "Pro is busy at this time, please choose another",
+    "error": "Failed to assign pro"
+  },
   "footer": {
     "offer": "Terms",
     "privacy": "Privacy",
@@ -844,6 +865,11 @@
       "rolesHint": "Operator — orders, schedule, clients, reviews. Administrator — everything except staff and settings. Owner — full access.",
       "addStaff": "Add staff member",
       "namePlaceholder": "Name (optional)",
+      "emailPlaceholder": "Email (optional)",
+      "emailHint": "Staff can sign in with a code or via Google using this email",
+      "emailSave": "Save email",
+      "emailTaken": "This email is already linked to another account",
+      "emailInvalid": "Invalid email format",
       "revokeAccess": "Revoke access",
       "revokeConfirm": "Revoke access for {label}? Role will change to Client and all sessions will be terminated.",
       "lastLogin": "Last login:",
@@ -1360,7 +1386,8 @@
         "approvedEmpty": "Nothing approved yet",
         "canon": "Library record",
         "designSnippet": "Design: {text}",
-        "files": "files: {n}"
+        "files": "files: {n}",
+        "approvedAgent": "by {agent}"
       },
       "backlog": {
         "strip": {

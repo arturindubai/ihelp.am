@@ -3,6 +3,7 @@ import { Prisma, type PaymentMethod, type User, type VisitStatus } from "@prisma
 import { db } from "../db";
 import { getSettings } from "../settings";
 import { html, notifyTeam } from "../notify";
+import { notifyMasterAssigned } from "./workerNotify";
 import { calculatePrice } from "@/lib/pricing";
 import { firstOrderUsedBy } from "@/lib/firstOrder";
 import { computeAllSlots, isMasterFree, type MasterAvailability } from "@/lib/slots";
@@ -217,6 +218,9 @@ export async function createOrder(user: User, input: CreateOrderInput) {
       html`📅 ${input.date} ${input.time} · ${Math.round(durationMin / 30) / 2} ч\n👤 ${user.name || ""} ${user.phone}\n📍 ${address.street} ${address.building}${address.apartment ? ", кв. " + address.apartment : ""}\n` +
       html`🧹 ${m ? tr(m.name, "ru") : "—"}\n💰 ${amd(price.payNow)} · ${input.paymentMethod === "CASH" ? "наличные" : "карта"}`,
   );
+  // Уведомить мастера о новом визите
+  const firstVisit = await db.visit.findFirst({ where: { orderId: order.id, masterId: { not: null } }, select: { id: true } });
+  if (firstVisit) await notifyMasterAssigned(firstVisit.id).catch(() => {});
   return order;
 }
 

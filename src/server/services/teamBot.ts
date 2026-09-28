@@ -7,6 +7,9 @@ import { html } from "../notify";
 import { intakeCreate, ccCounts } from "./ccBoard";
 import { addAttachment } from "./attachments";
 import { getWorkersConfig } from "./workers";
+import { db } from "../db";
+import { normalizePhone } from "@/lib/phone";
+import ru from "../../../messages/ru.json";
 
 /**
  * Бот команды в Telegram — как бот LIA (lia-tg-poll): владелец и команда пишут задачу → карточка IN-N в очереди
@@ -137,6 +140,7 @@ const HELP = [
 
 type TgUser = { id: number; first_name?: string; last_name?: string; username?: string };
 type TgPhoto = { file_id: string; file_size?: number; width: number; height: number };
+type TgContact = { phone_number: string; first_name?: string; user_id?: number };
 type TgMessage = {
   message_id: number;
   from?: TgUser;
@@ -145,6 +149,7 @@ type TgMessage = {
   caption?: string;
   photo?: TgPhoto[];
   document?: { file_id: string; file_name?: string; mime_type?: string; file_size?: number };
+  contact?: TgContact;
   voice?: unknown;
   audio?: unknown;
   video_note?: unknown;
@@ -200,9 +205,26 @@ export async function handleTeamUpdate(update: TgUpdate) {
       return;
     }
   }
-  // Чужим — одна короткая фраза и больше ничего: задачи от них не заводятся
+  // Мастер делится контактом → привязать staffChatId
+  if (!member && msg.contact) {
+    const phone = normalizePhone(msg.contact.phone_number);
+    if (phone) {
+      const master = await db.master.findFirst({ where: { user: { phone } }, select: { id: true } });
+      if (master) {
+        await db.master.update({ where: { id: master.id }, data: { staffChatId: String(msg.chat.id) } });
+        await reply(msg.chat.id, ru.notify.master.staffBotConnected);
+        console.log(`[team-bot] мастер привязан chatId=${msg.chat.id} masterId=${master.id}`);
+        return;
+      }
+    }
+    await reply(msg.chat.id, ru.notify.master.staffBotNotMaster);
+    return;
+  }
+
+  // Незарегистрированный: предлагаем поделиться номером (возможно, это мастер)
   if (!member) {
-    await reply(msg.chat.id, "Это рабочий бот команды iHelp.");
+    const SHARE_KEYBOARD = { keyboard: [[{ text: ru.notify.master.sharePhone, request_contact: true }]], resize_keyboard: true, one_time_keyboard: true };
+    await call(t.botToken, "sendMessage", { chat_id: msg.chat.id, text: ru.notify.master.staffBotConnect, parse_mode: "HTML", reply_markup: SHARE_KEYBOARD });
     return;
   }
   if (start || /^\/help\b|^помощь$/i.test(text)) {

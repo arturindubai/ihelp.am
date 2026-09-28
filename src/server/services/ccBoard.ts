@@ -119,16 +119,39 @@ export async function mockupPendingApprovals() {
   });
 }
 
-/** Утверждённые дизайны за две недели — со ссылкой на запись канона в Библиотеке */
+/** Утверждённые дизайны за две недели — со статусом задачи и первым открытым блокером */
 export async function designApproved(days = 14) {
-  return db.task.findMany({
+  const tasks = await db.task.findMany({
     where: { mockupApprovedAt: { gte: new Date(Date.now() - days * 86400_000) } },
     orderBy: { mockupApprovedAt: "desc" },
     select: {
-      key: true, title: true, status: true, mockupApprovedAt: true, mockupApprovedBy: true,
-      mockupUrl: true,
+      key: true, title: true, status: true, layer: true, mockupApprovedAt: true, mockupApprovedBy: true,
+      mockupUrl: true, blockedOn: true, blockedReason: true, depends: true, claimedBy: true,
       attachments: { where: { mime: { startsWith: "image/" } }, select: { url: true, fileName: true }, orderBy: { createdAt: "desc" } },
     },
+  });
+
+  const depKeys = [...new Set(tasks.flatMap((t) => t.depends))];
+  const depMap =
+    depKeys.length > 0
+      ? new Map(
+          (
+            await db.task.findMany({
+              where: { key: { in: depKeys } },
+              select: { key: true, status: true, layer: true, blockedOn: true },
+            })
+          ).map((d) => [d.key, d]),
+        )
+      : new Map<string, { key: string; status: string; layer: string; blockedOn: string | null }>();
+
+  return tasks.map((t) => {
+    const openDeps = t.depends
+      .map((d) => depMap.get(d))
+      .filter(
+        (d): d is { key: string; status: string; layer: string; blockedOn: string | null } =>
+          !!d && d.status !== "done" && d.status !== "cancelled",
+      );
+    return { ...t, openDeps };
   });
 }
 
@@ -304,6 +327,7 @@ export async function boardAudit() {
       if (t.blockedOn === "deps" && !open.length) add("blocked_deps_closed", t.key);
     }
     if (t.status === "backlog" && !t.triagedAt) add("backlog_untriaged", t.key);
+    if (t.status === "backlog" && t.triagedAt && t.depends.length > 0 && t.depends.every((d) => closed(d))) add("backlog_deps_closed", t.key);
     if (t.status === "ready" && open.length) add("ready_open_deps", t.key);
     if (t.status === "review") {
       const br = t.branch || `task/${t.key}`;

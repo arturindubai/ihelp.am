@@ -492,7 +492,8 @@ export async function runWatchdog(now = new Date()) {
     },
   });
   const byKey = new Map(tasks.map((t) => [t.key, t]));
-  const plan = watchdogPlan(tasks, await closedKeys(), now);
+  const closed = await closedKeys();
+  const plan = watchdogPlan(tasks, closed, now);
   const hours = Math.round(RETURN_AFTER_STALE_MIN / 60);
 
   for (const key of plan.markStale) {
@@ -567,7 +568,31 @@ export async function runWatchdog(now = new Date()) {
     await alertTech("cc:review", html`⏳ Ждут проверки дольше суток: ${plan.stuckReview.join(", ")}\nОчередь деплоера: /admin/control?status=review`, 24 * 60);
   }
 
-  return { stale: plan.markStale.length, returned: plan.autoReturn.length, unblocked: plan.unblock.length, phantom: plan.phantom.length, stuckReview: plan.stuckReview.length, releasedLeases: plan.releaseLease.length, scheduledUnblocks: plan.unblockScheduled.length };
+  // Догоняющий возврат на разбор: задачи в бэклоге, разобранные, но все зависимости уже закрыты.
+  // releaseDependents() срабатывает при закрытии конкретной задачи, но пропускает случаи, когда
+  // зависимость закрылась раньше триажа (или до введения DEV-55). Сторож находит их и возвращает.
+  // Ограничение: не чаще раза в сутки на задачу (поле retriage в истории событий).
+  const backlogTriaged = await db.task.findMany({
+    where: { status: "backlog", triagedAt: { not: null }, depends: { isEmpty: false } },
+    select: {
+      key: true,
+      depends: true,
+      events: {
+        where: { field: "retriage", createdAt: { gte: new Date(now.getTime() - 24 * 3600_000) } },
+        select: { createdAt: true },
+        take: 1,
+      },
+    },
+  });
+  let catchUpRetriaged = 0;
+  for (const t of backlogTriaged) {
+    if (t.depends.every((d) => closed.has(d)) && t.events.length === 0) {
+      await retriage(t.key);
+      catchUpRetriaged++;
+    }
+  }
+
+  return { stale: plan.markStale.length, returned: plan.autoReturn.length, unblocked: plan.unblock.length, phantom: plan.phantom.length, stuckReview: plan.stuckReview.length, releasedLeases: plan.releaseLease.length, scheduledUnblocks: plan.unblockScheduled.length, catchUpRetriaged };
 }
 
 /** Подписи для писем сторожа и интерфейса: кто должен снять блокировку */

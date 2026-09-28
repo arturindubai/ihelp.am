@@ -113,6 +113,28 @@ describe("имена и итоги запусков", () => {
     expect(freeName("tester", [])).toBe("tester");
     expect(freeName("tester", ["tester"])).toBe("tester-2");
   });
+  it("имя с задачей в работе (claimedAgents) не выбирается — отказ agent_busy не возникает (критерий 5)", () => {
+    // dev-1 держит задачу в работе, но нет активного запуска systemd
+    const s = state({ readyForDev: 2, claimedAgents: [{ pool: "dev", agent: "dev-1" }] });
+    const actions = planDispatch(s, noon);
+    // оба слота dev: dev-1 занят claimedAgents, должен выбраться dev-2 и dev-3
+    expect(actions.every((a) => a.agent !== "dev-1")).toBe(true);
+    expect(actions.find((a) => a.pool === "dev" && a.agent === "dev-2")).toBeTruthy();
+  });
+  it("два работающих разработчика с задачами, лимит 4 — планируются ещё два запуска (критерий 5, без дублей)", () => {
+    // Без дедупликации: running=[dev-1,dev-2], claimedAgents=[dev-1,dev-2] → names.length=4, free=0 → никого
+    // С дедупликацией через Set: names={dev-1,dev-2}.length=2, free=2 → dev-3 и dev-4
+    const config4 = { ...on, pools: { ...on.pools, dev: { ...on.pools.dev, max: 4 } } };
+    const s = state({
+      config: config4,
+      readyForDev: 4,
+      running: [{ pool: "dev" as const, agent: "dev-1" }, { pool: "dev" as const, agent: "dev-2" }],
+      claimedAgents: [{ pool: "dev" as const, agent: "dev-1" }, { pool: "dev" as const, agent: "dev-2" }],
+    });
+    const devActions = planDispatch(s, noon).filter((a) => a.pool === "dev");
+    expect(devActions).toHaveLength(2);
+    expect(devActions.every((a) => !["dev-1", "dev-2"].includes(a.agent))).toBe(true);
+  });
   it("исчерпанный лимит подписки распознаётся отдельно от ошибки", () => {
     expect(runOutcome({ is_error: true, result: "Claude AI usage limit reached|1759000000" }, 1)).toBe("limit");
     expect(runOutcome({ is_error: false, result: "Готово" }, 0)).toBe("done");
