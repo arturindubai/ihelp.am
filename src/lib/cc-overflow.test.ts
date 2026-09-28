@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { needsLibrary, buildSummaryText, COMMENT_LIMIT, COMMENT_SUMMARY_LEN } from "./cc-overflow";
+import { needsLibrary, buildSummaryText, buildLibraryTitle, COMMENT_LIMIT, COMMENT_SUMMARY_LEN } from "./cc-overflow";
 
 describe("needsLibrary", () => {
   it("не нужна для текста в пределах лимита", () => {
@@ -48,5 +48,30 @@ describe("buildSummaryText", () => {
     const summary = buildSummaryText(full, slug);
     // Из записи ленты владелец может достать slug
     expect(summary.includes(`[Полный текст: Библиотека, ${slug}]`)).toBe(true);
+  });
+});
+
+describe("buildLibraryTitle", () => {
+  it("включает ключ задачи и автора", () => {
+    const title = buildLibraryTitle("DEV-67", "dev-1");
+    expect(title).toContain("DEV-67");
+    expect(title).toContain("dev-1");
+  });
+
+  it("метка зависит от вида: report → отчёт", () => {
+    expect(buildLibraryTitle("DEV-67", "dev-1", "report")).toContain("отчёт");
+  });
+
+  it("метка зависит от вида: handoff → передача", () => {
+    expect(buildLibraryTitle("DEV-67", "dev-1", "handoff")).toContain("передача");
+  });
+
+  it("неизвестный вид → запись", () => {
+    expect(buildLibraryTitle("DEV-67", "dev-1", "unknown")).toContain("запись");
+  });
+
+  it("содержит дату (год четырёхзначный)", () => {
+    const title = buildLibraryTitle("DEV-67", "dev-1");
+    expect(title).toMatch(/20\d{2}/);
   });
 });
