@@ -719,14 +719,21 @@ export async function reblockOn(key: string, newBlockedOn: string, reason: strin
   return db.task.findUniqueOrThrow({ where: { id: t.id } });
 }
 
-/** Вернуть дизайн дизайнеру: задача блокируется на дизайне с причиной, утверждение и ссылка на макет снимаются */
+/** Вернуть дизайн дизайнеру: задача блокируется на дизайне с причиной, утверждение, ссылка на макет и изображения снимаются */
 export async function returnDesign(key: string, actor: Actor, reason: string) {
-  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true } });
+  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, blockedOn: true } });
   if (!t) throw new CcError("not_found");
   if (reason.trim().length < 5) throw new CcError("reason_required");
-  // Сбросить утверждение и ссылку на макет: дизайнер должен сделать новый макет с чистого листа
+  // Сбросить утверждение, ссылку на макет и загруженные изображения: дизайнер делает всё заново
   await db.task.update({ where: { key }, data: { mockupApprovedBy: null, mockupApprovedAt: null, mockupUrl: null } });
-  if (t.status !== "blocked") return transition(key, { to: "blocked", blockedOn: "design", text: `Дизайн возвращён: ${reason.trim()}` }, actor);
+  await db.attachment.deleteMany({ where: { taskId: t.id, mime: { startsWith: "image/" } } });
+  if (t.status !== "blocked") {
+    return transition(key, { to: "blocked", blockedOn: "design", text: `Дизайн возвращён: ${reason.trim()}` }, actor);
+  }
+  // Задача уже заблокирована (например, на владельце) — переключаем адресата на дизайн с записью в историю
+  const prevBlockedOn = t.blockedOn;
+  await db.task.update({ where: { id: t.id }, data: { blockedOn: "design", blockedReason: reason.trim().slice(0, 2000) } });
+  await log(t.id, actor.name, "blockedOn", prevBlockedOn, "design");
   await say(t.id, actor.name, "note", `Дизайн возвращён: ${reason.trim()}`, key);
   return db.task.findUniqueOrThrow({ where: { key } });
 }

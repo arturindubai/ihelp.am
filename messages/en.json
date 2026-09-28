@@ -1284,6 +1284,7 @@
           "holding": "no verdict, retry in {detail}",
           "question": "question: {detail}",
           "nodesign": "no design description",
+          "returned": "Returned",
           "deploy": "tested"
         },
         "more": "and {n} more — in Backlog tab",
@@ -1415,8 +1416,8 @@
         "link": "View mockup",
         "canon": "Library record",
         "return": "Return to designer",
-        "returnPh": "What to fix",
-        "returned": "Returned to designer",
+        "returnPh": "Remark (required)",
+        "returned": "Sent to designer",
         "failed": "Error: {error}"
       },
       "imageViewer": {
