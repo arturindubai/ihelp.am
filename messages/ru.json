@@ -377,9 +377,17 @@
   },
   "catalog": {
     "newService": "Новая услуга",
-    "comingSoonTitle": "Скоро откроем",
-    "comingSoonText": "Готовим услуги и мастеров. Напишите нам — ответим на вопросы",
-    "writeWhatsApp": "Написать в WhatsApp"
+    "comingSoonTitle": "Скоро в Ереване",
+    "comingSoonText": "Мы запускаем эту услугу. Оставьте контакт — сообщим первыми, когда откроем запись.",
+    "writeWhatsApp": "Написать в WhatsApp",
+    "notifyTitle": "Уведомить меня о запуске",
+    "notifySubtitle": "Телефон или e-mail — на выбор",
+    "notifyPlaceholder": "+374 … или name@mail.com",
+    "notifyHint": "Передадим только одно сообщение о запуске",
+    "notifyButton": "Уведомить меня",
+    "notifySuccess": "Записаны! Сообщим, когда откроем запись.",
+    "notifyAlready": "Мы уже получили ваш контакт",
+    "notifyInvalid": "Введите телефон или e-mail"
   },
   "pro": {
     "title": "Кабинет мастера",

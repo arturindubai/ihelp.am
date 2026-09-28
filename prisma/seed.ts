@@ -201,6 +201,10 @@ async function main() {
     ["upholstery", "Химчистка мебели", "Upholstery cleaning", "/img/cat-sofa.svg"],
     ["handyman", "Мастер на час", "Handyman", "/img/cat-handyman.svg"],
     ["after-renovation", "Уборка после ремонта", "After-renovation cleaning", "/img/cat-renovation.svg"],
+    ["chef", "Повар на дом", "Personal chef", "/img/cat-chef.svg"],
+    ["massage", "Массаж на дом", "Home massage", "/img/cat-massage.svg"],
+    ["moving", "Грузчики и переезды", "Moving services", "/img/cat-moving.svg"],
+    ["dry-cleaning", "Химчистка", "Dry cleaning", "/img/cat-dry.svg"],
   ];
   for (const [i, [slug, ru, en, image]] of soon.entries()) {
     await db.category.upsert({ where: { slug }, create: { slug, title: t(ru, en), image, sort: i + 2, comingSoon: true }, update: {} });

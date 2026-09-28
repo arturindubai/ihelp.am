@@ -828,3 +828,15 @@ model AppError {
 
   @@index([lastSeenAt])
 }
+
+/// Заявки «Уведомить меня» для категорий-заглушек
+model ServiceInterest {
+  id          String   @id @default(cuid())
+  serviceSlug String
+  contact     String
+  createdAt   DateTime @default(now())
+
+  @@unique([serviceSlug, contact])
+  @@index([serviceSlug])
+  @@map("service_interest")
+}
