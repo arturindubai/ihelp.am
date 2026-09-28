@@ -327,6 +327,7 @@ export async function boardAudit() {
       if (t.blockedOn === "deps" && !open.length) add("blocked_deps_closed", t.key);
     }
     if (t.status === "backlog" && !t.triagedAt) add("backlog_untriaged", t.key);
+    if (t.status === "backlog" && t.triagedAt && t.depends.length > 0 && t.depends.every((d) => closed(d))) add("backlog_deps_closed", t.key);
     if (t.status === "ready" && open.length) add("ready_open_deps", t.key);
     if (t.status === "review") {
       const br = t.branch || `task/${t.key}`;

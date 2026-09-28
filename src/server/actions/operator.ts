@@ -5,6 +5,7 @@ import type { VisitStatus } from "@prisma/client";
 import { requireRole } from "../auth";
 import { db } from "../db";
 import { setVisitStatus } from "../services/visits";
+import { notifyMasterAssigned } from "../services/workerNotify";
 import { audit } from "../audit";
 import { assignMasterToVisit } from "../services/operatorService";
 
@@ -30,10 +31,14 @@ export async function operatorAssignMasterAction(visitId: string, masterId: stri
   const u = await checkAccess();
   const prevMasterId = (await db.visit.findUniqueOrThrow({ where: { id: visitId }, select: { masterId: true } })).masterId;
 
+  // Проверка занятости мастера — в сервисе (BUG-6); уведомление мастеру — только после успешного назначения (NOTIFY-2A)
   const result = await assignMasterToVisit(visitId, masterId);
   if (!result.ok) return result;
 
   await audit(u.id, "visit.assignMaster", "Visit", visitId, { from: prevMasterId, to: masterId });
+  if (masterId && masterId !== prevMasterId) {
+    await notifyMasterAssigned(visitId).catch(() => {});
+  }
   rv();
   return { ok: true };
 }
