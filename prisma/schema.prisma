@@ -318,6 +318,7 @@ model Order {
 
   visits            Visit[]
   redemptions       PromoRedemption[]
+  clientMessages    ClientMessage[]
 
   @@index([userId])
   @@index([userId, createdAt])
@@ -360,9 +361,36 @@ model Visit {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   review          Review?
+  reviewToken     ReviewToken?
 
   @@index([scheduledAt])
   @@index([masterId, scheduledAt])
+}
+
+/// Одноразовая ссылка для отзыва без повторного входа (NOTIFY-3B)
+model ReviewToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  visitId   String    @unique
+  visit     Visit     @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  usedAt    DateTime?
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+}
+
+/// Лог клиентских сообщений с каналом и статусом доставки (NOTIFY-3B)
+model ClientMessage {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  visitId   String?
+  event     String
+  subject   String
+  channel   String
+  delivered Boolean  @default(false)
+  sentAt    DateTime @default(now())
+
+  @@index([orderId])
 }
 
 enum ReviewStatus {
