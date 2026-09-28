@@ -189,7 +189,7 @@ export async function transition(key: string, input: TransitionInput, actor: Act
     : commentBody;
   await say(task.id, actor.name, kindFor(from, to, actor, task.claimedBy), commentText, key);
   if (to === "done" || to === "cancelled") await releaseDependents(key);
-  if (to === "done" || to === "cancelled") await maybeCloseParent(key, to, actor).catch(() => null);
+  if (to === "done" || to === "cancelled") await maybeCloseParent(key, to).catch(() => null);
   // После приёмки не-код задачи с указанными следующими шагами — карточка в очередь триажа
   if (to === "done" && task.layer === "none" && task.nextSteps.length > 0) {
     await createNextStepsIntake(key, task.title, task.nextSteps, actor.name).catch(async (err) => {
@@ -782,26 +782,36 @@ export async function returnDesign(key: string, actor: Actor, reason: string) {
 /**
  * Если закрытая задача — часть родителя, проверяем: если все части закрыты,
  * родитель закрываем автоматически (done), снимая его из очереди.
+ * Обходим transition() напрямую: пути ready→done нет в TRANSITIONS ни для одной роли.
  */
-async function maybeCloseParent(partKey: string, closedTo: "done" | "cancelled", actor: Actor) {
+async function maybeCloseParent(partKey: string, _closedTo: "done" | "cancelled") {
   const part = await db.task.findUnique({ where: { key: partKey }, select: { parentKey: true } });
   if (!part?.parentKey) return;
-  const parent = await db.task.findUnique({ where: { key: part.parentKey }, select: { id: true, status: true, layer: true } });
+  const parentKey = part.parentKey;
+  const parent = await db.task.findUnique({ where: { key: parentKey }, select: { id: true, status: true, epicKey: true } });
   if (!parent) return;
   if ((CLOSED_STATUSES as readonly string[]).includes(parent.status)) return;
-  const openParts = await db.task.count({ where: { parentKey: part.parentKey, status: { notIn: CLOSED_STATUSES } } });
+  const openParts = await db.task.count({ where: { parentKey, status: { notIn: CLOSED_STATUSES } } });
   if (openParts > 0) return;
-  // Все части закрыты: родитель завершается как «done»
-  const targetTo: TaskStatusKey = "done";
-  await transition(
-    part.parentKey,
-    {
-      to: targetTo,
-      text: `Все части закрыты (последней — ${partKey}). Родительская задача закрыта автоматически.`,
-      sha: closedTo === "done" ? "parts-done" : undefined,
-    },
-    { ...actor, name: "watchdog", role: "deployer", via: "watchdog" },
-  ).catch(() => null);
+  const from = parent.status as TaskStatusKey;
+  const text = `Все части закрыты (последней — ${partKey}). Родительская задача закрыта автоматически.`;
+  const data: Prisma.TaskUpdateManyMutationInput = {
+    status: "done",
+    doneAt: new Date(),
+    proof: text.slice(0, 2000),
+    blockedOn: null,
+    blockedReason: null,
+    blockedUntil: null,
+    blockedFrom: null,
+  };
+  if (from === "in_progress") Object.assign(data, { claimedBy: null, claimUntil: null, staleAt: null, session: null });
+  if (from === "review") Object.assign(data, { claimedBy: null, claimUntil: null });
+  const r = await db.task.updateMany({ where: { id: parent.id, status: from }, data });
+  if (!r.count) return;
+  await log(parent.id, "watchdog", "status", from, "done");
+  await say(parent.id, "watchdog", "system", text, parentKey);
+  await releaseDependents(parentKey).catch(() => null);
+  if (parent.epicKey) await refreshEpicStatus(parent.epicKey).catch(() => null);
 }
 
 /**
