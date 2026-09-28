@@ -4,6 +4,7 @@ import {
   canTransition,
   unblockTarget,
   doneGate,
+  inTriageQueue,
   isOwnerQuestion,
   isReady,
   needsReason,
@@ -59,6 +60,42 @@ describe("разблокировка", () => {
     expect(unblockTarget("backlog", "dev")).toBe("ready");
     expect(unblockTarget("in_progress", "owner")).toBe("ready");
     expect(unblockTarget(null, "owner")).toBe("ready");
+  });
+
+  // Случай CONTENT-6: заблокирована на дизайне, blockedFrom ready, один открытый вопрос без слова «макет».
+  // После утверждения дизайна owner переходит задачу в ready — но гейт needs_open блокирует.
+  // Задача должна попасть к триажу, а не зависнуть молча.
+  it("CONTENT-6: после утверждения дизайна owner может перейти blocked→ready", () => {
+    expect(canTransition("blocked", "ready", "owner")).toBe(true);
+  });
+  it("CONTENT-6: readyNeedsGate блокирует переход при открытых вопросах без force", () => {
+    expect(readyNeedsGate(["Нужно согласовать текст кнопки"], "owner", false)).toBe("needs_open");
+  });
+  it("CONTENT-6: owner с force может обойти opens вопросы и отправить задачу в очередь", () => {
+    expect(readyNeedsGate(["Нужно согласовать текст кнопки"], "owner", true)).toBeNull();
+  });
+  it("CONTENT-6: роль из агентского имени — dev, из имени человека — тоже dev (не owner)", () => {
+    expect(roleOf("Артур")).toBe("dev");
+    expect(roleOf("owner")).toBe("owner");
+  });
+  // Случай CONTENT-6: заблокирована на дизайне, triagedAt пуст — должна попасть в очередь триажа
+  it("CONTENT-6: задача blocked/design/triagedAt=null попадает в очередь триажа", () => {
+    expect(inTriageQueue({ status: "blocked", blockedOn: "design", triagedAt: null })).toBe(true);
+  });
+  it("уже разобранная задача не попадает в очередь триажа повторно", () => {
+    expect(inTriageQueue({ status: "blocked", blockedOn: "design", triagedAt: new Date() })).toBe(false);
+  });
+  it("blocked/owner и blocked/product тоже в очереди триажа", () => {
+    expect(inTriageQueue({ status: "blocked", blockedOn: "owner", triagedAt: null })).toBe(true);
+    expect(inTriageQueue({ status: "blocked", blockedOn: "product", triagedAt: null })).toBe(true);
+  });
+  it("blocked/tech и blocked/external не попадают в очередь триажа", () => {
+    expect(inTriageQueue({ status: "blocked", blockedOn: "tech", triagedAt: null })).toBe(false);
+    expect(inTriageQueue({ status: "blocked", blockedOn: "external", triagedAt: null })).toBe(false);
+  });
+  it("бэклог без triagedAt попадает в очередь триажа", () => {
+    expect(inTriageQueue({ status: "backlog", blockedOn: null, triagedAt: null })).toBe(true);
+    expect(inTriageQueue({ status: "backlog", blockedOn: null, triagedAt: new Date() })).toBe(false);
   });
 });
 
@@ -179,7 +216,17 @@ describe("гейты сдачи", () => {
     expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, {})).toBe("release_note_required");
     expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note })).toBe("owner_summary_required");
     expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note, ownerSummary: summary })).toBeNull();
-    expect(reviewGate({ layer: "none", branch: null }, report, { releaseNote: note, ownerSummary: summary })).toBeNull();
+    // Для не-код задачи с opts обязательны nextSteps (даже пустой массив = «ничего дальше»)
+    expect(reviewGate({ layer: "none", branch: null }, report, { releaseNote: note, ownerSummary: summary })).toBe("next_steps_required");
+    expect(reviewGate({ layer: "none", branch: null }, report, { releaseNote: note, ownerSummary: summary, nextSteps: [] })).toBeNull();
+    expect(reviewGate({ layer: "none", branch: null }, report, { releaseNote: note, ownerSummary: summary, nextSteps: ["создать макет"] })).toBeNull();
+  });
+  it("noWork — код-задача без ветки проходит проверку", () => {
+    const report = "Проверено: поведение уже корректное, изменения не потребовались. Источник: логи и тест.";
+    const note = "Поведение верное";
+    const summary = "Сделано: не потребовалось; Проверить: нет; Риск: нет";
+    expect(reviewGate({ layer: "back", branch: null }, report, { releaseNote: note, ownerSummary: summary, noWork: true })).toBeNull();
+    expect(reviewGate({ layer: "fullstack", branch: "" }, report, { releaseNote: note, ownerSummary: summary, noWork: true })).toBeNull();
   });
   it("«Готово» у код-задачи — только с коммитом и доказательством", () => {
     expect(doneGate({ layer: "back" }, { text: "smoke OK, вход проверен в проде" })).toBe("sha_required");
@@ -246,6 +293,9 @@ describe("здоровье и сторож", () => {
     expect(roleOf("tester")).toBe("tester");
     expect(canTransition("review", "ready", "tester")).toBe(true);
     expect(canTransition("review", "done", "tester")).toBe(false);
+  });
+  it("тестировщик может отменить noWork-задачу с проверки", () => {
+    expect(canTransition("review", "cancelled", "tester")).toBe(true);
   });
   it("задача, заблокированная только зависимостями, разблокируется, когда они закрылись", () => {
     const b = task({ key: "B1", status: "blocked", blockedOn: "deps", depends: ["X"], claimedBy: null, claimUntil: null });

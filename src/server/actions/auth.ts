@@ -8,6 +8,8 @@ import { sendOtp, verifyOtp } from "../otp";
 import { createSession, getCurrentUser, hash, logout } from "../auth";
 import { audit } from "../audit";
 import { packSignupTicket, unpackSignupTicket } from "@/lib/signupTicket";
+import { alertTech } from "../alerts";
+import { html } from "../notify";
 
 const secret = () => process.env.SESSION_SECRET || "dev";
 
@@ -76,6 +78,7 @@ export async function sendEmailLoginCodeAction(emailRaw: string, locale = "ru") 
   const email = normalizeEmail(emailRaw);
   if (!email) return { ok: false as const, error: "email" };
   const user = await verifiedUserByEmail(email);
+  if (!user) alertTech("email-login-unknown", html`⚠️ <b>Вход по почте: адрес не найден</b>\nПопытка входа на адрес, не привязанный ни к одному аккаунту. Проверьте раздел «Сотрудники», если это ваш коллега.`, 30).catch(() => null);
   const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || undefined;
   const r = await sendOtp(email, "EMAIL", ip, ["ru", "en", "am"].includes(locale) ? locale : "ru", { skipDelivery: !user || user.blocked });

@@ -2,6 +2,7 @@ import "server-only";
 import fs from "fs/promises";
 import { db } from "../db";
 import { getSettings } from "../settings";
+import { hasAlertRecipient } from "../notify";
 import { BACKLOG } from "../backlog";
 import { PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { OPEN_STATUSES, isReady, needsAttention, readiness, taskHealth } from "@/lib/cc-flow";
@@ -321,8 +322,8 @@ export async function systemStatus() {
     cron: { lastRunAt: cronMarks.lastRunAt ?? null, ageMin: cronMarks.lastRunAt ? (Date.now() - Date.parse(cronMarks.lastRunAt)) / 60_000 : null },
     diskFreePct,
     otpChannels,
-    teamChat: !!(s.notify.telegramBotToken && s.notify.telegramChatId),
-    techChat: !!(s.notify.telegramBotToken && (s.notify.techChatId || s.notify.telegramChatId)),
+    teamChat: !!(s.notify.telegramBotToken && (s.notify.teamChatId || s.notify.telegramChatId)),
+    techChat: hasAlertRecipient(s),
     cardPayments: s.payments.cardEnabled,
     indexing: process.env.ROBOTS_TAG ?? null,
     https: (process.env.APP_URL ?? "").startsWith("https://"),

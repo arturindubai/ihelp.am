@@ -8,12 +8,11 @@ import { getCurrentUser } from "@/server/auth";
 import { getSettings } from "@/server/settings";
 import { tr } from "@/i18n/locales";
 import { amd, dateLabel } from "@/lib/format";
+import { RATING_THRESHOLD } from "@/lib/constants";
 import { Icon } from "@/components/Icon";
 import { Rating, StarRow } from "@/components/Stars";
 import { ServiceConfigurator } from "@/components/service/ServiceConfigurator";
 import { Img } from "@/components/Img";
-
-const RATING_THRESHOLD = 5;
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;

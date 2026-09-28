@@ -1,6 +1,15 @@
 import "server-only";
 import { getSettings, type Settings } from "./settings";
 import { enqueueAndSend } from "./services/notifyQueue";
+import { hasAlertRecipient as _hasAlertRecipient } from "@/lib/alertRoute";
+
+/**
+ * Есть ли хотя бы один адресат для тех-алертов.
+ * Единая проверка: используется в notifyTech, /api/health?check=alert и systemStatus.
+ */
+export function hasAlertRecipient(s: Settings): boolean {
+  return _hasAlertRecipient(s.notify, s.team);
+}
 
 export { html } from "@/lib/html";
 
@@ -59,6 +68,15 @@ async function send(chatId: string, text: string, tag: string, tokenPath: string
   await enqueueAndSend(chatId, text, tag, token, tokenPath, threadId);
 }
 
+/** Личное сообщение мастеру через @ihelp_staff_bot. Без staffChatId — тихо игнорируется. */
+export async function notifyMaster(staffChatId: string, text: string) {
+  try {
+    await send(staffChatId, text, "master", "team.botToken");
+  } catch (e) {
+    console.error("[notify:master] не отправлено", e, "|", text);
+  }
+}
+
 /** Уведомления команде: заказы, отмены, переносы, отзывы (бот @ihelp_staff_bot → группа сотрудников) */
 export async function notifyTeam(text: string) {
   try {
@@ -96,8 +114,14 @@ export async function notifyTech(text: string) {
     chatId = process.env.ALERT_CHAT_ID?.trim() ?? "";
     via = "tech-fallback";
   }
-  if (!token || !chatId) {
-    console.error("[notify:tech] не отправлено: настройки недоступны, запасной бот не задан |", text);
+  if (!token) {
+    console.error("[notify:tech] не отправлено: токен бота не задан |", text);
+    return;
+  }
+  if (!chatId) {
+    // Чат не задан — доставляем в личные сообщения всем привязанным членам команды
+    const { notifyMembers } = await import("./services/teamBot");
+    await notifyMembers(text).catch((e) => console.error("[notify:tech] members:", e));
     return;
   }
   await post(token, chatId, text, via, threadId);

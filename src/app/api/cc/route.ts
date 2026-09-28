@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { attention, getTask, listTasks, annotate, saveTask } from "@/server/services/cc";
-import { CcError, agentActor, agentNote, claim, heartbeat, markTriaged, reviewRelease, reviewTake, testPass, transition, approveMockup, reblockOn, type TransitionInput } from "@/server/services/ccWork";
+import { CcError, agentActor, agentNote, claim, heartbeat, markTriaged, retriage, reviewRelease, reviewTake, testPass, transition, approveMockup, reblockOn, type TransitionInput } from "@/server/services/ccWork";
 import { dispatchPlan, pauseWorkers, runFinish, runStart, setOpusLimit, tickLog, triageQueue, workersOverview } from "@/server/services/workers";
 import { sendMessage, takeInbox } from "@/server/services/ccMessages";
 import { intakeCreate, boardAudit } from "@/server/services/ccBoard";
@@ -99,6 +99,8 @@ const full = (t: Task) => ({
   mockupApprovedAt: t.mockupApprovedAt,
   releaseNote: t.releaseNote,
   ownerSummary: t.ownerSummary,
+  nextSteps: t.nextSteps,
+  noWork: t.noWork,
 });
 
 export async function GET(req: Request) {
@@ -251,13 +253,21 @@ export async function POST(req: Request) {
         if (!key) return json({ error: "key_required" }, 400);
         const role = roleOf(agent);
         if (!["owner", "cto", "product"].includes(role)) return json({ error: "forbidden_role", detail: role }, 403);
-        const task = await approveMockup(key, agent, text || null);
+        const task = await approveMockup(key, agentActor(agent), text || null);
         return json({ ok: true, task: brief(task) });
       }
       // Триаж: отметка «карточка разобрана» с вердиктом в ленте
       case "triaged": {
         if (!key) return json({ error: "key_required" }, 400);
         await markTriaged(key, agent, text);
+        return json({ ok: true });
+      }
+      // Принудительный возврат на разбор: только cto, product, owner
+      case "retriage": {
+        if (!key) return json({ error: "key_required" }, 400);
+        const role = roleOf(agent);
+        if (!["owner", "cto", "product"].includes(role)) return json({ error: "forbidden_role", detail: role }, 403);
+        await retriage(key);
         return json({ ok: true });
       }
       // Чат получил от человека новую работу: не исполняет сам, а кладёт в очередь триажа.
@@ -313,7 +323,8 @@ export async function POST(req: Request) {
         }
         const blockedUntilRaw = str(body.blockedUntil);
         const blockedUntil = blockedUntilRaw ? (() => { const d = new Date(blockedUntilRaw); return isNaN(d.getTime()) ? undefined : d; })() : undefined;
-        const input: TransitionInput = { to, text, force: body.force === true, blockedOn: str(body.on), blockedUntil, sha: str(body.sha), branch: str(body.branch), releaseNote: str(body.releaseNote), ownerSummary: str(body.ownerSummary) };
+        const nextSteps = Array.isArray(body.nextSteps) ? (body.nextSteps as unknown[]).filter((s) => typeof s === "string").map(String) : undefined;
+        const input: TransitionInput = { to, text, force: body.force === true, blockedOn: str(body.on), blockedUntil, sha: str(body.sha), branch: str(body.branch), releaseNote: str(body.releaseNote), ownerSummary: str(body.ownerSummary), nextSteps, noWork: body.noWork === true };
         const task = await transition(key, input, actor);
         return json({ ok: true, status: task.status, task: brief(task) });
       }
@@ -351,6 +362,8 @@ export async function POST(req: Request) {
         const parsed = taskContentSchema.safeParse(content);
         if (!parsed.success) return json({ error: "invalid", detail: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") }, 400);
         const task = await saveTask(parsed.data, agent, action === "create", "api");
+        // Правка карточки бэклога через API — то же, что правка в интерфейсе: возвращает задачу на разбор
+        if (action === "update") await retriage(task.key);
         return json({ ok: true, task: brief(task) });
       }
       default:
