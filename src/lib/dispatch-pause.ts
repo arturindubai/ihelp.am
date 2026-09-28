@@ -44,3 +44,14 @@ export function shouldReleaseAgentBusy(agentUnitActive: boolean, claimUntil: Dat
   if (claimUntil && claimUntil > now) return false;
   return true;
 }
+
+/**
+ * Срок аренды истёк по записи из снимка плана?
+ * Если запись не найдена (undefined) — неизвестное состояние, не снимаем аренду.
+ * Снимаем только когда запись найдена и срок уже прошёл.
+ */
+export function leaseExpiredForClaim(claim: { claimUntil: string | null } | undefined, now = new Date()): boolean {
+  if (claim === undefined) return false;
+  if (!claim.claimUntil) return true;
+  return Date.parse(claim.claimUntil) <= now.getTime();
+}

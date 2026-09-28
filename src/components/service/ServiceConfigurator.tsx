@@ -66,7 +66,6 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy }: { s: Ser
   }
   const barPrice = plan?.kind === "PACKAGE" ? price.payNow : price.first.price;
   const barStrike = plan?.kind === "PACKAGE" ? price.payNowBase : price.base;
-  const committedPct = rules.firstVisitCommittedDiscount;
 
   function go() {
     const q = new URLSearchParams({ o: opts.join(","), ...(planId ? { p: planId } : {}) });
@@ -255,17 +254,13 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy }: { s: Ser
         </section>
       )}
 
-      {/* Плашка скидки первого визита — показывается только при наличии акции */}
-      {isFirstOrder && rules.firstVisitDiscount > 0 && (
+      {/* Плашка скидки первого визита — процент берётся из реально применённой скидки выбранного тарифа */}
+      {isFirstOrder && planId !== null && price.first.percent > 0 && (
         <div className="mt-2 flex items-start gap-2 rounded-2xl bg-ok-50 px-4 py-3">
           <Info size={16} className="mt-0.5 shrink-0 text-ok" />
           <div>
             <div className="text-sm font-semibold text-ok">{t("firstVisitBannerTitle")}</div>
-            <div className="text-xs text-ok/80">
-              {committedPct > 0
-                ? t("firstOffer", { percent: committedPct })
-                : t("firstVisitBannerText", { percent: rules.firstVisitDiscount })}
-            </div>
+            <div className="text-xs text-ok/80">{t("firstOffer", { percent: price.first.percent })}</div>
           </div>
         </div>
       )}

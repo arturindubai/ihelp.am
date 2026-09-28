@@ -275,9 +275,11 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
   if (config.pausedUntil && Date.parse(config.pausedUntil) > now.getTime()) return [];
   const actions: DispatchAction[] = [];
   const names = (p: Pool) => [
-    ...s.running.filter((r) => r.pool === p).map((r) => r.agent),
-    ...(s.claimedAgents ?? []).filter((r) => r.pool === p).map((r) => r.agent),
-    ...actions.filter((a) => a.pool === p).map((a) => a.agent),
+    ...new Set([
+      ...s.running.filter((r) => r.pool === p).map((r) => r.agent),
+      ...(s.claimedAgents ?? []).filter((r) => r.pool === p).map((r) => r.agent),
+      ...actions.filter((a) => a.pool === p).map((a) => a.agent),
+    ]),
   ];
   const free = (p: Pool) => config.pools[p].max - names(p).length;
   const taken = () => new Set(actions.flatMap((a) => [a.key ?? "", ...(a.keys ?? [])]));
@@ -438,8 +440,9 @@ export function inDesignerQueue(t: {
   // Нужен макет, не утверждён и не подан: бэклог, очередь или в работе
   const open = ["backlog", "ready", "in_progress"];
   if (open.includes(t.status) && t.mockupRequired && !t.mockupApprovedBy && !t.mockupUrl && !t.hasImageAttachments) return true;
-  // Интерфейсная задача фронта без описания дизайна, без файлов, без ссылки на макет и без утверждения
-  if (["backlog", "ready"].includes(t.status) && t.layer === "front" && !t.design?.trim() && !t.hasAnyAttachments && !t.mockupApprovedBy && !t.mockupUrl) return true;
+  // Интерфейсная задача (фронт или бэк+фронт) без описания дизайна, без файлов, без ссылки на макет и без утверждения
+  const isUi = t.layer === "front" || t.layer === "fullstack";
+  if (["backlog", "ready"].includes(t.status) && isUi && !t.design?.trim() && !t.hasAnyAttachments && !t.mockupApprovedBy && !t.mockupUrl) return true;
   return false;
 }
 

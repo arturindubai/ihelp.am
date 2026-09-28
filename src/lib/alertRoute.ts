@@ -6,6 +6,24 @@ export interface NotifySettings {
   telegramBotToken: string;
   telegramChatId: string;
   techChatId: string;
+  teamChatId?: string;
+}
+
+export interface TeamSettings {
+  botToken: string;
+  members: unknown[];
+}
+
+/**
+ * Есть ли хотя бы один адресат для тех-алертов.
+ * Единая проверка: используется в notifyTech, /api/health?check=alert и systemStatus.
+ * Если чат не задан, но есть привязанные члены команды — алерт дойдёт в личку.
+ */
+export function hasAlertRecipient(notify: NotifySettings, team: TeamSettings): boolean {
+  const token = team.botToken || notify.telegramBotToken;
+  if (!token) return false;
+  if (notify.techChatId || notify.teamChatId || notify.telegramChatId) return true;
+  return team.members.length > 0;
 }
 
 export interface AlertRoute {

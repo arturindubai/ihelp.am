@@ -121,6 +121,20 @@ describe("имена и итоги запусков", () => {
     expect(actions.every((a) => a.agent !== "dev-1")).toBe(true);
     expect(actions.find((a) => a.pool === "dev" && a.agent === "dev-2")).toBeTruthy();
   });
+  it("два работающих разработчика с задачами, лимит 4 — планируются ещё два запуска (критерий 5, без дублей)", () => {
+    // Без дедупликации: running=[dev-1,dev-2], claimedAgents=[dev-1,dev-2] → names.length=4, free=0 → никого
+    // С дедупликацией через Set: names={dev-1,dev-2}.length=2, free=2 → dev-3 и dev-4
+    const config4 = { ...on, pools: { ...on.pools, dev: { ...on.pools.dev, max: 4 } } };
+    const s = state({
+      config: config4,
+      readyForDev: 4,
+      running: [{ pool: "dev" as const, agent: "dev-1" }, { pool: "dev" as const, agent: "dev-2" }],
+      claimedAgents: [{ pool: "dev" as const, agent: "dev-1" }, { pool: "dev" as const, agent: "dev-2" }],
+    });
+    const devActions = planDispatch(s, noon).filter((a) => a.pool === "dev");
+    expect(devActions).toHaveLength(2);
+    expect(devActions.every((a) => !["dev-1", "dev-2"].includes(a.agent))).toBe(true);
+  });
   it("исчерпанный лимит подписки распознаётся отдельно от ошибки", () => {
     expect(runOutcome({ is_error: true, result: "Claude AI usage limit reached|1759000000" }, 1)).toBe("limit");
     expect(runOutcome({ is_error: false, result: "Готово" }, 0)).toBe("done");
@@ -426,11 +440,17 @@ describe("отбор очереди дизайнера", () => {
     expect(inDesignerQueue({ ...base, status: "backlog", layer: "front" })).toBe(true);
     expect(inDesignerQueue({ ...base, status: "ready", layer: "front" })).toBe(true);
   });
+  it("задача бэк+фронт без описания дизайна и без файлов — в очереди", () => {
+    expect(inDesignerQueue({ ...base, status: "backlog", layer: "fullstack" })).toBe(true);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "fullstack" })).toBe(true);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "fullstack", design: "Экран..." })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "fullstack", hasAnyAttachments: true })).toBe(false);
+  });
   it("задача фронта с описанием дизайна или файлами — не в очереди", () => {
     expect(inDesignerQueue({ ...base, status: "ready", layer: "front", design: "Экран списка..." })).toBe(false);
     expect(inDesignerQueue({ ...base, status: "ready", layer: "front", hasAnyAttachments: true })).toBe(false);
   });
-  it("бэк-задача без дизайна не в очереди дизайнера — только front", () => {
+  it("бэк-задача без дизайна не в очереди дизайнера — только front и fullstack", () => {
     expect(inDesignerQueue({ ...base, status: "backlog", layer: "back" })).toBe(false);
     expect(inDesignerQueue({ ...base, status: "backlog", layer: "none" })).toBe(false);
   });

@@ -8,6 +8,7 @@ root=$(pwd -P)
 [ -f "$root/package.json" ] && [ -d "$root/prisma" ] || { echo "✗ Запускать из корня рабочей копии (здесь нет package.json и prisma/): $root"; exit 3; }
 docker run --rm \
   -v "$root/src:/app/src" -v "$root/prisma:/app/prisma" -v "$root/messages:/app/messages" \
+  -v "$root/deploy:/app/deploy:ro" -v "$root/scripts:/app/scripts:ro" \
   -w /app --entrypoint bash homecare-migrate -c '
     set -o pipefail
     npx prisma generate >/dev/null 2>&1 || { echo "✗ prisma generate"; exit 1; }

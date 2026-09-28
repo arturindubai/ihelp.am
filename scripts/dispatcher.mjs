@@ -189,7 +189,8 @@ async function reconcile(running, stopAll) {
         await api({ action: "workers-pause", until: resetAt(result).toISOString(), text: summary.slice(0, 300) });
       }
     }
-    // Вход в подписку пропал или истёк — пауза только при ошибочном запуске, не при успешном
+    // Вход в подписку пропал или истёк — пауза, пока человек не войдёт заново.
+    // Только для ошибочного запуска: успешный может упоминать OAuth и /login по делу (src/lib/login-pause.ts)
     if (["failed", "timeout"].includes(status) && /not logged in|\/login|oauth|failed to authenticate|authentication_error|\b401\b/i.test(summary)) {
       await api({ action: "workers-pause", until: new Date(Date.now() + 6 * 3600_000).toISOString(), text: "Воркеры не вошли в Claude. Войти: scripts/claude-login.sh на сервере, затем «Снять паузу» в Control Center → Воркеры." });
     }
@@ -365,7 +366,8 @@ async function main() {
         const heldKey = busyMatch[1];
         const unitActive = hasActiveWorkerUnit(a.agent);
         const claim = (plan.inProgressClaims ?? []).find((c) => c.key === heldKey && c.agent === a.agent);
-        const leaseExpired = !claim?.claimUntil || Date.parse(claim.claimUntil) <= Date.now();
+        // Если запись не найдена — неизвестное состояние, аренду не снимаем (зеркало leaseExpiredForClaim в dispatch-pause.ts)
+        const leaseExpired = claim !== undefined && (!claim.claimUntil || Date.parse(claim.claimUntil) <= Date.now());
         if (!unitActive && leaseExpired) {
           log(`· ${a.agent}: занят ${heldKey} без запуска — снимаем аренду`);
           const r = await asAgent(a.agent, { action: "handoff", key: heldKey, text: "Аренда снята диспетчером: агент занят, запуск не создан." });

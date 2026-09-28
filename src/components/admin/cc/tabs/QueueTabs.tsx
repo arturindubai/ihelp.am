@@ -18,10 +18,20 @@ type Href = (key: string) => string;
 /** «Нужен ты»: всё, что стоит без решения человека — вопросы воркеров и чатов, брошенные задачи, упавшие запуски */
 export async function YouTab({ taskHref }: { taskHref: Href }) {
   const [t, ty, data] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.you"), needsYou()]);
-  const nothing = !data.owner.length && !data.stale.length && !data.stuckReview.length && !data.nocodeReview.length && !data.failedRuns.length && !data.pausedUntil && !data.techBlocked.length;
+  const nothing = !data.owner.length && !data.stale.length && !data.stuckReview.length && !data.nocodeReview.length && !data.failedRuns.length && !data.pausedUntil && !data.techBlocked.length && !data.alertMissing;
   return (
     <div className="space-y-4">
       {nothing && <Empty>{ty("empty")}</Empty>}
+      {data.alertMissing && (
+        <Card>
+          <p className="text-sm text-bad">
+            <span className="font-medium">{ty("alertMissing")}</span>{" "}
+            <Link href="/admin/settings" className="font-medium underline">
+              {ty("alertMissingLink")}
+            </Link>
+          </p>
+        </Card>
+      )}
       {data.pausedUntil && (
         <Card>
           <p className="text-sm text-warn">

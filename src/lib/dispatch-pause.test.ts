@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcOutcome, needsLoginPause, shouldReleaseAgentBusy } from "./dispatch-pause";
+import { calcOutcome, needsLoginPause, shouldReleaseAgentBusy, leaseExpiredForClaim } from "./dispatch-pause";
 
 describe("calcOutcome", () => {
   it("done — успешный запуск без ошибок", () => {
@@ -137,5 +137,25 @@ describe("shouldReleaseAgentBusy", () => {
 
   it("claimUntil null и процесса нет — снять", () => {
     expect(shouldReleaseAgentBusy(false, null, now)).toBe(true);
+  });
+});
+
+describe("leaseExpiredForClaim", () => {
+  const now = new Date("2026-09-28T10:00:00Z");
+
+  it("запись не найдена (undefined) — не снимать аренду, неизвестное состояние (критерий 6)", () => {
+    expect(leaseExpiredForClaim(undefined, now)).toBe(false);
+  });
+
+  it("запись найдена, срок истёк — снимать аренду", () => {
+    expect(leaseExpiredForClaim({ claimUntil: "2026-09-28T09:00:00Z" }, now)).toBe(true);
+  });
+
+  it("запись найдена, аренда действует — не снимать", () => {
+    expect(leaseExpiredForClaim({ claimUntil: "2026-09-28T11:00:00Z" }, now)).toBe(false);
+  });
+
+  it("запись найдена, claimUntil null — считать истёкшей (старые данные без срока)", () => {
+    expect(leaseExpiredForClaim({ claimUntil: null }, now)).toBe(true);
   });
 });
