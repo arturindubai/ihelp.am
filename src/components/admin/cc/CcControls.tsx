@@ -588,6 +588,7 @@ export function OwnerQuestionCard({ taskKey, title, blockedReason, taskHref }: {
   const [replyText, setReplyText] = useState("");
   const [postponeOpen, setPostponeOpen] = useState(false);
   const [postponeReason, setPostponeReason] = useState("");
+  const [postponeDate, setPostponeDate] = useState("");
 
   if (answered) return null;
 
@@ -597,8 +598,8 @@ export function OwnerQuestionCard({ taskKey, title, blockedReason, taskHref }: {
   const answer = (text: string) => run(() => ccOwnerAnswerAction(taskKey, text), () => setAnswered(true));
   const postpone = () =>
     run(
-      () => ccOwnerPostponeAction(taskKey, postponeReason || undefined),
-      () => { setAnswered(true); setPostponeOpen(false); setPostponeReason(""); },
+      () => ccOwnerPostponeAction(taskKey, postponeDate, postponeReason || undefined),
+      () => { setAnswered(true); setPostponeOpen(false); setPostponeReason(""); setPostponeDate(""); },
     );
 
   return (
@@ -654,19 +655,32 @@ export function OwnerQuestionCard({ taskKey, title, blockedReason, taskHref }: {
       )}
       {postponeOpen && (
         <form
-          className="flex gap-1.5"
+          className="flex flex-col gap-1.5"
           onSubmit={(e) => {
             e.preventDefault();
             postpone();
           }}
         >
-          <input className="input h-9 flex-1 py-1 text-sm" value={postponeReason} onChange={(e) => setPostponeReason(e.target.value)} placeholder={t("postponePh")} />
-          <button className="btn-outline btn-sm" disabled={pending}>
-            {t("postponeConfirm")}
-          </button>
-          <button type="button" className="btn-ghost btn-sm" onClick={() => setPostponeOpen(false)}>
-            ×
-          </button>
+          <div className="flex gap-1.5">
+            <input
+              type="date"
+              className="input h-9 w-40 py-1 text-sm"
+              value={postponeDate}
+              onChange={(e) => setPostponeDate(e.target.value)}
+              min={new Date(Date.now() + 86400_000).toISOString().slice(0, 10)}
+              required
+              placeholder={t("postponeDatePh")}
+            />
+            <input className="input h-9 flex-1 py-1 text-sm" value={postponeReason} onChange={(e) => setPostponeReason(e.target.value)} placeholder={t("postponePh")} />
+          </div>
+          <div className="flex gap-1.5">
+            <button className="btn-outline btn-sm" disabled={pending || !postponeDate}>
+              {t("postponeConfirm")}
+            </button>
+            <button type="button" className="btn-ghost btn-sm" onClick={() => setPostponeOpen(false)}>
+              ×
+            </button>
+          </div>
         </form>
       )}
       {error && <p className="text-xs text-bad">{error}</p>}

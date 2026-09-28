@@ -1444,6 +1444,7 @@
         "answer": "reply",
         "postpone": "Postpone",
         "postponePh": "Reason (optional)…",
+        "postponeDatePh": "Until date",
         "postponeConfirm": "Postpone",
         "stale": "Stale or without assignee",
         "stuckReview": "Review stuck",

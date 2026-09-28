@@ -1523,6 +1523,7 @@
         "replySend": "Ответить",
         "postpone": "Отложить",
         "postponePh": "Причина (необязательно)…",
+        "postponeDatePh": "До какой даты",
         "postponeConfirm": "Отложить",
         "stale": "Брошены или без исполнителя",
         "stuckReview": "Проверка затянулась",

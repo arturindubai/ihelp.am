@@ -137,6 +137,7 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   if (to === "blocked") {
     const on = input.blockedOn || "tech";
     if (!(BLOCKED_ON as readonly string[]).includes(on)) throw new CcError("bad_blocked_on");
+    if (on === "external" && !input.blockedUntil) throw new CcError("until_required", "external block requires --until");
     data.blockedOn = on;
     data.blockedReason = text.slice(0, 2000) || null;
     data.blockedFrom = from;
@@ -678,16 +679,25 @@ async function designToCanon(t: { key: string; title: string; design: string | n
 }
 
 /** Сменить адресата блокировки с записью в историю — используется командой reblock */
-export async function reblockOn(key: string, newBlockedOn: string, reason: string, actor: Actor): Promise<Task> {
+export async function reblockOn(key: string, newBlockedOn: string, reason: string, actor: Actor, blockedUntil?: Date | null): Promise<Task> {
   if (!(BLOCKED_ON as readonly string[]).includes(newBlockedOn)) throw new CcError("bad_blocked_on");
   if (reason.trim().length < 5) throw new CcError("reason_required");
-  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, blockedOn: true } });
+  if (newBlockedOn === "external" && !blockedUntil) throw new CcError("until_required", "external block requires --until");
+  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, blockedOn: true, blockedUntil: true } });
   if (!t) throw new CcError("not_found");
   if (t.status !== "blocked") throw new CcError("wrong_status", t.status);
   const prev = t.blockedOn;
-  await db.task.update({ where: { id: t.id }, data: { blockedOn: newBlockedOn, blockedReason: reason.trim().slice(0, 200) } });
+  const updateData: Prisma.TaskUpdateInput = { blockedOn: newBlockedOn, blockedReason: reason.trim().slice(0, 2000) };
+  if (blockedUntil !== undefined) updateData.blockedUntil = blockedUntil;
+  await db.task.update({ where: { id: t.id }, data: updateData });
   await log(t.id, actor.name, "blockedOn", prev, newBlockedOn);
-  await say(t.id, actor.name, "note", `Адресат блокировки изменён: ${prev ?? "—"} → ${newBlockedOn}. ${reason.trim()}`);
+  if (blockedUntil !== undefined) {
+    const prevUntil = t.blockedUntil ? t.blockedUntil.toISOString().slice(0, 10) : null;
+    const nextUntil = blockedUntil ? blockedUntil.toISOString().slice(0, 10) : null;
+    if (prevUntil !== nextUntil) await log(t.id, actor.name, "blockedUntil", prevUntil, nextUntil);
+  }
+  const untilStr = blockedUntil ? ` (авторазблокировка ${blockedUntil.toISOString().slice(0, 10)})` : "";
+  await say(t.id, actor.name, "note", `Адресат блокировки изменён: ${prev ?? "—"} → ${newBlockedOn}${untilStr}. ${reason.trim()}`);
   return db.task.findUniqueOrThrow({ where: { id: t.id } });
 }
 
