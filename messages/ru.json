@@ -1013,6 +1013,7 @@
       "updated": "Обновлена {date}",
       "ownerSummary": "Резюме для владельца",
       "releaseNote": "Что изменилось для людей",
+      "readFullInLibrary": "Читать полностью в Библиотеке →",
       "fields": {
         "status": "Статус",
         "owner": "Кто делает",

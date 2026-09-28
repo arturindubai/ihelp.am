@@ -7,6 +7,8 @@ import { BACKLOG } from "../backlog";
 import { PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { OPEN_STATUSES, isReady, needsAttention, readiness, taskHealth } from "@/lib/cc-flow";
 import { closedKeys } from "./ccWork";
+import { createNote } from "./library";
+import { needsLibrary, buildSummaryText, buildLibraryTitle } from "@/lib/cc-overflow";
 import type { Prisma, Task } from "@prisma/client";
 
 export type TaskFilters = {
@@ -261,7 +263,18 @@ export async function saveTask(content: TaskContent, actor: string, isNew: boole
 export async function addComment(key: string, text: string, author: string, kind: "note" | "report" = "note") {
   const task = await db.task.findUnique({ where: { key }, select: { id: true } });
   if (!task) throw new Error("not_found");
-  return db.taskComment.create({ data: { taskId: task.id, text: text.trim().slice(0, 5000), author, kind } });
+  const trimmed = text.trim();
+  if (!needsLibrary(trimmed)) {
+    return db.taskComment.create({ data: { taskId: task.id, text: trimmed, author, kind } });
+  }
+  let libraryNoteId: string | null = null;
+  try {
+    const doc = await createNote({ title: buildLibraryTitle(key, author, kind), kind: "knowledge", content: trimmed }, author);
+    libraryNoteId = doc.slug;
+  } catch {
+    return db.taskComment.create({ data: { taskId: task.id, text: trimmed.slice(0, 4900) + "\n\n⚠️ Текст обрезан — не удалось сохранить в Библиотеку.", author, kind } });
+  }
+  return db.taskComment.create({ data: { taskId: task.id, text: buildSummaryText(trimmed, libraryNoteId), libraryNoteId, author, kind } });
 }
 
 /* ───────────── Журнал ошибок ───────────── */
