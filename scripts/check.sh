@@ -25,6 +25,14 @@ docker run --rm \
     echo "▶ Миграции"; if [ -f tools/check-migrations.mjs ]; then node tools/check-migrations.mjs || exit 1; else echo "  ! проверка миграций пропущена: рядом с check.sh нет check-migrations.mjs"; fi
     echo "▶ Демо-данные в seed"; if [ -f tools/check-seed.mjs ]; then node tools/check-seed.mjs || exit 1; else echo "  ! проверка seed пропущена: рядом с check.sh нет check-seed.mjs"; fi
     echo "▶ Хардкод строк"; count=$(grep -rn --include="*.tsx" --include="*.ts" "На главную\|Русский\|English" src/ 2>/dev/null | grep -v "backlog\.ts\|SettingsEditor\.tsx\|\.test\." | wc -l); [ "$count" = "0" ] && echo "  OK — зашитых строк нет" || { echo "  FAIL — найдено зашитых строк: $count"; grep -rn --include="*.tsx" --include="*.ts" "На главную\|Русский\|English" src/ 2>/dev/null | grep -v "backlog\.ts\|SettingsEditor\.tsx\|\.test\."; exit 1; }
+    echo "▶ Порядок ключей messages/*.json"; node -e "
+      const fs=require(\"fs\");
+      function isSorted(o){if(typeof o!==\"object\"||o===null||Array.isArray(o))return true;const k=Object.keys(o);for(let i=1;i<k.length;i++)if(k[i-1]>k[i])return false;return Object.values(o).every(isSorted);}
+      let bad=[];
+      for(const f of fs.readdirSync(\"messages\").filter(n=>n.endsWith(\".json\"))){const d=JSON.parse(fs.readFileSync(\"messages/\"+f,\"utf8\"));if(!isSorted(d))bad.push(f);}
+      if(bad.length){console.error(\"  FAIL — ключи не отсортированы: \"+bad.join(\", \")+\". Исправить: node scripts/sort-messages.mjs\");process.exit(1);}
+      console.log(\"  OK — ключи отсортированы\");
+    " || exit 1
     if [ "$vitest_exit" != "0" ]; then echo "✗ Тесты упали"; exit "$vitest_exit"; fi' 2>&1
 code=$?
 [ "$code" = 0 ] && echo "CHECK OK" || echo "CHECK FAILED"

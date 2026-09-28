@@ -385,6 +385,17 @@ export async function boardAudit() {
   return { total: tasks.length, byStatus: Object.fromEntries(Object.entries(tasks.reduce<Record<string, number>>((m, t) => ((m[t.status] = (m[t.status] ?? 0) + 1), m), {}))), checks, at: new Date().toISOString() };
 }
 
+/** Доля возвратов задач из-за конфликта слияния за последние N дней */
+export async function mergeConflictStats(days = 30) {
+  const since = new Date(Date.now() - days * 86400_000);
+  const [total, conflicts] = await Promise.all([
+    db.taskComment.count({ where: { kind: "review", createdAt: { gte: since } } }),
+    db.taskComment.count({ where: { kind: "review", text: { contains: "Конфликт при слиянии" }, createdAt: { gte: since } } }),
+  ]);
+  const pct = total > 0 ? Math.round((conflicts / total) * 100) : 0;
+  return { total, conflicts, pct, days };
+}
+
 export async function healthStatus() {
   const t0 = Date.now();
   let dbMs: number | null = null;

@@ -1,7 +1,7 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { pageUser } from "@/server/adminPage";
-import { boardAudit, healthStatus, staleTasksList } from "@/server/services/ccBoard";
+import { boardAudit, healthStatus, mergeConflictStats, staleTasksList } from "@/server/services/ccBoard";
 import { otpStats } from "@/server/services/otpStats";
 import { Forbidden } from "@/components/admin/ui";
 import { CcHeader } from "@/components/admin/cc/CcHeader";
@@ -41,7 +41,7 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
   const { locale } = await params;
   setRequestLocale(locale);
   if (!(await pageUser("control"))) return <Forbidden />;
-  const [t, th, h, audit, otp, staleTasks] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.healthPage"), healthStatus(), boardAudit(), otpStats(), staleTasksList()]);
+  const [t, th, h, audit, otp, staleTasks, mergeStats] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.healthPage"), healthStatus(), boardAudit(), otpStats(), staleTasksList(), mergeConflictStats()]);
   const uptime = h.uptimeSec >= 86400 ? th("uptimeD", { d: Math.floor(h.uptimeSec / 86400), h: Math.floor((h.uptimeSec % 86400) / 3600) }) : th("uptimeH", { h: Math.floor(h.uptimeSec / 3600), m: Math.floor((h.uptimeSec % 3600) / 60) });
   const tickTone: Tone = h.tickAgeMin == null ? "warn" : h.tickAgeMin > 3 ? "bad" : "ok";
   const workersValue = h.workers.state === "stopped" ? th("workersStopped") : h.workers.state === "planned" ? th("workersPlanned", { when: `${dateLabel(new Date(h.workers.pausedUntil!), locale, { day: "numeric", month: "short" })}, ${timeLabel(new Date(h.workers.pausedUntil!))}` }) : h.workers.state === "paused" ? th("workersPaused") : h.workers.enabled ? (h.workers.dryRun ? th("workersDry") : th("workersOn")) : th("workersOff");
@@ -79,6 +79,12 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
       </div>
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2">
+        <Metric
+          label={th("mergeConflicts")}
+          value={`${mergeStats.conflicts} / ${mergeStats.total}`}
+          hint={th("mergeConflictsHint", { pct: mergeStats.pct, days: mergeStats.days })}
+          tone={mergeStats.pct >= 20 ? "bad" : mergeStats.pct >= 10 ? "warn" : "ok"}
+        />
         <Metric
           label={th("otp24h")}
           value={otp.requests24h}

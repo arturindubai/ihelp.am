@@ -54,6 +54,17 @@ log="data/deploys/$KEY-$(date +%Y%m%d-%H%M%S).log"
 prod_marker=$(< src/lib/deploy-marker.txt)
 echo "▶ $KEY: слияние $merge, лог $log"
 
+echo "▶ check.sh на результате слияния"
+if ! scripts/check.sh >> "$log" 2>&1; then
+  git reset -q --hard "$prev"
+  tail_txt=$(grep -E '✗|FAIL|Error|error' "$log" | tail -n 6)
+  cc note "$KEY" "check.sh упал на результате слияния — типы или тесты не прошли на merge commit ${merge:0:10}. Лог: /opt/ihelp.am/${log}
+${tail_txt}" --error
+  cc return "$KEY" "check.sh упал на merge commit (типы/тесты). Подтяните main (git merge origin/main), исправьте и сдайте снова. Детали — в ленте и логе ${log}."
+  echo "✗ check.sh упал — задача возвращена"
+  exit 2
+fi
+
 backup_file=""
 if grep -q '^prisma/migrations/' <<< "$changed"; then
   echo "▶ Есть миграция — бэкап перед выкладкой"
