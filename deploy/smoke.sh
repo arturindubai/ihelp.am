@@ -75,17 +75,6 @@ echo "Счётчики данных (выкладка не должна созд
 # Прямой запуск smoke.sh (тестировщик, вручную, rollback.sh) сверку пропускает.
 counts_file="${PREDEPLOY_COUNTS_FILE:-}"
 if [ -n "$counts_file" ] && [ -f "$counts_file" ]; then
-  send_tech_alert() {
-    local msg="$1"
-    local token chat_id
-    token=$(grep -E '^ALERT_BOT_TOKEN=' .env 2>/dev/null | tail -n1 | cut -d= -f2-)
-    chat_id=$(grep -E '^ALERT_CHAT_ID=' .env 2>/dev/null | tail -n1 | cut -d= -f2-)
-    [ -n "$token" ] && [ -n "$chat_id" ] || return 0
-    curl -s -m 10 "https://api.telegram.org/bot${token}/sendMessage" \
-      --data-urlencode "chat_id=${chat_id}" \
-      --data-urlencode "text=${msg}" \
-      --data-urlencode "parse_mode=HTML" > /dev/null || true
-  }
   file_age=$(( $(date +%s) - $(stat -c %Y "$counts_file") ))
   if [ "$file_age" -gt 1200 ]; then
     echo "  ⚠ файл счётчиков устарел (${file_age}с > 20 мин) — пропускаю"
@@ -113,7 +102,7 @@ if [ -n "$counts_file" ] && [ -f "$counts_file" ]; then
     rm -f "$counts_file"
     if [ -n "$mismatches" ]; then
       echo "  ⚠ счётчики изменились: возможно клиент зарегистрировался во время выкладки или seed создал записи"
-      send_tech_alert "⚠ iHelp выкладка: счётчики изменились — ${mismatches}Проверить вручную."
+      echo "  ⚠ тех-алерт: проверьте вручную (отправка алерта через приложение — отдельная задача)"
     fi
   fi
 else
