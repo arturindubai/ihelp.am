@@ -50,6 +50,7 @@
   },
   "home": {
     "hello": "Hello{name, select, empty {} other {, {name}}}",
+    "slogan": "Apartment cleaning in Yerevan — price calculated instantly. Subscription: same master every time.",
     "title": "What service do you need?",
     "categories": "Categories",
     "popular": "Popular",
