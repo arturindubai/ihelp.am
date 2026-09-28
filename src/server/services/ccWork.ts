@@ -5,6 +5,7 @@ import { alertTech } from "../alerts";
 import { html, notifyTech } from "../notify";
 import { BLOCKED_ON_LABELS, STATUSES } from "@/lib/backlog-labels";
 import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, doneGate, isDesignerTask, isProductTask, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
+import { isAgentAuthor, findBlockingError } from "@/lib/cc-triage";
 import { nextIntakeKey, intakeTitle } from "@/lib/cc-lanes";
 import { needsLibrary, buildSummaryText, buildLibraryTitle } from "@/lib/cc-overflow";
 import type { Prisma, Task } from "@prisma/client";
@@ -179,7 +180,13 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   if (force) await log(task.id, actor.name, "forced", null, text.slice(0, 200));
   if (to === "blocked") await log(task.id, actor.name, "blockedOn", task.blockedOn, data.blockedOn as string);
   const extra = from === "done" && task.deployedSha ? `\nБыла выложена в ${task.deployedSha}.` : "";
-  await say(task.id, actor.name, kindFor(from, to, actor, task.claimedBy), text + extra, key);
+  // Критерий 7: при блокировке, разблокировке и возврате — первая строка говорит, кто и что сменил
+  const needsStatusHeader = to === "blocked" || from === "blocked" || (from === "review" && to === "ready");
+  const commentBody = text + extra;
+  const commentText = needsStatusHeader
+    ? `${actor.name}: ${STATUSES[from] ?? from} → ${STATUSES[to] ?? to}${commentBody ? `\n${commentBody}` : ""}`
+    : commentBody;
+  await say(task.id, actor.name, kindFor(from, to, actor, task.claimedBy), commentText, key);
   if (to === "done" || to === "cancelled") await releaseDependents(key);
   // После приёмки не-код задачи с указанными следующими шагами — карточка в очередь триажа
   if (to === "done" && task.layer === "none" && task.nextSteps.length > 0) {
@@ -261,8 +268,7 @@ export type ClaimOptions = {
  */
 export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Task | null> {
   const actor = agentActor(agent);
-  // Деплоер задачи не берёт: кто выкладывает, тот не пишет — иначе пропадает вторая пара глаз.
-  // Тестировщик берёт только через reviewTake — статус review, не ready.
+  // Деплоер и тестировщик задачи не берут через claim: у них reviewTake; тоже watchdog и триаж
   if (actor.role === "deployer" || actor.role === "watchdog" || actor.role === "triage" || actor.role === "tester") throw new CcError("forbidden_role", actor.role);
   const closed = await closedKeys();
   const now = new Date();
@@ -388,15 +394,28 @@ export async function markTriaged(key: string, agent: string, text: string) {
   const role = roleOf(agent);
   if (!["triage", "cto", "product", "owner"].includes(role)) throw new CcError("forbidden_role", role);
   if (text.trim().length < 10) throw new CcError("reason_required");
-  const t = await db.task.findUnique({ where: { key }, select: { id: true } });
+  const t = await db.task.findUnique({ where: { key }, select: { id: true, title: true } });
   if (!t) throw new CcError("not_found");
   // Гонка: владелец мог ответить пока триаж обрабатывал задачу.
   // retriage() фиксирует момент отправки на разбор — если после него есть человеческий ответ, не затираем его.
+  // Критерий 1: ответом человека считаются только записи не-агентов (владелец и люди из админки).
+  // Записи самого триажа (kind=note/progress от агента) не считаются ответом и не блокируют отметку.
   const lastRetriage = await db.taskEvent.findFirst({ where: { taskId: t.id, field: "retriage" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
   if (lastRetriage) {
-    const freshAnswer = await db.taskComment.findFirst({ where: { taskId: t.id, kind: { notIn: ["system", "triage"] }, createdAt: { gt: lastRetriage.createdAt } } });
-    if (freshAnswer) {
+    const recentComments = await db.taskComment.findMany({
+      where: { taskId: t.id, kind: { notIn: ["system", "triage"] }, createdAt: { gt: lastRetriage.createdAt } },
+      select: { author: true },
+      take: 50,
+    });
+    const humanAnswer = recentComments.find((c) => !isAgentAuthor(c.author));
+    if (humanAnswer) {
+      // Критерий 3: второй подряд отказ по одной задаче — тех-алерт
+      const priorRefusals = await db.taskEvent.count({ where: { taskId: t.id, field: "triaged_refused" } });
+      await log(t.id, agent, "triaged_refused", null, humanAnswer.author);
       await say(t.id, agent, "system", "Триаж завершён, но после отправки на разбор пришёл ответ человека — задача остаётся в очереди триажа.", key);
+      if (priorRefusals >= 1) {
+        await alertTech(`cc:triaged_refused:${key}`, html`⚠️ <b>${key}</b> · триаж дважды получил отказ в отметке «разобрано»\n${t.title}`, 60);
+      }
       return;
     }
   }
@@ -436,7 +455,7 @@ export async function reviewTake(key: string, agent: string) {
   const now = new Date();
   const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, branch: true, claimedBy: true, claimUntil: true, testedSha: true } });
   if (!t) throw new CcError("not_found");
-  if (t.status !== "review") throw new CcError("wrong_status", t.status);
+  if (t.status !== "review") throw new CcError("not_in_review", `задача сейчас в статусе «${STATUSES[t.status] ?? t.status}» — завершите текущий запуск`);
   if (t.claimedBy && t.claimedBy !== agent && t.claimUntil && t.claimUntil > now) throw new CcError("claimed", t.claimedBy);
   // Старые карточки сданы без записи ветки — по правилам проекта она task/<КЛЮЧ>; есть ли она в репозитории, проверит cc.mjs
   const r = await db.task.updateMany({
@@ -454,9 +473,27 @@ export async function testPass(key: string, agent: string, sha: string, text: st
   if (text.trim().length < 40) throw new CcError("report_required");
   const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, claimedBy: true, noWork: true } });
   if (!t) throw new CcError("not_found");
-  if (t.status !== "review") throw new CcError("wrong_status", t.status);
+  // Критерий 8: понятный отказ когда задача не на проверке
+  if (t.status !== "review") throw new CcError("not_in_review", `задача сейчас в статусе «${STATUSES[t.status] ?? t.status}» — завершите текущий запуск`);
   if (t.claimedBy !== agent) throw new CcError("not_your_task", t.claimedBy ?? "");
   if (!t.noWork && !SHA_RE.test(sha.trim())) throw new CcError("sha_required");
+  // Критерий 5: блокировать отметку, если после последней сдачи на проверку появилась запись об ошибке
+  const lastReviewEvent = await db.taskEvent.findFirst({
+    where: { taskId: t.id, field: "status", to: "review" },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true },
+  });
+  if (lastReviewEvent) {
+    const recentComments = await db.taskComment.findMany({
+      where: { taskId: t.id, kind: "error", createdAt: { gt: lastReviewEvent.createdAt } },
+      orderBy: { createdAt: "asc" },
+      select: { kind: true, createdAt: true, text: true },
+    });
+    const blockingError = findBlockingError(recentComments, lastReviewEvent.createdAt);
+    if (blockingError) {
+      throw new CcError("blocking_error", blockingError.text.slice(0, 300));
+    }
+  }
   const safeSha = t.noWork ? "no-work" : sha.trim();
   await db.task.update({ where: { id: t.id }, data: { testedSha: safeSha, testedBy: agent, testedAt: new Date(), claimedBy: null, claimUntil: null } });
   await log(t.id, agent, "tested", null, safeSha.slice(0, 10));
