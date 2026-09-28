@@ -621,8 +621,10 @@ export async function taskReadiness(key: string) {
  * Все пункты со словом «макет» убираются автоматически.
  */
 export async function approveMockup(key: string, actor: Actor, comment: string | null, closeNeeds?: string[]) {
-  const t = await db.task.findUnique({ where: { key }, include: { attachments: { select: { fileName: true, url: true } } } });
+  const t = await db.task.findUnique({ where: { key }, include: { attachments: { select: { fileName: true, url: true, mime: true } } } });
   if (!t) throw new CcError("not_found");
+  const hasRealMockup = !!t.mockupUrl || t.attachments.some((a) => a.mime.startsWith("image/"));
+  if (t.mockupRequired && !hasRealMockup) throw new CcError("no_mockup");
   if (!t.design?.trim() && !t.mockupUrl && !t.attachments.length) throw new CcError("no_design");
   const now = new Date();
   const canon = await designToCanon(t, actor.name, comment);

@@ -109,9 +109,10 @@ node /opt/ihelp.am/scripts/cc.mjs triage                                   # о�
 node /opt/ihelp.am/scripts/cc.mjs show КЛЮЧ                                # карточка целиком
 node /opt/ihelp.am/scripts/cc.mjs search "слова"                           # поиск дублей по ключевым словам заголовка
 node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --data '{…}'                 # дополнить поля (JSON прямо в команде)
+node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --design-file /opt/ihelp.am/data/tmp/triage/design.md   # длинное поле design
 node /opt/ihelp.am/scripts/cc.mjs create --data '{…}'                      # новая карточка (из Intake)
 node /opt/ihelp.am/scripts/cc.mjs ready КЛЮЧ "триаж: …"                    # в очередь (через проверку готовности)
-node /opt/ihelp.am/scripts/cc.mjs block КЛЮЧ "вопросы…" --on owner         # вопрос человеку (или --on product)
+node /opt/ihelp.am/scripts/cc.mjs block КЛЮЧ "вопросы…" --on owner|product # вопрос человеку
 node /opt/ihelp.am/scripts/cc.mjs block КЛЮЧ "ждём …" --on external --until 2026-10-10  # с датой авторазблокировки
 node /opt/ihelp.am/scripts/cc.mjs reblock КЛЮЧ "причина" --on tech          # сменить адресата блокировки
 node /opt/ihelp.am/scripts/cc.mjs unblock КЛЮЧ "ответ внесён: …"           # вернуть после ответа
@@ -133,10 +134,18 @@ node /opt/ihelp.am/scripts/cc.mjs msg "текст" --to owner                   
 5. **Новая карточка** — JSON файлом: `create --file /opt/ihelp.am/data/tmp/triage/имя.json --agent triage`.
 
 ```bash
+# 1. Написать текст в папку tmp триажа (Write-инструментом или строкой):
+# Инструментом Write: путь /opt/ihelp.am/data/tmp/triage/имя.md
+
+# 2. Передать файл в команду:
 node /opt/ihelp.am/scripts/cc.mjs note КЛЮЧ --text-file /opt/ihelp.am/data/tmp/triage/note.md --agent triage
+node /opt/ihelp.am/scripts/cc.mjs triaged КЛЮЧ --text-file /opt/ihelp.am/data/tmp/triage/triaged.md --agent triage
 node /opt/ihelp.am/scripts/cc.mjs block КЛЮЧ --on owner --text-file /opt/ihelp.am/data/tmp/triage/block.md --agent triage
-node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --file /opt/ihelp.am/data/tmp/triage/fields.json --agent triage
 node /opt/ihelp.am/scripts/cc.mjs msg --to owner --text-file /opt/ihelp.am/data/tmp/triage/msg.md --agent triage
+
+# Для update используй специальные флаги (не --text-file):
+node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --file /opt/ihelp.am/data/tmp/triage/fields.json --agent triage
+node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --design-file /opt/ihelp.am/data/tmp/triage/design.md --agent triage
 ```
 
 ## Если команда отклонена

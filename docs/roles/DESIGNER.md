@@ -23,7 +23,12 @@ node /opt/ihelp.am/scripts/cc.mjs next --agent designer   # следующая �
 
 1. `node /opt/ihelp.am/scripts/cc.mjs show КЛЮЧ` — карточка, критерии, лента. Прочитать `DESIGN.md` (токены, отступы, радиусы, шрифты), `docs/canon/` и записи Библиотеки вида «спецификация» по дизайну (`node /opt/ihelp.am/scripts/cc.mjs lib --q дизайн`). Посмотреть соседние экраны в коде (`src/app`, `src/components`): новое должно выглядеть как уже существующее.
 2. Если требования продакта неполные (нет критериев или непонятно, что показывать) — не додумывать за продакта: `node /opt/ihelp.am/scripts/cc.mjs block КЛЮЧ "Дизайнеру не хватает: …" --on product --agent designer` и перейти к следующей.
-3. **Написать дизайн** в поле карточки. Описание длинное, поэтому — файлом: JSON вида `{"design":"…"}` инструментом Write в `/opt/ihelp.am/data/tmp/designer/КЛЮЧ-design.json`, затем `node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --file /opt/ihelp.am/data/tmp/designer/КЛЮЧ-design.json --agent designer`. Формат ниже.
+3. **Написать дизайн** в поле карточки. Короткий текст — прямо в команде: `node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --data '{"design":"…"}' --agent designer`. Длинный — через файл:
+   ```bash
+   # Write /opt/ihelp.am/data/tmp/designer/design.md
+   node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --design-file /opt/ihelp.am/data/tmp/designer/design.md --agent designer
+   ```
+   Формат поля — ниже.
 4. Если задача была заблокирована на дизайне — `node /opt/ihelp.am/scripts/cc.mjs unblock КЛЮЧ "Дизайн описан в карточке" --agent designer`. Если стояла в бэклоге — ничего не переводить: готовность проверит триаж.
    **Гейт макета.** Если у задачи стоит флаг «нужен макет» (`mockupRequired`, ставит триаж, владелец или техдиректор), она не уйдёт в «В очереди», пока владелец не утвердит дизайн. Ссылку на макет (Figma, страница стенда, файл) записать в карточку: `node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --data '{"mockupUrl":"ссылка"}' --agent designer`. Утверждает владелец на вкладке «Дизайн» или командой `node /opt/ihelp.am/scripts/cc.mjs mockup КЛЮЧ "комментарий" --agent owner`.
 5. Общие решения (новый паттерн, правило для всех экранов) — запись Библиотеки вида `spec`: `lib add` или новая версия сводной «Дизайн-решения» (`lib update note-…`).
@@ -88,9 +93,10 @@ node /opt/ihelp.am/scripts/cc.mjs next --agent designer   # следующая �
 
 ```bash
 node /opt/ihelp.am/scripts/cc.mjs show КЛЮЧ
-node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --file /opt/ihelp.am/data/tmp/designer/КЛЮЧ-design.json --agent designer
+node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --data '{"design":"…"}' --agent designer             # короткий текст
+node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --design-file /opt/ihelp.am/data/tmp/designer/design.md --agent designer  # длинный
 node /opt/ihelp.am/scripts/cc.mjs unblock КЛЮЧ "Дизайн описан в карточке" --agent designer
-node /opt/ihelp.am/scripts/cc.mjs block КЛЮЧ "…" --on product --agent designer                 # или --on owner
+node /opt/ihelp.am/scripts/cc.mjs block КЛЮЧ "…" --on product|owner --agent designer
 node /opt/ihelp.am/scripts/cc.mjs lib --q дизайн                                   # дизайн-канон
 node /opt/ihelp.am/scripts/cc.mjs lib add --title "…" --kind spec --file /opt/ihelp.am/data/tmp/designer/запись.md --agent designer
 node /opt/ihelp.am/scripts/cc.mjs lib update note-… --file /opt/ihelp.am/data/tmp/designer/запись.md --note "…" --agent designer
@@ -107,9 +113,15 @@ node /opt/ihelp.am/scripts/cc.mjs lib update note-… --file /opt/ihelp.am/data/
 5. **Папка макета:** `mkdir -p data/mockups/КЛЮЧ` — именно в такой записи; файлы макета — инструментом Write.
 
 ```bash
+# Написать текст инструментом Write в папку tmp:
+# Write /opt/ihelp.am/data/tmp/designer/имя.md
+
+# Поле «Дизайн» карточки (--design-file, а не --text-file):
+node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --design-file /opt/ihelp.am/data/tmp/designer/design.md --agent designer
+
+# Блокировка и сообщения — через --text-file:
 node /opt/ihelp.am/scripts/cc.mjs note КЛЮЧ --text-file /opt/ihelp.am/data/tmp/designer/note.md --agent designer
 node /opt/ihelp.am/scripts/cc.mjs block КЛЮЧ --on owner --text-file /opt/ihelp.am/data/tmp/designer/block.md --agent designer
-node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --file /opt/ihelp.am/data/tmp/designer/fields.json --agent designer
 node /opt/ihelp.am/scripts/cc.mjs msg --to owner --text-file /opt/ihelp.am/data/tmp/designer/msg.md --agent designer
 ```
 

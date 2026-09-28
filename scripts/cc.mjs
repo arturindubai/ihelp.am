@@ -37,6 +37,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
   Длинный текст (многострочный отчёт, вердикт, блокировка):
     --text-file /path/file   читать текст из файла (Write /opt/ihelp.am/data/tmp/<роль>/имя.md)
     echo "…" | node …        или через stdin (для людей; воркеру конвейер команд закрыт)
+    (для update используйте не --text-file, а --design-file / --details-file / --summary-file)
 
   Воркеры пишут команду в одной форме: node /opt/ihelp.am/scripts/cc.mjs команда КЛЮЧ … --agent имя —
   одна команда за вызов, длинный текст файлом (docs/WORKERS.md, «Как воркер пишет команды»).
@@ -75,6 +76,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
   ready КЛЮЧ ["комментарий"]                    готова к работе (проверка готовности)
   create --file задача.json                     завести задачу (или --data '{…}' — JSON прямо в команде)
   update КЛЮЧ --file поля.json                  изменить тексты задачи (или --data '{…}')
+                                                  текстом из файла: --design-file / --details-file / --summary-file
   retriage КЛЮЧ                                 вернуть задачу бэклога на повторный разбор (также owner)
   cancel КЛЮЧ "причина"
 
@@ -239,6 +241,7 @@ function hint(code) {
     reason_required: "\n  Этот переход требует причину словами.",
     forbidden_transition: "\n  Этой роли такой переход не разрешён (docs/DEV_SYSTEM.md, раздел «Статусы»).",
     not_your_task: "\n  Задачу держит другой исполнитель.",
+    no_update_fields: "\n  Укажите поля: --design-file, --details-file, --summary-file или --data '{\"поле\":\"значение\"}'.",
   };
   return h[code] ?? "";
 }
@@ -765,16 +768,39 @@ async function main() {
     }
     case "create":
     case "update": {
-      if (!flags.file && !flags.data) die("нужны поля задачи: --file task.json или --data '{\"summary\":\"…\"}' (поля — docs/DEV_SYSTEM.md, раздел «Как завести задачу»)");
-      let task;
-      try {
-        task = JSON.parse(flags.data ? String(flags.data) : fs.readFileSync(String(flags.file), "utf8"));
-      } catch (e) {
-        die(`поля задачи — не JSON: ${e.message}`);
+      const UPD_FIELDS = ["title","summary","details","requirements","design","qaNotes","deployNotes","needs","depends","docs","epicKey","area","layer","priority","stage","owner","estimate","scope","mockupRequired","mockupUrl"];
+      if (cmd === "update" && flags["text-file"])
+        die("--text-file не работает в update; используйте --design-file, --details-file или --summary-file для текстовых полей");
+      const hasTextFile = cmd === "update" && ["design-file","details-file","summary-file"].some(f => typeof flags[f] === "string");
+      if (!flags.file && !flags.data && !hasTextFile)
+        die(`нужны поля задачи: --file task.json или --data '{…}'${cmd === "update" ? " или --design-file / --details-file / --summary-file" : ""} (поля — docs/DEV_SYSTEM.md, раздел «Как завести задачу»)`);
+      let task = {};
+      if (flags.file || flags.data) {
+        try {
+          task = JSON.parse(flags.data ? String(flags.data) : fs.readFileSync(String(flags.file), "utf8"));
+        } catch (e) {
+          die(`поля задачи — не JSON: ${e.message}`);
+        }
+      }
+      if (cmd === "update") {
+        for (const [field, fflag] of [["design","design-file"],["details","details-file"],["summary","summary-file"]]) {
+          if (typeof flags[fflag] === "string") {
+            const fp = path.resolve(String(flags[fflag]));
+            if (!fs.existsSync(fp)) die(`файл не найден: ${fp}`);
+            task[field] = fs.readFileSync(fp, "utf8").trim();
+          }
+        }
+        if (!Object.keys(task).some(f => UPD_FIELDS.includes(f)))
+          die(`нет полей для обновления; допустимые поля: ${UPD_FIELDS.join(", ")}`);
       }
       const k = cmd === "update" ? needKey() : undefined;
       const r = await api("POST", null, { action: cmd, agent: agentFor(k), key: k, task });
-      console.log(`✓ ${r.task.key} ${cmd === "create" ? "заведена" : "обновлена"} · ${STATUS[r.task.status]}`);
+      if (cmd === "update") {
+        const info = Object.entries(task).filter(([f]) => UPD_FIELDS.includes(f)).map(([f, v]) => typeof v === "string" ? `${f} (${v.length} симв.)` : Array.isArray(v) ? `${f} (${v.length} эл.)` : f).join(", ");
+        console.log(`✓ ${r.task.key} обновлена · изменены: ${info}`);
+      } else {
+        console.log(`✓ ${r.task.key} заведена · ${STATUS[r.task.status]}`);
+      }
       return;
     }
     case "triage": {

@@ -96,25 +96,43 @@ export async function needsYou() {
   };
 }
 
-/**
- * Дизайн ждёт утверждения владельцем: есть настоящий макет — картинка во вложениях или ссылка (mockupUrl) —
- * либо стоит флаг «нужен макет». Текстовое описание дизайна само по себе на согласование не выносится
- */
+/** Дизайн на согласовании: есть настоящий макет (ссылка или картинка), дизайн не утверждён */
 const DESIGN_PENDING: Prisma.TaskWhereInput = {
   status: { notIn: ["done", "cancelled"] },
   mockupApprovedBy: null,
-  OR: [{ mockupRequired: true }, { mockupUrl: { not: null } }, { attachments: { some: { mime: { startsWith: "image/" } } } }],
+  OR: [{ mockupUrl: { not: null } }, { attachments: { some: { mime: { startsWith: "image/" } } } }],
+};
+
+/** Ждут макета от дизайнера: флаг «нужен макет», но реального макета ещё нет */
+const WAITING_MOCKUP: Prisma.TaskWhereInput = {
+  status: { notIn: ["done", "cancelled"] },
+  mockupApprovedBy: null,
+  mockupRequired: true,
+  mockupUrl: null,
+  attachments: { none: { mime: { startsWith: "image/" } } },
 };
 
 export async function mockupPendingApprovals() {
   return db.task.findMany({
     where: DESIGN_PENDING,
-    orderBy: [{ mockupRequired: "desc" }, { priority: "asc" }, { updatedAt: "asc" }],
+    orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
     select: {
       key: true, title: true, priority: true, status: true, layer: true, updatedAt: true,
       mockupUrl: true, mockupRequired: true, design: true, needs: true,
       _count: { select: { attachments: true } },
       attachments: { where: { mime: { startsWith: "image/" } }, select: { url: true, fileName: true }, orderBy: { createdAt: "desc" } },
+    },
+  });
+}
+
+/** Задачи, ожидающие макета от дизайнера: флаг «нужен макет», но картинки и ссылки ещё нет */
+export async function mockupWaitingDesign() {
+  return db.task.findMany({
+    where: WAITING_MOCKUP,
+    orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
+    select: {
+      key: true, title: true, priority: true, status: true,
+      blockedOn: true, claimedBy: true,
     },
   });
 }

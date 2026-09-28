@@ -69,6 +69,8 @@
 node /opt/ihelp.am/scripts/cc.mjs show КЛЮЧ                                   # карточка и лента
 node /opt/ihelp.am/scripts/cc.mjs note КЛЮЧ "Ответ продакта: …" --agent product
 node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --data '{"summary":"…","requirements":["…"],"details":"…","needs":[]}' --agent product
+node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --details-file /opt/ihelp.am/data/tmp/product/details.md --agent product    # длинный details
+node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --summary-file /opt/ihelp.am/data/tmp/product/summary.md --agent product    # длинный summary
 node /opt/ihelp.am/scripts/cc.mjs unblock КЛЮЧ "ответ в ленте, карточка дополнена" --agent product
 node /opt/ihelp.am/scripts/cc.mjs block КЛЮЧ "Вопрос … Варианты А/Б … Рекомендую …" --on owner --agent product
 node /opt/ihelp.am/scripts/cc.mjs lib --kind decision                          # продуктовый канон
