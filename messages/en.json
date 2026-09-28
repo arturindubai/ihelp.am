@@ -1809,5 +1809,38 @@
       "hint": "Email and SMS",
       "notifications": "Notifications"
     }
+  },
+  "notify": {
+    "client": {
+      "confirmation": {
+        "subject": "Order #{number} confirmed",
+        "title": "Your order is confirmed!",
+        "service": "Service: {service}",
+        "date": "Date and time: {date} at {time}",
+        "address": "Address: {address}",
+        "total": "Total: {total}",
+        "button": "My bookings"
+      },
+      "reminder": {
+        "subject": "Reminder: visit tomorrow",
+        "title": "Your visit is tomorrow",
+        "service": "Service: {service}",
+        "date": "Date and time: {date} at {time}",
+        "master": "Pro: {master}",
+        "address": "Address: {address}",
+        "button": "View booking"
+      },
+      "review": {
+        "subject": "How did your visit go?",
+        "title": "How was the visit?",
+        "line1": "We hope you're satisfied! Leave a review — it takes just a minute.",
+        "line2": "Your feedback helps us improve.",
+        "button": "Leave a review"
+      },
+      "unsubscribeText": "To stop receiving emails — {link}.",
+      "unsubscribeLink": "unsubscribe here",
+      "unsubscribedTitle": "You have unsubscribed",
+      "unsubscribedBody": "You will no longer receive emails from iHelp."
+    }
   }
 }

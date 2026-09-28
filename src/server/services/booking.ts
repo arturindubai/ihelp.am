@@ -13,6 +13,7 @@ import { amd } from "@/lib/format";
 import { tr } from "@/i18n/locales";
 import { loadServiceRaw, localizeService, resolveSelection } from "./catalog";
 import { checkPromo } from "./promo";
+import { notifyBookingConfirmed } from "./bookingNotify";
 
 export const BUSY_STATUSES: VisitStatus[] = ["SCHEDULED", "CONFIRMED", "ON_WAY", "IN_PROGRESS"];
 
@@ -221,6 +222,8 @@ export async function createOrder(user: User, input: CreateOrderInput) {
   // Уведомить мастера о новом визите
   const firstVisit = await db.visit.findFirst({ where: { orderId: order.id, masterId: { not: null } }, select: { id: true } });
   if (firstVisit) await notifyMasterAssigned(firstVisit.id).catch(() => {});
+  // Письмо клиенту: подтверждение заказа
+  notifyBookingConfirmed(order.id).catch(() => {});
   return order;
 }
 

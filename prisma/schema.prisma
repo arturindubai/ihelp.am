@@ -46,6 +46,8 @@ model User {
   telegramUsername String?
   /// Согласие на рекламные рассылки (LEGAL-2): null — не давал, дата — дал; отзывается в профиле
   adsConsentAt     DateTime?
+  /// Когда клиент отписался от транзакционных писем (ссылка в подвале письма): дата отписки или null
+  emailUnsubscribedAt DateTime?
 
   sessions    Session[]
   addresses   Address[]
