@@ -42,11 +42,24 @@ tested_label="Протестирован коммит ${tested:0:10}."
 [ -n "$NOTEST" ] && tested_label="Без отметки тестировщика (--no-test): проверял деплоер."
 
 prev=$(git rev-parse HEAD)
+# Регистрируем merge driver для messages/*.json: объединяет ключи обеих сторон без конфликта,
+# сортирует результат. Прописывается в .git/config один раз и сохраняется навсегда.
+git config merge.json-messages.driver "node /opt/ihelp.am/scripts/merge-messages.mjs %O %A %B" 2>/dev/null || true
 if ! git merge --no-ff -q "origin/$branch" -m "Слияние $branch: $title"; then
   files=$(git diff --name-only --diff-filter=U | tr '\n' ' ')
   git merge --abort
   cc return "$KEY" "Конфликт при слиянии с main: ${files}. Обновите ветку от свежего main (git merge origin/main), проверьте и сдайте снова."
   stop "Конфликт при слиянии — задача возвращена" 2
+fi
+# Merge driver сортирует при конфликте обеих сторон; если только одна сторона изменила файл,
+# git берёт её версию без вызова driver. Досортировываем на всякий случай и добавляем в коммит.
+if git diff --name-only "$prev" HEAD | grep -q '^messages/.*\.json$'; then
+  node scripts/sort-messages.mjs 2>/dev/null
+  if [ -n "$(git status --porcelain messages/)" ]; then
+    git add messages/
+    git commit --amend --no-edit -q
+    echo "  ✓ messages/*.json досортированы и включены в merge commit"
+  fi
 fi
 merge=$(git rev-parse HEAD)
 changed=$(git diff --name-only "$prev" "$merge")
