@@ -5,7 +5,7 @@ import type { PricePromo } from "@/lib/pricing";
 
 export type PromoCheck = { ok: true; promo: PricePromo & { id: string } } | { ok: false; error: string; amount?: number };
 
-export async function checkPromo(opts: { code: string; userId?: string | null; phone?: string | null; serviceId: string; planKind: PlanKind; amount: number; isFirstOrder: boolean }): Promise<PromoCheck> {
+export async function checkPromo(opts: { code: string; userId?: string | null; phone?: string | null; email?: string | null; serviceId: string; planKind: PlanKind; amount: number; isFirstOrder: boolean }): Promise<PromoCheck> {
   const code = opts.code.trim().toUpperCase();
   if (!code) return { ok: false, error: "not_found" };
   const p = await db.promoCode.findUnique({ where: { code } });
@@ -17,6 +17,9 @@ export async function checkPromo(opts: { code: string; userId?: string | null; p
   if (p.planKinds.length && !p.planKinds.includes(opts.planKind)) return { ok: false, error: "service" };
   if (p.firstOrderOnly && !opts.isFirstOrder) return { ok: false, error: "first_only" };
   if (p.minOrder && opts.amount < p.minOrder) return { ok: false, error: "min_order", amount: p.minOrder };
+  // Персональный промокод: проверяем совпадение телефона или email
+  if (p.forPhone && opts.phone !== p.forPhone) return { ok: false, error: "not_found" };
+  if (p.forEmail && opts.email?.toLowerCase() !== p.forEmail) return { ok: false, error: "not_found" };
   if (opts.userId || opts.phone) {
     const used = await db.promoRedemption.count({ where: { promoId: p.id, OR: [opts.userId ? { userId: opts.userId } : {}, opts.phone ? { phone: opts.phone } : {}].filter((x) => Object.keys(x).length) } });
     if (used >= p.perUserLimit) return { ok: false, error: "used" };

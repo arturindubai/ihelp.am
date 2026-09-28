@@ -735,7 +735,13 @@
       "planKinds": "For plan types only",
       "used": "Used",
       "anyService": "All services",
-      "rulesHint": "The promo code applies to the first paid visit. Without the 'stackable' flag the client gets the best discount."
+      "rulesHint": "The promo code applies to the first paid visit. Without the 'stackable' flag the client gets the best discount.",
+      "forPhone": "For client (phone)",
+      "forEmail": "For client (email)",
+      "forPhoneHint": "If set, this promo code is only valid for the client with this phone number",
+      "forEmailHint": "If set, this promo code is only valid for the client with this email address",
+      "personal": "Personal",
+      "forClient": "Client"
     },
     "banners": {
       "title": "Home page banners",

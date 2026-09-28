@@ -8,7 +8,7 @@ import { amd } from "@/lib/format";
 import { Sheet } from "@/components/ui/Sheet";
 import { NumInput, TextInput, Toggle } from "./fields";
 
-const EMPTY: PromoPayload = { code: "", description: "", type: "PERCENT", value: 10, maxDiscount: null, minOrder: null, validFrom: null, validTo: null, usageLimit: null, perUserLimit: 1, firstOrderOnly: false, stackable: false, serviceIds: [], planKinds: [], active: true };
+const EMPTY: PromoPayload = { code: "", description: "", type: "PERCENT", value: 10, maxDiscount: null, minOrder: null, validFrom: null, validTo: null, usageLimit: null, perUserLimit: 1, firstOrderOnly: false, stackable: false, serviceIds: [], planKinds: [], active: true, forPhone: null, forEmail: null };
 
 export function PromoManager({ promos, services }: { promos: { id: string; usedCount: number; data: PromoPayload }[]; services: { id: string; name: string }[] }) {
   const t = useTranslations("admin");
@@ -30,6 +30,9 @@ export function PromoManager({ promos, services }: { promos: { id: string; usedC
               {p.data.description && <span className="text-muted"> · {p.data.description}</span>}
               <span className="block text-xs text-muted">{p.data.validTo ? `→ ${p.data.validTo}` : ""} {p.data.firstOrderOnly ? `· ${t("promos.firstOrderOnly")}` : ""}</span>
             </span>
+            {(p.data.forPhone || p.data.forEmail) && (
+              <span className="shrink-0 text-xs text-brand font-medium">{t("promos.personal")}: {p.data.forPhone || p.data.forEmail}</span>
+            )}
             <span className="text-xs text-muted">{t("promos.used")}: {p.usedCount}{p.data.usageLimit ? `/${p.data.usageLimit}` : ""}</span>
           </button>
         ))}
@@ -60,6 +63,8 @@ export function PromoManager({ promos, services }: { promos: { id: string; usedC
               <Toggle label={t("promos.stackable")} checked={d.stackable} onChange={(v) => up({ stackable: v })} />
               <Toggle label={t("common.active")} checked={d.active} onChange={(v) => up({ active: v })} />
             </div>
+            <TextInput className="col-span-2" label={t("promos.forPhone")} value={d.forPhone ?? ""} hint={t("promos.forPhoneHint")} onChange={(v) => up({ forPhone: v || null })} />
+            <TextInput className="col-span-2" label={t("promos.forEmail")} value={d.forEmail ?? ""} hint={t("promos.forEmailHint")} onChange={(v) => up({ forEmail: v || null })} />
             <div className="col-span-2">
               <label className="label">{t("promos.services")}</label>
               <p className="mb-1 text-xs text-muted">{t("promos.anyService")}</p>

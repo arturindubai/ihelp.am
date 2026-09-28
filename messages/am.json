@@ -735,7 +735,13 @@
       "planKinds": "",
       "used": "",
       "anyService": "",
-      "rulesHint": ""
+      "rulesHint": "",
+      "forPhone": "",
+      "forEmail": "",
+      "forPhoneHint": "",
+      "forEmailHint": "",
+      "personal": "",
+      "forClient": ""
     },
     "banners": {
       "title": "",
