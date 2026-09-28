@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { getSettings } from "@/server/settings";
 import { generateSubscriptionVisitsSafe, resumeSubscription } from "@/server/services/booking";
-import { cleanUnusedImages } from "@/server/services/cleanup";
+import { cleanUnusedImages, cleanOldAuditLogs } from "@/server/services/cleanup";
 import { runWatchdog } from "@/server/services/ccWork";
 import { getTick } from "@/server/services/workers";
 import { processQueue, cleanQueue } from "@/server/services/notifyQueue";
@@ -110,12 +110,13 @@ export async function GET(req: Request) {
     masterScheduleSent = await sendMasterTomorrowSchedule(now);
   }), undefined);
 
-  // 5. Очистка: коды входа (с IP) старше 7 дней и истёкшие сессии — персональные данные не храним дольше нужного
-  let cleaned = { otp: 0, sessions: 0 };
+  // 5. Очистка: коды входа (с IP) старше 7 дней, истёкшие сессии, журнал действий старше 6 месяцев
+  let cleaned = { otp: 0, sessions: 0, auditLogs: 0 };
   await step("cleanup", () => daily("cleanup", 4, async () => {
     const otp = await db.otpCode.deleteMany({ where: { createdAt: { lt: new Date(now.getTime() - 7 * 24 * HOUR) } } });
     const sessions = await db.session.deleteMany({ where: { expiresAt: { lt: now } } });
-    cleaned = { otp: otp.count, sessions: sessions.count };
+    const auditLogs = await cleanOldAuditLogs(now);
+    cleaned = { otp: otp.count, sessions: sessions.count, auditLogs };
   }), undefined);
 
   // 5а. Сторож Control Center: брошенные задачи, возврат в очередь, снятие блокировок по зависимостям (docs/DEV_SYSTEM.md)
