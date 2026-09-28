@@ -8,7 +8,6 @@ describe("isAgentAuthor — критерий 1", () => {
     expect(isAgentAuthor("dev-1")).toBe(true);
     expect(isAgentAuthor("dev-2")).toBe(true);
     expect(isAgentAuthor("cto")).toBe(true);
-    expect(isAgentAuthor("owner")).toBe(true);
     expect(isAgentAuthor("product")).toBe(true);
     expect(isAgentAuthor("designer")).toBe(true);
     expect(isAgentAuthor("nocode-2")).toBe(true);
@@ -16,6 +15,12 @@ describe("isAgentAuthor — критерий 1", () => {
     expect(isAgentAuthor("tester-2")).toBe(true);
     expect(isAgentAuthor("deployer")).toBe(true);
     expect(isAgentAuthor("watchdog")).toBe(true);
+  });
+
+  it("owner — человек при любом регистре (критерий 1: ответ владельца считается человеческим)", () => {
+    // Владелец пишет с авторами "owner", "Owner" — это люди, не агенты
+    expect(isAgentAuthor("owner")).toBe(false);
+    expect(isAgentAuthor("Owner")).toBe(false);
   });
 
   it("имена людей из UI не считаются агентами", () => {
@@ -37,10 +42,17 @@ describe("DSN-1C: возврат на разбор → заметка триаж
     expect(isAgentAuthor("triage-1")).toBe(true);
   });
 
-  it("настоящий ответ человека (из UI) блокирует markTriaged до повторного разбора", () => {
+  it("настоящий ответ человека из UI блокирует markTriaged до повторного разбора", () => {
     // Если владелец ответил в ленте задачи — это сигнал триажу разобрать снова
     expect(isAgentAuthor("Артур")).toBe(false);
     expect(isAgentAuthor("Анна")).toBe(false);
+  });
+
+  it("ответ владельца с авторами «Owner» и «owner» блокирует markTriaged (критерий 1)", () => {
+    // Владелец ставит одобрение в «Согласованиях» с авторами Owner/owner —
+    // это человеческий ответ, и отметка «разобрано» должна отклоняться до нового разбора
+    expect(isAgentAuthor("Owner")).toBe(false);
+    expect(isAgentAuthor("owner")).toBe(false);
   });
 });
 
