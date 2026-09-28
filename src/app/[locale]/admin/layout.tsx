@@ -1,7 +1,7 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { redirect } from "@/i18n/navigation";
 import { getCurrentUser } from "@/server/auth";
-import { sectionsFor } from "@/server/admin";
+import { sectionsForUser } from "@/lib/adminAccess";
 import { getSettings } from "@/server/settings";
 import { VersionWatch } from "@/components/admin/VersionWatch";
 import { buildId } from "@/server/version";
@@ -14,7 +14,7 @@ export default async function AdminLayout({ children, params }: { children: Reac
   setRequestLocale(locale);
   const user = await getCurrentUser();
   if (!user) return redirect({ href: "/login?next=/admin", locale });
-  const sections = sectionsFor(user.role);
+  const sections = sectionsForUser(user);
   const t = await getTranslations("errors");
   if (!sections.length) return <div className="p-10 text-center">{t("forbidden")}</div>;
   const s = await getSettings();
