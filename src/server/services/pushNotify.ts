@@ -3,7 +3,7 @@ import webpush from "web-push";
 import { db } from "@/server/db";
 
 export function vapidEnabled() {
-  return !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
+  return !!(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
 }
 
 export type PushPayload = {
@@ -14,7 +14,7 @@ export type PushPayload = {
 
 /** Отправить push-уведомление всем активным подпискам пользователя */
 export async function pushNotify(userId: string, payload: PushPayload) {
-  const pub = process.env.VAPID_PUBLIC_KEY;
+  const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const priv = process.env.VAPID_PRIVATE_KEY;
   if (!pub || !priv) return;
 

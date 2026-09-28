@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("server-only", () => ({}));
 
 // VAPID ключи для тестов устанавливаем до импорта модуля
-process.env.VAPID_PUBLIC_KEY = "test-public-key";
+process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = "test-public-key";
 process.env.VAPID_PRIVATE_KEY = "test-private-key";
 
 // Хранилище подписок в памяти
