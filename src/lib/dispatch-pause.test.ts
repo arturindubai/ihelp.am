@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcOutcome, needsLoginPause } from "./dispatch-pause";
+import { calcOutcome, needsLoginPause, shouldReleaseAgentBusy } from "./dispatch-pause";
 
 describe("calcOutcome", () => {
   it("done — успешный запуск без ошибок", () => {
@@ -111,5 +111,31 @@ describe("needsLoginPause", () => {
 
   it("не ставит паузу при failed без ошибки входа", () => {
     expect(needsLoginPause("failed", "задача не завершена, тип не проверить")).toBe(false);
+  });
+});
+
+describe("shouldReleaseAgentBusy", () => {
+  const now = new Date("2026-09-28T10:00:00Z");
+  const future = new Date("2026-09-28T11:00:00Z");
+  const past = new Date("2026-09-28T09:00:00Z");
+
+  it("аренда действует — не снимать (критерий 6)", () => {
+    expect(shouldReleaseAgentBusy(false, future, now)).toBe(false);
+  });
+
+  it("процесс активен — не снимать (критерий 6)", () => {
+    expect(shouldReleaseAgentBusy(true, null, now)).toBe(false);
+  });
+
+  it("процесс активен, аренда истекла — всё равно не снимать (критерий 6)", () => {
+    expect(shouldReleaseAgentBusy(true, past, now)).toBe(false);
+  });
+
+  it("аренда истекла и процесса нет — снять (критерий 6)", () => {
+    expect(shouldReleaseAgentBusy(false, past, now)).toBe(true);
+  });
+
+  it("claimUntil null и процесса нет — снять", () => {
+    expect(shouldReleaseAgentBusy(false, null, now)).toBe(true);
   });
 });

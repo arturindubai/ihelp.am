@@ -104,6 +104,12 @@ function heads() {
 
 const isActive = (unit) => ["active", "activating", "deactivating", "reloading"].includes(sh("systemctl", ["is-active", unit]).stdout.trim());
 
+/** Есть ли хотя бы один активный юнит ihelp-w-<agent>-* (диспетчер мог запустить несколько за время аренды) */
+const hasActiveWorkerUnit = (agent) => {
+  const r = sh("systemctl", ["list-units", "--state=active,activating,deactivating,reloading", "--no-legend", "--plain", `ihelp-w-${agent}-*`]);
+  return r.stdout.trim().length > 0;
+};
+
 /** Итог запуска по JSON claude -p: закончен, ошибка, упёрлись в лимит или команда записи в карточку отклонена правами */
 function outcome(result, killed, err = "") {
   const text = `${result?.result ?? ""} ${result?.subtype ?? ""} ${err}`;
@@ -353,13 +359,20 @@ async function main() {
       }
     } catch (e) {
       const msg = String(e.message ?? e);
-      // agent_busy: DEV-XX — агент держит задачу без запуска; снимаем аренду сразу
+      // agent_busy: DEV-XX — у имени агента есть задача в работе
       const busyMatch = msg.match(/agent_busy[:\s]+([A-Z][A-Z0-9-]*)/i);
       if (busyMatch) {
         const heldKey = busyMatch[1];
-        log(`· ${a.agent}: занят ${heldKey} без запуска — снимаем аренду`);
-        const r = await asAgent(a.agent, { action: "handoff", key: heldKey, text: "Аренда снята диспетчером: агент занят, запуск не создан." });
-        if (r.error) log(`! не удалось снять аренду ${heldKey}: ${r.error}`);
+        const unitActive = hasActiveWorkerUnit(a.agent);
+        const claim = (plan.inProgressClaims ?? []).find((c) => c.key === heldKey && c.agent === a.agent);
+        const leaseExpired = !claim?.claimUntil || Date.parse(claim.claimUntil) <= Date.now();
+        if (!unitActive && leaseExpired) {
+          log(`· ${a.agent}: занят ${heldKey} без запуска — снимаем аренду`);
+          const r = await asAgent(a.agent, { action: "handoff", key: heldKey, text: "Аренда снята диспетчером: агент занят, запуск не создан." });
+          if (r.error) log(`! не удалось снять аренду ${heldKey}: ${r.error}`);
+        } else {
+          log(`· ${a.agent}: агент занят ${heldKey}, работает (юнит${unitActive ? " активен" : " нет"}, аренда ${leaseExpired ? "истекла" : "действует"})`);
+        }
       } else if (takenTask) {
         // задачу взяли, но запуск не создался — возвращаем в очередь
         log(`! ${a.agent} ${takenTask}: запуск не создан — ${msg.slice(0, 200)}`);

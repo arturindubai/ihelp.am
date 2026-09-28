@@ -113,6 +113,14 @@ describe("имена и итоги запусков", () => {
     expect(freeName("tester", [])).toBe("tester");
     expect(freeName("tester", ["tester"])).toBe("tester-2");
   });
+  it("имя с задачей в работе (claimedAgents) не выбирается — отказ agent_busy не возникает (критерий 5)", () => {
+    // dev-1 держит задачу в работе, но нет активного запуска systemd
+    const s = state({ readyForDev: 2, claimedAgents: [{ pool: "dev", agent: "dev-1" }] });
+    const actions = planDispatch(s, noon);
+    // оба слота dev: dev-1 занят claimedAgents, должен выбраться dev-2 и dev-3
+    expect(actions.every((a) => a.agent !== "dev-1")).toBe(true);
+    expect(actions.find((a) => a.pool === "dev" && a.agent === "dev-2")).toBeTruthy();
+  });
   it("исчерпанный лимит подписки распознаётся отдельно от ошибки", () => {
     expect(runOutcome({ is_error: true, result: "Claude AI usage limit reached|1759000000" }, 1)).toBe("limit");
     expect(runOutcome({ is_error: false, result: "Готово" }, 0)).toBe("done");

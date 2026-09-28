@@ -312,7 +312,7 @@ async function todayCounts() {
 
 export async function dispatchState(heads: Record<string, string>): Promise<DispatchState> {
   const config = await getWorkersConfig();
-  const [running, today, review, readyForDev, readyForNocode, triage, sweep, lastStart, requests, product, productSweep, productHold, designer, designerSweep] = await Promise.all([
+  const [running, today, review, readyForDev, readyForNocode, triage, sweep, lastStart, requests, product, productSweep, productHold, designer, designerSweep, inProgress] = await Promise.all([
     db.workerRun.findMany({ where: { status: "running" }, select: { pool: true, agent: true } }),
     todayCounts(),
     reviewTasks(),
@@ -327,10 +327,12 @@ export async function dispatchState(heads: Record<string, string>): Promise<Disp
     productHoldKeys(),
     designerQueue(),
     sweepDue(config, "designer"),
+    db.task.findMany({ where: { status: "in_progress", claimedBy: { not: null } }, select: { claimedBy: true, layer: true, claimUntil: true, key: true } }),
   ]);
   return {
     config,
     running: running.map((r) => ({ pool: r.pool as Pool, agent: r.agent })),
+    claimedAgents: inProgress.map((t) => ({ pool: (t.layer === "none" ? "nocode" : "dev") as Pool, agent: t.claimedBy! })),
     today,
     review,
     readyForDev,
@@ -345,6 +347,7 @@ export async function dispatchState(heads: Record<string, string>): Promise<Disp
     designerSweepDue: designerSweep,
     lastStart,
     requests: requests.filter((r) => Date.now() - Date.parse(r.at) < 30 * 60_000),
+    inProgressClaims: inProgress.map((t) => ({ key: t.key, agent: t.claimedBy!, claimUntil: t.claimUntil?.toISOString() ?? null })),
   };
 }
 
@@ -381,6 +384,7 @@ export async function dispatchPlan(heads: Record<string, string>) {
       .filter((r) => !waiting.has(`${r.pool}|${r.at}`))
       .map((r) => `${r.pool}${r.key ? ` ${r.key}` : ""}: ${state.config.stopRunning ? "идёт остановка" : state.config.pausedUntil && Date.parse(state.config.pausedUntil) > Date.now() ? `воркеры на паузе (${state.config.pausedReason ?? "лимит подписки или вход"})` : "нет подходящей работы (задача не в нужном статусе или без отправленной ветки)"}`),
     triageQueueSize: state.triageQueue.length,
+    inProgressClaims: state.inProgressClaims ?? [],
   };
 }
 

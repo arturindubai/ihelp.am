@@ -33,3 +33,14 @@ export function needsLoginPause(status: RunOutcome, summary: string): boolean {
   if (!["failed", "timeout"].includes(status)) return false;
   return /not logged in|\/login|oauth|failed to authenticate|authentication_error|\b401\b/i.test(summary);
 }
+
+/**
+ * Снимать ли аренду при отказе agent_busy.
+ * Аренда снимается только если одновременно нет активного юнита воркера (ihelp-w-<агент>-*)
+ * и срок аренды задачи уже истёк. Иначе агент работает — не трогать.
+ */
+export function shouldReleaseAgentBusy(agentUnitActive: boolean, claimUntil: Date | null, now = new Date()): boolean {
+  if (agentUnitActive) return false;
+  if (claimUntil && claimUntil > now) return false;
+  return true;
+}
