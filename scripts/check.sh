@@ -14,8 +14,9 @@ docker run --rm \
     # Типы маршрутов .next/types в образе собраны с main: в ветке без этих маршрутов они дают ложные ошибки
     rm -rf .next
     echo "▶ Проверка типов"; npx tsc --noEmit -p . || exit 1
-    echo "▶ Тесты"; npx vitest run 2>&1 | tail -n 25
-    echo "▶ Хардкод строк"; count=$(grep -rn --include="*.tsx" --include="*.ts" "На главную\|Русский\|English" src/ 2>/dev/null | grep -v "backlog\.ts\|SettingsEditor\.tsx\|\.test\." | wc -l); [ "$count" = "0" ] && echo "  OK — зашитых строк нет" || { echo "  FAIL — найдено зашитых строк: $count"; grep -rn --include="*.tsx" --include="*.ts" "На главную\|Русский\|English" src/ 2>/dev/null | grep -v "backlog\.ts\|SettingsEditor\.tsx\|\.test\."; exit 1; }' 2>&1
+    echo "▶ Тесты"; npx vitest run 2>&1 | tail -n 25; vitest_exit=${PIPESTATUS[0]}
+    echo "▶ Хардкод строк"; count=$(grep -rn --include="*.tsx" --include="*.ts" "На главную\|Русский\|English" src/ 2>/dev/null | grep -v "backlog\.ts\|SettingsEditor\.tsx\|\.test\." | wc -l); [ "$count" = "0" ] && echo "  OK — зашитых строк нет" || { echo "  FAIL — найдено зашитых строк: $count"; grep -rn --include="*.tsx" --include="*.ts" "На главную\|Русский\|English" src/ 2>/dev/null | grep -v "backlog\.ts\|SettingsEditor\.tsx\|\.test\."; exit 1; }
+    if [ "$vitest_exit" != "0" ]; then echo "✗ Тесты упали"; exit "$vitest_exit"; fi' 2>&1
 code=$?
 [ "$code" = 0 ] && echo "CHECK OK" || echo "CHECK FAILED"
 exit "$code"
