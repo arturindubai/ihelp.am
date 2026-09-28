@@ -75,6 +75,13 @@ check "X-Robots-Tag: ${robots:-noindex, nofollow}" [ "$(curl -sI -m 20 "$BASE/ru
 
 echo "Бэкапы"
 check "бэкап базы моложе 26 часов" [ -n "$(find backups -maxdepth 1 -name 'db-*.sql.gz' -mmin -1560 2> /dev/null | head -n 1)" ]
+backup_script_ok() {
+  local host_sum cont_sum
+  host_sum=$(md5sum deploy/backup.sh 2>/dev/null | cut -d' ' -f1) || return 1
+  cont_sum=$(docker exec homecare-backup-1 md5sum /backup.sh 2>/dev/null | cut -d' ' -f1) || return 1
+  [ "$host_sum" = "$cont_sum" ]
+}
+check "скрипт бэкапа совпадает с репозиторием" backup_script_ok
 
 neighbors=("$@")
 if [ ${#neighbors[@]} -eq 0 ]; then read -r -a neighbors <<< "$(env_val NEIGHBORS | tr -d '"')"; fi
