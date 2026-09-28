@@ -49,6 +49,27 @@ og="$(curl -s -m 20 "$BASE/ru" | grep -oE '<meta property="og:image" content="[^
 og_ok() { [ -n "$og" ] && [ "$(curl -s -o /dev/null -m 30 -w '%{http_code} %{content_type}' "$BASE/${og#*://*/}")" = "200 image/png" ]; }
 check "превью ссылок (og:image) → PNG" og_ok
 
+echo "Control Center"
+# Ключ агента читается без вывода в лог: env_val возвращает значение, не эхо
+cc_api_ok() {
+  local key response http_code body
+  key="$(env_val CC_AGENT_KEY)"
+  [ -z "$key" ] && return 1
+  response=$(curl -s -m 20 -w '\n%{http_code}' -H "x-cc-key: $key" "$BASE/api/cc")
+  http_code=$(echo "$response" | tail -n1)
+  body=$(echo "$response" | head -n-1)
+  [ "$http_code" = "200" ] || return 1
+  # Список задач непустой: JSON содержит хотя бы один объект задачи
+  echo "$body" | grep -q '"tasks":\[{'
+}
+check "API воркеров: список задач (200, не пуст)" cc_api_ok
+db_schema_ok() {
+  # Проверяет, что все поля Task, Epic, WorkerRun из schema.prisma реально есть в базе.
+  # Если миграция добавила столбец с неверным именем, запрос упадёт с ERROR: column "..." does not exist.
+  node scripts/check-migrations.mjs --db >/dev/null 2>&1
+}
+check "схема Prisma и база согласованы (Task, Epic, WorkerRun)" db_schema_ok
+
 echo "Логи приложения"
 # Первые 60 секунд после запуска контейнера — не должно быть MISSING_MESSAGE (next-intl) или
 # необработанных исключений Node.js, которые сигнализируют о пропавших ключах перевода / багах.
