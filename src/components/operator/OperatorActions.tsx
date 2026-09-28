@@ -1,5 +1,5 @@
 "use client";
-import { useTransition } from "react";
+import { useTransition, useState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { operatorAssignMasterAction, operatorChangeStatusAction } from "@/server/actions/operator";
@@ -24,6 +24,20 @@ export function OperatorActions({
   const to = useTranslations("order");
   const router = useRouter();
   const [pending, start] = useTransition();
+  const [masterError, setMasterError] = useState<string | null>(null);
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    };
+  }, []);
+
+  const showMasterError = (msg: string) => {
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    setMasterError(msg);
+    errorTimerRef.current = setTimeout(() => setMasterError(null), 5000);
+  };
 
   const run = (fn: () => Promise<unknown>) =>
     start(async () => {
@@ -38,12 +52,25 @@ export function OperatorActions({
 
   return (
     <div className="mt-3 flex flex-col gap-2 md:flex-row md:justify-end">
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-1 flex-1 md:flex-none">
         <select
-          className="min-h-9 rounded-lg border border-line bg-paper px-2 text-sm disabled:opacity-50 flex-1 md:flex-none"
+          className="min-h-9 rounded-lg border border-line bg-paper px-2 text-sm disabled:opacity-50 w-full md:w-auto"
           disabled={pending}
           value={masterId || ""}
-          onChange={(e) => run(() => operatorAssignMasterAction(visitId, e.target.value || null))}
+          onChange={(e) => {
+            setMasterError(null);
+            if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+            const newMasterId = e.target.value || null;
+            start(async () => {
+              const result = await operatorAssignMasterAction(visitId, newMasterId);
+              if (!result.ok) {
+                const msg = result.error === "busy" ? t("masterBusy") : t("error");
+                showMasterError(msg);
+              } else {
+                router.refresh();
+              }
+            });
+          }}
         >
           <option value="">{masters.length === 0 ? t("noMastersAvail") : t("selectMaster")}</option>
           {masters.map((m) => (
@@ -52,6 +79,9 @@ export function OperatorActions({
             </option>
           ))}
         </select>
+        {masterError && (
+          <p className="rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad">{masterError}</p>
+        )}
       </div>
       <div className="flex gap-2">
         <select

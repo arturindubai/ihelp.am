@@ -1,4 +1,5 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
+import { forbidden } from "next/navigation";
 import { redirect } from "@/i18n/navigation";
 import { getCurrentUser } from "@/server/auth";
 import { Logo } from "@/components/Logo";
@@ -13,10 +14,7 @@ export default async function OperatorLayout({ children, params }: { children: R
   setRequestLocale(locale);
   const user = await getCurrentUser();
   if (!user) return redirect({ href: "/login?next=/operator", locale });
-  if (!(ALLOWED as readonly string[]).includes(user.role)) {
-    const t = await getTranslations("errors");
-    return <div className="p-10 text-center text-bad">{t("forbidden")}</div>;
-  }
+  if (!(ALLOWED as readonly string[]).includes(user.role)) forbidden();
   const t = await getTranslations("operator");
   return (
     <div className="min-h-dvh bg-surface">

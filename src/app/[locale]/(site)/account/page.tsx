@@ -24,7 +24,7 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
         {user.role === "MASTER" && <Link href="/pro" className="flex items-center gap-3 p-4 font-medium"><Briefcase size={20} /> <span className="flex-1">{tn("pro")}</span><ChevronRight size={18} className="text-muted" /></Link>}
         {STAFF_ROLES.includes(user.role) && <Link href="/admin" className="flex items-center gap-3 p-4 font-medium"><LayoutDashboard size={20} /> <span className="flex-1">{tn("admin")}</span><ChevronRight size={18} className="text-muted" /></Link>}
       </div>
-      <ProfileClient user={{ name: user.name, phone: user.phone, email: user.email, emailVerified: !!user.emailVerifiedAt, locale: user.locale, telegramId: user.telegramId, telegramUsername: user.telegramUsername }} addresses={addresses} districts={settings.booking.districts} enabledLocales={settings.locales.enabled} emailCodes={emailCodesAvailable(settings)} telegramLinkEnabled={telegramLinkEnabled} telegramError={telegramError} />
+      <ProfileClient user={{ name: user.name, phone: user.phone, email: user.email, emailVerified: !!user.emailVerifiedAt, locale: user.locale, telegramId: user.telegramId, telegramUsername: user.telegramUsername, adsConsent: !!user.adsConsentAt }} addresses={addresses} districts={settings.booking.districts} enabledLocales={settings.locales.enabled} emailCodes={emailCodesAvailable(settings)} telegramLinkEnabled={telegramLinkEnabled} telegramError={telegramError} />
     </div>
   );
 }

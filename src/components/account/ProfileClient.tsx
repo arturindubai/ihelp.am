@@ -4,13 +4,14 @@ import { useLocale, useTranslations } from "next-intl";
 import { MapPin, Pencil, Trash2, Plus, LogOut, Send } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { confirmProfileEmailAction, sendProfileEmailCodeAction, unlinkTelegramAction, updateProfileAction } from "@/server/actions/account";
+import { toggleAdsConsentAction } from "@/server/actions/consent";
 import { deleteAddressAction } from "@/server/actions/booking";
 import { logoutAction } from "@/server/actions/auth";
 import { Sheet } from "@/components/ui/Sheet";
 import { AddressForm, addressLine, type AddressRow } from "@/components/booking/AddressForm";
 import { formatPhone } from "@/lib/phone";
 
-export function ProfileClient({ user, addresses: initial, districts, enabledLocales, emailCodes, telegramLinkEnabled, telegramError }: { user: { name: string | null; phone: string; email: string | null; emailVerified: boolean; locale: string; telegramId: string | null; telegramUsername: string | null }; addresses: AddressRow[]; districts: string[]; enabledLocales: string[]; emailCodes: boolean; telegramLinkEnabled: boolean; telegramError: string | null }) {
+export function ProfileClient({ user, addresses: initial, districts, enabledLocales, emailCodes, telegramLinkEnabled, telegramError }: { user: { name: string | null; phone: string; email: string | null; emailVerified: boolean; locale: string; telegramId: string | null; telegramUsername: string | null; adsConsent: boolean }; addresses: AddressRow[]; districts: string[]; enabledLocales: string[]; emailCodes: boolean; telegramLinkEnabled: boolean; telegramError: string | null }) {
   const t = useTranslations("account");
   const ta = useTranslations("address");
   const tc = useTranslations("common");
@@ -68,6 +69,8 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
       {telegramLinkEnabled && (
         <TelegramSection telegramId={user.telegramId} telegramUsername={user.telegramUsername} error={telegramError} />
       )}
+
+      <AdsConsentSection initialValue={user.adsConsent} />
 
       <section className="card mt-4 p-4">
         <h2 className="h3 mb-3">{t("addresses")}</h2>
@@ -139,6 +142,39 @@ function TelegramSection({ telegramId, telegramUsername, error }: { telegramId: 
           {t("telegramConnect")}
         </a>
       )}
+    </section>
+  );
+}
+
+/** Согласие на рекламные рассылки (LEGAL-2): одиночное действие без кнопки «Сохранить» */
+function AdsConsentSection({ initialValue }: { initialValue: boolean }) {
+  const tc = useTranslations("consent");
+  const [checked, setChecked] = useState(initialValue);
+  const [, start] = useTransition();
+
+  function toggle(next: boolean) {
+    setChecked(next);
+    start(async () => {
+      const r = await toggleAdsConsentAction(next);
+      if (!r.ok) setChecked(!next);
+    });
+  }
+
+  return (
+    <section className="card mt-4 p-4">
+      <h2 className="h3 mb-3">{tc("ads.notifications")}</h2>
+      <label className="flex cursor-pointer items-start gap-3">
+        <input
+          type="checkbox"
+          className="checkbox-brand mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-action)]"
+          checked={checked}
+          onChange={(e) => toggle(e.target.checked)}
+        />
+        <span>
+          <span className="text-sm">{tc("ads.label")}</span>
+          <span className="mt-0.5 block text-xs text-muted">{tc("ads.hint")}</span>
+        </span>
+      </label>
     </section>
   );
 }
