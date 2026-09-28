@@ -1357,7 +1357,8 @@
         "approvedEmpty": "Nothing approved yet",
         "canon": "Library record",
         "designSnippet": "Design: {text}",
-        "files": "files: {n}"
+        "files": "files: {n}",
+        "approvedAgent": "by {agent}"
       },
       "backlog": {
         "strip": {

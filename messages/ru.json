@@ -1447,7 +1447,8 @@
         "canon": "запись в Библиотеке",
         "designSnippet": "Дизайн: {text}",
         "files": "файлов: {n}",
-        "workersLink": "Пуск и настройки пула — вкладка «Воркеры» →"
+        "workersLink": "Пуск и настройки пула — вкладка «Воркеры» →",
+        "approvedAgent": "у {agent}"
       },
       "backlog": {
         "strip": {
