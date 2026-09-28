@@ -3,7 +3,7 @@
  * Единый источник истины: схема строится из POOLS, а не перечисляет пулы вручную.
  */
 import { z } from "zod";
-import { EVERY_MIN, MODELS, MODES, POOLS, type Pool } from "./workers";
+import { DAILY_CAP_MAX, EVERY_MIN, MODELS, MODES, POOLS, type Pool } from "./workers";
 
 export const poolPatchSchema = z
   .object({
@@ -11,7 +11,8 @@ export const poolPatchSchema = z
     max: z.number().int().min(0).max(4),
     model: z.enum(MODELS),
     modelForL: z.enum(MODELS),
-    dailyCap: z.number().int().min(0).max(100),
+    // null — без лимита
+    dailyCap: z.number().int().min(0).max(DAILY_CAP_MAX).nullable(),
     mode: z.enum(MODES),
     everyMin: z.number().int().refine((n) => (EVERY_MIN as readonly number[]).includes(n)),
   })

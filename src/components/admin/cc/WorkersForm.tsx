@@ -3,7 +3,7 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { ccSaveWorkersAction, ccWorkersControlAction } from "@/server/actions/admin/cc";
-import { EVERY_MIN, MODELS, MODES, SINGLE, workersState, type Pool, type PoolConfig, type WorkersCommand, type WorkersConfig, type WorkersState } from "@/lib/workers";
+import { DAILY_CAP_MAX, EVERY_MIN, MODELS, MODES, SINGLE, workersState, type Pool, type PoolConfig, type WorkersCommand, type WorkersConfig, type WorkersState } from "@/lib/workers";
 import { cn, dateLabel, timeLabel } from "@/lib/format";
 
 type Patch = Parameters<typeof ccSaveWorkersAction>[0];
@@ -260,7 +260,15 @@ export function PoolSettings({ pool, initial }: { pool: Pool; initial: PoolConfi
         </label>
         <label className="flex flex-col gap-0.5">
           <span className="text-muted">{t("dailyCap")}</span>
-          <input className="input h-8 w-16 py-0.5 text-xs" type="number" min={0} max={100} value={p.dailyCap} onChange={(e) => put({ dailyCap: Number(e.target.value) })} />
+          <input
+            className="input h-8 w-24 py-0.5 text-xs"
+            type="number"
+            min={0}
+            max={DAILY_CAP_MAX}
+            placeholder={t("dailyCapNone")}
+            value={p.dailyCap ?? ""}
+            onChange={(e) => put({ dailyCap: e.target.value.trim() === "" ? null : Number(e.target.value) })}
+          />
         </label>
         <button className="btn-outline btn-sm" disabled={pending} onClick={() => savePool({ model: p.model, modelForL: p.modelForL, max: p.max, dailyCap: p.dailyCap })}>
           {saved ? t("saved") : t("save")}
