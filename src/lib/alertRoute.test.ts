@@ -1,7 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { pickTechRoute } from "./alertRoute";
+import { pickTechRoute, hasAlertRecipient } from "./alertRoute";
 
 const notify = { telegramBotToken: "db-token", telegramChatId: "team", techChatId: "tech" };
+const noTeam = { botToken: "", members: [] };
+const teamWithMembers = { botToken: "", members: [{ telegramId: 1 }] };
+
+describe("hasAlertRecipient", () => {
+  it("true: notify-токен + тех-чат", () => {
+    expect(hasAlertRecipient(notify, noTeam)).toBe(true);
+  });
+  it("true: notify-токен + team-чат (без techChatId)", () => {
+    expect(hasAlertRecipient({ ...notify, techChatId: "" }, noTeam)).toBe(true);
+  });
+  it("true: team-бот + members, нет чата", () => {
+    expect(hasAlertRecipient({ telegramBotToken: "", telegramChatId: "", techChatId: "" }, teamWithMembers)).toBe(false);
+    expect(hasAlertRecipient({ telegramBotToken: "", telegramChatId: "", techChatId: "" }, { botToken: "tok", members: [{ id: 1 }] })).toBe(true);
+  });
+  it("false: нет токена", () => {
+    expect(hasAlertRecipient({ telegramBotToken: "", telegramChatId: "chat", techChatId: "" }, noTeam)).toBe(false);
+  });
+  it("false: токен есть, но нет ни чата ни members", () => {
+    expect(hasAlertRecipient({ ...notify, telegramChatId: "", techChatId: "" }, noTeam)).toBe(false);
+  });
+});
 
 describe("pickTechRoute", () => {
   it("uses the bot from settings and prefers the tech chat", () => {

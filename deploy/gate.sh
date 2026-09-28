@@ -64,5 +64,34 @@ else
   report "имена секретных переменных в клиентском JS" "$secrets"
 fi
 
+# ── 4. Демо-данные вне блока SEED_FLAG ───────────────────────────────────────
+# Нарушение: seed.ts или миграция создаёт записи Review/Order/Visit/Master вне
+# блока, закрытого флагом _seed. При первом деплое на чистую базу такие записи
+# появились бы на живом сайте от имени несуществующих клиентов (инцидент DSN-1).
+echo "Гейт: демо-данные вне блока SEED_FLAG"
+if command -v node >/dev/null 2>&1; then
+  if seed_out=$(node scripts/check-seed.mjs 2>&1); then
+    echo "$seed_out"
+  else
+    report "демо-данные вне блока SEED_FLAG" "$seed_out"
+  fi
+else
+  echo "  ⚠ node не найден — проверка seed пропущена"
+fi
+
+# ── 5. Имена столбцов в новых миграциях ──────────────────────────────────────
+# Проверяет, что каждый ADD COLUMN / CREATE TABLE в новых миграциях ветки
+# использует имена из schema.prisma. Ловит опечатки типа DEV-66 до запуска.
+echo "Гейт: имена столбцов в новых миграциях"
+if command -v node >/dev/null 2>&1; then
+  if mig_out=$(node scripts/check-migrations.mjs 2>&1); then
+    echo "$mig_out"
+  else
+    report "имена столбцов в новых миграциях" "$mig_out"
+  fi
+else
+  echo "  ⚠ node не найден — проверка миграций пропущена"
+fi
+
 if [ "$fail" = 0 ]; then echo "GATE OK"; else echo "GATE FAILED"; fi
 exit "$fail"
