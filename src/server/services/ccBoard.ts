@@ -37,21 +37,21 @@ export type BoardTask = Awaited<ReturnType<typeof boardTasks>>[number];
 
 /** Счётчики вкладок */
 export async function ccCounts() {
-  const [byStatus, reviewCode, reviewNoCode, ownerBlocked, unread, running, attn, failed, mockupPending] = await Promise.all([
+  const [byStatus, reviewCode, reviewNoCode, ownerBlocked, unread, running, mockupPending] = await Promise.all([
     db.task.groupBy({ by: ["status"], _count: true }),
     db.task.count({ where: { status: "review", layer: { not: "none" } } }),
     db.task.count({ where: { status: "review", layer: "none" } }),
+    // только карточки с вопросом к владельцу; упавшие запуски и брошенные задачи — в «Здоровье» и «Воркеры»
     db.task.count({ where: { status: "blocked", blockedOn: { in: ["owner", "product"] }, triagedAt: { not: null } } }),
     unreadForOwner(),
     db.workerRun.count({ where: { status: "running" } }),
-    attention(),
-    db.workerRun.count({ where: { status: { in: ["failed", "timeout"] }, startedAt: { gte: new Date(Date.now() - 24 * 3600_000) } } }),
     db.task.count({ where: DESIGN_PENDING }),
   ]);
   const n = (s: string) => byStatus.find((r) => r.status === s)?._count ?? 0;
   return {
     backlog: OPEN_STATUSES.reduce((sum, s) => sum + n(s), 0),
-    you: ownerBlocked + attn.stale.length + attn.review.filter((r) => r.health.stuckReview).length + failed + reviewNoCode,
+    // «Нужен ты»: только карточки с вопросом + приёмка не-кода; упавшие/брошенные — в других вкладках
+    you: ownerBlocked + reviewNoCode,
     dev: n("in_progress"),
     deployer: reviewCode,
     approvals: reviewNoCode,
@@ -64,14 +64,14 @@ export async function ccCounts() {
 
 /** «Нужен ты»: блокировки на владельце и продукте, брошенные задачи, застрявшая проверка, не-код на приёмке, упавшие запуски, пауза воркеров, нет адресата алертов */
 export async function needsYou() {
-  const [attn, owner, failedRuns, config, nocodeReview, settings, ownerPostponed] = await Promise.all([
+  const [attn, owner, allFailedRuns, config, nocodeReview, settings, ownerPostponed] = await Promise.all([
     attention(),
     db.task.findMany({
       where: { status: "blocked", blockedOn: { in: ["owner", "product"] } },
       orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
-      select: { key: true, title: true, priority: true, blockedOn: true, blockedReason: true, updatedAt: true, triageNote: true, triagedAt: true, comments: { orderBy: { createdAt: "desc" }, take: 5, select: { author: true, text: true, kind: true, createdAt: true } } },
+      select: { key: true, title: true, priority: true, blockedOn: true, blockedReason: true, updatedAt: true, triageNote: true, triagedAt: true, comments: { orderBy: { createdAt: "desc" }, take: 20, select: { author: true, text: true, kind: true, createdAt: true } } },
     }),
-    db.workerRun.findMany({ where: { status: { in: ["failed", "timeout"] }, startedAt: { gte: new Date(Date.now() - 24 * 3600_000) } }, orderBy: { startedAt: "desc" }, take: 10 }),
+    db.workerRun.findMany({ where: { status: { in: ["failed", "timeout"] }, startedAt: { gte: new Date(Date.now() - 24 * 3600_000) } }, orderBy: { startedAt: "desc" }, take: 20 }),
     getWorkersConfig(),
     db.task.findMany({
       where: { status: "review", layer: "none" },
@@ -85,12 +85,34 @@ export async function needsYou() {
       select: { key: true, title: true, priority: true, blockedReason: true, blockedUntil: true, updatedAt: true },
     }),
   ]);
+
+  // Отделяем «возвращено на доработку» (задача жива) от реальных ошибок
+  const failedTaskKeys = [...new Set(allFailedRuns.map((r) => r.taskKey).filter(Boolean) as string[])];
+  const failedTaskStatuses =
+    failedTaskKeys.length > 0
+      ? await db.task.findMany({ where: { key: { in: failedTaskKeys } }, select: { key: true, status: true } })
+      : [];
+  const taskStatusMap = new Map(failedTaskStatuses.map((t) => [t.key, t.status]));
+
+  const failedRuns = allFailedRuns.filter((r) => {
+    if (!r.taskKey) return true;
+    const s = taskStatusMap.get(r.taskKey);
+    return !s || CLOSED_STATUSES.includes(s as (typeof CLOSED_STATUSES)[number]);
+  });
+  const returnedRuns = allFailedRuns.filter((r) => {
+    if (!r.taskKey) return false;
+    const s = taskStatusMap.get(r.taskKey);
+    return s && !CLOSED_STATUSES.includes(s as (typeof CLOSED_STATUSES)[number]);
+  });
+
   return {
     owner: owner.map((x) => ({
       ...x,
       ownerAnswered: x.triagedAt === null,
-      /** Полный текст причины: для reblockOn старых задач восстанавливаем из ленты, если было обрезано до 200 знаков */
+      /** Полный текст причины: восстанавливаем из ленты, если обрезано до 200 знаков */
       fullReason: recoverFullReason(x.blockedReason, x.comments),
+      /** Флаг: текст мог быть обрезан и восстановить не удалось */
+      textMayCut: x.blockedReason?.length === 200 && recoverFullReason(x.blockedReason, x.comments)?.length === 200,
     })),
     /** Задачи, отложенные владельцем (blockedOn: external) */
     ownerPostponed,
@@ -99,23 +121,39 @@ export async function needsYou() {
     /** Заблокированы на tech/external — видно техдиректору в «Нужен ты» */
     techBlocked: attn.tech,
     nocodeReview,
-    failedRuns,
+    /** Реальные ошибки: запуски без связанной живой задачи */
+    failedRuns: failedRuns.slice(0, 10),
+    /** Возвращено на доработку: задача жива, деплоер вернул из-за конфликта или замечаний */
+    returnedRuns: returnedRuns.slice(0, 10),
     pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null,
     alertMissing: !hasAlertRecipient(settings),
   };
 }
 
 /**
- * Восстанавливает полный текст причины блокировки из ленты задачи для задач, заблокированных через reblock
- * до исправления ошибки обрезки до 200 знаков. Проверяет только задачи с признаком обрезки (ровно 200 знаков).
+ * Восстанавливает полный текст причины блокировки из ленты задачи.
+ * Срабатывает только если blockedReason ровно 200 знаков (признак обрезки).
+ * Паттерны (в порядке приоритета):
+ *   a) комментарий «Адресат блокировки изменён: … . <текст>»
+ *   b) комментарий «Заблокировано на owner|product: <текст>»
+ *   c) последний комментарий kind:"block" длиннее 200 знаков
  */
-function recoverFullReason(blockedReason: string | null, comments: { text: string }[]): string | null {
+function recoverFullReason(blockedReason: string | null, comments: { text: string; kind?: string }[]): string | null {
   if (!blockedReason || blockedReason.length !== 200) return blockedReason;
-  const reblockComment = comments.find((c) => c.text.startsWith("Адресат блокировки изменён:"));
-  if (reblockComment) {
-    const match = reblockComment.text.match(/^Адресат блокировки изменён:.+?\. ([\s\S]+)/);
-    if (match && match[1].trim().length > blockedReason.length) return match[1].trim();
+
+  for (const c of comments) {
+    const matchA = c.text.match(/^Адресат блокировки изменён:.+?\. ([\s\S]+)/);
+    if (matchA && matchA[1].trim().length > blockedReason.length) return matchA[1].trim();
   }
+
+  for (const c of comments) {
+    const matchB = c.text.match(/^Заблокировано на (?:owner|product): ([\s\S]+)/);
+    if (matchB && matchB[1].trim().length > blockedReason.length) return matchB[1].trim();
+  }
+
+  const blockComment = comments.find((c) => c.kind === "block" && c.text.length > 200);
+  if (blockComment) return blockComment.text;
+
   return blockedReason;
 }
 

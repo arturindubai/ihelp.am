@@ -16,6 +16,25 @@ export function parseVariants(text: string): { question: string; variants: { id:
   return { question: text.slice(0, markers[0].index!).trim(), variants };
 }
 
+export type MultiQuestionBlock = { question: string; variants: { id: string; text: string }[] | null };
+
+/**
+ * Разбивает текст на несколько вопросов, если их несколько (разделены пустой строкой или нумерацией).
+ * Каждый блок прогоняется через parseVariants. Если блок один — поведение аналогично parseVariants.
+ */
+export function parseMultiQuestion(text: string): MultiQuestionBlock[] {
+  const rawBlocks = text.split(/\n\n+|\n(?=\d+\.\s)/);
+  const blocks = rawBlocks.map((b) => b.trim()).filter(Boolean);
+  if (blocks.length <= 1) {
+    const parsed = parseVariants(text);
+    return [{ question: parsed?.question ?? text, variants: parsed?.variants ?? null }];
+  }
+  return blocks.map((block) => {
+    const parsed = parseVariants(block);
+    return { question: parsed?.question ?? block, variants: parsed?.variants ?? null };
+  });
+}
+
 /**
  * Формирует причину блокировки при откладывании на N дней.
  * Исходный вопрос сохраняется после даты: триаж восстановит блокировку на владельце после разблокировки по дате.

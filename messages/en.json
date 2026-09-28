@@ -1505,9 +1505,12 @@
         "urgent": "Urgent",
         "groups": {
           "variant": "Choose an option",
+          "price": "Name a price or number",
           "data": "Send data or document",
           "auth": "Sign in to a service",
-          "rule": "Approve a rule"
+          "approve": "Approve or agree",
+          "rule": "Approve a system rule",
+          "other": "Other"
         },
         "postpone3days": "Postpone for 3 days",
         "paused": "Workers paused until {until}.",
@@ -1531,6 +1534,10 @@
         "stuckReview": "Review stuck",
         "nocodeReview": "Awaiting your approval",
         "nocodeReviewHint": "No-code in review: documents, decisions, content. Accept or return with feedback.",
+        "devOnly": "for assignee",
+        "textMayCut": "⚠ text may be truncated — open task for full text",
+        "returnedRuns": "Returned for revision",
+        "returnedRunsHint": "Deployer returned the task due to merge conflict or feedback — production not affected, task back in queue.",
         "failedRuns": "Failed worker runs in the last 24 hours",
         "techBlocked": "Blocked on tech/external reasons",
         "techBlockedHint": "These tasks are waiting for a technical solution or external service response. Unblock with cc.mjs unblock KEY.",

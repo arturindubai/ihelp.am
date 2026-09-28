@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPostponeReason, parseVariants } from "./cc-owner-q";
+import { buildPostponeReason, parseMultiQuestion, parseVariants } from "./cc-owner-q";
 
 describe("parseVariants", () => {
   it("возвращает null если вариантов меньше двух", () => {
@@ -68,6 +68,47 @@ describe("parseVariants", () => {
     expect(r).not.toBeNull();
     expect(r!.variants[0]).toEqual({ id: "A", text: "да" });
     expect(r!.variants[1]).toEqual({ id: "B", text: "нет" });
+  });
+});
+
+describe("parseMultiQuestion", () => {
+  it("одиночный вопрос без вариантов — один блок", () => {
+    const r = parseMultiQuestion("Прислать логотип");
+    expect(r).toHaveLength(1);
+    expect(r[0].question).toBe("Прислать логотип");
+    expect(r[0].variants).toBeNull();
+  });
+
+  it("одиночный вопрос с вариантами — один блок с вариантами", () => {
+    const r = parseMultiQuestion("Выбрать канал? А) Telegram Б) Email");
+    expect(r).toHaveLength(1);
+    expect(r[0].variants).toHaveLength(2);
+  });
+
+  it("два вопроса разделены пустой строкой", () => {
+    const text = "Какой цвет? А) Синий Б) Красный\n\nКакой шрифт? А) Bold Б) Regular";
+    const r = parseMultiQuestion(text);
+    expect(r).toHaveLength(2);
+    expect(r[0].variants).toHaveLength(2);
+    expect(r[1].variants).toHaveLength(2);
+    expect(r[0].question).toBe("Какой цвет?");
+    expect(r[1].question).toBe("Какой шрифт?");
+  });
+
+  it("два вопроса разделены нумерацией", () => {
+    const text = "1. Войти в сервис\n2. Прислать логотип";
+    const r = parseMultiQuestion(text);
+    expect(r).toHaveLength(2);
+    expect(r[0].variants).toBeNull();
+    expect(r[1].variants).toBeNull();
+  });
+
+  it("один из блоков без вариантов, другой с вариантами", () => {
+    const text = "Прислать логотип\n\nКакой срок? А) Неделя Б) Месяц";
+    const r = parseMultiQuestion(text);
+    expect(r).toHaveLength(2);
+    expect(r[0].variants).toBeNull();
+    expect(r[1].variants).toHaveLength(2);
   });
 });
 
