@@ -1563,7 +1563,9 @@
         "returnAllPh": "Что доработать",
         "rejectAllPh": "Почему отклоняем",
         "returnAllFailed": "Не возвращены (не прошли гейт): {keys}",
-        "rejectAllFailed": "Не отклонены (не прошли гейт): {keys}"
+        "rejectAllFailed": "Не отклонены (не прошли гейт): {keys}",
+        "afterAccept": "После принятия будет заведено:",
+        "afterAcceptMore": "и ещё {count}"
       },
       "plans": {
         "empty": "Эпиков пока нет",

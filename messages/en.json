@@ -1451,7 +1451,9 @@
         "failed": "Failed: {error}",
         "approveAll": "Accept all",
         "approveAllConfirm": "Accept all tasks in this lane ({n})?",
-        "approveAllFailed": "Not accepted (failed gate): {keys}"
+        "approveAllFailed": "Not accepted (failed gate): {keys}",
+        "afterAccept": "After acceptance will be created:",
+        "afterAcceptMore": "and {count} more"
       },
       "plans": {
         "empty": "No epics yet",

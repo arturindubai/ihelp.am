@@ -26,6 +26,8 @@ const HELP = `cc — Control Center из командной строки (docs/D
   pulse КЛЮЧ                                    пульс вручную (обычно его шлёт хук Claude Code)
   note КЛЮЧ "текст" [--error]                   запись в ленту: ход работы или ошибка
   review КЛЮЧ "отчёт"                           сдать на проверку: ветка должна быть отправлена
+                                                  (не-код: обязательны --next "шаг1; шаг2" или --no-next)
+                                                  (код без изменений: --no-work — уходит тестировщику)
   handoff КЛЮЧ "что сделано и что осталось"     передать задачу — вернуть в очередь с веткой
   block КЛЮЧ "причина" --on owner|product|design|tech|external|deps [--until YYYY-MM-DD]
   unblock КЛЮЧ "что изменилось"
@@ -94,7 +96,7 @@ for (let i = 0; i < argv.length; i++) {
   if (a.startsWith("--")) {
     const name = a.slice(2);
     const next = argv[i + 1];
-    if (next !== undefined && !next.startsWith("--") && !["error", "json", "force", "auto"].includes(name)) {
+    if (next !== undefined && !next.startsWith("--") && !["error", "json", "force", "auto", "no-next", "no-work"].includes(name)) {
       flags[name] = next;
       i++;
     } else flags[name] = true;
@@ -192,7 +194,8 @@ function hint(code) {
     deps_open: "\n  Сначала должны закрыться зависимости.",
     scope_conflict: "\n  Эти файлы уже меняет другая задача в работе — возьмите другую или договоритесь в ленте.",
     claimed: "\n  Задачу держит другой исполнитель с живой арендой.",
-    branch_required: "\n  Отправьте ветку: git push -u origin task/<КЛЮЧ>.",
+    branch_required: "\n  Отправьте ветку: git push -u origin task/<КЛЮЧ>.\n  Если работа оказалась не нужна, используйте флаг --no-work.",
+    next_steps_required: "\n  Укажите следующие шаги: --next \"шаг 1; шаг 2\" или --no-next если продолжения нет.",
     report_required: "\n  Отчёт от 40 символов: что сделано, как проверено, как проверить деплоеру.",
     not_ready: "\n  Не выполнены обязательные пункты готовности — см. show КЛЮЧ.",
     mockup_required: "\n  Макет не утверждён — утвердите в Control Center (Согласования) командой: node scripts/cc.mjs mockup КЛЮЧ.",
@@ -301,7 +304,10 @@ function finishSteps(role, t, agent, dir) {
     return `1. Результат — в карточке: файлы проекта не правь, ветку не создавай. Материал (инструкция, тексты, расчёт, таблица, ссылки на источники) — в отчёте сдачи.
 2. Шаги, которые может сделать только человек (аккаунт, оплата, пароль, DNS у регистратора), не делай: node scripts/cc.mjs block ${k} "Что сделать: 1) … 2) … Зачем: …" --on owner --agent ${agent}. После ответа задача вернётся в очередь.
 3. Ход работы — note ${k} "…"; не успеваешь — handoff ${k} "что готово, что осталось".
-4. Сдать: node scripts/cc.mjs review ${k} "Сделано: … Материал: … Что сделать владельцу: … Как проверить: … Источники: …" --agent ${agent} — задача уйдёт владельцу в «Согласования».
+4. Сдать: node scripts/cc.mjs review ${k} "Сделано: … Материал: … Что сделать владельцу: … Как проверить: … Источники: …" \\
+     --next "следующий шаг 1; следующий шаг 2"   (или --no-next, если продолжения нет) \\
+     --release "Что изменилось для людей" --summary "Сделано: …; Проверить: …; Риск: …" --agent ${agent}
+   Задача уйдёт владельцу в «Согласования». Если следующие шаги указаны — после принятия триаж заведёт карточки.
 Не мёрджить, не выкладывать, не ставить «Сделано».`;
   if (role === "deployer")
     return `1. Прочитай карточку, отчёт разработчика и отметку тестировщика (лента), диф: git diff origin/main...origin/task/${k}.
@@ -600,10 +606,31 @@ async function main() {
           `  До трёх строк: что сделано, что проверить самому, риск.`,
         );
       // Задача без кода сдаётся отчётом: ветки и коммитов нет, принимает владелец в «Согласованиях»
-      if ((await api("GET", { key: k })).task.layer === "none") {
-        await api("POST", null, { action: "review", agent: agentFor(k), key: k, text: text(), releaseNote, ownerSummary });
+      const taskData = (await api("GET", { key: k })).task;
+      if (taskData.layer === "none") {
+        // Для не-код задач обязательно указать следующие шаги или явное «ничего»
+        const noNext = flags["no-next"] === true;
+        const nextRaw = typeof flags.next === "string" ? flags.next.trim() : "";
+        if (!noNext && !nextRaw)
+          die(
+            `Укажите следующие шаги после приёмки:\n` +
+            `  --next "шаг 1; шаг 2"   или   --no-next (если продолжения нет)\n` +
+            `  Пример: --next "создать макет; разработать форму регистрации"\n` +
+            `  При нескольких шагах разделите точкой с запятой.`,
+          );
+        const nextSteps = noNext ? [] : nextRaw.split(/\s*;\s*/).map((s) => s.trim()).filter(Boolean);
+        await api("POST", null, { action: "review", agent: agentFor(k), key: k, text: text(), releaseNote, ownerSummary, nextSteps });
         dropState(k);
-        console.log(`✓ ${k} на проверке: задача без кода — её примет владелец в «Согласованиях».`);
+        const nextMsg = nextSteps.length ? `\n  После приёмки триаж заведёт ${nextSteps.length} карточку(-ки): ${nextSteps.slice(0, 2).join("; ")}${nextSteps.length > 2 ? "…" : ""}` : "";
+        console.log(`✓ ${k} на проверке: задача без кода — её примет владелец в «Согласованиях».${nextMsg}`);
+        return;
+      }
+      // Код-задача, по которой работа оказалась не нужна: сдаётся без коммита
+      const noWork = flags["no-work"] === true;
+      if (noWork) {
+        await api("POST", null, { action: "review", agent: agentFor(k), key: k, text: text(), releaseNote, ownerSummary, noWork: true });
+        dropState(k);
+        console.log(`✓ ${k} на проверке как «не потребовалось»: уходит тестировщику на подтверждение.`);
         return;
       }
       const st = readState(k);

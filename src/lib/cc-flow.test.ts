@@ -216,7 +216,17 @@ describe("гейты сдачи", () => {
     expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, {})).toBe("release_note_required");
     expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note })).toBe("owner_summary_required");
     expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note, ownerSummary: summary })).toBeNull();
-    expect(reviewGate({ layer: "none", branch: null }, report, { releaseNote: note, ownerSummary: summary })).toBeNull();
+    // Для не-код задачи с opts обязательны nextSteps (даже пустой массив = «ничего дальше»)
+    expect(reviewGate({ layer: "none", branch: null }, report, { releaseNote: note, ownerSummary: summary })).toBe("next_steps_required");
+    expect(reviewGate({ layer: "none", branch: null }, report, { releaseNote: note, ownerSummary: summary, nextSteps: [] })).toBeNull();
+    expect(reviewGate({ layer: "none", branch: null }, report, { releaseNote: note, ownerSummary: summary, nextSteps: ["создать макет"] })).toBeNull();
+  });
+  it("noWork — код-задача без ветки проходит проверку", () => {
+    const report = "Проверено: поведение уже корректное, изменения не потребовались. Источник: логи и тест.";
+    const note = "Поведение верное";
+    const summary = "Сделано: не потребовалось; Проверить: нет; Риск: нет";
+    expect(reviewGate({ layer: "back", branch: null }, report, { releaseNote: note, ownerSummary: summary, noWork: true })).toBeNull();
+    expect(reviewGate({ layer: "fullstack", branch: "" }, report, { releaseNote: note, ownerSummary: summary, noWork: true })).toBeNull();
   });
   it("«Готово» у код-задачи — только с коммитом и доказательством", () => {
     expect(doneGate({ layer: "back" }, { text: "smoke OK, вход проверен в проде" })).toBe("sha_required");
