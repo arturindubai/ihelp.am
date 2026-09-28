@@ -36,6 +36,19 @@ export function parseMultiQuestion(text: string): MultiQuestionBlock[] {
 }
 
 /**
+ * Подсчитывает число уникальных «карточек» (групп) из списка задач, заблокированных на владельце.
+ * Задачи с одинаковым текстом вопроса (trimmed blockedReason) объединяются в одну карточку.
+ * Используется как в ccCounts() (бейдж вкладки), так и в YouTab (заголовок секции) — чтобы числа совпадали.
+ */
+export function countOwnerCards(tasks: { blockedReason: string | null }[]): number {
+  const seen = new Set<string>();
+  for (const t of tasks) {
+    seen.add((t.blockedReason ?? "").trim());
+  }
+  return seen.size;
+}
+
+/**
  * Формирует причину блокировки при откладывании на N дней.
  * Исходный вопрос сохраняется после даты: триаж восстановит блокировку на владельце после разблокировки по дате.
  */

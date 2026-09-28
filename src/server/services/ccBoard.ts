@@ -9,6 +9,7 @@ import { hasAlertRecipient } from "../notify";
 import { flowOf, intakeTitle, laneOf, nextIntakeKey, sizeOf, weekStart } from "@/lib/cc-lanes";
 import { CLOSED_STATUSES, LEASE_MIN, OPEN_STATUSES } from "@/lib/cc-flow";
 import { testedCurrent, workersState } from "@/lib/workers";
+import { countOwnerCards } from "@/lib/cc-owner-q";
 import { Prisma } from "@prisma/client";
 
 /**
@@ -37,21 +38,23 @@ export type BoardTask = Awaited<ReturnType<typeof boardTasks>>[number];
 
 /** Счётчики вкладок */
 export async function ccCounts() {
-  const [byStatus, reviewCode, reviewNoCode, ownerBlocked, unread, running, mockupPending] = await Promise.all([
+  const [byStatus, reviewCode, reviewNoCode, ownerBlockedTasks, unread, running, mockupPending] = await Promise.all([
     db.task.groupBy({ by: ["status"], _count: true }),
     db.task.count({ where: { status: "review", layer: { not: "none" } } }),
     db.task.count({ where: { status: "review", layer: "none" } }),
-    // только карточки с вопросом к владельцу; упавшие запуски и брошенные задачи — в «Здоровье» и «Воркеры»
-    db.task.count({ where: { status: "blocked", blockedOn: { in: ["owner", "product"] }, triagedAt: { not: null } } }),
+    // fetch задач (не count): нужно группировать по вопросу, чтобы бейдж считал карточки, а не задачи
+    db.task.findMany({ where: { status: "blocked", blockedOn: { in: ["owner", "product"] }, triagedAt: { not: null } }, select: { blockedReason: true } }),
     unreadForOwner(),
     db.workerRun.count({ where: { status: "running" } }),
     db.task.count({ where: DESIGN_PENDING }),
   ]);
   const n = (s: string) => byStatus.find((r) => r.status === s)?._count ?? 0;
+  // cardCount — число уникальных карточек (групп задач с одним вопросом); совпадает с заголовком YouQuestionsSection
+  const cardCount = countOwnerCards(ownerBlockedTasks);
   return {
     backlog: OPEN_STATUSES.reduce((sum, s) => sum + n(s), 0),
-    // «Нужен ты»: только карточки с вопросом + приёмка не-кода; упавшие/брошенные — в других вкладках
-    you: ownerBlocked + reviewNoCode,
+    // «Нужен ты»: карточки (сгруппированные вопросы) + приёмка не-кода; упавшие/брошенные — в других вкладках
+    you: cardCount + reviewNoCode,
     dev: n("in_progress"),
     deployer: reviewCode,
     approvals: reviewNoCode,

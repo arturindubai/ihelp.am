@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPostponeReason, parseMultiQuestion, parseVariants } from "./cc-owner-q";
+import { buildPostponeReason, countOwnerCards, parseMultiQuestion, parseVariants } from "./cc-owner-q";
 
 describe("parseVariants", () => {
   it("возвращает null если вариантов меньше двух", () => {
@@ -109,6 +109,57 @@ describe("parseMultiQuestion", () => {
     expect(r).toHaveLength(2);
     expect(r[0].variants).toBeNull();
     expect(r[1].variants).toHaveLength(2);
+  });
+});
+
+describe("countOwnerCards", () => {
+  it("три задачи с одним вопросом и одна с другим — 2 карточки", () => {
+    const tasks = [
+      { blockedReason: "Какой вариант? А) Да Б) Нет" },
+      { blockedReason: "Какой вариант? А) Да Б) Нет" },
+      { blockedReason: "Какой вариант? А) Да Б) Нет" },
+      { blockedReason: "Прислать логотип" },
+    ];
+    expect(countOwnerCards(tasks)).toBe(2);
+  });
+
+  it("одна задача — одна карточка", () => {
+    expect(countOwnerCards([{ blockedReason: "Прислать файл" }])).toBe(1);
+  });
+
+  it("пустой список — ноль карточек", () => {
+    expect(countOwnerCards([])).toBe(0);
+  });
+
+  it("null причины группируются в одну карточку", () => {
+    const tasks = [{ blockedReason: null }, { blockedReason: null }];
+    expect(countOwnerCards(tasks)).toBe(1);
+  });
+
+  it("пробелы не влияют на группировку", () => {
+    const tasks = [{ blockedReason: "Вопрос " }, { blockedReason: "Вопрос" }, { blockedReason: " Вопрос" }];
+    expect(countOwnerCards(tasks)).toBe(1);
+  });
+
+  it("разные вопросы — разные карточки", () => {
+    const tasks = [
+      { blockedReason: "Войти в Google" },
+      { blockedReason: "Прислать логотип" },
+      { blockedReason: "Утвердить цены" },
+    ];
+    expect(countOwnerCards(tasks)).toBe(3);
+  });
+
+  it("бейдж совпадает с числом групп: 2 карточки, сумма групп 2", () => {
+    // Имитирует реальный сценарий: DEV-49/50/51 — один вопрос, ещё одна задача — другой
+    const tasks = [
+      { blockedReason: "Выбрать канал входа? А) Telegram Б) Email" },
+      { blockedReason: "Выбрать канал входа? А) Telegram Б) Email" },
+      { blockedReason: "Выбрать канал входа? А) Telegram Б) Email" },
+      { blockedReason: "Прислать логотип" },
+    ];
+    const cardCount = countOwnerCards(tasks);
+    expect(cardCount).toBe(2); // бейдж = 2; заголовок YouQuestionsSection = 2; сумма групп = 2
   });
 });
 
