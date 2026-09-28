@@ -3,7 +3,7 @@ import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
 import { getCurrentUser } from "@/server/auth";
-import { sectionsFor } from "@/server/admin";
+import { sectionsForUser } from "@/lib/adminAccess";
 import { addAttachment } from "@/server/services/attachments";
 import { audit } from "@/server/audit";
 import { formatPhone } from "@/lib/phone";
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   // Агенты (дизайнер-воркер прикладывает макеты) — по ключу агента, люди — по сессии
   const agentKey = !!process.env.CC_AGENT_KEY && req.headers.get("x-cc-key") === process.env.CC_AGENT_KEY;
   const u = agentKey ? null : await getCurrentUser();
-  if (!agentKey && (!u || !sectionsFor(u.role).includes("control"))) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!agentKey && (!u || !sectionsForUser(u).includes("control"))) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const form = await req.formData();
   const agent = form.get("agent");

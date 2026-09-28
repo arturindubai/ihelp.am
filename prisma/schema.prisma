@@ -46,6 +46,8 @@ model User {
   telegramUsername String?
   /// Согласие на рекламные рассылки (LEGAL-2): null — не давал, дата — дал; отзывается в профиле
   adsConsentAt     DateTime?
+  /// Поправка прав по конкретному человеку поверх роли: { added: string[], removed: string[] }
+  sectionDelta     Json?
 
   sessions    Session[]
   addresses   Address[]
@@ -232,6 +234,8 @@ model Master {
   sort           Int       @default(0)
   /// Telegram chat ID в @ihelp_staff_bot — заполняется при первом /start мастера боту
   staffChatId    String?
+  /// Получать уведомления о визитах и вечернее расписание — мастер может выключить в кабинете
+  notifyEnabled  Boolean   @default(true)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -307,6 +311,8 @@ model Order {
   source            String        @default("web")
   cancelReason      String?
   expiresAt         DateTime?
+  /// Ключи отправленных клиентских уведомлений на уровне заказа: ["created", "cancelled"]
+  clientNotifiedEvents String[] @default([])
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -349,6 +355,8 @@ model Visit {
   remindedAt      DateTime?
   reviewRequestedAt DateTime?
   masterNote      String?
+  /// Ключи отправленных клиентских уведомлений на уровне визита: ["masterAssigned", "rescheduled:2026-09-28T06:00", "cancelled", "completed"]
+  clientNotifiedEvents String[] @default([])
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   review          Review?

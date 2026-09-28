@@ -336,7 +336,7 @@ export async function dispatchState(heads: Record<string, string>): Promise<Disp
     productHoldKeys(),
     designerQueue(),
     sweepDue(config, "designer"),
-    db.task.findMany({ where: { status: "in_progress", claimedBy: { not: null } }, select: { claimedBy: true, layer: true, claimUntil: true, key: true } }),
+    db.task.findMany({ where: { status: "in_progress", claimedBy: { not: null } }, select: { claimedBy: true, layer: true, claimUntil: true, heartbeatAt: true, key: true } }),
   ]);
   return {
     config,
@@ -356,7 +356,7 @@ export async function dispatchState(heads: Record<string, string>): Promise<Disp
     designerSweepDue: designerSweep,
     lastStart,
     requests: requests.filter((r) => Date.now() - Date.parse(r.at) < 30 * 60_000),
-    inProgressClaims: inProgress.map((t) => ({ key: t.key, agent: t.claimedBy!, claimUntil: t.claimUntil?.toISOString() ?? null })),
+    inProgressClaims: inProgress.map((t) => ({ key: t.key, agent: t.claimedBy!, claimUntil: t.claimUntil?.toISOString() ?? null, heartbeatAt: t.heartbeatAt?.toISOString() ?? null })),
   };
 }
 

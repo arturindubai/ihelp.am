@@ -381,7 +381,16 @@
     "note": "Note",
     "client": "Client",
     "stats": "My stats",
-    "schedule": "My schedule"
+    "schedule": "My schedule",
+    "settingsTab": "Settings",
+    "settings": {
+      "notifyTitle": "Notifications",
+      "receiveNotify": "Receive visit notifications",
+      "notifyOff": "You will not receive visit notifications",
+      "notConnected": "Telegram is not connected.",
+      "writeBot": "Message the bot",
+      "saveError": "Failed to save. Please try again."
+    }
   },
   "operator": {
     "title": "Operator panel",
@@ -852,6 +861,7 @@
     },
     "staff": {
       "title": "Staff",
+      "manageSub": "Manage access and login methods",
       "hint": "Role is assigned by phone number. Staff signs in with a code and sees the admin panel.",
       "phone": "Phone",
       "role": "Role",
@@ -873,7 +883,48 @@
       "revokeAccess": "Revoke access",
       "revokeConfirm": "Revoke access for {label}? Role will change to Client and all sessions will be terminated.",
       "lastLogin": "Last login:",
-      "lastLoginNever": "never logged in"
+      "lastLoginNever": "never logged in",
+      "empty": "No staff members",
+      "loginMethods": "Login methods",
+      "permissions": "Access rights",
+      "fieldPhone": "Phone",
+      "fieldEmail": "Email",
+      "fieldTelegram": "Telegram ID",
+      "notLinked": "Not linked",
+      "editField": "Edit",
+      "saveField": "Save",
+      "cancelField": "Cancel",
+      "fromRole": "from role",
+      "savePermissions": "Save changes",
+      "confirmPermissions": "Changing permissions will terminate all open sessions for this staff member. Continue?",
+      "confirmYes": "Continue",
+      "confirmNo": "Cancel",
+      "settingsStaffOwnerOnly": "Sections settings and staff are owner-only",
+      "saveError": "Failed to save",
+      "phoneInvalid": "Invalid phone format",
+      "phoneTaken": "This phone is already linked to another account",
+      "phoneRequired": "Phone is required",
+      "telegramInvalid": "Telegram ID must be digits only",
+      "telegramTaken": "This Telegram ID is already linked to another account",
+      "savedMsg": "Permissions updated, sessions terminated",
+      "ownerFullAccess": "Owner has full access, permissions cannot be configured",
+      "sections": {
+        "control": "Control Center",
+        "dashboard": "Dashboard",
+        "orders": "Orders",
+        "schedule": "Schedule",
+        "clients": "Clients",
+        "reviews": "Reviews",
+        "services": "Services",
+        "masters": "Masters",
+        "promos": "Promo codes",
+        "banners": "Banners",
+        "pages": "Pages",
+        "content": "Content",
+        "translations": "Translations",
+        "analytics": "Analytics",
+        "log": "Activity log"
+      }
     },
     "log": {
       "title": "Activity log",
@@ -1855,6 +1906,15 @@
       "label": "Receive promotional offers",
       "hint": "Email and SMS",
       "notifications": "Notifications"
+    }
+  },
+  "notify": {
+    "order": {
+      "created": "✅ Order confirmed\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}\nTotal: {price}\nThank you for choosing iHelp! We will assign a master soon.",
+      "masterAssigned": "👷 Master assigned\nService: {serviceName}, {date} at {time}\nMaster: {masterName}\nFeel free to contact us with any questions.",
+      "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}",
+      "cancelled": "❌ Visit cancelled\nService: {serviceName}, {date}\nWant to reschedule? Place a new order on the website.",
+      "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}"
     }
   }
 }

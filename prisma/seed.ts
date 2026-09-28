@@ -346,6 +346,7 @@ async function main() {
     await db.page.upsert({ where: { slug }, create: { slug, title: t(ru, en), body: t("Текст документа будет добавлен.", "Coming soon.") }, update: {} });
   }
   await db.setting.create({ data: { key: SEED_FLAG, value: { at: new Date().toISOString() } } });
+
   console.log("Seed done. Owner phone:", ownerPhone);
 }
 
