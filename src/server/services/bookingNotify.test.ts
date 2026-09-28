@@ -416,3 +416,100 @@ describe("sendVisitReminders", () => {
     expect(text).toContain("Иван Петров");
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// Тихий период
+
+describe("тихий период (QUIET_HOURS_START/QUIET_HOURS_END)", () => {
+  // Ереван UTC+4: тихое время 21:00–09:00
+  // Чтобы получить ереванский час H: now = UTC (H-4)
+  // Тихо: UTC 17:00 = Ереван 21:00
+  // Активно: UTC 05:00 = Ереван 09:00 (граница — уже не тихо)
+
+  it("в тихое время (Ереван 22:00) ничего не отправляет", async () => {
+    const quietNow = new Date("2026-09-28T18:00:00Z"); // Ереван 22:00
+    const scheduledAt = new Date(quietNow.getTime() + 24 * 3_600_000);
+    makeVisit("v1", { scheduledAt });
+    makeUser("u1", "telegram");
+
+    const result = await sendVisitReminders(quietNow);
+
+    expect(result.sent).toBe(0);
+    expect(vi.mocked(sendTelegramDirect)).not.toHaveBeenCalled();
+  });
+
+  it("в тихое время (Ереван 01:00) ничего не отправляет", async () => {
+    const quietNow = new Date("2026-09-28T21:00:00Z"); // Ереван 01:00 (следующие сутки)
+    const scheduledAt = new Date(quietNow.getTime() + 2 * 3_600_000);
+    makeVisit("v1", { scheduledAt });
+    makeUser("u1", "telegram");
+
+    const result = await sendVisitReminders(quietNow);
+
+    expect(result.sent).toBe(0);
+    expect(vi.mocked(sendTelegramDirect)).not.toHaveBeenCalled();
+  });
+
+  it("ровно в 09:00 по Еревану (граница) — уже активное время, отправляет", async () => {
+    const activeNow = new Date("2026-09-28T05:00:00Z"); // Ереван 09:00
+    // Визит через 26ч = Ереван 11:00 следующего дня: 2h-окно (08:30–09:30) не целиком тихое
+    const scheduledAt = new Date(activeNow.getTime() + 26 * 3_600_000);
+    makeVisit("v1", { scheduledAt });
+    makeUser("u1", "telegram");
+
+    const result = await sendVisitReminders(activeNow);
+
+    expect(result.sent).toBe(1);
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+  });
+
+  // Визит в Ереване 10:00 (UTC 06:00 следующего дня):
+  // — now = UTC 06:00 (Ереван 10:00) — активное время
+  // — визит ровно через 24ч → в окне 22–26ч
+  // — 2h-окно визита: 07:30–08:30 Ереван → целиком тихое
+  // → 2h-напоминание должно уйти вместе с 24h
+  it("визит в 10:00 по Еревану: reminder2h отправляется вместе с reminder24h", async () => {
+    const activeNow = new Date("2026-09-28T06:00:00Z"); // Ереван 10:00
+    const scheduledAt = new Date("2026-09-29T06:00:00Z"); // Ереван 10:00 следующего дня
+    makeVisit("v1", { scheduledAt });
+    makeUser("u1", "telegram");
+
+    const result = await sendVisitReminders(activeNow);
+
+    expect(result.sent).toBe(2);
+    const calls = vi.mocked(sendTelegramDirect).mock.calls;
+    expect(calls).toHaveLength(2);
+    const texts = calls.map((c) => c[2] as string);
+    expect(texts.some((t) => t.includes("завтра"))).toBe(true);
+    expect(texts.some((t) => t.includes("2 час"))).toBe(true);
+  });
+
+  // Визит в Ереване 11:00 (UTC 07:00 следующего дня):
+  // — 2h-окно: 08:30–09:30 Ереван, граница 09:00 уже активна
+  // → в 09:00 нормальный крон поймает 2h-окно; специальной ранней отправки не нужно
+  it("визит в 11:00 по Еревану: reminder2h НЕ отправляется вместе с reminder24h", async () => {
+    const activeNow = new Date("2026-09-28T06:00:00Z"); // Ереван 10:00
+    const scheduledAt = new Date("2026-09-29T07:00:00Z"); // Ереван 11:00 следующего дня, 25ч вперёд
+    makeVisit("v1", { scheduledAt });
+    makeUser("u1", "telegram");
+
+    const result = await sendVisitReminders(activeNow);
+
+    expect(result.sent).toBe(1); // только 24h
+    const texts = vi.mocked(sendTelegramDirect).mock.calls.map((c) => c[2] as string);
+    expect(texts.some((t) => t.includes("завтра"))).toBe(true);
+    expect(texts.some((t) => t.includes("2 час"))).toBe(false);
+  });
+
+  it("повторный вызов не дублирует 2h-напоминание для утреннего визита", async () => {
+    const activeNow = new Date("2026-09-28T06:00:00Z");
+    const scheduledAt = new Date("2026-09-29T06:00:00Z");
+    makeVisit("v1", { scheduledAt });
+    makeUser("u1", "telegram");
+
+    await sendVisitReminders(activeNow);
+    await sendVisitReminders(activeNow);
+
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledTimes(2); // 24h + 2h, не 4
+  });
+});

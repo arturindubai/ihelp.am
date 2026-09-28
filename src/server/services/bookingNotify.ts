@@ -313,12 +313,31 @@ export async function notifyClientVisitCancelled(visitId: string): Promise<void>
 
 const HOUR_MS = 3_600_000;
 
+/** Час в ереванском времени (UTC+4, без летнего времени) */
+function toYerevanHour(d: Date): number {
+  return new Date(d.getTime() + 4 * 3_600_000).getUTCHours();
+}
+
 /**
  * 6. Напоминания клиентам: за 24 часа (окно 22–26 ч) и за 2 часа (окно 1.5–2.5 ч).
  * Дедупликация через clientNotifiedEvents: ключи "reminder24h" и "reminder2h".
  * Отменённые визиты исключены статусным фильтром (SCHEDULED/CONFIRMED).
+ *
+ * Тихий период (по умолчанию 21:00–09:00 по Еревану, QUIET_HOURS_START/QUIET_HOURS_END):
+ * — в тихое время уведомления не отправляются.
+ * — напоминание за 2 часа для визитов на 09:00–10:30 (окно 2h целиком в тихом периоде)
+ *   уходит вместе с напоминанием за сутки (накануне вечером до 21:00).
  */
 export async function sendVisitReminders(now: Date): Promise<{ sent: number }> {
+  const quietStart = parseInt(process.env.QUIET_HOURS_START ?? "21", 10);
+  const quietEnd = parseInt(process.env.QUIET_HOURS_END ?? "9", 10);
+
+  // В тихое время уведомления не отправляем
+  const nowHour = toYerevanHour(now);
+  if (nowHour >= quietStart || nowHour < quietEnd) {
+    return { sent: 0 };
+  }
+
   const windows = [
     { key: "reminder24h" as const, minMs: 22 * HOUR_MS, maxMs: 26 * HOUR_MS },
     { key: "reminder2h" as const, minMs: 90 * 60_000, maxMs: 150 * 60_000 },
@@ -360,15 +379,33 @@ export async function sendVisitReminders(now: Date): Promise<{ sent: number }> {
 
       try {
         const tmpl = await getOrderTemplates();
-        const text = fill(tmpl[key], {
+        const params = {
           serviceName: serviceTitle(visit.order.config),
           date: ymd(visit.scheduledAt),
           time: hm(visit.scheduledAt),
           address: addrLine(visit.order.addressSnapshot),
           masterName: visit.master ? tr(visit.master.name, "ru") : "—",
-        });
+        };
+        const text = fill(tmpl[key], params);
         await sendToClient(visit.order.userId, text, `Напоминание — заказ №${visit.order.number}`, `client:${key}`);
         sent++;
+
+        // Визиты на 09:00–10:30: окно 2h целиком попадает в тихий период (06:30–09:00).
+        // К 09:00 такой визит уже ближе 1.5ч — нормальный крон его не поймает.
+        // Отправляем 2h-напоминание вместе с суточным (накануне до 21:00).
+        if (key === "reminder24h") {
+          const before1h30 = new Date(visit.scheduledAt.getTime() - 90 * 60_000);
+          const h = toYerevanHour(before1h30);
+          const twoHInQuiet = h >= quietStart || h < quietEnd;
+          if (twoHInQuiet && !visit.clientNotifiedEvents.includes("reminder2h")) {
+            const ok2h = await markVisitEvent(visit.id, "reminder2h");
+            if (ok2h) {
+              const text2h = fill(tmpl["reminder2h"], params);
+              await sendToClient(visit.order.userId, text2h, `Напоминание — заказ №${visit.order.number}`, "client:reminder2h");
+              sent++;
+            }
+          }
+        }
       } catch (e) {
         console.error(`[bookingNotify:${key}] ошибка для визита ${visit.id}`, e);
       }
