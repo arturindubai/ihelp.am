@@ -166,7 +166,9 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   if (to === "done" || to === "cancelled") await releaseDependents(key);
   // После приёмки не-код задачи с указанными следующими шагами — карточка в очередь триажа
   if (to === "done" && task.layer === "none" && task.nextSteps.length > 0) {
-    await createNextStepsIntake(key, task.title, task.nextSteps, actor.name).catch(() => null);
+    await createNextStepsIntake(key, task.title, task.nextSteps, actor.name).catch(async (err) => {
+      await say(task.id, "system", "note", `⚠️ Не удалось завести карточку следующих шагов: ${String(err).slice(0, 200)}`).catch(() => null);
+    });
   }
   // task получен до обновления — передаём свежие значения из input для review-перехода
   const taskForBot = {

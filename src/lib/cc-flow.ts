@@ -69,7 +69,8 @@ const TRANSITIONS: Record<TaskStatusKey, Partial<Record<TaskStatusKey, Role[]>>>
   ready: { backlog: TRIAGE, blocked: ANY, cancelled: PLAN },
   in_progress: { review: WORK, ready: [...WORK, ...PLAN, "watchdog"], blocked: ANY, backlog: PLAN, cancelled: PLAN },
   // Сторож блокирует проверку, когда тестировщик дважды закончил без вердикта (src/server/services/workers.ts)
-  review: { done: RELEASE, ready: [...RELEASE, ...PLAN, "tester"], blocked: [...RELEASE, ...PLAN, "tester", "watchdog"], cancelled: PLAN },
+  // tester: закрывает noWork-задачи как «не потребовалось» через cancelled
+  review: { done: RELEASE, ready: [...RELEASE, ...PLAN, "tester"], blocked: [...RELEASE, ...PLAN, "tester", "watchdog"], cancelled: [...PLAN, "tester"] },
   // Разблокировка ведёт туда, откуда задача была заблокирована (unblockTarget): с проверки — на проверку
   // watchdog добавлен в backlog: плановая разблокировка по blockedUntil возвращает задачу на разбор
   blocked: { ready: ANY, review: ANY, backlog: [...TRIAGE, "watchdog"], cancelled: PLAN },

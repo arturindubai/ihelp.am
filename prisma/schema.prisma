@@ -567,9 +567,9 @@ model Task {
   /// Резюме для владельца: что сделано, что проверить, риск — до трёх строк
   ownerSummary  String?
   /// Следующие шаги после приёмки: триаж заведёт карточки с зависимостью от этой. Пустой массив = «ничего дальше»
-  nextSteps     String[]  @default([])
+  nextSteps     String[]  @default([]) @map("next_steps")
   /// Код-задача, по которой работа оказалась не нужна: сдана без коммита, уходит на подтверждение тестировщику
-  noWork        Boolean   @default(false)
+  noWork        Boolean   @default(false) @map("no_work")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

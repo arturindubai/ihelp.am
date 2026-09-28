@@ -294,6 +294,9 @@ describe("здоровье и сторож", () => {
     expect(canTransition("review", "ready", "tester")).toBe(true);
     expect(canTransition("review", "done", "tester")).toBe(false);
   });
+  it("тестировщик может отменить noWork-задачу с проверки", () => {
+    expect(canTransition("review", "cancelled", "tester")).toBe(true);
+  });
   it("задача, заблокированная только зависимостями, разблокируется, когда они закрылись", () => {
     const b = task({ key: "B1", status: "blocked", blockedOn: "deps", depends: ["X"], claimedBy: null, claimUntil: null });
     expect(watchdogPlan([b], new Set(), now).unblock).toEqual([]);
