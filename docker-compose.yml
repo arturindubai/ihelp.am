@@ -44,6 +44,8 @@ services:
     restart: unless-stopped
     <<: *logging
     mem_limit: 1g
+    # init: true добавляет tini как PID 1 — корректно пересылает SIGTERM в node (иначе node может не получить сигнал)
+    init: true
     # Даём Next.js время завершить текущие запросы при graceful shutdown во время выкладки
     stop_grace_period: 30s
     environment:

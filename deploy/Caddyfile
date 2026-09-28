@@ -18,9 +18,10 @@
 		request_body {
 			max_size 16MB
 		}
-		# lb_try_duration: Caddy повторяет соединение вместо 502 пока приложение перезапускается при выкладке
+		# lb_try_duration: Caddy повторяет соединение вместо 502 пока приложение перезапускается при выкладке.
+		# 30s достаточно для типичного рестарта (10–20с); nginx перед Caddy ждёт 60с — не получит 504.
 		reverse_proxy app:3000 {
-			lb_try_duration 60s
+			lb_try_duration 30s
 			lb_try_interval 1s
 		}
 	}
@@ -29,7 +30,7 @@
 			max_size 10MB
 		}
 		reverse_proxy app:3000 {
-			lb_try_duration 60s
+			lb_try_duration 30s
 			lb_try_interval 1s
 		}
 	}
