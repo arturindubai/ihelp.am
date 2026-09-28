@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 import { POOLS, controlPatch, DEFAULT_WORKERS, executorOf, filterDesignerCooldown, freeName, inDesignerQueue, normalizeWorkers, planDispatch, poolForTask, reviewQueues, runOutcome, testedCurrent, workersState, type DispatchState, type ReviewTask, type WorkersConfig } from "./workers";
+import { workersPatchSchema } from "./workers-schema";
 import { unblockTarget } from "./cc-flow";
 
 // 12:00 по Еревану — внутри окна выкладки 10–20
@@ -539,15 +539,13 @@ describe("пулы product и designer при лимите > 1", () => {
   });
 });
 
-describe("схема настроек пулов (зеркало workersSchema в cc.ts)", () => {
+describe("схема настроек пулов (workersPatchSchema)", () => {
   it("принимает все семь пулов из POOLS, неизвестный ключ — ошибка", () => {
-    const poolSchema = z.object({ enabled: z.boolean(), max: z.number() }).partial();
-    const schema = z.object(Object.fromEntries(POOLS.map((p) => [p, poolSchema]))).strict().partial();
     expect(POOLS.length).toBe(7);
     for (const p of POOLS) {
-      expect(schema.safeParse({ [p]: { enabled: true } }).success, `пул ${p} должен приниматься`).toBe(true);
+      expect(workersPatchSchema.safeParse({ pools: { [p]: { enabled: true } } }).success, `пул ${p} должен приниматься`).toBe(true);
     }
-    expect(schema.safeParse({ unknown_pool: { enabled: true } }).success).toBe(false);
+    expect(workersPatchSchema.safeParse({ pools: { unknown_pool: { enabled: true } } }).success).toBe(false);
   });
 });
 
