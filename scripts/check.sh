@@ -23,7 +23,7 @@ docker run --rm \
     echo "▶ Тесты"; npx vitest run 2>&1 | tail -n 25; vitest_exit=${PIPESTATUS[0]}
     echo "▶ Миграции"; if [ -f tools/check-migrations.mjs ]; then node tools/check-migrations.mjs || exit 1; else echo "  ! проверка миграций пропущена: рядом с check.sh нет check-migrations.mjs"; fi
     echo "▶ Хардкод строк"; count=$(grep -rn --include="*.tsx" --include="*.ts" "На главную\|Русский\|English" src/ 2>/dev/null | grep -v "backlog\.ts\|SettingsEditor\.tsx\|\.test\." | wc -l); [ "$count" = "0" ] && echo "  OK — зашитых строк нет" || { echo "  FAIL — найдено зашитых строк: $count"; grep -rn --include="*.tsx" --include="*.ts" "На главную\|Русский\|English" src/ 2>/dev/null | grep -v "backlog\.ts\|SettingsEditor\.tsx\|\.test\."; exit 1; }
-    echo "▶ Прямой доступ к базе в страницах"; db_hits=$(grep -rn --include="*.tsx" --include="*.ts" "from.*['\"]@/server/db['\"]" src/app/ 2>/dev/null | grep -v "src/app/api/"); db_count=$(echo "$db_hits" | grep -c . || true); [ "$db_count" = "0" ] && echo "  OK — страницы не обращаются к базе напрямую" || { echo "  FAIL — найдены прямые db-импорты в страницах ($db_count):"; echo "$db_hits"; exit 1; }
+    echo "▶ Прямой доступ к базе в страницах"; db_hits=$(grep -rn --include="*.tsx" --include="*.ts" -F "@/server/db" src/app/ 2>/dev/null | grep "from" | grep -v "src/app/api/" || true); [ -z "$db_hits" ] && echo "  OK — страницы не обращаются к базе напрямую" || { echo "  FAIL — найдены прямые db-импорты в страницах:"; echo "$db_hits"; exit 1; }
     if [ "$vitest_exit" != "0" ]; then echo "✗ Тесты упали"; exit "$vitest_exit"; fi' 2>&1
 code=$?
 [ "$code" = 0 ] && echo "CHECK OK" || echo "CHECK FAILED"
