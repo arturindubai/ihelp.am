@@ -132,12 +132,12 @@ export async function designApproved(days = 14) {
   });
 }
 
-/** Согласования: не-код на проверке — принимает человек. С резюме для владельца и последним отчётом */
+/** Согласования: не-код на проверке — принимает человек. С резюме для владельца, последним отчётом и следующими шагами */
 export async function approvals() {
   const tasks = await db.task.findMany({
     where: { status: "review", layer: "none" },
     orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
-    select: { key: true, title: true, priority: true, updatedAt: true, ownerSummary: true, _count: { select: { attachments: true } }, comments: { where: { kind: "report" }, orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, createdAt: true } } },
+    select: { key: true, title: true, priority: true, updatedAt: true, ownerSummary: true, nextSteps: true, _count: { select: { attachments: true } }, comments: { where: { kind: "report" }, orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, createdAt: true } } },
   });
   return tasks.map((t) => ({ ...t, lane: laneOf({ key: t.key, layer: "none" }) }));
 }
