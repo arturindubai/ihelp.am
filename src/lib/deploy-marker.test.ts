@@ -51,4 +51,24 @@ describe("deploy-marker", () => {
       'deploy-task.sh должен искать метку через grep -qF "$prod_marker" "$log"'
     ).toMatch(/grep\s+-qF\s+"\$prod_marker"\s+"\$log"/);
   });
+
+  it("test-rollback.sh отказывает при имени проекта homecare (защита образов прода)", () => {
+    const src = tryRead("../../scripts/test-rollback.sh");
+    if (!src) return; // scripts/ не смонтирован — пропускаем
+    // Скрипт должен явно проверять имя проекта "homecare" и вызывать exit 1
+    expect(
+      src,
+      'test-rollback.sh должен отказывать при --project homecare'
+    ).toMatch(/"homecare".*exit 1/s);
+    // Скрипт должен требовать формат ihelp-stand-*
+    expect(
+      src,
+      'test-rollback.sh должен требовать формат ihelp-stand-*'
+    ).toMatch(/ihelp-stand-\*/);
+    // Скрипт должен передавать ROLLBACK_IMAGE_PREFIX в rollback.sh — не трогает homecare-* теги
+    expect(
+      src,
+      'test-rollback.sh должен передавать ROLLBACK_IMAGE_PREFIX в rollback.sh'
+    ).toMatch(/ROLLBACK_IMAGE_PREFIX/);
+  });
 });

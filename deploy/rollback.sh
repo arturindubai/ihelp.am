@@ -4,14 +4,16 @@
 # База данных НЕ откатывается. Если обновление меняло схему базы и старая версия с ней несовместима —
 # восстановите бэкап, снятый перед обновлением (README → «Бэкапы»).
 # Тестирование цепочки (без docker compose up): ROLLBACK_SKIP_COMPOSE=1 deploy/rollback.sh
+# Для изолированного стенда задать ROLLBACK_IMAGE_PREFIX=<имя-проекта> (по умолчанию homecare).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+prefix="${ROLLBACK_IMAGE_PREFIX:-homecare}"
 for s in app migrate; do
-  docker image inspect "homecare-$s:previous" > /dev/null 2>&1 || { echo "Нет образа homecare-$s:previous — откатывать не на что"; exit 1; }
+  docker image inspect "${prefix}-$s:previous" > /dev/null 2>&1 || { echo "Нет образа ${prefix}-$s:previous — откатывать не на что"; exit 1; }
 done
-for s in app migrate; do docker tag "homecare-$s:previous" "homecare-$s:latest"; done
-echo "Образы переключены: homecare-{app,migrate}:latest → :previous"
+for s in app migrate; do docker tag "${prefix}-$s:previous" "${prefix}-$s:latest"; done
+echo "Образы переключены: ${prefix}-{app,migrate}:latest → :previous"
 
 if [ -z "${ROLLBACK_SKIP_COMPOSE:-}" ]; then
   # Без migrate: миграции старой версии не запускаем поверх новой схемы
