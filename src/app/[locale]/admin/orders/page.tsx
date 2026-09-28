@@ -1,8 +1,7 @@
 import { getTranslations } from "next-intl/server";
-import type { Prisma } from "@prisma/client";
 import { Link } from "@/i18n/navigation";
-import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
+import { getAdminOrders, ADMIN_ORDERS_PER } from "@/server/services/pages/admin";
 import { tr } from "@/i18n/locales";
 import { amd, dateLabel } from "@/lib/format";
 import { hm } from "@/lib/time";
@@ -10,33 +9,14 @@ import { formatPhone } from "@/lib/phone";
 import { PageHead, Forbidden, Table } from "@/components/admin/ui";
 import { StatusBadge } from "@/components/account/StatusBadge";
 
-const PER = 30;
-
 export default async function AdminOrders({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ q?: string; status?: string; kind?: string; page?: string }> }) {
   const { locale } = await params;
   const sp = await searchParams;
   if (!(await pageUser("orders"))) return <Forbidden />;
   const [t, to, ts] = await Promise.all([getTranslations("admin"), getTranslations("order"), getTranslations("service")]);
   const page = Math.max(1, Number(sp.page) || 1);
-  const where: Prisma.OrderWhereInput = {};
-  if (sp.status) where.status = sp.status as "ACTIVE";
-  if (sp.kind) where.kind = sp.kind as "ONE_TIME";
-  if (sp.q) {
-    const q = sp.q.trim();
-    const num = Number(q.replace(/\D/g, ""));
-    where.OR = [
-      ...(num && q.replace(/\D/g, "").length < 7 ? [{ number: num }] : []),
-      { user: { phone: { contains: q.replace(/[^\d+]/g, "") || q } } },
-      { user: { name: { contains: q, mode: "insensitive" } } },
-    ];
-  }
-  const [orders, count] = await Promise.all([
-    db.order.findMany({
-      where, orderBy: { createdAt: "desc" }, skip: (page - 1) * PER, take: PER,
-      include: { user: true, service: true, plan: true, visits: { where: { scheduledAt: { gte: new Date() }, status: { in: ["SCHEDULED", "CONFIRMED", "ON_WAY", "IN_PROGRESS"] } }, orderBy: { scheduledAt: "asc" }, take: 1, include: { master: true } } },
-    }),
-    db.order.count({ where }),
-  ]);
+  const { orders, count } = await getAdminOrders({ q: sp.q, status: sp.status, kind: sp.kind }, page);
+  const PER = ADMIN_ORDERS_PER;
   const qs = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams(Object.entries({ ...sp, ...patch }).filter(([, v]) => v) as [string, string][]);
     return `/admin/orders?${p}`;

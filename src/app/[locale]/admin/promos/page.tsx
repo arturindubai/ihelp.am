@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
-import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
+import { getAdminPromos } from "@/server/services/pages/admin";
 import { tr } from "@/i18n/locales";
 import { ymd } from "@/lib/time";
 import { PageHead, Forbidden } from "@/components/admin/ui";
@@ -10,7 +10,7 @@ export default async function AdminPromos({ params }: { params: Promise<{ locale
   const { locale } = await params;
   if (!(await pageUser("promos"))) return <Forbidden />;
   const t = await getTranslations("admin");
-  const [promos, services] = await Promise.all([db.promoCode.findMany({ orderBy: [{ active: "desc" }, { createdAt: "desc" }] }), db.service.findMany({ orderBy: { sort: "asc" } })]);
+  const [promos, services] = await getAdminPromos();
   return (
     <div className="max-w-4xl">
       <PageHead title={t("promos.title")} />

@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
-import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
+import { getAdminServices } from "@/server/services/pages/admin";
 import { tr } from "@/i18n/locales";
 import { PageHead, Forbidden } from "@/components/admin/ui";
 import { CatalogList } from "@/components/admin/CatalogList";
@@ -9,7 +9,7 @@ export default async function AdminServices({ params }: { params: Promise<{ loca
   const { locale } = await params;
   if (!(await pageUser("services"))) return <Forbidden />;
   const t = await getTranslations("admin");
-  const cats = await db.category.findMany({ orderBy: { sort: "asc" }, include: { services: { orderBy: { sort: "asc" }, include: { _count: { select: { orders: true } } } } } });
+  const cats = await getAdminServices();
   return (
     <div className="max-w-4xl">
       <PageHead title={t("services.title")} />

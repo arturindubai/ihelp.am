@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
-import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
 import { getSettings } from "@/server/settings";
+import { getAdminServiceEdit } from "@/server/services/pages/admin";
 import { tr } from "@/i18n/locales";
 import { Forbidden } from "@/components/admin/ui";
 import { ServiceEditor } from "@/components/admin/ServiceEditor";
@@ -10,9 +10,8 @@ import type { ServicePayload } from "@/server/actions/admin/catalog";
 export default async function EditService({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params;
   if (!(await pageUser("services"))) return <Forbidden />;
-  const s = await db.service.findUnique({ where: { id }, include: { groups: { orderBy: { sort: "asc" }, include: { options: { orderBy: { sort: "asc" } } } }, plans: { orderBy: { sort: "asc" } }, masters: { select: { id: true } } } });
+  const [{ service: s, cats, masters }, settings] = await Promise.all([getAdminServiceEdit(id), getSettings()]);
   if (!s) notFound();
-  const [cats, masters, settings] = await Promise.all([db.category.findMany({ orderBy: { sort: "asc" } }), db.master.findMany({ orderBy: { sort: "asc" } }), getSettings()]);
   type AnyI = Record<string, string>;
   const content = (s.content || {}) as Partial<ServicePayload["content"]>;
   const payload: ServicePayload = {

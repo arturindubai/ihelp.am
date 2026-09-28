@@ -1,15 +1,15 @@
 import { getTranslations } from "next-intl/server";
-import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
 import { formatPhone } from "@/lib/phone";
 import { ymd } from "@/lib/time";
+import { getAdminStaff } from "@/server/services/pages/admin";
 import { PageHead, Forbidden } from "@/components/admin/ui";
 import { StaffManager } from "@/components/admin/StaffManager";
 
 export default async function AdminStaff() {
   if (!(await pageUser("staff"))) return <Forbidden />;
   const t = await getTranslations("admin");
-  const staff = await db.user.findMany({ where: { role: { in: ["OPERATOR", "ADMIN", "OWNER", "MASTER"] } }, orderBy: [{ role: "desc" }, { createdAt: "asc" }] });
+  const staff = await getAdminStaff();
   return (
     <div className="max-w-3xl">
       <PageHead title={t("staff.title")} sub={t("staff.hint")} />

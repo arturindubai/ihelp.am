@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
-import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
+import { getAdminTranslationOverrides } from "@/server/services/pages/admin";
 import { PageHead, Forbidden } from "@/components/admin/ui";
 import { TranslationsEditor } from "@/components/admin/TranslationsEditor";
 import ru from "../../../../../messages/ru.json";
@@ -20,7 +20,7 @@ function flat(obj: Tree, prefix = "", out: Record<string, string> = {}) {
 export default async function AdminTranslations() {
   if (!(await pageUser("translations"))) return <Forbidden />;
   const t = await getTranslations("admin");
-  const overrides = await db.uiString.findMany();
+  const overrides = await getAdminTranslationOverrides();
   const base = { ru: flat(ru as unknown as Tree), en: flat(en as unknown as Tree), am: flat(am as unknown as Tree) };
   const ov: Record<string, Record<string, string>> = { ru: {}, en: {}, am: {} };
   for (const o of overrides) ov[o.locale][o.key] = o.value;
