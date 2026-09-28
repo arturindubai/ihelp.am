@@ -12,10 +12,11 @@ export function parseClosingMapKeys(map: string): string[] {
 
 /**
  * Находит ключ оригинала, если входящая закрыта как дубль.
- * Формат строки в карте: «дубль DEV-5» или «уже есть AUTH-3» (регистр не важен).
+ * Форматы: «дубль DEV-5», «уже есть AUTH-3» (регистр не важен),
+ * а также формат blockedReason из createDuplicateNotice: «…как дубль. Оригинал: KEY title».
  */
 export function parseDuplicateOriginalKey(map: string): string | null {
-  const match = map.match(/(?:дубль|уже есть)[:\s]+([A-Z]+-\d+)/i);
+  const match = map.match(/(?:(?:дубль|уже есть)[:\s]+|Оригинал:\s+)([A-Z]+-\d+)/i);
   return match ? match[1] : null;
 }
 

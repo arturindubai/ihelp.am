@@ -45,6 +45,11 @@ describe("parseDuplicateOriginalKey", () => {
   it("берёт первое совпадение при нескольких дублях", () => {
     expect(parseDuplicateOriginalKey("дубль DEV-5; также схоже с дубль DEV-7")).toBe("DEV-5");
   });
+
+  it("находит ключ в формате blockedReason из createDuplicateNotice", () => {
+    expect(parseDuplicateOriginalKey("Входящая IN-6 закрыта как дубль. Оригинал: AUTH-5 Вход через Google")).toBe("AUTH-5");
+    expect(parseDuplicateOriginalKey("Входящая IN-22 закрыта как дубль. Оригинал: DEV-87 Какой-то заголовок")).toBe("DEV-87");
+  });
 });
 
 describe("intakeClosingMapValid", () => {
