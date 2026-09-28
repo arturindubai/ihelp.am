@@ -27,6 +27,7 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
   const [addresses, setAddresses] = useState(initial);
   const [edit, setEdit] = useState<Partial<AddressRow> | null>(null);
   const [pending, start] = useTransition();
+  const localeNames: Record<string, string> = { ru: t("locales.ru"), en: t("locales.en"), am: t("locales.am") };
 
   return (
     <div>
@@ -54,10 +55,7 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
           {enabledLocales.length > 1 && (
             <div><label className="label">{t("language")}</label>
               <select className="input" value={form.locale} onChange={(e) => setForm({ ...form, locale: e.target.value })}>
-                {enabledLocales.map((l) => {
-                  const label = ({ ru: t("locales.ru"), en: t("locales.en"), am: t("locales.am") } as Record<string, string>)[l] ?? l;
-                  return <option key={l} value={l}>{label}</option>;
-                })}
+                {enabledLocales.map((l) => <option key={l} value={l}>{localeNames[l] ?? l}</option>)}
               </select>
             </div>
           )}

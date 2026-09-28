@@ -69,6 +69,8 @@
 node scripts/cc.mjs show КЛЮЧ                                   # карточка и лента
 node scripts/cc.mjs note КЛЮЧ "Ответ продакта: …" --agent product
 node scripts/cc.mjs update КЛЮЧ --data '{"summary":"…","requirements":["…"],"details":"…","needs":[]}' --agent product
+node scripts/cc.mjs update КЛЮЧ --details-file /opt/ihelp.am/data/tmp/product/details.md --agent product    # длинный details
+node scripts/cc.mjs update КЛЮЧ --summary-file /opt/ihelp.am/data/tmp/product/summary.md --agent product    # длинный summary
 node scripts/cc.mjs unblock КЛЮЧ "ответ в ленте, карточка дополнена" --agent product
 node scripts/cc.mjs block КЛЮЧ "Вопрос … Варианты А/Б … Рекомендую …" --on owner --agent product
 node scripts/cc.mjs lib --kind decision                          # продуктовый канон

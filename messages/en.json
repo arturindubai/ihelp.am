@@ -1378,8 +1378,17 @@
         "pool": "Designer",
         "queue": "Designer queue · {n}",
         "queueEmpty": "No UI tasks without design",
+        "waiting": "Waiting for designer mockup · {n}",
+        "waitingHint": "Triage decided these tasks need a mockup before development, but the designer hasn't uploaded one yet.",
+        "waitingEmpty": "All tasks marked «mockup required» already have a mockup",
+        "waitingHold": {
+          "owner": "question for owner",
+          "product": "product requirements",
+          "active": "designer working",
+          "queue": "designer queue"
+        },
         "pending": "Pending approval · {n}",
-        "pendingHint": "Design description, mockup or files — review and approve or return to designer with feedback.",
+        "pendingHint": "Has a mockup — image in attachments or link. Review and approve or return to designer with feedback.",
         "pendingEmpty": "Nothing to approve",
         "gate": "mockup required",
         "approved": "Approved in the last two weeks · {n}",
