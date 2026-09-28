@@ -154,6 +154,8 @@ export function localizeService(s: ServiceRaw, locale: string) {
     howItWorks: (content.howItWorks || []).map((b) => ({ title: tr(b.title, locale), body: tr(b.body, locale) })).filter((b) => b.title),
     faq: (content.faq || []).map((b) => ({ q: tr(b.q, locale), a: tr(b.a, locale) })).filter((b) => b.q),
     policy: tr(content.policy, locale),
+    includesItems: tr(s.includesText, locale).split('\n').filter(Boolean),
+    excludesItems: tr(s.excludesText, locale).split('\n').filter(Boolean),
   };
 }
 export type ServiceView = ReturnType<typeof localizeService>;

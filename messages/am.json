@@ -94,7 +94,9 @@
       "PACKAGE": "Պակետ"
     },
     "firstOffer": "",
-    "notFound": ""
+    "notFound": "",
+    "includes": "",
+    "excludes": ""
   },
   "booking": {
     "title": "",
@@ -650,6 +652,9 @@
       "deleteCategory": "",
       "categoryHasServices": "",
       "openOnSite": "",
+      "includesText": "",
+      "excludesText": "",
+      "includesExcludesPlaceholder": "",
       "rating": "",
       "bookings": ""
     },

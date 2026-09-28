@@ -106,7 +106,9 @@
     "guarantee3": "Проверенные мастера",
     "perVisitSaving": "−{amount} с визита",
     "firstVisitBannerTitle": "Скидка новому клиенту",
-    "firstVisitBannerText": "−{percent}% от стоимости первого визита"
+    "firstVisitBannerText": "−{percent}% от стоимости первого визита",
+    "includes": "Включено",
+    "excludes": "Не входит"
   },
   "booking": {
     "title": "Оформление заказа",
@@ -681,6 +683,9 @@
       "deleteCategory": "Удалить категорию",
       "categoryHasServices": "В категории есть услуги — сначала перенесите или удалите их",
       "openOnSite": "Открыть на сайте",
+      "includesText": "Что включено",
+      "excludesText": "Что не входит",
+      "includesExcludesPlaceholder": "Каждая строка — отдельный пункт",
       "rating": "Рейтинг",
       "bookings": "Заказов"
     },
