@@ -13,6 +13,7 @@ import { sendMail, mailTemplate } from "../../services/mail";
 import { registerTelegramWebhook } from "../../services/telegramBot";
 import { telegramWebhookSecret } from "@/lib/telegramAuth";
 import { normalizePhone } from "@/lib/phone";
+import { normalizeEmail } from "@/lib/email";
 
 const i18n = z.object({ ru: z.string().max(20000).optional(), en: z.string().max(20000).optional(), am: z.string().max(20000).optional() }).partial();
 const J = (v: unknown) => (v == null ? Prisma.DbNull : (v as Prisma.InputJsonValue));
@@ -312,4 +313,23 @@ export async function setRoleAction(phoneRaw: string, role: Role, name?: string)
   if (role === "CLIENT") await db.session.deleteMany({ where: { userId: r.id } });
   await audit(u.id, "staff.role", "User", r.id, { role });
   return { ok: true as const };
+}
+
+/** Владелец задаёт или меняет email сотрудника. Адрес, заданный администратором, считается подтверждённым. */
+export async function setStaffEmailAction(phoneRaw: string, emailRaw: string | null) {
+  const u = await requireSection("staff");
+  const phone = normalizePhone(phoneRaw);
+  if (!phone) return { ok: false as const, error: "phone" };
+  const email = emailRaw ? normalizeEmail(emailRaw) : null;
+  if (emailRaw && !email) return { ok: false as const, error: "email" };
+  const target = await db.user.findUnique({ where: { phone } });
+  if (!target) return { ok: false as const, error: "notfound" };
+  try {
+    await db.user.update({ where: { id: target.id }, data: { email, emailVerifiedAt: email ? new Date() : null } });
+    await audit(u.id, "staff.email", "User", target.id, { action: email ? "set" : "clear" });
+    return { ok: true as const };
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return { ok: false as const, error: "email_taken" };
+    throw e;
+  }
 }

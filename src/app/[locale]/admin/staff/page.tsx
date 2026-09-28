@@ -13,7 +13,7 @@ export default async function AdminStaff() {
   return (
     <div className="max-w-3xl">
       <PageHead title={t("staff.title")} sub={t("staff.hint")} />
-      <StaffManager staff={staff.map((u) => ({ phone: u.phone, label: `${u.name || "—"} · ${formatPhone(u.phone)}`, role: u.role, lastLoginAt: u.lastLoginAt ? ymd(u.lastLoginAt) : null }))} />
+      <StaffManager staff={staff.map((u) => ({ phone: u.phone, email: u.email, label: `${u.name || "—"} · ${formatPhone(u.phone)}`, role: u.role, lastLoginAt: u.lastLoginAt ? ymd(u.lastLoginAt) : null }))} />
     </div>
   );
 }
