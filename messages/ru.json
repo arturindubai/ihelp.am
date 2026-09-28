@@ -72,7 +72,8 @@
     "whatsappSub": "Напишите нам — ответим быстро",
     "writeUs": "Написать",
     "reviewsTitle": "Отзывы клиентов",
-    "stickyOrder": "Заказать услугу"
+    "stickyOrder": "Заказать услугу",
+    "subCatClose": "Закрыть"
   },
   "service": {
     "startsAt": "от {price} за визит",

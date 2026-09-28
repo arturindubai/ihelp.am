@@ -7,7 +7,7 @@ export type LText = string;
 
 export async function getHome(locale: string) {
   const [categories, banners, services, features, faq, reviews] = await Promise.all([
-    db.category.findMany({ where: { active: true }, orderBy: { sort: "asc" }, include: { services: { where: { active: true }, orderBy: { sort: "asc" }, select: { slug: true } } } }),
+    db.category.findMany({ where: { active: true }, orderBy: { sort: "asc" }, include: { services: { where: { active: true }, orderBy: { sort: "asc" }, select: { slug: true, title: true, subtitle: true, image: true } } } }),
     db.banner.findMany({ where: { active: true }, orderBy: { sort: "asc" } }),
     db.service.findMany({ where: { active: true, category: { active: true } }, orderBy: { sort: "asc" }, include: { groups: { where: { active: true, isDuration: true }, include: { options: { where: { active: true } } } }, plans: { where: { active: true } } } }),
     db.siteFeature.findMany({ where: { active: true }, orderBy: { sort: "asc" } }),
@@ -15,14 +15,29 @@ export async function getHome(locale: string) {
     db.review.findMany({ where: { status: "APPROVED" }, orderBy: { createdAt: "desc" }, take: 10, include: { service: { select: { title: true } } } }),
   ]);
   return {
-    categories: categories.map((c) => ({
-      slug: c.slug,
-      title: tr(c.title, locale),
-      image: c.image,
-      comingSoon: c.comingSoon,
-      // если в категории одна услуга — ведём сразу в неё
-      href: c.comingSoon ? null : c.services.length === 1 ? `/s/${c.services[0].slug}` : `/c/${c.slug}`,
-    })),
+    categories: categories.map((c) => {
+      const isComposite = !c.comingSoon && c.services.length > 1;
+      return {
+        slug: c.slug,
+        title: tr(c.title, locale),
+        image: c.image,
+        comingSoon: c.comingSoon,
+        // если в категории одна услуга — ведём сразу в неё
+        href: c.comingSoon ? null : c.services.length === 1 ? `/s/${c.services[0].slug}` : `/c/${c.slug}`,
+        subcategories: isComposite
+          ? [{
+              section: null as string | null,
+              items: c.services.map((s) => ({
+                slug: s.slug,
+                title: tr(s.title, locale),
+                subtitle: tr(s.subtitle, locale) || null,
+                image: s.image,
+                href: `/s/${s.slug}`,
+              })),
+            }]
+          : [] as { section: string | null; items: { slug: string; title: string; subtitle: string | null; image: string | null; href: string }[] }[],
+      };
+    }),
     banners: banners.map((b) => ({ id: b.id, title: tr(b.title, locale), subtitle: tr(b.subtitle, locale), image: b.image, link: b.link, bg: b.bg, promoCode: b.promoCode })),
     services: services.map((s) => serviceCard(s, locale)),
     features: features.map((f) => ({ id: f.id, icon: f.icon, title: tr(f.title, locale) as string, body: tr(f.body, locale) as string })),
