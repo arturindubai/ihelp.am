@@ -1287,8 +1287,7 @@
         "scopeHint": "File or folder paths, one per line, e.g. src/server/services/booking.ts — parallel assignees won't conflict",
         "sourceIntake": "from Intake",
         "mockupRequired": "Mockup required",
-        "mockupUrl": "Mockup link",
-        "delete": "Delete"
+        "mockupUrl": "Mockup link"
       },
       "searchAll": "Search tasks",
       "pages": {
@@ -1591,6 +1590,17 @@
           "login": "Workers say 'Not logged in' — sign in to subscription: scripts/claude-login.sh, then 'Resume' in Workers tab.",
           "stop": "Stop everything immediately: 'Stop all' in Workers tab or on server systemctl stop 'ihelp-w-*' ihelp-dispatcher.timer.",
           "logs": "App errors — Logs page; full log — docker compose logs app."
+        },
+        "denials": {
+          "title": "Worker permission denials in 24 hours",
+          "share": "{pct}%",
+          "shareHint": "runs with a denied command: {denied} of {total}. Target — below {target}%",
+          "noData": "No data yet: the dispatcher writes denials to the run log, the first numbers will appear after the next worker runs.",
+          "none": "No denied commands in 24 hours.",
+          "top": "Most frequent denied commands",
+          "times": "×{n}",
+          "skipped": "Runs without denial data: {n} — not counted in the share.",
+          "hint": "A denial is a command blocked by the role rules (scripts/worker-run.sh). Only the command form is shown, without text or keys. To check instructions against the rules: node scripts/check-role-commands.mjs."
         }
       },
       "logs": {
