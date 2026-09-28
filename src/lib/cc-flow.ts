@@ -205,6 +205,30 @@ export function isOwnerQuestion(task: { status: string; blockedOn: string | null
   return task.status === "blocked" && (task.blockedOn === "owner" || task.blockedOn === "product");
 }
 
+/**
+ * Дизайнер берёт: задачи с флагом макета; дизайн-исследования (assignee=designer);
+ * фронт/бэк+фронт без описания дизайна и без вложений — задача ждёт дизайна, а не кода.
+ * Логика совпадает с designerQueue() в workers.ts.
+ */
+export function isDesignerTask(t: { layer: string; mockupRequired?: boolean | null; assignee?: string | null; design?: string | null; hasAttachments?: boolean }): boolean {
+  if (t.mockupRequired) return true;
+  if (t.assignee === "designer") return true;
+  if (t.layer === "front" || t.layer === "fullstack") {
+    return !t.design?.trim() && !t.hasAttachments;
+  }
+  return false;
+}
+
+/** Продакт берёт только задачи с открытыми вопросами к нему */
+export function isProductTask(t: { needs: string[] }): boolean {
+  return t.needs.length > 0;
+}
+
+/** Роли, которым разрешено брать задачи в работу через claim (deployer, watchdog, triage и tester работают иначе) */
+export function canClaimRole(role: Role): boolean {
+  return role !== "deployer" && role !== "watchdog" && role !== "triage" && role !== "tester";
+}
+
 /** Гейт «Сделано»: код-задача — коммит в main и что проверено после выкладки; прочие — доказательство словами или файлом */
 export function doneGate(t: { layer: string; noWork?: boolean }, proof: { sha?: string | null; text?: string | null; attachments?: number }): string | null {
   if (isCodeTask(t.layer) && !t.noWork && !SHA_RE.test(proof.sha?.trim() ?? "")) return "sha_required";

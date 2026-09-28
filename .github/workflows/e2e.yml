@@ -1,0 +1,86 @@
+name: E2E
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Тестовые значения не являются секретами — стенд поднимается с нуля и сразу гасится
+      - name: Подготовить .env для тестового стенда
+        run: |
+          printf '%s\n' \
+            'POSTGRES_PASSWORD=ci_test_pw_ephemeral' \
+            'SESSION_SECRET=ci_test_session_secret_ephemeral_min32chars' \
+            'CRON_SECRET=ci_test_cron_secret' \
+            'ADMIN_PHONE=+37400000001' \
+            'APP_URL=http://localhost:8080' \
+            'OTP_DEV_MODE=false' \
+            'COOKIE_SECURE=false' \
+          > .env
+
+      - name: Запустить стенд (db + migrate + app)
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.e2e.yml \
+            up -d app
+        env:
+          COMPOSE_PROJECT_NAME: ihelp-e2e
+
+      - name: Ждать готовности приложения (до 3 мин)
+        run: |
+          for i in $(seq 1 90); do
+            curl -sf http://localhost:8080/api/health && echo " — приложение готово" && exit 0
+            sleep 2
+          done
+          echo "Таймаут: приложение не поднялось"
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.e2e.yml \
+            logs
+          exit 1
+        env:
+          COMPOSE_PROJECT_NAME: ihelp-e2e
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Установить зависимости
+        run: npm ci
+
+      - name: Установить браузер Playwright (Chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E-тест
+        run: node e2e/order.mjs
+        env:
+          BASE: http://localhost:8080
+          COMPOSE_PROJECT_NAME: ihelp-e2e
+
+      - name: Логи приложения при ошибке
+        if: failure()
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.e2e.yml \
+            logs --tail 100
+        env:
+          COMPOSE_PROJECT_NAME: ihelp-e2e
+
+      - name: Остановить стенд
+        if: always()
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.e2e.yml \
+            down -v
+        env:
+          COMPOSE_PROJECT_NAME: ihelp-e2e

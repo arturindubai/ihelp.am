@@ -1,0 +1,6 @@
+# Переопределение для e2e-теста в CI: пробрасываем порт приложения напрямую на хост.
+# Использование: docker compose -f docker-compose.yml -f docker-compose.e2e.yml up -d app
+services:
+  app:
+    ports:
+      - "8080:3000"

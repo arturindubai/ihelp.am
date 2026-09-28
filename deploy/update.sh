@@ -5,7 +5,13 @@
 # Откат, если что-то пошло не так: deploy/rollback.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
-trap 'echo "✗ Обновление прервано: $BASH_COMMAND. Логи: docker compose logs --tail 100 app migrate. Откат: deploy/rollback.sh"' ERR
+_poll_pid=""
+_poll_log=""
+trap '
+  [ -n "$_poll_pid" ] && kill "$_poll_pid" 2>/dev/null || true; _poll_pid=""
+  [ -n "$_poll_log" ] && rm -f "$_poll_log" 2>/dev/null || true; _poll_log=""
+  echo "✗ Обновление прервано: $BASH_COMMAND. Логи: docker compose logs --tail 100 app migrate. Откат: deploy/rollback.sh"
+' ERR
 
 if [ -n "$(git status --porcelain)" ]; then
   echo "Есть незафиксированные изменения — сначала: git add -A && git commit -m '…'"
@@ -58,9 +64,55 @@ if ! deploy/gate.sh; then
   exit 1
 fi
 
+echo "▶ 4b/7 Счётчики до выкладки (для smoke-теста)"
+if docker compose ps --status running --services 2>/dev/null | grep -qx db; then
+  mkdir -p data/tmp
+  predeploy_counts=""
+  for table in Review Order; do
+    count=$(docker compose exec -T db psql -U app -d homeservices -tAc "SELECT COUNT(*) FROM \"$table\"" 2>/dev/null | tr -d '[:space:]' || echo "?")
+    predeploy_counts="${predeploy_counts}${table}:${count}"$'\n'
+  done
+  client_count=$(docker compose exec -T db psql -U app -d homeservices -tAc "SELECT COUNT(*) FROM \"User\" WHERE role = 'CLIENT'" 2>/dev/null | tr -d '[:space:]' || echo "?")
+  predeploy_counts="${predeploy_counts}UserClient:${client_count}"$'\n'
+  printf '%s' "$predeploy_counts" > data/tmp/predeploy-counts.txt
+  echo "  сохранены в data/tmp/predeploy-counts.txt"
+else
+  echo "  БД не запущена — пропускаю"
+fi
+
 echo "▶ 5/7 Запуск на готовом образе (миграции базы применяются автоматически)"
 echo "$(< src/lib/deploy-marker.txt)"
+
+# Замер простоя: поллер опрашивает /api/health раз в секунду в фоне.
+# Во время выкладки Caddy держит клиентские соединения открытыми (lb_try_duration 60s) и
+# не возвращает 502 — поэтому поллер с коротким таймаутом фиксирует реальное окно перезапуска.
+_http_bind="$(grep -E '^HTTP_BIND=' .env 2>/dev/null | tail -n 1 | cut -d= -f2-)" || _http_bind=""
+_hport="${_http_bind##*:}"
+_hbase="http://127.0.0.1:${_hport:-80}"
+_poll_log="$(mktemp /tmp/health-poll.XXXXXX)"
+(
+  set +e
+  while true; do
+    ts="$(date +%s%3N)"
+    code="$(curl -s -o /dev/null -m 2 -w '%{http_code}' "$_hbase/api/health" 2>/dev/null)" || code=000
+    printf '%s %s\n' "$ts" "$code"
+    sleep 1
+  done
+) > "$_poll_log" &
+_poll_pid=$!
+
 docker compose up -d --no-build
+
+# Применяем конфигурацию Caddy (graceful reload — соединения не обрываются).
+# docker compose up не пересоздаёт контейнер caddy при изменении bind-mount, поэтому
+# перезагружаем вручную: сначала validate, затем reload без перезапуска контейнера.
+if docker compose exec -T caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile 2>/dev/null; then
+  docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+  echo "  ✓ конфигурация Caddy обновлена"
+else
+  echo "  ⚠ caddy validate не прошёл — новый конфиг не применён (работает прежний)"
+fi
+
 # Пересоздаём backup, чтобы получить актуальный /backup.sh (git при merge меняет inode файла)
 echo "  пересоздаём контейнер backup"
 docker compose up -d --no-build --force-recreate backup
@@ -71,9 +123,35 @@ for _ in $(seq 1 60); do
   sleep 5
 done
 
+# Останавливаем замер и рассчитываем время простоя
+kill "$_poll_pid" 2>/dev/null || true
+wait "$_poll_pid" 2>/dev/null || true
+_poll_pid=""
+
+_last_ok_ts=0; _first_ok_after_ts=0; _in_outage=0; _prev_ts=0; _prev_code=""
+while IFS=' ' read -r _ts _code; do
+  if [ "$_code" != "200" ] && [ "$_prev_code" = "200" ] && [ "$_in_outage" -eq 0 ]; then
+    _in_outage=1; _last_ok_ts="$_prev_ts"
+  fi
+  if [ "$_code" = "200" ] && [ "$_in_outage" -eq 1 ]; then
+    _first_ok_after_ts="$_ts"; _in_outage=0; break
+  fi
+  _prev_ts="$_ts"; _prev_code="$_code"
+done < "$_poll_log"
+rm -f "$_poll_log"; _poll_log=""
+
+if [ "$_last_ok_ts" -gt 0 ] && [ "$_first_ok_after_ts" -gt 0 ]; then
+  _downtime_ms=$(( _first_ok_after_ts - _last_ok_ts ))
+  echo "⏱ Время простоя при выкладке: ${_downtime_ms}мс (от последнего 200 до первого 200 на /api/health)"
+elif [ "$_last_ok_ts" -gt 0 ]; then
+  echo "⚠ Приложение не восстановилось за время замера (>${_hbase}/api/health не вернул 200)"
+else
+  echo "⏱ Простоя не зафиксировано — все опросы /api/health вернули 200"
+fi
+
 echo "▶ 7/7 Smoke-тест"
 trap - ERR
-if ! deploy/smoke.sh "$@"; then
+if ! PREDEPLOY_COUNTS_FILE=data/tmp/predeploy-counts.txt deploy/smoke.sh "$@"; then
   echo "✗ Smoke-тест не прошёл. Логи: docker compose logs --tail 100 app migrate. Откат: deploy/rollback.sh"
   exit 1
 fi
