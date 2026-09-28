@@ -302,19 +302,23 @@ export function Checkout(props: {
               {days.map((d) => {
                 const dt = atYerevan(d, "12:00");
                 const on = d === date;
+                const hasNoSlots = noSlotsDates.has(d);
                 return (
                   <button
                     key={d}
                     ref={(el) => { if (el && on && el.parentElement) el.parentElement.scrollLeft = Math.max(0, el.offsetLeft - 16); }}
                     onClick={() => setDate(d)}
                     className={cn(
-                      "flex min-h-[64px] min-w-[44px] flex-col items-center justify-center rounded-xl border px-2 text-center transition",
+                      "relative flex min-h-[64px] min-w-[44px] flex-col items-center justify-center rounded-xl border px-2 text-center transition",
                       on ? "border-action bg-action text-on-action" : "border-line bg-paper"
                     )}
                   >
                     <span className={cn("text-xs capitalize", on ? "text-on-action/80" : "text-muted")}>{dateLabel(dt, locale, { weekday: "short" })}</span>
-                    <span className="text-lg font-bold">{dateLabel(dt, locale, { day: "numeric" })}</span>
+                    <span className={cn("text-lg font-bold", !on && hasNoSlots && "text-muted")}>{dateLabel(dt, locale, { day: "numeric" })}</span>
                     <span className={cn("text-[10px]", on ? "text-on-action/80" : "text-muted")}>{dateLabel(dt, locale, { month: "short" })}</span>
+                    {hasNoSlots && !on && (
+                      <span className="absolute bottom-1 left-1/2 size-1 -translate-x-1/2 rounded-full bg-muted" />
+                    )}
                   </button>
                 );
               })}
