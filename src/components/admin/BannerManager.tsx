@@ -349,18 +349,18 @@ export function BannerManager({ banners }: Props) {
 
             {/* секция: Статистика (только для существующих баннеров) */}
             {edit?.id && (
-              <div className="rounded-xl bg-surface p-3">
+              <div className="rounded-xl p-3">
                 <p className="label mb-2">{t("banners.stats")}</p>
                 <div className="grid grid-cols-3 gap-2">
-                  <div className="rounded-[10px] bg-paper p-2 text-center">
+                  <div className="rounded-[10px] bg-surface p-2 text-center">
                     <div className="text-[11px] text-muted">{t("banners.views")}</div>
                     <div className="text-sm font-semibold text-ink">{statsViews}</div>
                   </div>
-                  <div className="rounded-[10px] bg-paper p-2 text-center">
+                  <div className="rounded-[10px] bg-surface p-2 text-center">
                     <div className="text-[11px] text-muted">{t("banners.clicks")}</div>
                     <div className="text-sm font-semibold text-ink">{statsClicks}</div>
                   </div>
-                  <div className="rounded-[10px] bg-paper p-2 text-center">
+                  <div className="rounded-[10px] bg-surface p-2 text-center">
                     <div className="text-[11px] text-muted">{t("banners.ctr")}</div>
                     <div
                       className={`text-sm font-semibold ${
