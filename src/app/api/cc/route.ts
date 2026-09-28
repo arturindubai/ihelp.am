@@ -251,7 +251,7 @@ export async function POST(req: Request) {
         if (!key) return json({ error: "key_required" }, 400);
         const role = roleOf(agent);
         if (!["owner", "cto", "product"].includes(role)) return json({ error: "forbidden_role", detail: role }, 403);
-        const task = await approveMockup(key, agent, text || null);
+        const task = await approveMockup(key, agentActor(agent), text || null);
         return json({ ok: true, task: brief(task) });
       }
       // Триаж: отметка «карточка разобрана» с вердиктом в ленте

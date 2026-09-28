@@ -101,7 +101,7 @@ export async function DesignTab({ locale, taskHref }: { locale: string; taskHref
                       )}
                     </div>
                     <div className="flex flex-col items-end gap-1.5">
-                      <MockupApproveButton taskKey={x.key} />
+                      <MockupApproveButton taskKey={x.key} needs={x.needs} />
                       <DesignReturnButton taskKey={x.key} />
                     </div>
                   </div>

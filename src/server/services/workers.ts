@@ -110,7 +110,7 @@ const STAGE_ORDER = ["launch", "public", "growth", "later", "baseline"];
 /** Карточки, ждущие триажа: новые из бэклога и заблокированные на владельце, где человек ответил, — по приоритету и этапу */
 export async function triageQueue() {
   const rows = await db.task.findMany({
-    where: { triagedAt: null, OR: [{ status: "backlog" }, { status: "blocked", blockedOn: { in: ["owner", "product"] } }] },
+    where: { triagedAt: null, OR: [{ status: "backlog" }, { status: "blocked", blockedOn: { in: ["owner", "product", "design"] } }] },
     select: { key: true, title: true, priority: true, stage: true, status: true, sort: true, source: true },
   });
   return rows.sort(

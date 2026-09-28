@@ -109,7 +109,7 @@ export async function mockupPendingApprovals() {
     orderBy: [{ mockupRequired: "desc" }, { priority: "asc" }, { updatedAt: "asc" }],
     select: {
       key: true, title: true, priority: true, status: true, layer: true, updatedAt: true,
-      mockupUrl: true, mockupRequired: true, design: true,
+      mockupUrl: true, mockupRequired: true, design: true, needs: true,
       _count: { select: { attachments: true } },
       attachments: { where: { mime: { startsWith: "image/" } }, select: { url: true, fileName: true }, orderBy: { createdAt: "desc" } },
     },
