@@ -54,7 +54,7 @@
 | Крон-шаги подписок и пакетов | `src/app/api/cron/route.ts` → шаги `subscriptions`, `packages`, `unassigned` |
 | Дефолты | `src/server/settings.ts` → `DEFAULT_SETTINGS.booking.subscriptionHorizonDays` |
 
-Тесты: `src/lib/__tests__/recurrence.test.ts`.
+Тесты: `src/lib/recurrence.test.ts`.
 
 ## История изменений
 

@@ -86,7 +86,7 @@
 | Ссылка владельца | `src/app/api/auth/link/route.ts` |
 | Роли | `src/server/auth.ts` → `STAFF_ROLES`, `ADMIN_ROLES` |
 
-Тесты: `src/lib/__tests__/firstOrder.test.ts` (косвенно затрагивает логику сессии).
+Тесты: `src/lib/firstOrder.test.ts` (косвенно затрагивает логику сессии).
 
 ## История изменений
 

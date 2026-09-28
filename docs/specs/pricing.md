@@ -35,7 +35,7 @@
 | Применение в заказе | `src/server/services/booking.ts` → `isFirstOrder`, `createOrder` |
 | Дефолты настроек | `src/server/settings.ts` → `DEFAULT_SETTINGS.pricing` |
 
-Тесты: `src/lib/__tests__/pricing.test.ts`.
+Тесты: `src/lib/pricing.test.ts`.
 
 ## История изменений
 

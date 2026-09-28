@@ -38,7 +38,7 @@
 | Advisory lock | `src/server/services/booking.ts` → строка с `pg_advisory_xact_lock` |
 | Дефолты | `src/server/settings.ts` → `DEFAULT_SETTINGS.booking` |
 
-Тесты: `src/lib/__tests__/slots.test.ts`.
+Тесты: `src/lib/slots.test.ts`.
 
 ## История изменений
 
