@@ -41,9 +41,11 @@ model User {
   lastLoginAt DateTime?
   /// Когда пользователь получил код из формы с уведомлением о политике конфиденциальности
   privacyConsentAt DateTime?
-  /// Telegram-аккаунт для входа через виджет (AUTH-10): id и username, nullable, привязывается из профиля
+  /// Telegram-аккаунт для входа через виджет (AUTH-10): id и username, nullable, привязывается из профиле
   telegramId       String?   @unique
   telegramUsername String?
+  /// Согласие на рекламные рассылки (LEGAL-2): null — не давал, дата — дал; отзывается в профиле
+  adsConsentAt     DateTime?
 
   sessions    Session[]
   addresses   Address[]

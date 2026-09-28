@@ -1897,5 +1897,19 @@
   "notFound": {
     "title": "404",
     "back": "На главную"
+  },
+  "cookies": {
+    "title": "Мы используем cookies",
+    "text": "Мы используем файлы cookie для работы сайта и аналитики. Подробнее — в {policyLink}.",
+    "policyLinkText": "политике конфиденциальности",
+    "accept": "Принять",
+    "essentialOnly": "Только необходимые"
+  },
+  "consent": {
+    "ads": {
+      "label": "Получать рекламные предложения",
+      "hint": "Email и SMS",
+      "notifications": "Уведомления"
+    }
   }
 }

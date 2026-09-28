@@ -1761,5 +1761,19 @@
         "unarchive": "Restore from archive"
       }
     }
+  },
+  "cookies": {
+    "title": "We use cookies",
+    "text": "We use cookies for site functionality and analytics. Learn more in our {policyLink}.",
+    "policyLinkText": "privacy policy",
+    "accept": "Accept",
+    "essentialOnly": "Essential only"
+  },
+  "consent": {
+    "ads": {
+      "label": "Receive promotional offers",
+      "hint": "Email and SMS",
+      "notifications": "Notifications"
+    }
   }
 }
