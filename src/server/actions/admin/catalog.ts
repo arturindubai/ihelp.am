@@ -16,7 +16,7 @@ const revalidateAll = () => revalidatePath("/", "layout");
 
 export async function saveCategoryAction(input: unknown) {
   const u = await requireSection("services");
-  const p = z.object({ id: z.string().optional(), slug, title: i18nReq, description: i18n.nullable().optional(), image: img, sort: z.number().int(), active: z.boolean(), comingSoon: z.boolean() }).safeParse(input);
+  const p = z.object({ id: z.string().optional(), slug, title: i18nReq, description: i18n.nullable().optional(), image: img, sort: z.number().int(), active: z.boolean(), comingSoon: z.boolean(), archived: z.boolean().optional() }).safeParse(input);
   if (!p.success) return { ok: false as const, error: p.error.issues[0]?.path.join(".") };
   const { id, ...d } = p.data;
   const data = { ...d, description: J(d.description) };
@@ -31,6 +31,37 @@ export async function saveCategoryAction(input: unknown) {
   }
 }
 
+export async function archiveCategoryAction(id: string, archived: boolean) {
+  const u = await requireSection("services");
+  await db.category.update({ where: { id }, data: { archived } });
+  await audit(u.id, archived ? "category.archive" : "category.restore", "Category", id);
+  revalidateAll();
+  return { ok: true as const };
+}
+
+export async function reorderCategoriesAction(ids: string[]) {
+  await requireSection("services");
+  await db.$transaction(ids.map((id, i) => db.category.update({ where: { id }, data: { sort: i } })));
+  revalidateAll();
+  return { ok: true as const };
+}
+
+export async function reorderServicesAction(ids: string[]) {
+  await requireSection("services");
+  await db.$transaction(ids.map((id, i) => db.service.update({ where: { id }, data: { sort: i } })));
+  revalidateAll();
+  return { ok: true as const };
+}
+
+export async function toggleServiceComingSoonAction(id: string, comingSoon: boolean) {
+  const u = await requireSection("services");
+  await db.service.update({ where: { id }, data: { comingSoon } });
+  await audit(u.id, "service.toggleComingSoon", "Service", id, { comingSoon });
+  revalidateAll();
+  return { ok: true as const };
+}
+
+/** @deprecated используйте archiveCategoryAction — удаление категорий запрещено */
 export async function deleteCategoryAction(id: string) {
   const u = await requireSection("services");
   const n = await db.service.count({ where: { categoryId: id } });
