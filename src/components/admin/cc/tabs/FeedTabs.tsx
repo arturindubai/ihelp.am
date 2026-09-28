@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { activityFeed, doneFeed } from "@/server/services/ccBoard";
 import { listEpics } from "@/server/services/epics";
-import { listMessages, MESSAGE_ROLES } from "@/server/services/ccMessages";
+import { listMessages, listOwnerInbox, MESSAGE_ROLES } from "@/server/services/ccMessages";
 import { roleOf } from "@/lib/cc-flow";
 import { BLOCKED_ON_LABELS, COMMENT_KIND_LABELS, EPIC_STATUSES, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { Card } from "@/components/admin/fields";
@@ -125,10 +125,9 @@ export async function DoneTab({ locale, taskHref }: { locale: string; taskHref: 
 
 /** «Сообщения», как Notify в LIA: написать роли или всем воркерам; входящие владельцу — прочитано, в бэклог, ответить */
 export async function NotifyTab({ locale, taskHref }: { locale: string; taskHref: Href }) {
-  const [tn, messages] = await Promise.all([getTranslations("admin.cc.notify"), listMessages(80)]);
+  const [tn, inbox, outboxAll] = await Promise.all([getTranslations("admin.cc.notify"), listOwnerInbox(100), listMessages(80)]);
   const when = (d: Date) => `${dateLabel(d, locale, { day: "numeric", month: "short" })}, ${timeLabel(d)}`;
-  const inbox = messages.filter((m) => m.toRole === "owner");
-  const outbox = messages.filter((m) => m.toRole !== "owner");
+  const outbox = outboxAll.filter((m) => m.toRole !== "owner");
   // Ответ уходит роли отправителя: dev-2 → разработчикам, triage → триажу; человеку из админки ответить нечем
   const replyRole = (from: string) => {
     const r = roleOf(from);
