@@ -44,6 +44,10 @@ services:
     restart: unless-stopped
     <<: *logging
     mem_limit: 1g
+    # init: true добавляет tini как PID 1 — корректно пересылает SIGTERM в node (иначе node может не получить сигнал)
+    init: true
+    # Даём Next.js время завершить текущие запросы при graceful shutdown во время выкладки
+    stop_grace_period: 30s
     environment:
       DATABASE_URL: postgresql://app:${POSTGRES_PASSWORD}@db:5432/homeservices
       APP_URL: ${APP_URL}
@@ -75,7 +79,10 @@ services:
       migrate: { condition: service_completed_successfully }
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 30s
+      # Частые проверки (5s) + начальная пауза (15s): контейнер помечается healthy быстрее при выкладке
+      interval: 5s
+      timeout: 3s
+      start_period: 15s
       retries: 3
 
   caddy:

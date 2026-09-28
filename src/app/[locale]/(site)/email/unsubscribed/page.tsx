@@ -5,7 +5,7 @@ export default async function UnsubscribedPage() {
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
       <h1 className="text-2xl font-bold text-ink mb-3">{t("unsubscribedTitle")}</h1>
-      <p className="text-ink-muted max-w-sm">{t("unsubscribedBody")}</p>
+      <p className="text-muted max-w-sm">{t("unsubscribedBody")}</p>
     </div>
   );
 }

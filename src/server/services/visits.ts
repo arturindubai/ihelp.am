@@ -2,6 +2,7 @@ import "server-only";
 import type { VisitStatus } from "@prisma/client";
 import { db } from "../db";
 import { html, notifyTeam } from "../notify";
+import { notifyClientVisitCompleted } from "./bookingNotify";
 
 /** Смена статуса визита с побочными эффектами (счётчики мастера, закрытие заказа, оплата) */
 export async function setVisitStatus(visitId: string, status: VisitStatus, actor: string) {
@@ -17,6 +18,10 @@ export async function setVisitStatus(visitId: string, status: VisitStatus, actor
   if (["ON_WAY", "DONE", "NO_SHOW"].includes(status)) {
     const label = { ON_WAY: "🚗 выехал", DONE: "✅ завершил", NO_SHOW: "⚠️ визит не состоялся" }[status as "ON_WAY"];
     await notifyTeam(html`${label} · заказ №${v.order.number} · ${actor}`);
+  }
+  // Уведомить клиента о завершении визита с просьбой оставить отзыв
+  if (status === "DONE" && v.status !== "DONE") {
+    await notifyClientVisitCompleted(visitId).catch(() => {});
   }
 }
 

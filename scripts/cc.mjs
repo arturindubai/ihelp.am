@@ -36,6 +36,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
   Длинный текст (многострочный отчёт, вердикт, блокировка):
     --text-file /path/file   читать текст из файла (Write /opt/ihelp.am/data/tmp/<роль>/имя.md)
     echo "…" | node …        или через stdin
+    (для update используйте не --text-file, а --design-file / --details-file / --summary-file)
 
   brief КЛЮЧ [--role dev|tester|deployer|nocode]   брифинг: правила роли, карточка, что сдать
                                                   При сдаче (review) обязательны:
@@ -70,6 +71,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
   ready КЛЮЧ ["комментарий"]                    готова к работе (проверка готовности)
   create --file задача.json                     завести задачу (или --data '{…}' — JSON прямо в команде)
   update КЛЮЧ --file поля.json                  изменить тексты задачи (или --data '{…}')
+                                                  текстом из файла: --design-file / --details-file / --summary-file
   retriage КЛЮЧ                                 вернуть задачу бэклога на повторный разбор (также owner)
   cancel КЛЮЧ "причина"
 
@@ -204,6 +206,7 @@ function hint(code) {
     reason_required: "\n  Этот переход требует причину словами.",
     forbidden_transition: "\n  Этой роли такой переход не разрешён (docs/DEV_SYSTEM.md, раздел «Статусы»).",
     not_your_task: "\n  Задачу держит другой исполнитель.",
+    no_update_fields: "\n  Укажите поля: --design-file, --details-file, --summary-file или --data '{\"поле\":\"значение\"}'.",
   };
   return h[code] ?? "";
 }
@@ -459,6 +462,15 @@ function branchFacts(branch) {
 
 /* ───── команды ───── */
 
+const COMMENT_LIMIT = 5000;
+
+/** Если текст длиннее лимита — сообщить об этом до отправки (полный текст сохранится в Библиотеке) */
+function warnIfLong(str) {
+  if (str.length > COMMENT_LIMIT) {
+    console.log(`ℹ Длина текста: ${str.length} знаков (лимит ${COMMENT_LIMIT}) — полный текст сохранится в Библиотеке, в ленте будет резюме со ссылкой.`);
+  }
+}
+
 /**
  * Текст для команды: из --text-file > позиционных аргументов > stdin.
  * Пустой stdin не перекрывает позиционный аргумент — только непустой и только при отсутствии аргумента.
@@ -598,6 +610,7 @@ async function main() {
     case "note": {
       const k = needKey();
       if (!text()) die("нужен текст записи");
+      warnIfLong(text());
       await api("POST", null, { action: "note", agent: agentFor(k), key: k, text: text(), kind: flags.error ? "error" : "progress" });
       console.log(`✓ запись добавлена в ${k}`);
       return;
@@ -605,6 +618,7 @@ async function main() {
     case "review": {
       const k = needKey();
       if (text().length < 40) die("отчёт от 40 символов: что сделано, как проверено (tsc, vitest, стенд), как проверить деплоеру, риски");
+      warnIfLong(text());
       const releaseNote = typeof flags.release === "string" ? flags.release.trim() : "";
       const ownerSummary = typeof flags.summary === "string" ? flags.summary.trim() : "";
       if (!releaseNote)
@@ -658,6 +672,7 @@ async function main() {
     case "handoff": {
       const k = needKey();
       if (text().length < 20) die("опишите передачу: что сделано, что осталось, где остановились, подводные камни");
+      warnIfLong(text());
       const st = readState(k);
       const facts = st?.branch ? `\nВетка: ${st.branch}${tryGit(["rev-parse", "--verify", "-q", `refs/remotes/origin/${st.branch}`], ROOT) ? " (отправлена)" : " (НЕ отправлена — работа только на этом сервере)"}` : "";
       await api("POST", null, { action: "handoff", agent: agentFor(k), key: k, text: text() + facts });
@@ -670,6 +685,7 @@ async function main() {
       if (!flags.on) die("укажите, кто разблокирует: --on owner|product|design|tech|external|deps");
       const until = typeof flags.until === "string" ? flags.until : undefined;
       if (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) die("--until ожидает дату в формате YYYY-MM-DD, например --until 2026-10-10");
+      warnIfLong(text());
       await api("POST", null, { action: "block", agent: agentFor(k), key: k, text: text(), on: flags.on, ...(until ? { blockedUntil: until } : {}) });
       dropState(k);
       console.log(`✓ ${k} заблокирована (${flags.on})${until ? `, авторазблокировка ${until}` : ""}. Аренда снята, ветка сохранена.`);
@@ -701,16 +717,39 @@ async function main() {
     }
     case "create":
     case "update": {
-      if (!flags.file && !flags.data) die("нужны поля задачи: --file task.json или --data '{\"summary\":\"…\"}' (поля — docs/DEV_SYSTEM.md, раздел «Как завести задачу»)");
-      let task;
-      try {
-        task = JSON.parse(flags.data ? String(flags.data) : fs.readFileSync(String(flags.file), "utf8"));
-      } catch (e) {
-        die(`поля задачи — не JSON: ${e.message}`);
+      const UPD_FIELDS = ["title","summary","details","requirements","design","qaNotes","deployNotes","needs","depends","docs","epicKey","area","layer","priority","stage","owner","estimate","scope","mockupRequired","mockupUrl"];
+      if (cmd === "update" && flags["text-file"])
+        die("--text-file не работает в update; используйте --design-file, --details-file или --summary-file для текстовых полей");
+      const hasTextFile = cmd === "update" && ["design-file","details-file","summary-file"].some(f => typeof flags[f] === "string");
+      if (!flags.file && !flags.data && !hasTextFile)
+        die(`нужны поля задачи: --file task.json или --data '{…}'${cmd === "update" ? " или --design-file / --details-file / --summary-file" : ""} (поля — docs/DEV_SYSTEM.md, раздел «Как завести задачу»)`);
+      let task = {};
+      if (flags.file || flags.data) {
+        try {
+          task = JSON.parse(flags.data ? String(flags.data) : fs.readFileSync(String(flags.file), "utf8"));
+        } catch (e) {
+          die(`поля задачи — не JSON: ${e.message}`);
+        }
+      }
+      if (cmd === "update") {
+        for (const [field, fflag] of [["design","design-file"],["details","details-file"],["summary","summary-file"]]) {
+          if (typeof flags[fflag] === "string") {
+            const fp = path.resolve(String(flags[fflag]));
+            if (!fs.existsSync(fp)) die(`файл не найден: ${fp}`);
+            task[field] = fs.readFileSync(fp, "utf8").trim();
+          }
+        }
+        if (!Object.keys(task).some(f => UPD_FIELDS.includes(f)))
+          die(`нет полей для обновления; допустимые поля: ${UPD_FIELDS.join(", ")}`);
       }
       const k = cmd === "update" ? needKey() : undefined;
       const r = await api("POST", null, { action: cmd, agent: agentFor(k), key: k, task });
-      console.log(`✓ ${r.task.key} ${cmd === "create" ? "заведена" : "обновлена"} · ${STATUS[r.task.status]}`);
+      if (cmd === "update") {
+        const info = Object.entries(task).filter(([f]) => UPD_FIELDS.includes(f)).map(([f, v]) => typeof v === "string" ? `${f} (${v.length} симв.)` : Array.isArray(v) ? `${f} (${v.length} эл.)` : f).join(", ");
+        console.log(`✓ ${r.task.key} обновлена · изменены: ${info}`);
+      } else {
+        console.log(`✓ ${r.task.key} заведена · ${STATUS[r.task.status]}`);
+      }
       return;
     }
     case "triage": {

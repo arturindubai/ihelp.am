@@ -37,7 +37,7 @@
      — Также проверить: не противоречит ли карточка журналу решений `docs/DECISIONS.md`.
 3. **Решить** — одно из трёх:
    - **В очередь.** Если нужно, дополни поля: `node scripts/cc.mjs update КЛЮЧ --data '{"requirements":[…],"scope":[…],"estimate":"M"}' --agent triage`. Затем выполни `node scripts/cc.mjs ready КЛЮЧ "триаж: …" --agent triage`. Можно дописывать критерии, область файлов, размер, слой и зависимости. Нельзя менять смысл задачи и приоритет, который поставил человек.
-   - **Вопрос человеку:** `node scripts/cc.mjs block КЛЮЧ "Вопросы: 1) … 2) … Предлагаю: …" --on owner|product --agent triage`. У каждого вопроса есть варианты и рекомендация, чтобы человеку хватило ответить одной фразой.
+   - **Вопрос человеку:** `node scripts/cc.mjs block КЛЮЧ "Вопрос: … А) … Б) … Рекомендую: …" --on owner|product --agent triage`. **Один вопрос — один блок**: не задавать несколько вопросов в одной карточке, иначе владелец не сможет ответить одним нажатием. Варианты и рекомендация обязательны. **Технические вопросы** (реализация, архитектура, выбор инструментов) к владельцу не отправлять — они для техдиректора (`--on tech`). Владельцу — только продуктовые: деньги, бренд, юридика, внешние аккаунты, противоречие решению в `docs/DECISIONS.md`.
    - **Отложить.** Задача не для текущего этапа или ждёт внешнего события. Она остаётся в бэклоге, в вердикте написано почему и когда к ней вернуться. Если дата известна — заблокируй с `--until YYYY-MM-DD`: сторож сам вернёт задачу на разбор в этот день. Пример: `block КЛЮЧ "ждём решения по … до 10 октября" --on external --until 2026-10-10`.
 
    Кто возьмёт задачу из очереди, решает её слой. Код (`back`, `front`, `fullstack`, `infra`) берут разработчики, дальше тестировщик и деплоер. Без кода (`none`) берёт воркер «Не-код: исследования и инструкции», результат уходит владельцу в «Согласования» ([NOCODE.md](NOCODE.md)). Для задачи без кода, где нужны действия владельца (аккаунт, оплата, DNS), сразу перечисли их в критериях: воркер подготовит всё остальное и попросит владельца о конкретных шагах.
@@ -109,6 +109,7 @@ node scripts/cc.mjs triage                                   # очередь т
 node scripts/cc.mjs show КЛЮЧ                                # карточка целиком
 node scripts/cc.mjs search "слова"                           # поиск дублей по ключевым словам заголовка
 node scripts/cc.mjs update КЛЮЧ --data '{…}'                 # дополнить поля (JSON прямо в команде)
+node scripts/cc.mjs update КЛЮЧ --design-file /opt/ihelp.am/data/tmp/triage/design.md   # длинное поле design
 node scripts/cc.mjs create --data '{…}'                      # новая карточка (из Intake)
 node scripts/cc.mjs ready КЛЮЧ "триаж: …"                    # в очередь (через проверку готовности)
 node scripts/cc.mjs block КЛЮЧ "вопросы…" --on owner|product # вопрос человеку
@@ -134,6 +135,9 @@ node scripts/cc.mjs msg "текст" --to owner                   # сообще
 node scripts/cc.mjs triaged КЛЮЧ --text-file /opt/ihelp.am/data/tmp/triage/triaged.md
 node scripts/cc.mjs block КЛЮЧ --on owner --text-file /opt/ihelp.am/data/tmp/triage/block.md
 node scripts/cc.mjs msg --to owner --text-file /opt/ihelp.am/data/tmp/triage/msg.md
+
+# Для update используй специальные флаги (не --text-file):
+node scripts/cc.mjs update КЛЮЧ --design-file /opt/ihelp.am/data/tmp/triage/design.md
 ```
 
 Папка `/opt/ihelp.am/data/tmp/triage/` разрешена для записи триажу. Короткие тексты по-прежнему передаются inline.
