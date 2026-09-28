@@ -4,6 +4,18 @@
 
 Спецификации хранятся в git, поэтому версии, разница между ними и откат есть без дополнительных инструментов, а правка проходит ту же проверку, что и код. Задача, которая меняет правило, меняет и спецификацию в той же ветке.
 
+**Правило обновления:** изменил алгоритм — обнови спецификацию в той же ветке. В шапке файла укажи новую дату сверки и коммит. Запись в «История изменений» — обязательна.
+
+## Спецификации
+
+| Файл | О чём | Где в коде |
+|---|---|---|
+| [`pricing.md`](pricing.md) | Цены, скидки (тариф / первый заказ / промокод), payNow | `src/lib/pricing.ts`, `src/lib/firstOrder.ts`, `src/server/services/booking.ts` |
+| [`slots.md`](slots.md) | Слоты, рабочие часы мастеров, буфер, advisory lock | `src/lib/slots.ts`, `src/server/services/booking.ts` |
+| [`subscriptions.md`](subscriptions.md) | Подписки и пакеты: Recurrence, горизонт, пауза, истечение | `src/lib/recurrence.ts`, `src/server/services/booking.ts`, `src/app/api/cron/route.ts` |
+| [`auth.md`](auth.md) | Вход (OTP / Google / Apple / ссылка), роли, сессия, лимиты OTP | `src/server/auth.ts`, `src/server/otp.ts`, `src/server/actions/auth.ts` |
+| [`notifications.md`](notifications.md) | Кому, когда и через что уходят уведомления | `src/server/notify.ts`, `src/server/alerts.ts` |
+
 ## Какие нужны (задача DEV-15)
 
 | Файл | О чём | Где в коде |

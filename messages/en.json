@@ -147,7 +147,7 @@
     "payNow": "Total",
     "payFirst": "First visit",
     "confirm": "Confirm order",
-    "agree": "By clicking the button, you agree to the <offer>terms</offer>, <cancel>cancellation policy</cancel> and <privacy>privacy policy</privacy>",
+    "agree": "By placing the order, you confirm your agreement with the <offer>terms of service</offer>, <cancel>cancellation policy</cancel> and <privacy>privacy policy</privacy>, and to processing your address and contact details for service delivery.",
     "success": "Order placed!",
     "successSub": "We're already getting ready for your visit",
     "successNumber": "Order #{number}",
@@ -189,7 +189,7 @@
     "title": "Sign in or register",
     "phone": "Phone number",
     "getCodeVia": "Get code via",
-    "consent": "By getting the code, you agree to the <privacy>privacy policy</privacy> and <offer>terms</offer>",
+    "consent": "By getting the code, you agree to the processing of your personal data (phone number, email) for identification and sign-in to iHelp. More details: <privacy>privacy policy</privacy> and <offer>terms of service</offer>.",
     "channel": {
       "SMS": "SMS",
       "WHATSAPP": "WhatsApp",

@@ -159,7 +159,7 @@
     "payNow": "К оплате",
     "payFirst": "Первый визит",
     "confirm": "Подтвердить заказ",
-    "agree": "Нажимая кнопку, вы соглашаетесь с <offer>офертой</offer>, <cancel>правилами отмены</cancel> и <privacy>политикой конфиденциальности</privacy>",
+    "agree": "Оформляя заказ, вы подтверждаете согласие с <offer>офертой</offer>, <cancel>правилами отмены</cancel> и <privacy>политикой конфиденциальности</privacy>, а также на обработку адреса и контактных данных для исполнения услуги.",
     "success": "Заказ оформлен!",
     "successSub": "Мы уже готовимся к вашему визиту",
     "successNumber": "Заказ №{number}",
@@ -201,7 +201,7 @@
     "title": "Вход или регистрация",
     "phone": "Номер телефона",
     "getCodeVia": "Получить код через",
-    "consent": "Получая код, вы соглашаетесь с <privacy>политикой конфиденциальности</privacy> и <offer>офертой</offer>",
+    "consent": "Получая код, вы соглашаетесь на обработку ваших персональных данных (номер телефона, email) для идентификации и входа в iHelp. Подробнее: <privacy>политика конфиденциальности</privacy> и <offer>оферта</offer>.",
     "channel": {
       "SMS": "SMS",
       "WHATSAPP": "WhatsApp",
@@ -1914,6 +1914,19 @@
   "notFound": {
     "title": "404",
     "back": "На главную"
+  },
+  "notify": {
+    "master": {
+      "assigned": "📋 Новый визит\nКлиент: {clientName}\nУслуга: {serviceName}\nДата: {date}, {time}\nАдрес: {address}",
+      "rescheduled": "🔄 Визит перенесён\n{serviceName}\nНовая дата: {date}, {time}",
+      "cancelled": "❌ Визит отменён\n{serviceName}, {date}",
+      "tomorrow": "📅 Визиты на завтра ({date}):\n{list}",
+      "tomorrowItem": "• {time} — {serviceName} · {clientName} · {address}",
+      "staffBotConnect": "Привет! Я iHelp Staff Bot. Нажмите кнопку ниже, чтобы привязать ваш профиль мастера и получать уведомления о визитах.",
+      "staffBotConnected": "✓ Готово! Теперь вы будете получать уведомления о своих визитах здесь.",
+      "staffBotNotMaster": "Этот бот предназначен только для мастеров iHelp.",
+      "sharePhone": "📱 Поделиться номером"
+    }
   },
   "cookies": {
     "title": "Мы используем cookies",
