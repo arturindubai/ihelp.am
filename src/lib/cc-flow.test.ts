@@ -73,6 +73,18 @@ describe("очередь дизайнера: отбор задач", () => {
     expect(isDesignerTask({ layer: "none", mockupRequired: false, assignee: "designer" })).toBe(true);
     expect(isDesignerTask({ layer: "back", mockupRequired: false, assignee: "designer" })).toBe(true);
   });
+  it("фронт/бэк+фронт с непустым описанием дизайна дизайнеру не выдаётся", () => {
+    expect(isDesignerTask({ layer: "fullstack", design: "Use card grid", mockupRequired: false, assignee: null, hasAttachments: false })).toBe(false);
+    expect(isDesignerTask({ layer: "front", design: "White background layout", mockupRequired: false, assignee: null, hasAttachments: false })).toBe(false);
+  });
+  it("фронт/бэк+фронт с вложениями дизайнеру не выдаётся", () => {
+    expect(isDesignerTask({ layer: "front", design: null, mockupRequired: false, assignee: null, hasAttachments: true })).toBe(false);
+    expect(isDesignerTask({ layer: "fullstack", design: "", mockupRequired: false, assignee: null, hasAttachments: true })).toBe(false);
+  });
+  it("фронт/бэк+фронт без дизайна и без вложений — дизайнерская", () => {
+    expect(isDesignerTask({ layer: "front", design: null, mockupRequired: false, assignee: null, hasAttachments: false })).toBe(true);
+    expect(isDesignerTask({ layer: "fullstack", design: "", mockupRequired: false, assignee: null, hasAttachments: false })).toBe(true);
+  });
   it("продакт берёт только задачи с открытыми вопросами", () => {
     expect(isProductTask({ needs: [] })).toBe(false);
     expect(isProductTask({ needs: ["Ключ API"] })).toBe(true);

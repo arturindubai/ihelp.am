@@ -205,9 +205,18 @@ export function isOwnerQuestion(task: { status: string; blockedOn: string | null
   return task.status === "blocked" && (task.blockedOn === "owner" || task.blockedOn === "product");
 }
 
-/** Дизайнер берёт только фронт/бэк+фронт, задачи с флагом макета или дизайн-исследование (assignee=designer) */
-export function isDesignerTask(t: { layer: string; mockupRequired?: boolean | null; assignee?: string | null }): boolean {
-  return t.layer === "front" || t.layer === "fullstack" || !!t.mockupRequired || t.assignee === "designer";
+/**
+ * Дизайнер берёт: задачи с флагом макета; дизайн-исследования (assignee=designer);
+ * фронт/бэк+фронт без описания дизайна и без вложений — задача ждёт дизайна, а не кода.
+ * Логика совпадает с designerQueue() в workers.ts.
+ */
+export function isDesignerTask(t: { layer: string; mockupRequired?: boolean | null; assignee?: string | null; design?: string | null; hasAttachments?: boolean }): boolean {
+  if (t.mockupRequired) return true;
+  if (t.assignee === "designer") return true;
+  if (t.layer === "front" || t.layer === "fullstack") {
+    return !t.design?.trim() && !t.hasAttachments;
+  }
+  return false;
 }
 
 /** Продакт берёт только задачи с открытыми вопросами к нему */
