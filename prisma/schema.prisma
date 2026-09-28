@@ -230,6 +230,8 @@ model Master {
   reviewsCount   Int       @default(0)
   jobsCount      Int       @default(0)
   sort           Int       @default(0)
+  /// Telegram chat ID в @ihelp_staff_bot — заполняется при первом /start мастера боту
+  staffChatId    String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
