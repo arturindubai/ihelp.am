@@ -6,6 +6,7 @@ import { requireRole } from "../auth";
 import { db } from "../db";
 import { setVisitStatus } from "../services/visits";
 import { notifyMasterAssigned } from "../services/workerNotify";
+import { notifyClientMasterAssigned } from "../services/bookingNotify";
 import { audit } from "../audit";
 import { assignMasterToVisit } from "../services/operatorService";
 
@@ -38,6 +39,7 @@ export async function operatorAssignMasterAction(visitId: string, masterId: stri
   await audit(u.id, "visit.assignMaster", "Visit", visitId, { from: prevMasterId, to: masterId });
   if (masterId && masterId !== prevMasterId) {
     await notifyMasterAssigned(visitId).catch(() => {});
+    await notifyClientMasterAssigned(visitId).catch(() => {});
   }
   rv();
   return { ok: true };

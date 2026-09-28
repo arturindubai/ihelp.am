@@ -381,7 +381,16 @@
     "note": "",
     "client": "",
     "stats": "",
-    "schedule": ""
+    "schedule": "",
+    "settingsTab": "Կարգավորումներ",
+    "settings": {
+      "notifyTitle": "Ծանուցումներ",
+      "receiveNotify": "Ստանալ ծանուցումներ այցի մասին",
+      "notifyOff": "Դուք չեք ստանա ծանուցումներ այցերի մասին",
+      "notConnected": "Telegram-ը կապված չէ:",
+      "writeBot": "Գրել բոտին",
+      "saveError": "Չհաջողվեց պահել: Կրկին փորձեք:"
+    }
   },
   "operator": {
     "title": "",
@@ -849,6 +858,7 @@
     },
     "staff": {
       "title": "",
+      "manageSub": "",
       "hint": "",
       "phone": "",
       "role": "",
@@ -870,7 +880,48 @@
       "revokeAccess": "",
       "revokeConfirm": "",
       "lastLogin": "",
-      "lastLoginNever": ""
+      "lastLoginNever": "",
+      "empty": "",
+      "loginMethods": "",
+      "permissions": "",
+      "fieldPhone": "",
+      "fieldEmail": "",
+      "fieldTelegram": "",
+      "notLinked": "",
+      "editField": "",
+      "saveField": "",
+      "cancelField": "",
+      "fromRole": "",
+      "savePermissions": "",
+      "confirmPermissions": "",
+      "confirmYes": "",
+      "confirmNo": "",
+      "settingsStaffOwnerOnly": "",
+      "saveError": "",
+      "phoneInvalid": "",
+      "phoneTaken": "",
+      "phoneRequired": "",
+      "telegramInvalid": "",
+      "telegramTaken": "",
+      "savedMsg": "",
+      "ownerFullAccess": "",
+      "sections": {
+        "control": "",
+        "dashboard": "",
+        "orders": "",
+        "schedule": "",
+        "clients": "",
+        "reviews": "",
+        "services": "",
+        "masters": "",
+        "promos": "",
+        "banners": "",
+        "pages": "",
+        "content": "",
+        "translations": "",
+        "analytics": "",
+        "log": ""
+      }
     },
     "log": {
       "title": "",
@@ -1058,6 +1109,15 @@
       "label": "",
       "hint": "",
       "notifications": ""
+    }
+  },
+  "notify": {
+    "order": {
+      "created": "",
+      "masterAssigned": "",
+      "rescheduled": "",
+      "cancelled": "",
+      "completed": ""
     }
   }
 }

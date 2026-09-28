@@ -3,7 +3,7 @@ import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
 import { getCurrentUser } from "@/server/auth";
-import { sectionsFor } from "@/server/admin";
+import { sectionsForUser } from "@/lib/adminAccess";
 import { MAX_UPLOAD_BYTES, prepareUpload } from "@/lib/images";
 
 /**
@@ -12,7 +12,7 @@ import { MAX_UPLOAD_BYTES, prepareUpload } from "@/lib/images";
  */
 export async function POST(req: Request) {
   const u = await getCurrentUser();
-  if (!u || !sectionsFor(u.role).includes("services")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!u || !sectionsForUser(u).includes("services")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const form = await req.formData();
   const file = form.get("file");
   if (!(file instanceof File)) return NextResponse.json({ error: "no file" }, { status: 400 });

@@ -11,6 +11,8 @@ import {
   ccIntakeAction,
   ccMessageToIntakeAction,
   ccOwnerAnswerAction,
+  ccOwnerAnswerManyAction,
+  ccOwnerPostpone3DaysAction,
   ccOwnerPostponeAction,
   ccReadMessageAction,
   ccRejectManyAction,
@@ -778,6 +780,226 @@ export function MessageActions({ id, unread, replyTo }: { id: string; unread: bo
             {t("send")}
           </button>
         </form>
+      )}
+    </div>
+  );
+}
+
+/* ───────────── Вкладка «Нужен ты»: интерактивная часть ───────────── */
+
+export type YouCardTask = { key: string; title: string; href: string; priority: string };
+export type YouCard = {
+  id: string;
+  question: string;
+  groupType: "variant" | "data" | "auth" | "rule";
+  tasks: YouCardTask[];
+  variants: { id: string; text: string }[] | null;
+  isUrgent: boolean;
+};
+export type YouPostponedTask = {
+  key: string;
+  title: string;
+  href: string;
+  priority: string;
+  reason: string | null;
+  updatedAt: string;
+};
+
+const GROUP_ICONS: Record<YouCard["groupType"], string> = {
+  variant: "🗳️",
+  data: "📎",
+  auth: "🔑",
+  rule: "✅",
+};
+
+/** Карточка одного вопроса: полный текст, чипы задач, кнопки вариантов или ввод текста, «Отложить на 3 дня» */
+function YouQuestionCard({ card, onDone }: { card: YouCard; onDone: (id: string) => void }) {
+  const t = useTranslations("admin.cc.you");
+  const { pending, error, run } = useAct();
+  const [replyText, setReplyText] = useState("");
+  const [visible, setVisible] = useState(true);
+
+  const answer = (text: string) =>
+    run(() => ccOwnerAnswerManyAction(card.tasks.map((x) => x.key), text), () => {
+      setVisible(false);
+      setTimeout(() => onDone(card.id), 300);
+    });
+
+  const postpone = () =>
+    run(() => ccOwnerPostpone3DaysAction(card.tasks.map((x) => x.key)), () => {
+      setVisible(false);
+      setTimeout(() => onDone(card.id), 300);
+    });
+
+  return (
+    <div
+      className={cn(
+        "rounded-card border bg-paper p-4 transition-all duration-300",
+        card.isUrgent ? "border-bad-50 bg-bad-50/20" : "border-line",
+        !visible && "pointer-events-none scale-95 opacity-0",
+      )}
+    >
+      {card.isUrgent && (
+        <span className="chip mb-2 inline-block bg-bad-50 text-[10px] text-bad">{t("urgent")}</span>
+      )}
+      {card.question && <p className="mb-2 whitespace-pre-wrap text-sm font-medium">{card.question}</p>}
+      {card.tasks.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {card.tasks.map((task) => (
+            <Link key={task.key} href={task.href} scroll={false} className="chip bg-surface text-[11px] hover:bg-brand-50 hover:text-brand">
+              {task.key}
+            </Link>
+          ))}
+        </div>
+      )}
+      {card.variants ? (
+        <div className="flex flex-wrap gap-2">
+          {card.variants.map((v) => (
+            <button
+              key={v.id}
+              disabled={pending}
+              className="rounded-lg border border-brand px-3 py-1.5 text-sm text-brand transition-colors hover:bg-brand hover:text-inverse disabled:opacity-50"
+              onClick={() => answer(t("answerVariant", { id: v.id }))}
+            >
+              {v.id}) {v.text}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <form
+          className="flex gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            answer(replyText);
+          }}
+        >
+          <input
+            className="input h-9 flex-1 py-1 text-sm"
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            placeholder={t("replyPh")}
+          />
+          <button className="btn-primary btn-sm" disabled={pending || replyText.trim().length < 2}>
+            {t("replySend")}
+          </button>
+        </form>
+      )}
+      <div className="mt-2 flex justify-end">
+        <button className="btn-ghost btn-sm text-muted" disabled={pending} onClick={postpone}>
+          {t("postpone3days")}
+        </button>
+      </div>
+      {error && <p className="mt-1 text-xs text-bad">{error}</p>}
+    </div>
+  );
+}
+
+/**
+ * Интерактивная секция вопросов во вкладке «Нужен ты»: фильтры, группы, карточки.
+ * Принимает сериализованные данные от серверного компонента YouTab.
+ */
+export function YouQuestionsSection({
+  cards,
+  postponed,
+}: {
+  cards: YouCard[];
+  postponed: YouPostponedTask[];
+}) {
+  const t = useTranslations("admin.cc.you");
+  const [filter, setFilter] = useState<"all" | "urgent" | "postponed">("all");
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+
+  const hide = (id: string) => setHidden((prev) => new Set([...prev, id]));
+  const visibleCards = cards.filter((c) => !hidden.has(c.id));
+  const urgentCards = visibleCards.filter((c) => c.isUrgent);
+  const activeCount = visibleCards.length;
+  const urgentCount = urgentCards.length;
+  const postponedCount = postponed.length;
+
+  const displayCards = filter === "urgent" ? urgentCards : filter === "postponed" ? [] : visibleCards;
+
+  const byGroup = (
+    [
+      ["variant", displayCards.filter((c) => c.groupType === "variant")],
+      ["data", displayCards.filter((c) => c.groupType === "data")],
+      ["auth", displayCards.filter((c) => c.groupType === "auth")],
+      ["rule", displayCards.filter((c) => c.groupType === "rule")],
+    ] as [YouCard["groupType"], YouCard[]][]
+  ).filter(([, g]) => g.length > 0);
+
+  const allEmpty = activeCount === 0 && postponedCount === 0;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="text-base font-semibold">
+          {allEmpty ? t("allDone") : t("headerCount", { n: activeCount })}
+        </h2>
+      </div>
+
+      {(activeCount > 0 || postponedCount > 0) && (
+        <div className="flex flex-wrap gap-1">
+          {(
+            [
+              ["all", t("filterAll", { n: activeCount })] as const,
+              ["urgent", t("filterUrgent", { n: urgentCount })] as const,
+              ["postponed", t("filterPostponed", { n: postponedCount })] as const,
+            ] as [typeof filter, string][]
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              className={cn(
+                "rounded-lg px-3 py-1 text-sm transition-colors",
+                filter === key ? "bg-brand text-inverse" : "bg-surface text-ink hover:bg-brand-50",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {filter !== "postponed" && (
+        <>
+          {byGroup.length === 0 && activeCount === 0 && (
+            <p className="py-6 text-center text-sm text-muted">{t("allDone")}</p>
+          )}
+          {byGroup.map(([groupType, groupCards]) => (
+            <div key={groupType} className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-base">{GROUP_ICONS[groupType]}</span>
+                <span className="font-medium">{t(`groups.${groupType}`)}</span>
+                <span className="chip bg-brand-50 text-[11px] text-brand">{groupCards.length}</span>
+              </div>
+              {groupCards.map((card) => (
+                <YouQuestionCard key={card.id} card={card} onDone={hide} />
+              ))}
+            </div>
+          ))}
+        </>
+      )}
+
+      {filter === "postponed" && (
+        <>
+          {postponedCount === 0 && (
+            <p className="py-6 text-center text-sm text-muted">{t("noPostponed")}</p>
+          )}
+          {postponedCount > 0 && (
+            <p className="text-sm text-muted">{t("postponedSectionHint")}</p>
+          )}
+          <div className="space-y-2">
+            {postponed.map((task) => (
+              <div key={task.key} className="rounded-card border border-line bg-paper p-3 text-sm">
+                <Link href={task.href} scroll={false} className="font-medium hover:underline">
+                  <span className="mr-2 font-mono text-xs text-muted">{task.key}</span>
+                  {task.title}
+                </Link>
+                {task.reason && <p className="mt-1 text-xs text-muted">{task.reason}</p>}
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

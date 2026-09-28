@@ -347,9 +347,9 @@ async function main() {
         cc(["lock", a.key, "--agent", "deployer"]);
         await spawn("deployer", "deployer", a.key, pools.deployer.model, extra);
       } else if (a.pool === "product") {
-        await spawn("product", "product", null, pools.product.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
+        await spawn("product", a.agent, null, pools.product.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
       } else if (a.pool === "designer") {
-        await spawn("designer", "designer", null, pools.designer.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
+        await spawn("designer", a.agent, null, pools.designer.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
       } else if (a.pool === "triage") {
         await spawn("triage", "triage", null, pools.triage.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
         if (a.keys?.length) {
@@ -366,14 +366,17 @@ async function main() {
         const heldKey = busyMatch[1];
         const unitActive = hasActiveWorkerUnit(a.agent);
         const claim = (plan.inProgressClaims ?? []).find((c) => c.key === heldKey && c.agent === a.agent);
-        // Если запись не найдена — неизвестное состояние, аренду не снимаем (зеркало leaseExpiredForClaim в dispatch-pause.ts)
-        const leaseExpired = claim !== undefined && (!claim.claimUntil || Date.parse(claim.claimUntil) <= Date.now());
-        if (!unitActive && leaseExpired) {
+        // Пульс устарел? Порог 10 минут; запись не найдена — неизвестное состояние, аренду не снимаем
+        // Зеркало функции shouldReleaseAgentBusy из src/lib/dispatch-lease.ts
+        const STALE_MS = 10 * 60_000;
+        const staleHeartbeat = claim !== undefined && (!claim.heartbeatAt || Date.parse(claim.heartbeatAt) <= Date.now() - STALE_MS);
+        if (!unitActive && staleHeartbeat) {
           log(`· ${a.agent}: занят ${heldKey} без запуска — снимаем аренду`);
           const r = await asAgent(a.agent, { action: "handoff", key: heldKey, text: "Аренда снята диспетчером: агент занят, запуск не создан." });
           if (r.error) log(`! не удалось снять аренду ${heldKey}: ${r.error}`);
         } else {
-          log(`· ${a.agent}: агент занят ${heldKey}, работает (юнит${unitActive ? " активен" : " нет"}, аренда ${leaseExpired ? "истекла" : "действует"})`);
+          const pulseState = !claim?.heartbeatAt ? "нет" : staleHeartbeat ? "устарел" : "свежий";
+          log(`· ${a.agent}: агент занят, работает — ${heldKey} (юнит${unitActive ? " активен" : " нет"}, пульс ${pulseState})`);
         }
       } else if (takenTask) {
         // задачу взяли, но запуск не создался — возвращаем в очередь
