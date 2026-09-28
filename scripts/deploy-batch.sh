@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # Выкладка пачкой: несколько протестированных задач одной сборкой.
-#   scripts/deploy-batch.sh KEY1 [KEY2 ...] [--no-test]
+#   scripts/deploy-batch.sh KEY1 [KEY2 ...] [--no-test] [--dry-run]
+#
+# Флаг --dry-run: проверка плана пачки без выкладки. Работает во временной рабочей копии
+#   (git worktree на origin/main), сливает ветки, гоняет scripts/check.sh на результате,
+#   делит при провале и печатает план: что войдёт в пачку, что исключено и почему, что
+#   пошло бы отдельно. Доску задач не трогает, deploy/update.sh не вызывает, временную
+#   копию удаляет. Принимает ветки по KEY: задача должна быть на проверке или иметь ветку
+#   task/KEY (origin или локальную). При --dry-run статус задачи — предупреждение, не стоп.
 #
 # Алгоритм:
 #   1. Проверить каждую задачу (статус, testedSha, ветка); разделить на безопасные и рискованные.
@@ -18,36 +25,73 @@ cd "$(dirname "$0")/.." || exit 2
 
 KEYS=()
 NOTEST=""
+DRY_RUN=""
 for arg in "$@"; do
   if [ "$arg" = "--no-test" ]; then
     [ -z "${CC_WORKER:-}" ] && NOTEST=1
+  elif [ "$arg" = "--dry-run" ]; then
+    DRY_RUN=1
   else
     KEYS+=("$arg")
   fi
 done
 
-[ ${#KEYS[@]} -gt 0 ] || { echo "Использование: scripts/deploy-batch.sh KEY1 [KEY2 ...] [--no-test]"; exit 2; }
-[ ${#KEYS[@]} -eq 1 ] && { echo "▶ Одна задача — используем deploy-task.sh"; exec scripts/deploy-task.sh "${KEYS[0]}" ${NOTEST:+--no-test}; }
+[ ${#KEYS[@]} -gt 0 ] || { echo "Использование: scripts/deploy-batch.sh KEY1 [KEY2 ...] [--no-test] [--dry-run]"; exit 2; }
+[ ${#KEYS[@]} -eq 1 ] && [ -z "$DRY_RUN" ] && { echo "▶ Одна задача — используем deploy-task.sh"; exec scripts/deploy-task.sh "${KEYS[0]}" ${NOTEST:+--no-test}; }
 
 AGENT="${CC_AGENT:-deployer}"
 cc() { node scripts/cc.mjs "$@" --agent "$AGENT"; }
 stop() { echo "✗ $1"; exit 2; }
 
-# Только из основной копии: рабочая копия задачи или песочница пересобрала бы прод
-[ "$(pwd -P)" = /opt/ihelp.am ] && [ "$(git rev-parse --git-dir)" = .git ] || stop "Выкладка — только из основной копии /opt/ihelp.am"
-mkdir -p data/deploys
-exec 9> data/deploy.lock
-flock -n 9 || stop "Уже идёт другая выкладка — жду своей очереди в следующий раз"
+# Переменные для dry-run (заполняются при DRY_RUN=1)
+DRY_TMPWT=""
+DRY_LOG=""
+DRY_CHECK_FAILED=()
+DRY_ORIG_DIR=""
 
-[ "$(git branch --show-current)" = main ] || stop "Основная копия не на main — выкладку не начинаю"
-[ -z "$(git status --porcelain)" ] || stop "В основной копии незакоммиченные изменения — выкладку не начинаю"
-git fetch -q origin || stop "Нет связи с GitHub"
-git merge --ff-only -q origin/main || stop "Локальный main разошёлся с origin/main — нужен человек"
+cleanup_dryrun() {
+  [ -z "$DRY_TMPWT" ] && return
+  cd /tmp 2>/dev/null || true
+  git -C "$DRY_ORIG_DIR" worktree remove --force "$DRY_TMPWT" 2>/dev/null || true
+  rm -rf "$DRY_TMPWT"
+  [ -n "${DRY_LOG:-}" ] && rm -f "$DRY_LOG" || true
+}
 
-prod_marker=$(< src/lib/deploy-marker.txt)
-prev=$(git rev-parse HEAD)
-log="data/deploys/batch-$(date +%Y%m%d-%H%M%S).log"
-echo "▶ Пачка [${KEYS[*]}], лог $log"
+if [ -n "$DRY_RUN" ]; then
+  # Режим проверки без выкладки: временная рабочая копия, прод и доска не трогаются
+  echo "▶ [DRY-RUN] Проверка пачки [${KEYS[*]}] без выкладки"
+  git fetch -q origin || stop "Нет связи с GitHub"
+  DRY_ORIG_DIR="$(pwd -P)"
+  DRY_TMPWT=$(mktemp -d /tmp/dryrun-batch-XXXXXX)
+  git worktree add --detach -q "$DRY_TMPWT" origin/main 2>/dev/null \
+    || { rm -rf "$DRY_TMPWT"; stop "Не удалось создать временную рабочую копию"; }
+  trap cleanup_dryrun EXIT
+  cd "$DRY_TMPWT" || stop "Не удалось перейти во временную рабочую копию"
+  # В режиме проверки cc-вызовы не меняют доску — только пишут в лог
+  cc() { echo "  [dry-run: cc $*]"; }
+  # Открываем dummy fd 9 — чтобы exec 9>&- в путях ниже не давал ошибку
+  exec 9>/dev/null
+  prev=$(git rev-parse HEAD)
+  DRY_LOG=$(mktemp /tmp/dryrun-log-XXXXXX.log)
+  log="$DRY_LOG"
+  echo "▶ [DRY-RUN] Временная копия: $DRY_TMPWT (origin/main @${prev:0:10})"
+else
+  # Только из основной копии: рабочая копия задачи или песочница пересобрала бы прод
+  [ "$(pwd -P)" = /opt/ihelp.am ] && [ "$(git rev-parse --git-dir)" = .git ] || stop "Выкладка — только из основной копии /opt/ihelp.am"
+  mkdir -p data/deploys
+  exec 9> data/deploy.lock
+  flock -n 9 || stop "Уже идёт другая выкладка — жду своей очереди в следующий раз"
+
+  [ "$(git branch --show-current)" = main ] || stop "Основная копия не на main — выкладку не начинаю"
+  [ -z "$(git status --porcelain)" ] || stop "В основной копии незакоммиченные изменения — выкладку не начинаю"
+  git fetch -q origin || stop "Нет связи с GitHub"
+  git merge --ff-only -q origin/main || stop "Локальный main разошёлся с origin/main — нужен человек"
+
+  prod_marker=$(< src/lib/deploy-marker.txt)
+  prev=$(git rev-parse HEAD)
+  log="data/deploys/batch-$(date +%Y%m%d-%H%M%S).log"
+  echo "▶ Пачка [${KEYS[*]}], лог $log"
+fi
 
 # ─── Шаг 1: проверить задачи, разделить на безопасные и рискованные ───────────
 VALID_KEYS=()
@@ -55,23 +99,44 @@ RISKY_KEYS=()
 SKIP_KEYS=()
 
 for KEY in "${KEYS[@]}"; do
-  card=$(node scripts/cc.mjs show "$KEY" --json 2>/dev/null) || { echo "! $KEY не найдена — пропускаем"; SKIP_KEYS+=("$KEY"); continue; }
-  task_status=$(jq -r '.task.status' <<< "$card")
-  tested=$(jq -r '.task.testedSha // ""' <<< "$card")
   branch="task/$KEY"
 
-  [ "$task_status" = review ] || { echo "! $KEY не на проверке (статус $task_status) — пропускаем"; SKIP_KEYS+=("$KEY"); continue; }
+  if [ -n "$DRY_RUN" ]; then
+    # В dry-run: ветка обязательна (origin или локальная), CC статус — предупреждение
+    head=$(git rev-parse --verify -q "origin/$branch" 2>/dev/null) \
+      || head=$(git rev-parse --verify -q "$branch" 2>/dev/null) \
+      || { echo "▶ [DRY-RUN] $KEY: ветки $branch нет ни на origin, ни локально — пропускаем"; SKIP_KEYS+=("$KEY"); continue; }
+    card=$(node scripts/cc.mjs show "$KEY" --json 2>/dev/null) || true
+    if [ -n "${card:-}" ]; then
+      task_status=$(jq -r '.task.status // ""' <<< "$card")
+      tested=$(jq -r '.task.testedSha // ""' <<< "$card")
+      [ "$task_status" != review ] && echo "▶ [DRY-RUN] ПРЕДУПРЕЖДЕНИЕ: $KEY статус «${task_status:-?}» (не на проверке)"
+      if [ -z "$NOTEST" ] && [ -n "$tested" ] && [[ "$head" != "$tested"* ]]; then
+        echo "▶ [DRY-RUN] ПРЕДУПРЕЖДЕНИЕ: $KEY testedSha не совпадает с HEAD ветки"
+      fi
+    else
+      echo "▶ [DRY-RUN] ПРЕДУПРЕЖДЕНИЕ: $KEY не найдена в Control Center"
+    fi
+  else
+    card=$(node scripts/cc.mjs show "$KEY" --json 2>/dev/null) || { echo "! $KEY не найдена — пропускаем"; SKIP_KEYS+=("$KEY"); continue; }
+    task_status=$(jq -r '.task.status' <<< "$card")
+    tested=$(jq -r '.task.testedSha // ""' <<< "$card")
 
-  head=$(git rev-parse --verify -q "origin/$branch" 2>/dev/null) || { echo "! $KEY: ветки $branch нет в репозитории — пропускаем"; SKIP_KEYS+=("$KEY"); continue; }
+    [ "$task_status" = review ] || { echo "! $KEY не на проверке (статус $task_status) — пропускаем"; SKIP_KEYS+=("$KEY"); continue; }
 
-  if [ -z "$NOTEST" ] && { [ -z "$tested" ] || [[ "$head" != "$tested"* ]]; }; then
-    echo "! $KEY: проверен «${tested:-никакой}», в ветке $head — нужна проверка тестировщиком, пропускаем"
-    SKIP_KEYS+=("$KEY")
-    continue
+    head=$(git rev-parse --verify -q "origin/$branch" 2>/dev/null) || { echo "! $KEY: ветки $branch нет в репозитории — пропускаем"; SKIP_KEYS+=("$KEY"); continue; }
+
+    if [ -z "$NOTEST" ] && { [ -z "$tested" ] || [[ "$head" != "$tested"* ]]; }; then
+      echo "! $KEY: проверен «${tested:-никакой}», в ветке $head — нужна проверка тестировщиком, пропускаем"
+      SKIP_KEYS+=("$KEY")
+      continue
+    fi
   fi
 
   # Рискованные: миграции базы, правки скриптов выкладки / диспетчера / cc, docker-compose, package
-  risky_files=$(git diff --name-only "origin/main...origin/$branch" 2>/dev/null \
+  # В dry-run используем уже разрешённый $head (SHA, работает и для локальных веток)
+  if [ -n "$DRY_RUN" ]; then local_diff_ref="$head"; else local_diff_ref="origin/$branch"; fi
+  risky_files=$(git diff --name-only "origin/main...$local_diff_ref" 2>/dev/null \
     | grep -E '^(prisma/migrations/|scripts/deploy-task\.sh|scripts/deploy-batch\.sh|scripts/dispatcher\.mjs|scripts/cc\.mjs|scripts/worker-run\.sh|scripts/check\.sh|deploy/update\.sh|deploy/rollback\.sh|deploy/smoke\.sh|deploy/gate\.sh|deploy/Caddyfile|docker-compose\.yml|package\.json|package-lock\.json)' \
     || true)
 
@@ -88,6 +153,17 @@ echo "▶ Безопасных: ${#VALID_KEYS[@]}, рискованных: ${#RI
 # ─── Если безопасных нет — только рискованные поштучно ────────────────────────
 if [ ${#VALID_KEYS[@]} -eq 0 ]; then
   echo "▶ Безопасных задач нет — все выкладываем по одной" | tee -a "$log"
+  if [ -n "$DRY_RUN" ]; then
+    echo ""
+    echo "▶ [DRY-RUN] ══════════════════════ ПЛАН ПАЧКИ ══════════════════════"
+    echo "▶ [DRY-RUN] Запрошено: [${KEYS[*]}]"
+    echo "▶ [DRY-RUN] Безопасных: 0, рискованных: ${#RISKY_KEYS[@]}, пропущено: ${#SKIP_KEYS[@]}"
+    echo "▶ [DRY-RUN] Вошли бы в пачку: (нет — все задачи рискованные или пропущены)"
+    [ ${#RISKY_KEYS[@]} -gt 0 ] && echo "▶ [DRY-RUN] Рискованные (выложить отдельно): [${RISKY_KEYS[*]}]"
+    [ ${#SKIP_KEYS[@]} -gt 0 ] && echo "▶ [DRY-RUN] Пропущено: [${SKIP_KEYS[*]}]"
+    echo "▶ [DRY-RUN] ═══════════════════════════════════════════════════════"
+    exit 0
+  fi
   exec 9>&-
   exit_code=0
   for KEY in "${RISKY_KEYS[@]}"; do
@@ -100,8 +176,8 @@ fi
 CONFLICT_RETURNED=()
 BATCH_RESULT=()
 
-# Попытка смёрджить набор задач; конфликтующие исключаются и возвращаются разработчику
-# Записывает имена смёрджанных задач в BATCH_MERGED (глобальный массив)
+# Попытка смёрджить набор задач; конфликтующие исключаются и возвращаются разработчику.
+# Записывает имена смёрджанных задач в BATCH_MERGED (глобальный массив).
 BATCH_MERGED=()
 do_merges() {
   local keys=("$@")
@@ -109,6 +185,10 @@ do_merges() {
   git reset -q --hard "$prev"
   for KEY in "${keys[@]}"; do
     local branch="origin/task/$KEY"
+    # В dry-run: если ветки нет на origin, пробуем локальную
+    if [ -n "$DRY_RUN" ]; then
+      git rev-parse --verify -q "$branch" >/dev/null 2>&1 || branch="task/$KEY"
+    fi
     local title
     title=$(node scripts/cc.mjs show "$KEY" --json 2>/dev/null | jq -r '.task.title' 2>/dev/null || echo "$KEY")
     if git merge --no-ff -q "$branch" -m "Слияние пачки task/$KEY: $title" >> "$log" 2>&1; then
@@ -157,6 +237,7 @@ find_deployable() {
     cc return "$bad" "check.sh не прошёл с этой задачей в пачке (задача одна). Исправьте ошибку и сдайте снова.
 ${tail_txt:-(см. лог /opt/ihelp.am/${log})}" >> "$log" 2>&1 || true
     echo "▶ $bad check.sh → возвращён разработчику" | tee -a "$log"
+    DRY_CHECK_FAILED+=("$bad")
     return 1
   fi
 
@@ -176,6 +257,20 @@ find_deployable "${VALID_KEYS[@]}"
 if [ ${#BATCH_RESULT[@]} -eq 0 ]; then
   echo "✗ Ни одна задача из пачки не прошла check.sh" | tee -a "$log"
   git reset -q --hard "$prev"
+  if [ -n "$DRY_RUN" ]; then
+    echo ""
+    echo "▶ [DRY-RUN] ══════════════════════ ПЛАН ПАЧКИ ══════════════════════"
+    echo "▶ [DRY-RUN] Запрошено: [${KEYS[*]}]"
+    echo "▶ [DRY-RUN] Безопасных: ${#VALID_KEYS[@]}, рискованных: ${#RISKY_KEYS[@]}, пропущено: ${#SKIP_KEYS[@]}"
+    echo "▶ [DRY-RUN] Вошли бы в пачку: (нет — check.sh не прошёл ни для одного поднабора)"
+    [ ${#CONFLICT_RETURNED[@]} -gt 0 ] && echo "▶ [DRY-RUN] Конфликт слияния: [${CONFLICT_RETURNED[*]}]"
+    [ ${#DRY_CHECK_FAILED[@]} -gt 0 ] && echo "▶ [DRY-RUN] Не прошли check.sh: [${DRY_CHECK_FAILED[*]}]"
+    [ ${#RISKY_KEYS[@]} -gt 0 ] && echo "▶ [DRY-RUN] Рискованные (выложить отдельно): [${RISKY_KEYS[*]}]"
+    [ ${#SKIP_KEYS[@]} -gt 0 ] && echo "▶ [DRY-RUN] Пропущено: [${SKIP_KEYS[*]}]"
+    echo "▶ [DRY-RUN] ═══════════════════════════════════════════════════════"
+    exec 9>&- 2>/dev/null || true
+    exit 1
+  fi
   for KEY in "${VALID_KEYS[@]}"; do
     cc note "$KEY" "Пачковая выкладка не начата: check.sh провалился на всём наборе. Задача остаётся на проверке." --error >> "$log" 2>&1 || true
   done
@@ -189,6 +284,22 @@ if [ ${#BATCH_RESULT[@]} -eq 0 ]; then
 fi
 
 echo "▶ Пачка готова к выкладке: [${BATCH_RESULT[*]}]" | tee -a "$log"
+
+# В режиме проверки — печатаем план и выходим без выкладки
+if [ -n "$DRY_RUN" ]; then
+  echo ""
+  echo "▶ [DRY-RUN] ══════════════════════ ПЛАН ПАЧКИ ══════════════════════"
+  echo "▶ [DRY-RUN] Запрошено: [${KEYS[*]}]"
+  echo "▶ [DRY-RUN] Безопасных: ${#VALID_KEYS[@]}, рискованных: ${#RISKY_KEYS[@]}, пропущено: ${#SKIP_KEYS[@]}"
+  echo "▶ [DRY-RUN] Вошли бы в пачку: [${BATCH_RESULT[*]}]"
+  [ ${#CONFLICT_RETURNED[@]} -gt 0 ] && echo "▶ [DRY-RUN] Конфликт слияния (вернули бы разработчику): [${CONFLICT_RETURNED[*]}]"
+  [ ${#DRY_CHECK_FAILED[@]} -gt 0 ] && echo "▶ [DRY-RUN] Не прошли check.sh (вернули бы разработчику): [${DRY_CHECK_FAILED[*]}]"
+  [ ${#RISKY_KEYS[@]} -gt 0 ] && echo "▶ [DRY-RUN] Рискованные (выложить отдельно): [${RISKY_KEYS[*]}]"
+  [ ${#SKIP_KEYS[@]} -gt 0 ] && echo "▶ [DRY-RUN] Пропущено: [${SKIP_KEYS[*]}]"
+  echo "▶ [DRY-RUN] check.sh прошёл — пачка готова к выкладке"
+  echo "▶ [DRY-RUN] ═══════════════════════════════════════════════════════"
+  exit 0
+fi
 
 # ─── Шаг 4: бэкап при миграции, затем сборка и smoke ─────────────────────────
 merge=$(git rev-parse HEAD)
