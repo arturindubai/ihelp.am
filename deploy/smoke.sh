@@ -38,7 +38,7 @@ echo "Уведомления"
 tech_alert_ok() {
   curl -s -m 20 "$BASE/api/health?check=alert" | grep -q '"ok":true'
 }
-check "адресат тех-алертов задан" tech_alert_ok
+warn "адресат тех-алертов задан (нет — красная плашка в Здоровье)" tech_alert_ok
 
 echo "Страницы ($BASE)"
 check "/api/health → {\"ok\":true}" [ "$(curl -s -m 20 "$BASE/api/health")" = '{"ok":true}' ]
