@@ -15,3 +15,13 @@ export function parseVariants(text: string): { question: string; variants: { id:
   }
   return { question: text.slice(0, markers[0].index!).trim(), variants };
 }
+
+/**
+ * Формирует причину блокировки при откладывании на N дней.
+ * Исходный вопрос сохраняется после даты: триаж восстановит блокировку на владельце после разблокировки по дате.
+ */
+export function buildPostponeReason(untilStr: string, originalReason: string): string {
+  const base = `Отложено до ${untilStr}`;
+  const trimmed = originalReason.trim();
+  return trimmed ? `${base}. ${trimmed}` : base;
+}

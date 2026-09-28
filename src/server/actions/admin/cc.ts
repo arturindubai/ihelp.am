@@ -4,10 +4,11 @@ import { z } from "zod";
 import { requireSection } from "../../admin";
 import { audit } from "../../audit";
 import { addComment, linkErrorToTask, saveTask, updateTask, type TaskContent } from "../../services/cc";
-import { CcError, approveMockup, retriage, returnDesign, transition } from "../../services/ccWork";
+import { CcError, approveMockup, reblockOn, retriage, returnDesign, transition, type Actor } from "../../services/ccWork";
 import { saveEpic, type EpicContent } from "../../services/epics";
 import { deleteAttachment } from "../../services/attachments";
 import { EPIC_STATUSES, OWNERS, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
+import { buildPostponeReason } from "@/lib/cc-owner-q";
 import { BLOCKED_ON, type TaskStatusKey } from "@/lib/cc-flow";
 import { taskContentSchema } from "@/lib/cc-schema";
 import { EVERY_MIN, MODELS, MODES, POOLS, WORKERS_COMMANDS, type Pool } from "@/lib/workers";
@@ -156,19 +157,26 @@ export async function ccOwnerAnswerManyAction(keys: string[], text: string) {
 }
 
 /**
- * Отложить группу вопросов на 3 дня: задачи переводятся в blockedOn: external с blockedUntil.
- * Сторож вернёт их на разбор через 3 дня автоматически.
+ * Отложить группу вопросов на 3 дня: blockedOn меняется на external с blockedUntil.
+ * Исходный вопрос сохраняется в причине («Отложено до <дата>. <вопрос>»), событие пишется в историю.
+ * Сторож вернёт задачу на разбор через 3 дня, триаж увидит вопрос в причине блокировки.
  */
 export async function ccOwnerPostpone3DaysAction(keys: string[]) {
   const u = await requireSection("control");
   if (!keys.length) return { ok: false as const, error: "empty" };
   const until = new Date(Date.now() + 3 * 24 * 3600_000);
   const untilStr = until.toLocaleDateString("ru-RU", { timeZone: "Asia/Yerevan", day: "numeric", month: "long" });
+  const actor: Actor = { name: who(u), role: u.role === "OWNER" ? "owner" : "cto", via: "ui" };
   for (const key of keys) {
-    const task = await db.task.findUnique({ where: { key }, select: { status: true, blockedOn: true } });
+    const task = await db.task.findUnique({ where: { key }, select: { id: true, status: true, blockedOn: true, blockedReason: true } });
     if (!task || task.status !== "blocked" || !["owner", "product"].includes(task.blockedOn ?? "")) continue;
-    await db.task.update({ where: { key }, data: { blockedOn: "external", blockedReason: `Отложено до ${untilStr}`, blockedUntil: until, updatedAt: new Date() } });
-    await addComment(key, `Отложено на 3 дня (до ${untilStr})`, who(u));
+    const originalReason = task.blockedReason?.trim() ?? "";
+    // Сохраняем исходный вопрос: триаж сможет восстановить блокировку на владельце после разблокировки по дате
+    const newReason = buildPostponeReason(untilStr, originalReason);
+    // reblockOn записывает событие в историю (как reblock) и пишет комментарий в ленту
+    await reblockOn(key, "external", newReason, actor);
+    // blockedUntil устанавливается отдельно — reblockOn его не трогает
+    await db.task.update({ where: { id: task.id }, data: { blockedUntil: until } });
     await audit(u.id, "cc.owner.postpone", "Task", key);
   }
   rAll();

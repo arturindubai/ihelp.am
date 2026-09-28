@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseVariants } from "./cc-owner-q";
+import { buildPostponeReason, parseVariants } from "./cc-owner-q";
 
 describe("parseVariants", () => {
   it("возвращает null если вариантов меньше двух", () => {
@@ -68,5 +68,22 @@ describe("parseVariants", () => {
     expect(r).not.toBeNull();
     expect(r!.variants[0]).toEqual({ id: "A", text: "да" });
     expect(r!.variants[1]).toEqual({ id: "B", text: "нет" });
+  });
+});
+
+describe("buildPostponeReason", () => {
+  it("включает исходный вопрос после даты", () => {
+    const result = buildPostponeReason("1 октября", "Выбрать вариант? А) Да Б) Нет");
+    expect(result).toBe("Отложено до 1 октября. Выбрать вариант? А) Да Б) Нет");
+  });
+
+  it("возвращает только дату если вопрос пустой", () => {
+    const result = buildPostponeReason("1 октября", "");
+    expect(result).toBe("Отложено до 1 октября");
+  });
+
+  it("обрезает пробелы исходного вопроса", () => {
+    const result = buildPostponeReason("5 ноября", "  Прислать логотип  ");
+    expect(result).toBe("Отложено до 5 ноября. Прислать логотип");
   });
 });

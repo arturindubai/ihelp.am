@@ -1451,6 +1451,7 @@
         "filterUrgent": "Urgent ({n})",
         "filterPostponed": "Postponed ({n})",
         "noPostponed": "No postponed questions",
+        "postponedSectionHint": "Tasks with external blocks: postponed by owner and waiting for external events.",
         "urgent": "Urgent",
         "groups": {
           "variant": "Choose an option",

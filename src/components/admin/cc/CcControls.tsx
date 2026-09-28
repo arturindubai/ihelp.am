@@ -971,6 +971,9 @@ export function YouQuestionsSection({
           {postponedCount === 0 && (
             <p className="py-6 text-center text-sm text-muted">{t("noPostponed")}</p>
           )}
+          {postponedCount > 0 && (
+            <p className="text-sm text-muted">{t("postponedSectionHint")}</p>
+          )}
           <div className="space-y-2">
             {postponed.map((task) => (
               <div key={task.key} className="rounded-card border border-line bg-paper p-3 text-sm">
