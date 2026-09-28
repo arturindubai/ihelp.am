@@ -70,9 +70,9 @@ for KEY in "${KEYS[@]}"; do
     continue
   fi
 
-  # Рискованные: миграции базы или правки скриптов выкладки / диспетчера
+  # Рискованные: миграции базы, правки скриптов выкладки / диспетчера / cc, docker-compose, package
   risky_files=$(git diff --name-only "origin/main...origin/$branch" 2>/dev/null \
-    | grep -E '^(prisma/migrations/|scripts/deploy-task\.sh|scripts/deploy-batch\.sh|scripts/dispatcher\.mjs|deploy/update\.sh|deploy/rollback\.sh)' \
+    | grep -E '^(prisma/migrations/|scripts/deploy-task\.sh|scripts/deploy-batch\.sh|scripts/dispatcher\.mjs|scripts/cc\.mjs|scripts/worker-run\.sh|scripts/check\.sh|deploy/update\.sh|deploy/rollback\.sh|deploy/smoke\.sh|deploy/gate\.sh|deploy/Caddyfile|docker-compose\.yml|package\.json|package-lock\.json)' \
     || true)
 
   if [ -n "$risky_files" ]; then
@@ -114,14 +114,15 @@ do_merges() {
     if git merge --no-ff -q "$branch" -m "Слияние пачки task/$KEY: $title" >> "$log" 2>&1; then
       BATCH_MERGED+=("$KEY")
     else
+      # Читаем конфликтные файлы ДО abort — после abort список всегда пустой
+      local cfiles
+      cfiles=$(git diff --name-only --diff-filter=U 2>/dev/null | tr '\n' ', ')
       git merge --abort >> "$log" 2>&1
       # Вернуть только один раз
       local already=false
       for ret in "${CONFLICT_RETURNED[@]:-}"; do [ "$ret" = "$KEY" ] && already=true && break; done
       if ! $already; then
         CONFLICT_RETURNED+=("$KEY")
-        local cfiles
-        cfiles=$(git diff --name-only --diff-filter=U 2>/dev/null | tr '\n' ', ')
         cc return "$KEY" "Конфликт слияния в пачке: ${cfiles%,}. Обновите ветку (git merge origin/main) и сдайте снова." >> "$log" 2>&1 || true
         echo "▶ $KEY конфликт → возвращён разработчику" | tee -a "$log"
       fi
@@ -129,8 +130,9 @@ do_merges() {
   done
 }
 
-# Найти наибольший работающий поднабор через последовательное двоичное деление
-# При провале check.sh делим пополам и пробуем снова
+# Найти наибольший работающий поднабор через последовательное двоичное деление.
+# При провале check.sh делим пополам и проверяем каждую половину независимо.
+# Задача, которая одна не проходит check.sh, возвращается разработчику.
 find_deployable() {
   local keys=("$@")
   [ ${#keys[@]} -eq 0 ] && return 1
@@ -148,11 +150,25 @@ find_deployable() {
   echo "! CHECK FAILED для [${BATCH_MERGED[*]}]" | tee -a "$log"
   git reset -q --hard "$prev"
 
-  [ ${#BATCH_MERGED[@]} -le 1 ] && return 1
+  if [ ${#BATCH_MERGED[@]} -eq 1 ]; then
+    # Одиночная задача провалила check.sh — возвращаем разработчику, чтобы не блокировать очередь
+    local bad="${BATCH_MERGED[0]}"
+    local tail_txt; tail_txt=$(grep -E 'error|Error|✗|FAILED|Expected|Cannot' "$log" | tail -n 5 | head -c 500 || true)
+    cc return "$bad" "check.sh не прошёл с этой задачей в пачке (задача одна). Исправьте ошибку и сдайте снова.
+${tail_txt:-(см. лог /opt/ihelp.am/${log})}" >> "$log" 2>&1 || true
+    echo "▶ $bad check.sh → возвращён разработчику" | tee -a "$log"
+    return 1
+  fi
 
   local half=$(( ${#BATCH_MERGED[@]} / 2 ))
+  local rest=$(( ${#BATCH_MERGED[@]} - half ))
   echo "▶ Делим пополам, пробуем первые $half задач" | tee -a "$log"
-  find_deployable "${BATCH_MERGED[@]:0:$half}"
+  if find_deployable "${BATCH_MERGED[@]:0:$half}"; then
+    return 0
+  fi
+  # Первая половина не прошла (задачи возвращены или конфликты); пробуем вторые $rest задач
+  echo "▶ Первая половина не прошла, пробуем вторые $rest задач" | tee -a "$log"
+  find_deployable "${BATCH_MERGED[@]:$half}"
 }
 
 find_deployable "${VALID_KEYS[@]}"
@@ -214,20 +230,31 @@ ${tail_txt}" --error 2>/dev/null || true
   # Освобождаем батч-замок: deploy-task.sh берёт собственный
   exec 9>&-
   local any_ok=false
+  local consec_fail=0
   for KEY in "${BATCH_RESULT[@]}"; do
     echo "▶ $KEY — отдельно..." | tee -a "$log"
     if scripts/deploy-task.sh "$KEY" ${NOTEST:+--no-test} >> "$log" 2>&1; then
       echo "✓ $KEY выложено" | tee -a "$log"
       any_ok=true
+      consec_fail=0
     else
       echo "✗ $KEY: не выложено (возможный виновник)" | tee -a "$log"
+      consec_fail=$(( consec_fail + 1 ))
+      if [ "$consec_fail" -ge 2 ]; then
+        cc note "${BATCH_RESULT[0]}" "Smoke-тест провалился дважды подряд при поштучной выкладке пачки. Нужна ручная проверка. Лог: /opt/ihelp.am/${log}" --error >> "$log" 2>&1 || true
+        echo "✗ Два провала подряд — останавливаю поштучную выкладку, нужен человек" | tee -a "$log"
+        break
+      fi
     fi
   done
   $any_ok && exit 1 || exit 1
 }
 
 echo "▶ deploy/update.sh" | tee -a "$log"
-DEPLOY_KEY="batch:${BATCH_RESULT[*]}" PREDEPLOY_DONE="${backup_file:+1}" deploy/update.sh >> "$log" 2>&1 || fail "deploy/update.sh завершился с ошибкой"
+# Метка вида batch-N-HHMMSS без пробелов и двоеточий; перечень задач — только в логе
+batch_deploy_label="batch-${#BATCH_RESULT[@]}-$(date +%H%M%S)"
+echo "▶ Метка выкладки: $batch_deploy_label, задачи: [${BATCH_RESULT[*]}]" | tee -a "$log"
+DEPLOY_KEY="$batch_deploy_label" PREDEPLOY_DONE="${backup_file:+1}" deploy/update.sh >> "$log" 2>&1 || fail "deploy/update.sh завершился с ошибкой"
 grep -q '^SMOKE OK' "$log" || fail "smoke-тест не подтвердил SMOKE OK"
 
 if grep -q '^deploy/Caddyfile$' <<< "$changed"; then
