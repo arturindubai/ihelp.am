@@ -314,13 +314,12 @@ export function Checkout(props: {
                     className={cn(
                       "flex w-full flex-row items-center gap-3 rounded-xl border p-3 text-left transition",
                       on ? "border-action bg-brand-50" : "border-line bg-paper",
-                      (!time || !free) && "opacity-50"
                     )}
                   >
                     {m.photo ? (
-                      <Img src={m.photo} width={44} className="size-11 shrink-0 rounded-full object-cover" />
+                      <Img src={m.photo} width={44} className={cn("size-11 shrink-0 rounded-full object-cover", !free && "grayscale")} />
                     ) : (
-                      <span className="grid size-11 shrink-0 place-items-center rounded-full bg-surface text-sm font-bold text-muted">
+                      <span className={cn("grid size-11 shrink-0 place-items-center rounded-full bg-surface text-sm font-bold text-muted", !free && "grayscale")}>
                         {m.name.slice(0, 1)}
                       </span>
                     )}
