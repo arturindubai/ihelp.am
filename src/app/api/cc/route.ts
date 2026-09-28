@@ -324,7 +324,7 @@ export async function POST(req: Request) {
         const blockedUntilRaw = str(body.blockedUntil);
         const blockedUntil = blockedUntilRaw ? (() => { const d = new Date(blockedUntilRaw); return isNaN(d.getTime()) ? undefined : d; })() : undefined;
         const nextSteps = Array.isArray(body.nextSteps) ? (body.nextSteps as unknown[]).filter((s) => typeof s === "string").map(String) : undefined;
-        const input: TransitionInput = { to, text, force: body.force === true, blockedOn: str(body.on), blockedUntil, sha: str(body.sha), branch: str(body.branch), releaseNote: str(body.releaseNote), ownerSummary: str(body.ownerSummary), nextSteps, noWork: body.noWork === true };
+        const input: TransitionInput = { to, text, force: body.force === true, blockedOn: str(body.on), blockedUntil, sha: str(body.sha), branch: str(body.branch), releaseNote: str(body.releaseNote), ownerSummary: str(body.ownerSummary), nextSteps, noWork: body.noWork === true, intakeClosingMap: str(body.intakeClosingMap) };
         const task = await transition(key, input, actor);
         return json({ ok: true, status: task.status, task: brief(task) });
       }

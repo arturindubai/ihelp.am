@@ -73,7 +73,8 @@ const HELP = `cc — Control Center из командной строки (docs/D
   update КЛЮЧ --file поля.json                  изменить тексты задачи (или --data '{…}')
                                                   текстом из файла: --design-file / --details-file / --summary-file
   retriage КЛЮЧ                                 вернуть задачу бэклога на повторный разбор (также owner)
-  cancel КЛЮЧ "причина"
+  cancel КЛЮЧ "причина" [--intakeClosingMap "КЛЮЧ1: ... \nКЛЮЧ2: ..."]
+                                                  для IN-N: обязателен --intakeClosingMap; при дубле: "дубль КЛЮЧ"
 
 Деплоер (--agent deployer):
   return КЛЮЧ "что исправить"                   вернуть на доработку
@@ -701,10 +702,17 @@ async function main() {
     }
     case "unblock":
     case "ready":
-    case "cancel":
     case "return": {
       const k = needKey();
       const r = await api("POST", null, { action: cmd, agent: agentFor(k), key: k, text: text(), force: flags.force === true });
+      console.log(`✓ ${k} → ${STATUS[r.status] ?? r.status}`);
+      return;
+    }
+    case "cancel": {
+      const k = needKey();
+      const body = { action: cmd, agent: agentFor(k), key: k, text: text(), force: flags.force === true };
+      if (flags.intakeClosingMap) body.intakeClosingMap = String(flags.intakeClosingMap);
+      const r = await api("POST", null, body);
       console.log(`✓ ${k} → ${STATUS[r.status] ?? r.status}`);
       return;
     }

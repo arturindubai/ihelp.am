@@ -781,6 +781,10 @@ export type YouCard = {
   tasks: YouCardTask[];
   variants: { id: string; text: string }[] | null;
   isUrgent: boolean;
+  /** Ссылка на задачу-оригинал при уведомлении о дубле */
+  origTaskHref?: string;
+  /** Ключ задачи-оригинала для отображения в ссылке */
+  origTaskKey?: string;
 };
 export type YouPostponedTask = {
   key: string;
@@ -829,6 +833,13 @@ function YouQuestionCard({ card, onDone }: { card: YouCard; onDone: (id: string)
         <span className="chip mb-2 inline-block bg-bad-50 text-[10px] text-bad">{t("urgent")}</span>
       )}
       {card.question && <p className="mb-2 whitespace-pre-wrap text-sm font-medium">{card.question}</p>}
+      {card.origTaskHref && card.origTaskKey && (
+        <p className="mb-2 text-sm">
+          <Link href={card.origTaskHref} scroll={false} className="font-mono text-brand hover:underline">
+            {card.origTaskKey}
+          </Link>
+        </p>
+      )}
       {card.tasks.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-1.5">
           {card.tasks.map((task) => (
