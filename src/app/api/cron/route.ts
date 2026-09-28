@@ -7,6 +7,7 @@ import { cleanUnusedImages } from "@/server/services/cleanup";
 import { runWatchdog } from "@/server/services/ccWork";
 import { getTick } from "@/server/services/workers";
 import { processQueue, cleanQueue } from "@/server/services/notifyQueue";
+import { sendMasterTomorrowSchedule } from "@/server/services/workerNotify";
 import { html, notifyTeam } from "@/server/notify";
 import { alertTech } from "@/server/alerts";
 import { ymd } from "@/lib/time";
@@ -102,6 +103,12 @@ export async function GET(req: Request) {
     if (unassigned) await notifyTeam(html`⚠️ Визитов без мастера на ближайшие сутки: ${unassigned}`);
   }), undefined);
 
+  // 4a. Расписание мастерам на завтра — каждому личным сообщением около 20:00 по Еревану
+  let masterScheduleSent = 0;
+  await step("master-tomorrow", () => daily("master-tomorrow", 20, async () => {
+    masterScheduleSent = await sendMasterTomorrowSchedule(now);
+  }), undefined);
+
   // 5. Очистка: коды входа (с IP) старше 7 дней и истёкшие сессии — персональные данные не храним дольше нужного
   let cleaned = { otp: 0, sessions: 0 };
   await step("cleanup", () => daily("cleanup", 4, async () => {
@@ -174,5 +181,5 @@ export async function GET(req: Request) {
     console.error("[cron] disk check failed", e);
   }
 
-  return NextResponse.json({ ok: true, resumed, created, expired, unassigned, cleaned, cleanImages, diskFreePct, cc, nq });
+  return NextResponse.json({ ok: true, resumed, created, expired, unassigned, masterScheduleSent, cleaned, cleanImages, diskFreePct, cc, nq });
 }

@@ -1915,6 +1915,19 @@
     "title": "404",
     "back": "На главную"
   },
+  "notify": {
+    "master": {
+      "assigned": "📋 Новый визит\nКлиент: {clientName}\nУслуга: {serviceName}\nДата: {date}, {time}\nАдрес: {address}",
+      "rescheduled": "🔄 Визит перенесён\n{serviceName}\nНовая дата: {date}, {time}",
+      "cancelled": "❌ Визит отменён\n{serviceName}, {date}",
+      "tomorrow": "📅 Визиты на завтра ({date}):\n{list}",
+      "tomorrowItem": "• {time} — {serviceName} · {clientName} · {address}",
+      "staffBotConnect": "Привет! Я iHelp Staff Bot. Нажмите кнопку ниже, чтобы привязать ваш профиль мастера и получать уведомления о визитах.",
+      "staffBotConnected": "✓ Готово! Теперь вы будете получать уведомления о своих визитах здесь.",
+      "staffBotNotMaster": "Этот бот предназначен только для мастеров iHelp.",
+      "sharePhone": "📱 Поделиться номером"
+    }
+  },
   "cookies": {
     "title": "Мы используем cookies",
     "text": "Мы используем файлы cookie для работы сайта и аналитики. Подробнее — в {policyLink}.",

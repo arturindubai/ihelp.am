@@ -36,8 +36,21 @@ for s in app migrate; do
   fi
 done
 
-echo "▶ 3/7 Сборка (на этом сервере — до 40 минут; лучше вне пиковых часов)"
-docker compose build
+echo "▶ 3/7 Получение образов приложения"
+if [ -n "${APP_IMAGE:-}" ] && [ -n "${MIGRATE_IMAGE:-}" ]; then
+  echo "  образы из CI registry: $APP_IMAGE / $MIGRATE_IMAGE"
+  # Авторизация нужна для приватных пакетов GHCR; для публичных можно не задавать
+  if [ -n "${GHCR_TOKEN:-}" ]; then
+    echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER:-arturindubai}" --password-stdin
+  fi
+  docker pull "${APP_IMAGE}"
+  docker pull "${MIGRATE_IMAGE}"
+  docker tag "${APP_IMAGE}" homecare-app:latest
+  docker tag "${MIGRATE_IMAGE}" homecare-migrate:latest
+else
+  echo "  локальная сборка (APP_IMAGE / MIGRATE_IMAGE не заданы в .env — до 40 минут)"
+  docker compose build
+fi
 
 echo "▶ 4/7 Гейт (хардкод цветов, строки мимо переводов, секреты в сборке)"
 if ! deploy/gate.sh; then

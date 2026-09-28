@@ -92,28 +92,17 @@ cd /opt/ihelp.am && git worktree remove ../ihelp.am-review
 Тот же `docker-compose.yml`, значит тот же стек 1 к 1, но отдельные тома, отдельная база, отдельные порты — прод и соседи не задеты. Порты: 8080 — прод, 8081 — стенд деплоера, 8082–8099 — стенды разработчиков (перед запуском `ss -ltn`). **Без `COMPOSE_PROJECT_NAME` команда `docker compose` работает с продом**: имя проекта `homecare` зашито в `docker-compose.yml`.
 
 ```bash
-cd /opt/ihelp.am
-git worktree add ../ihelp.am-staging origin/<ветка>
-cd ../ihelp.am-staging
-cp /opt/ihelp.am/.env .env
-export COMPOSE_PROJECT_NAME=ihelp-staging HTTP_BIND=8081 HTTPS_BIND=127.0.0.1:8444 APP_URL=http://<IP-сервера>:8081
-docker compose up -d --build
+deploy/staging.sh up <ветка>               # поднять стенд (создаёт worktree, копирует .env, собирает образ)
+deploy/staging.sh up <ветка> --no-notify   # то же, но ALERT_BOT_TOKEN/ALERT_CHAT_ID обнулены
+deploy/staging.sh status                   # адрес стенда и токен входа владельцем
+deploy/staging.sh down                     # снести стенд, тома и worktree
 ```
 
-**Осторожно, обязательно учесть:** скопированный `.env` несёт настоящие токены — Telegram-бот, WhatsApp, Resend, Google/Apple OAuth secrets. Стенд с этими ключами отправит настоящие сообщения и письма на настоящие адреса и в настоящие чаты. Перед тем, как гонять сценарии с уведомлениями/письмами/входом через соцсети — либо очисти эти поля в staging-`.env` (`notify.telegramBotToken` и подобные хранятся в базе через Настройки, не только в `.env` — для полной изоляции может понадобиться зайти в админку стенда и выключить их там), либо чётко осознавай, что тест реальный, и предупреди владельца.
+**Про токены:** скопированный `.env` несёт настоящие токены. `ALERT_BOT_TOKEN`/`ALERT_CHAT_ID` могут отправить тех-алерты в реальный Telegram-чат — флаг `--no-notify` их обнуляет. Уведомления Telegram/WhatsApp/почта хранятся в базе настроек (`notify.telegramBotToken` и подобные); на свежем стенде их нет — не вводи их в настройках стенда без необходимости.
 
-Если ветка меняет `prisma/schema.prisma` — миграция здесь применяется автоматически контейнером `migrate` при `docker compose up`, на изолированной пустой базе стенда, не на проде. Прогони её тут, посмотри, что ничего не падает, прежде чем переносить на прод.
+Если ветка меняет `prisma/schema.prisma` — миграция применяется автоматически контейнером `migrate` при `docker compose up`, на изолированной пустой базе стенда, не на проде. Прогони её тут, посмотри, что ничего не падает, прежде чем переносить на прод.
 
-Проверь нужный сценарий в браузере на `http://<IP-сервера>:8081`.
-
-Убрать стенд, когда закончил:
-
-```bash
-cd /opt/ihelp.am-staging && COMPOSE_PROJECT_NAME=ihelp-staging docker compose down -v
-cd /opt/ihelp.am && git worktree remove ../ihelp.am-staging
-```
-
-(Обёртка одной командой, `deploy/staging.sh` — задача **DEV-12** в бэклоге, пока не сделана. Делаешь руками, как выше.)
+Проверь нужный сценарий в браузере на `http://127.0.0.1:8081`.
 
 ### 6. Выложить — одной командой
 
@@ -186,6 +175,9 @@ docker compose logs app | grep otp                   # код входа, пок
 docker compose exec -T db psql -U app -d homeservices -tAc 'select count(*) from "Order"'   # запрос к базе
 docker compose exec -T backup sh /backup.sh once     # бэкап прямо сейчас
 deploy/smoke.sh                                      # быстрая проверка, что всё живо, без полного деплоя
+deploy/staging.sh up <ветка> [--no-notify]           # поднять изолированный стенд для проверки ветки
+deploy/staging.sh down                               # снести стенд и тома полностью
+deploy/staging.sh status                             # адрес работающего стенда
 deploy/update.sh                                     # мёрдж уже сделан → выложить
 deploy/rollback.sh                                   # откат образа приложения (не базы)
 git worktree list                                    # какие временные копии сейчас подняты — не забывать чистить
