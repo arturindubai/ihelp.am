@@ -4,7 +4,7 @@ import { escapeHtml } from "@/lib/html";
 import { sendTelegramDirect } from "./notifyQueue";
 import { getSettings, getUiOverrides } from "../settings";
 import { tr } from "@/i18n/locales";
-import { hm, ymd } from "@/lib/time";
+import { hm, ymd, isQuietHour } from "@/lib/time";
 import { amd, dateLabel, timeLabel } from "@/lib/format";
 import { sendMail, mailTemplate } from "./mail";
 import { notifyTech, html } from "../notify";
@@ -367,7 +367,6 @@ export async function notifyClientVisitCompleted(visitId: string): Promise<void>
         master: { select: { name: true } },
         order: {
           select: {
-            id: true,
             number: true,
             userId: true,
           },
@@ -377,23 +376,22 @@ export async function notifyClientVisitCompleted(visitId: string): Promise<void>
     if (!visit) return;
 
     const masterName = visit.master ? tr(visit.master.name, "ru") : "—";
-    const reviewLink = `${APP_URL()}/ru/account/orders/${visit.order.id}`;
 
     const tmpl = await getOrderTemplates();
-    const text = fill(tmpl.completed, {
-      masterName,
-      reviewLink,
-    });
+    const text = fill(tmpl.completed, { masterName });
 
-    await sendToClient(visit.order.userId, text, `Как прошёл визит? — заказ №${visit.order.number}`, "client:completed");
+    await sendToClient(visit.order.userId, text, `Визит завершён — заказ №${visit.order.number}`, "client:completed");
   } catch (e) {
     console.error("[bookingNotify:completed] ошибка", e);
   }
 }
 
 /** 6. Напоминания о визитах: визиты через 22–26 часов с remindedAt=null.
- *  Вызывается из cron каждые 15 минут. */
+ *  Вызывается из cron каждые 15 минут. В тихий период (по умолчанию 21:00–09:00 Ереван) не отправляет. */
 export async function sendVisitReminders(now: Date): Promise<number> {
+  const s0 = await getSettings();
+  if (isQuietHour(now, s0.notify.quietHourStart, s0.notify.quietHourEnd)) return 0;
+
   const from = new Date(now.getTime() + 22 * 3600_000);
   const to = new Date(now.getTime() + 26 * 3600_000);
 
@@ -498,8 +496,11 @@ export async function sendVisitReminders(now: Date): Promise<number> {
 }
 
 /** 7. Запросы отзыва: визиты со статусом DONE, finishedAt 2–6 часов назад, reviewRequestedAt=null.
- *  Вызывается из cron каждые 15 минут. */
+ *  Вызывается из cron каждые 15 минут. В тихий период (по умолчанию 21:00–09:00 Ереван) не отправляет. */
 export async function sendReviewRequests(now: Date): Promise<number> {
+  const s0 = await getSettings();
+  if (isQuietHour(now, s0.notify.quietHourStart, s0.notify.quietHourEnd)) return 0;
+
   const from = new Date(now.getTime() - 6 * 3600_000);
   const to = new Date(now.getTime() - 2 * 3600_000);
 

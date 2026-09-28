@@ -2036,7 +2036,7 @@
       "masterAssigned": "👷 Мастер назначен\nУслуга: {serviceName}, {date} в {time}\nМастер: {masterName}\nЕсли есть вопросы — напишите нам.",
       "rescheduled": "🔄 Визит перенесён\nУслуга: {serviceName}\nНовая дата: {date}, {time}\nАдрес прежний: {address}",
       "cancelled": "❌ Визит отменён\nУслуга: {serviceName}, {date}\nЕсли хотите перенести — оформите новый заказ на сайте.",
-      "completed": "⭐ Как прошёл визит?\n{masterName} завершил работу. Ваш отзыв помогает другим клиентам и мотивирует мастера.\nОставить отзыв: {reviewLink}"
+      "completed": "⭐ Визит завершён\n{masterName} завершил работу. Спасибо, что выбрали iHelp!"
     }
   },
   "cookies": {

@@ -34,3 +34,13 @@ export const toMin = (t: string) => {
   return h * 60 + m;
 };
 export const fromMin = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+/** Проверить, что момент попадает в тихий период по Еревану (UTC+4).
+ *  При startH > endH период охватывает полночь: например, 21..9. */
+export function isQuietHour(now: Date, startH = 21, endH = 9): boolean {
+  const hour = parseInt(new Date(now.getTime() + 4 * 3600_000).toISOString().slice(11, 13), 10);
+  if (startH < endH) {
+    return hour >= startH && hour < endH;
+  }
+  return hour >= startH || hour < endH;
+}

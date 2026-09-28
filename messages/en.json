@@ -1934,7 +1934,7 @@
       "masterAssigned": "👷 Master assigned\nService: {serviceName}, {date} at {time}\nMaster: {masterName}\nFeel free to contact us with any questions.",
       "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}",
       "cancelled": "❌ Visit cancelled\nService: {serviceName}, {date}\nWant to reschedule? Place a new order on the website.",
-      "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}"
+      "completed": "⭐ Visit complete\n{masterName} has finished the work. Thank you for choosing iHelp!"
     }
   }
 }
