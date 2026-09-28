@@ -178,6 +178,16 @@ async function main() {
   const ownerPhone = process.env.ADMIN_PHONE || "+37400000000";
   await db.user.upsert({ where: { phone: ownerPhone }, create: { phone: ownerPhone, role: "OWNER", name: "Owner" }, update: { role: "OWNER" } });
 
+  // Демо-привязка: первый мастер связывается с владельцем, чтобы /pro был доступен на стенде.
+  // Запускается при каждом seed (идемпотентно): если мастер уже создан и не привязан — привязывает.
+  {
+    const owner = await db.user.findUnique({ where: { phone: ownerPhone } });
+    const anna = await db.master.findUnique({ where: { slug: "anna" } });
+    if (owner && anna && !anna.userId) {
+      await db.master.update({ where: { id: anna.id }, data: { userId: owner.id } });
+    }
+  }
+
   // Демо-каталог заливается один раз. Seed выполняется при каждом деплое, и без флага
   // удалённые в админке демо-мастера, баннер, категории и страницы возвращались бы после обновления.
   await syncEpics();
@@ -346,6 +356,15 @@ async function main() {
     await db.page.upsert({ where: { slug }, create: { slug, title: t(ru, en), body: t("Текст документа будет добавлен.", "Coming soon.") }, update: {} });
   }
   await db.setting.create({ data: { key: SEED_FLAG, value: { at: new Date().toISOString() } } });
+
+  // Привязать первого мастера к владельцу (дополнительно: здесь мастера точно созданы)
+  {
+    const owner = await db.user.findUnique({ where: { phone: ownerPhone } });
+    const anna = await db.master.findUnique({ where: { slug: "anna" } });
+    if (owner && anna && !anna.userId) {
+      await db.master.update({ where: { id: anna.id }, data: { userId: owner.id } });
+    }
+  }
   console.log("Seed done. Owner phone:", ownerPhone);
 }
 

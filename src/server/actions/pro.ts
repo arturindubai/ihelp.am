@@ -37,3 +37,13 @@ export async function proNoteAction(visitId: string, note: string) {
   await db.visit.update({ where: { id: v.id }, data: { masterNote: note.slice(0, 1000) } });
   return { ok: true };
 }
+
+export async function proNotifySettingsAction(notifyEnabled: boolean) {
+  const u = await getCurrentUser();
+  if (!u) return { ok: false, error: "auth" };
+  const m = await db.master.findUnique({ where: { userId: u.id } });
+  if (!m) return { ok: false, error: "forbidden" };
+  await db.master.update({ where: { id: m.id }, data: { notifyEnabled } });
+  revalidatePath("/[locale]/pro", "page");
+  return { ok: true };
+}

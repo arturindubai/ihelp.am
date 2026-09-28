@@ -381,7 +381,16 @@
     "note": "Note",
     "client": "Client",
     "stats": "My stats",
-    "schedule": "My schedule"
+    "schedule": "My schedule",
+    "settingsTab": "Settings",
+    "settings": {
+      "notifyTitle": "Notifications",
+      "receiveNotify": "Receive visit notifications",
+      "notifyOff": "You will not receive visit notifications",
+      "notConnected": "Telegram is not connected.",
+      "writeBot": "Message the bot",
+      "saveError": "Failed to save. Please try again."
+    }
   },
   "operator": {
     "title": "Operator panel",
