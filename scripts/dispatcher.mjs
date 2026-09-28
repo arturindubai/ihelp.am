@@ -111,8 +111,8 @@ function outcome(result, killed, err = "") {
   if (!result) return killed ? "timeout" : "failed";
   if (result.subtype === "error_max_turns") return "failed";
   // Запись в карточку отклонена правилами прав: Bash(node scripts/cc.mjs …) с многострочным текстом не прошёл
-  if (/(cc\.mjs|scripts\/cc).*(note|block|review|triaged|unblock|msg)/i.test(text) &&
-      /(denied|not permitted|not allowed|отклонен|запрещен|недоступн|tool.*blocked|permission)/i.test(text)) {
+  if (/(cc\.mjs|scripts\/cc).*(note|block|review|done|triaged|unblock|msg)/i.test(text) &&
+      /(denied|not permitted|not allowed|отклонен|запрещен|заблокирован|недоступн|tool.*blocked|permission)/i.test(text)) {
     return "permission_blocked";
   }
   return result.is_error ? "failed" : "done";
@@ -183,8 +183,8 @@ async function reconcile(running, stopAll) {
         await api({ action: "workers-pause", until: resetAt(result).toISOString(), text: summary.slice(0, 300) });
       }
     }
-    // Вход в подписку пропал или истёк — пауза, пока человек не войдёт заново
-    if (/not logged in|\/login|oauth|failed to authenticate|authentication_error|\b401\b/i.test(summary)) {
+    // Вход в подписку пропал или истёк — пауза только при ошибочном запуске, не при успешном
+    if (["failed", "timeout"].includes(status) && /not logged in|\/login|oauth|failed to authenticate|authentication_error|\b401\b/i.test(summary)) {
       await api({ action: "workers-pause", until: new Date(Date.now() + 6 * 3600_000).toISOString(), text: "Воркеры не вошли в Claude. Войти: scripts/claude-login.sh на сервере, затем «Снять паузу» в Control Center → Воркеры." });
     }
     if (!run.taskKey) continue;
@@ -306,6 +306,8 @@ async function main() {
   const pools = plan.config.pools;
   for (const a of plan.actions) {
     const extra = { requestedBy: a.requestedBy };
+    // takenTask — ключ задачи, взятой cc.mjs; нужен для возврата аренды при провале spawn
+    let takenTask = null;
     try {
       if (a.pool === "dev") {
         const out = JSON.parse(cc(a.key ? ["take", a.key, "--agent", a.agent, "--json"] : ["next", "--agent", a.agent, "--auto", "--json"]));
@@ -313,6 +315,7 @@ async function main() {
           log(`${a.agent}: подходящей задачи нет`);
           continue;
         }
+        takenTask = out.task;
         const isL = out.estimate === "L";
         let devModel = isL ? (pools.dev.modelForL ?? pools.dev.model) : pools.dev.model;
         if (devModel === "opus" && plan.config.opusLimitUntil && Date.parse(plan.config.opusLimitUntil) > Date.now()) {
@@ -328,6 +331,7 @@ async function main() {
           log(`${a.agent}: подходящей задачи без кода нет`);
           continue;
         }
+        takenTask = out.task;
         await spawn("nocode", a.agent, out.task, pools.nocode.model, { ...extra, dir: out.dir, role: "nocode" });
       } else if (a.pool === "tester") {
         const out = JSON.parse(cc(["test", a.key, "--agent", a.agent, "--json"]));
@@ -348,7 +352,22 @@ async function main() {
         }
       }
     } catch (e) {
-      log(`! ${a.agent} ${a.key ?? ""}: ${String(e.message ?? e).slice(0, 300)}`);
+      const msg = String(e.message ?? e);
+      // agent_busy: DEV-XX — агент держит задачу без запуска; снимаем аренду сразу
+      const busyMatch = msg.match(/agent_busy[:\s]+([A-Z][A-Z0-9-]*)/i);
+      if (busyMatch) {
+        const heldKey = busyMatch[1];
+        log(`· ${a.agent}: занят ${heldKey} без запуска — снимаем аренду`);
+        const r = await asAgent(a.agent, { action: "handoff", key: heldKey, text: "Аренда снята диспетчером: агент занят, запуск не создан." });
+        if (r.error) log(`! не удалось снять аренду ${heldKey}: ${r.error}`);
+      } else if (takenTask) {
+        // задачу взяли, но запуск не создался — возвращаем в очередь
+        log(`! ${a.agent} ${takenTask}: запуск не создан — ${msg.slice(0, 200)}`);
+        const r = await asAgent(a.agent, { action: "handoff", key: takenTask, text: `Запуск не создан: ${msg.slice(0, 200)}` });
+        if (r.error) log(`! не удалось вернуть ${takenTask}: ${r.error}`);
+      } else {
+        log(`! ${a.agent} ${a.key ?? ""}: ${msg.slice(0, 300)}`);
+      }
     }
   }
 }
