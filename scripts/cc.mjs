@@ -9,6 +9,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { RETRY_TOTAL_MS, isRetryable, retryDelay } from "../src/lib/cc-retry.mjs";
 
 const HELP = `cc — Control Center из командной строки (docs/DEV_SYSTEM.md)
 
@@ -35,8 +36,12 @@ const HELP = `cc — Control Center из командной строки (docs/D
 
   Длинный текст (многострочный отчёт, вердикт, блокировка):
     --text-file /path/file   читать текст из файла (Write /opt/ihelp.am/data/tmp/<роль>/имя.md)
-    echo "…" | node …        или через stdin
+    echo "…" | node …        или через stdin (для людей; воркеру конвейер команд закрыт)
     (для update используйте не --text-file, а --design-file / --details-file / --summary-file)
+
+  Воркеры пишут команду в одной форме: node /opt/ihelp.am/scripts/cc.mjs команда КЛЮЧ … --agent имя —
+  одна команда за вызов, длинный текст файлом (docs/WORKERS.md, «Как воркер пишет команды»).
+  Запрос повторяется сам, если приложение перезапускается (502, 503, отказ соединения), — до 60 секунд.
 
   brief КЛЮЧ [--role dev|tester|deployer|nocode]   брифинг: правила роли, карточка, что сдать
                                                   При сдаче (review) обязательны:
@@ -169,16 +174,46 @@ function agentFor(key) {
 
 /* ───── API ───── */
 
+/**
+ * fetch с повтором, пока приложение перезапускается при выкладке (10–20 секунд): 502/503 и отказ соединения
+ * пережидаем, до минуты суммарно. Что считается поводом для повтора и расписание пауз — src/lib/cc-retry.mjs
+ */
+async function fetchRetry(url, init = {}, timeoutMs = 15000) {
+  const method = init.method ?? "GET";
+  const started = Date.now();
+  const envTotal = Number(process.env.CC_RETRY_MS);
+  const total = process.env.CC_RETRY_MS && Number.isFinite(envTotal) ? envTotal : RETRY_TOTAL_MS;
+  for (let attempt = 1; ; attempt++) {
+    let res = null;
+    let err = null;
+    try {
+      res = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+    } catch (e) {
+      err = e;
+    }
+    const code = err?.cause?.code ?? err?.code ?? null;
+    if (isRetryable({ method, status: res?.status ?? null, errorCode: code, errorName: err?.name ?? null })) {
+      const wait = retryDelay(attempt, Date.now() - started, total);
+      if (wait != null) {
+        console.error(`… Control Center не отвечает (${res ? res.status : code ?? err.name}) — похоже, приложение перезапускается; повтор через ${Math.ceil(wait / 1000)} с`);
+        await new Promise((r) => setTimeout(r, wait));
+        continue;
+      }
+    }
+    if (err) throw err;
+    return res;
+  }
+}
+
 async function api(method, query, body, soft = false) {
   if (!KEY) die("CC_AGENT_KEY пуст: API Control Center выключено (ключ — в .env основной копии)");
   const url = method === "GET" ? `${URL_BASE}?${new URLSearchParams(query)}` : URL_BASE;
   let res;
   try {
-    res = await fetch(url, {
+    res = await fetchRetry(url, {
       method,
       headers: { "x-cc-key": KEY, "content-type": "application/json" },
       body: method === "GET" ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(15000),
     });
   } catch (e) {
     die(`Control Center не отвечает (${URL_BASE}): ${e.message}`);
@@ -201,7 +236,7 @@ function hint(code) {
     next_steps_required: "\n  Укажите следующие шаги: --next \"шаг 1; шаг 2\" или --no-next если продолжения нет.",
     report_required: "\n  Отчёт от 40 символов: что сделано, как проверено, как проверить деплоеру.",
     not_ready: "\n  Не выполнены обязательные пункты готовности — см. show КЛЮЧ.",
-    mockup_required: "\n  Макет не утверждён — утвердите в Control Center (Согласования) командой: node scripts/cc.mjs mockup КЛЮЧ.",
+    mockup_required: "\n  Макет не утверждён — утвердите в Control Center (Согласования) командой: node /opt/ihelp.am/scripts/cc.mjs mockup КЛЮЧ.",
     sha_required: "\n  Нужен коммит в main: --sha <коммит>.",
     reason_required: "\n  Этот переход требует причину словами.",
     forbidden_transition: "\n  Этой роли такой переход не разрешён (docs/DEV_SYSTEM.md, раздел «Статусы»).",
@@ -296,46 +331,75 @@ const ROLE_DOCS = {
 /** Какая роль нужна задаче: код — разработчик, без кода — продуктовая работа; проверка и выкладка — по команде */
 const roleForTask = (t) => (t.layer === "none" ? "nocode" : "dev");
 
+/** Единая форма команды доски: полный путь работает из любой папки проекта и проходит правила прав каждой роли */
+const CC = "node /opt/ihelp.am/scripts/cc.mjs";
+
+/** Папка роли для файлов с текстом: названа по роли, а не по имени агента (tester-2 пишет в data/tmp/tester) */
+const tmpDir = (role) => `/opt/ihelp.am/data/tmp/${role}`;
+
+/** Как писать команды и что делать при отказе прав — одинаково для всех ролей (DEV-79) */
+function commandRules(role, k, agent) {
+  const tmp = tmpDir(role);
+  return `═══ КАК ПИСАТЬ КОМАНДЫ ═══
+Форма команды доски одна: ${CC} команда ${k} … --agent ${agent}
+1. Одна команда за вызов: без перехода в другую папку, без склейки (&&, ;), без передачи вывода (|), без перенаправлений.
+2. Короткий текст (одна фраза без переводов строки, знака доллара и обратных кавычек) — в кавычках в команде.
+3. Любой другой текст — файлом: инструмент Write, путь ${tmp}/имя.md, затем --text-file ${tmp}/имя.md.
+   Папка уже создана. Не /tmp и не папка с именем агента.
+4. Файлы вне текущей папки читать инструментами Read, Grep, Glob, а не командами оболочки.
+
+═══ ЕСЛИ КОМАНДА ОТКЛОНЕНА ═══
+Отказ прав относится к записи команды, а не ко всей командной строке. Один отказ — не повод останавливать работу.
+1. Возьми разрешённую форму из списка выше и повтори действие.
+2. Запрещённое правилами проекта (запуск контейнеров напрямую, права администратора, управление службами, .env,
+   папки вне проекта, принудительная отправка, отправка в main, выкладка руками) не обходи никакой формой — блокируй сразу.
+3. Остановка — только после трёх отказов подряд на трёх разных формах одного действия:
+   запиши отклонённые команды дословно в ${tmp}/denied-${k}.md и выполни
+   ${CC} block ${k} --on tech --text-file ${tmp}/denied-${k}.md --agent ${agent}`;
+}
+
 function finishSteps(role, t, agent, dir) {
   const k = t.key;
+  const tmp = tmpDir(role);
+  const rules = `\n\n${commandRules(role, k, agent)}`;
   if (role === "tester")
     return `Рабочая копия — коммит ветки, скриптов последней версии в ней может не быть: инструменты бери из /opt/ihelp.am по полному пути, запускай из текущей папки.
 1. Проверь по /opt/ihelp.am/docs/roles/TESTER.md: bash /opt/ihelp.am/scripts/check.sh, критерии приёмки, соглашения, стенд для интерфейса и денег (bash /opt/ihelp.am/scripts/stand.sh up, node /opt/ihelp.am/scripts/stand-shot.mjs /ru/…).
-2. Прошло — node /opt/ihelp.am/scripts/cc.mjs pass ${k} "Проверено: … Как: … Скриншоты: …" --agent ${agent}
-3. Не прошло — node /opt/ihelp.am/scripts/cc.mjs fail ${k} "Что не так: … Как воспроизвести: … Что ожидалось: …" --agent ${agent}
-4. Нужен человек — node /opt/ihelp.am/scripts/cc.mjs block ${k} "вопрос" --on owner|product|tech --agent ${agent}
-5. Стенд, если поднимал, — bash /opt/ihelp.am/scripts/stand.sh down. Код не чинить, не мёрджить, не выкладывать. Без pass/fail проверка не засчитывается.`;
+2. Вердикт — файлом: инструмент Write, путь ${tmp}/pass-${k}.md или ${tmp}/fail-${k}.md.
+   Прошло («Проверено: … Как: … Скриншоты: …») — ${CC} pass ${k} --text-file ${tmp}/pass-${k}.md --agent ${agent}
+3. Не прошло («Что не так: … Как воспроизвести: … Что ожидалось: …») — ${CC} fail ${k} --text-file ${tmp}/fail-${k}.md --agent ${agent}
+4. Нужен человек — ${CC} block ${k} "вопрос" --on owner --agent ${agent} (адресат: owner, product или tech)
+5. Стенд, если поднимал, — bash /opt/ihelp.am/scripts/stand.sh down. Код не чинить, не мёрджить, не выкладывать. Без pass/fail проверка не засчитывается.${rules}`;
   if (role === "nocode")
     return `1. Результат — в карточке: файлы проекта не правь, ветку не создавай. Материал (инструкция, тексты, расчёт, таблица, ссылки на источники) — в отчёте сдачи.
-2. Шаги, которые может сделать только человек (аккаунт, оплата, пароль, DNS у регистратора), не делай: node scripts/cc.mjs block ${k} "Что сделать: 1) … 2) … Зачем: …" --on owner --agent ${agent}. После ответа задача вернётся в очередь.
-3. Ход работы — note ${k} "…"; не успеваешь — handoff ${k} "что готово, что осталось".
-4. Сдать: node scripts/cc.mjs review ${k} "Сделано: … Материал: … Что сделать владельцу: … Как проверить: … Источники: …" \\
+2. Шаги, которые может сделать только человек (аккаунт, оплата, пароль, DNS у регистратора), не делай: инструкцию «Что сделать: 1) … 2) … Зачем: …» запиши в ${tmp}/block-${k}.md,
+   затем ${CC} block ${k} --on owner --text-file ${tmp}/block-${k}.md --agent ${agent}. После ответа задача вернётся в очередь.
+3. Ход работы — ${CC} note ${k} "…" --agent ${agent}; не успеваешь — ${CC} handoff ${k} "что готово, что осталось" --agent ${agent}.
+4. Сдать: отчёт «Сделано: … Материал: … Что сделать владельцу: … Как проверить: … Источники: …» запиши в ${tmp}/review-${k}.md,
+   затем ${CC} review ${k} --text-file ${tmp}/review-${k}.md \\
      --next "следующий шаг 1; следующий шаг 2"   (или --no-next, если продолжения нет) \\
      --release "Что изменилось для людей" --summary "Сделано: …; Проверить: …; Риск: …" --agent ${agent}
    Задача уйдёт владельцу в «Согласования». Если следующие шаги указаны — после принятия триаж заведёт карточки.
-Не мёрджить, не выкладывать, не ставить «Сделано».`;
+Не мёрджить, не выкладывать, не ставить «Сделано».${rules}`;
   if (role === "deployer")
     return `1. Прочитай карточку, отчёт разработчика и отметку тестировщика (лента), диф: git diff origin/main...origin/task/${k}.
 2. Если есть ручные шаги (поле «Готовность к деплою»), удаляющая миграция, секрет в коде или отчёт тестировщика не убеждает —
-   не выкладывай: node scripts/cc.mjs block ${k} "почему" --on owner --agent ${agent} (или return с причиной).
+   не выкладывай: причину запиши в ${tmp}/block-${k}.md, затем ${CC} block ${k} --on owner --text-file ${tmp}/block-${k}.md --agent ${agent} (или return с причиной).
 3. Иначе — scripts/deploy-task.sh ${k}: слияние, бэкап при миграции, выкладка, smoke; при провале — откат и возврат задачи.
-   Скрипт сам закроет задачу с доказательством или вернёт её. Больше ничего в проде не делать.`;
+   Скрипт сам закроет задачу с доказательством или вернёт её. Больше ничего в проде не делать.${rules}`;
   return `1. Работай в рабочей копии ${dir ?? `.claude/worktrees/${k}`} (ветка task/${k}); основную копию /opt/ihelp.am не переключать.
-2. Непонятно зачем или критерии не проверяемы — не угадывай: node scripts/cc.mjs block ${k} "вопрос, варианты, предложение" --on product|owner|design|tech --agent ${agent}
+2. Непонятно зачем или критерии не проверяемы — не угадывай: ${CC} block ${k} "вопрос, варианты, предложение" --on product --agent ${agent} (адресат: product, owner, design или tech)
 3. Проверка: scripts/check.sh; интерфейс — scripts/stand.sh up и node scripts/stand-shot.mjs /ru/… (потом scripts/stand.sh down).
    Если задача меняет package.json — сначала scripts/lock-update.sh, затем коммитить package-lock.json.
 4. Коммиты «${k}: что сделано», git push -u origin task/${k}.
-   Если нужно обновиться от main — только git merge origin/main. git rebase запрещён: перезаписывает историю и требует force-push.
-   Если команда или инструмент отклонены из-за прав — сразу: node scripts/cc.mjs block ${k} "Нужны права: …" --on tech --agent ${agent}
-5. Сдать — оба поля обязательны:
-   node scripts/cc.mjs review ${k} "Сделано: … Проверено: … Проверить: … Миграции: … Риски и что не сделано: …" \\
-     --release "Что изменилось для людей: 1–2 предложения простым языком" \\
-     --summary "Сделано: …; Проверить самому: …; Риск: …" \\
-     --agent ${agent}
+   Если нужно обновиться от main — только git merge origin/main. git rebase запрещён: перезаписывает историю и требует принудительной отправки.
+5. Сдать — отчёт файлом, оба поля обязательны, команда одной строкой:
+   отчёт «Сделано: … Проверено: … Проверить: … Миграции: … Риски и что не сделано: …» запиши в ${tmp}/review-${k}.md, затем
+   ${CC} review ${k} --text-file ${tmp}/review-${k}.md --release "Что изменилось для людей: 1–2 предложения простым языком" --summary "Сделано: …; Проверить самому: …; Риск: …" --agent ${agent}
    --release — строка для Release Notes: что видит клиент или команда, простыми словами.
    --summary — до трёх строк для владельца: что сделано, что проверить самому, риск.
-   Ход работы — note ${k} "…"; ошибка — note ${k} "…" --error; не успеваешь — handoff ${k} "что сделано, что осталось".
-Не мёрджить, не выкладывать, не ставить «Сделано».`;
+   Ход работы — ${CC} note ${k} "…" --agent ${agent}; ошибка — с ключом --error; не успеваешь — ${CC} handoff ${k} "что сделано, что осталось" --agent ${agent}.
+Не мёрджить, не выкладывать, не ставить «Сделано».${rules}`;
 }
 
 function briefing(role, d, agent, dir) {
@@ -374,7 +438,7 @@ async function takeTask(key) {
   }
   if (!r.task) {
     if (flags.json) return console.log(JSON.stringify({ task: null }));
-    console.log("Готовых к работе задач по этому фильтру нет. Список: node scripts/cc.mjs list ready");
+    console.log("Готовых к работе задач по этому фильтру нет. Список: node /opt/ihelp.am/scripts/cc.mjs list ready");
     return;
   }
   const t = r.task;
@@ -789,7 +853,7 @@ async function main() {
       form.set("taskKey", k);
       form.set("agent", agentFor(k));
       const base = URL_BASE.replace(/\/api\/cc\/?$/, "/api/cc/upload");
-      const res = await fetch(base, { method: "POST", headers: { "x-cc-key": KEY }, body: form, signal: AbortSignal.timeout(60000) }).catch((e) => die(`загрузка не удалась: ${e.message}`));
+      const res = await fetchRetry(base, { method: "POST", headers: { "x-cc-key": KEY }, body: form }, 60000).catch((e) => die(`загрузка не удалась: ${e.message}`));
       const d = await res.json().catch(() => ({}));
       if (!res.ok) die(d.error ?? res.status);
       console.log(`✓ ${k}: приложен ${d.attachment.fileName} → ${d.attachment.url}`);
@@ -806,7 +870,7 @@ async function main() {
         const file = typeof flags.file === "string" ? flags.file : null;
         if (!slug || !file || !fs.existsSync(file)) die("нужны slug записи и файл с текстом: lib update note-… --file запись.md");
         const body = { slug, title: typeof flags.title === "string" ? flags.title : undefined, note: typeof flags.note === "string" ? flags.note : undefined, content: fs.readFileSync(file, "utf8"), agent: typeof flags.agent === "string" ? flags.agent : "cto" };
-        const res = await fetch(base, { method: "PUT", headers: { "x-cc-key": KEY, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));
+        const res = await fetchRetry(base, { method: "PUT", headers: { "x-cc-key": KEY, "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));
         const d = await res.json().catch(() => ({}));
         if (!res.ok) die(d.error ?? res.status);
         return console.log(d.changed ? `✓ ${slug}: новая версия ${d.version}` : `· ${slug}: текст не изменился, версия та же`);
@@ -815,14 +879,14 @@ async function main() {
         const file = typeof flags.file === "string" ? flags.file : null;
         if (!file || !fs.existsSync(file)) die("нужен файл с текстом: --file запись.md");
         const body = { title: typeof flags.title === "string" ? flags.title : "", kind: typeof flags.kind === "string" ? flags.kind : "knowledge", content: fs.readFileSync(file, "utf8"), agent: typeof flags.agent === "string" ? flags.agent : "cto" };
-        const res = await fetch(base, { method: "POST", headers: { "x-cc-key": KEY, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));
+        const res = await fetchRetry(base, { method: "POST", headers: { "x-cc-key": KEY, "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));
         const d = await res.json().catch(() => ({}));
         if (!res.ok) die(d.error ?? res.status);
         return console.log(`✓ запись ${d.slug} · ${d.kind} · ${d.title}`);
       }
       const slug = pos[0];
       const query = new URLSearchParams(slug ? { slug } : { ...(typeof flags.kind === "string" ? { kind: flags.kind } : {}), ...(typeof flags.q === "string" ? { q: flags.q } : {}) });
-      const res = await fetch(`${base}?${query}`, { headers: { "x-cc-key": KEY }, signal: AbortSignal.timeout(15000) }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));
+      const res = await fetchRetry(`${base}?${query}`, { headers: { "x-cc-key": KEY } }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));
       const d = await res.json().catch(() => ({}));
       if (!res.ok) die(d.error ?? res.status);
       if (flags.json) return console.log(JSON.stringify(d, null, 2));
@@ -986,7 +1050,7 @@ async function main() {
       return;
     }
     default:
-      die(`неизвестная команда «${cmd}». Справка: node scripts/cc.mjs help`);
+      die(`неизвестная команда «${cmd}». Справка: node /opt/ihelp.am/scripts/cc.mjs help`);
   }
 }
 
