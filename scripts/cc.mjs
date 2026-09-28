@@ -68,6 +68,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
   ready КЛЮЧ ["комментарий"]                    готова к работе (проверка готовности)
   create --file задача.json                     завести задачу (или --data '{…}' — JSON прямо в команде)
   update КЛЮЧ --file поля.json                  изменить тексты задачи (или --data '{…}')
+  retriage КЛЮЧ                                 вернуть задачу бэклога на повторный разбор (также owner)
   cancel КЛЮЧ "причина"
 
 Деплоер (--agent deployer):
@@ -696,6 +697,12 @@ async function main() {
       if (text().length < 10) die("нужен вердикт словами: что проверено и что решено (в очередь, вопрос, отложено, разбито на …)");
       await api("POST", null, { action: "triaged", agent: agentFor(k), key: k, text: text() });
       console.log(`✓ ${k} разобрана триажем`);
+      return;
+    }
+    case "retriage": {
+      const k = needKey();
+      await api("POST", null, { action: "retriage", agent: agentFor(k), key: k });
+      console.log(`✓ ${k}: возвращена на повторный разбор триажем`);
       return;
     }
     case "mockup": {
