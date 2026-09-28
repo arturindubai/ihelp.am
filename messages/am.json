@@ -878,6 +878,8 @@
       "emailTaken": "",
       "emailInvalid": "",
       "revokeAccess": "",
+      "cannotRemoveOwner": "",
+      "lastOwner": "",
       "revokeConfirm": "",
       "lastLogin": "",
       "lastLoginNever": "",

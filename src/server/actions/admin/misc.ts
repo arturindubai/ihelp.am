@@ -7,7 +7,7 @@ import { requireSection } from "../../admin";
 import { audit } from "../../audit";
 import { recalcRatings } from "../../services/catalog";
 import { invalidateUiCache, saveSettingsSection, getSettings, SECRET_PATHS, type Settings } from "../../settings";
-import { notifyTeam, notifyTech } from "../../notify";
+import { html, notifyTeam, notifyTech } from "../../notify";
 import { envContacts } from "../../contacts";
 import { sendMail, mailTemplate } from "../../services/mail";
 import { registerTelegramWebhook } from "../../services/telegramBot";
@@ -307,11 +307,26 @@ export async function setRoleAction(phoneRaw: string, role: Role, name?: string)
   const u = await requireSection("staff");
   const phone = normalizePhone(phoneRaw);
   if (!phone) return { ok: false as const, error: "phone" };
-  if (phone === u.phone && role !== "OWNER") return { ok: false as const, error: "self" };
+
+  const target = await db.user.findUnique({ where: { phone }, select: { id: true, role: true } });
+  if (target?.role === "OWNER") {
+    // Вариант А: роль другого владельца менять нельзя
+    if (phone !== u.phone) return { ok: false as const, error: "cannotRemoveOwner" };
+    // Последнего владельца нельзя понизить ни при каком варианте
+    const ownerCount = await db.user.count({ where: { role: "OWNER" } });
+    if (ownerCount <= 1) return { ok: false as const, error: "lastOwner" };
+  } else {
+    if (phone === u.phone && role !== "OWNER") return { ok: false as const, error: "self" };
+  }
+
   const namePatch = name ? { name } : {};
   const r = await db.user.upsert({ where: { phone }, create: { phone, role, ...namePatch }, update: { role, ...namePatch } });
   if (role === "CLIENT") await db.session.deleteMany({ where: { userId: r.id } });
   await audit(u.id, "staff.role", "User", r.id, { role });
+  // Тех-алерт при изменении роли владельца (понижение или повышение)
+  if (target?.role === "OWNER" || role === "OWNER") {
+    await notifyTech(html`⚠️ Смена роли владельца: <b>${r.id}</b> → <code>${role}</code> (оператор: <code>${u.phone}</code>)`);
+  }
   return { ok: true as const };
 }
 
