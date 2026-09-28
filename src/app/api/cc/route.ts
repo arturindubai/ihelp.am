@@ -357,6 +357,12 @@ export async function POST(req: Request) {
           if (!current) return json({ error: "not_found" }, 404);
           const allowed = role === "designer" ? (DESIGNER_FIELDS as readonly string[]) : Object.keys(raw);
           const patch = Object.fromEntries(Object.entries(raw).filter(([k]) => allowed.includes(k) && k !== "key"));
+          if (Object.keys(patch).length === 0) {
+            const available = role === "designer"
+              ? DESIGNER_FIELDS.join(", ")
+              : "title, summary, details, requirements, design, qaNotes, deployNotes, needs, depends, docs, epicKey, area, layer, priority, stage, owner, estimate, scope, mockupRequired, mockupUrl";
+            return json({ error: "no_update_fields", detail: `нет полей для обновления; допустимые поля: ${available}` }, 400);
+          }
           content = { ...full(current), ...patch, key };
         }
         const parsed = taskContentSchema.safeParse(content);
