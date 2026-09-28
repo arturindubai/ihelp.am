@@ -258,9 +258,10 @@ function ensureWorktree(key, branch) {
   } catch {}
   const list = tryGit(["worktree", "list", "--porcelain"], ROOT) ?? "";
   if (list.split("\n").includes(`worktree ${dir}`)) return { dir, created: false };
-  // Ветка уже где-то открыта — второй worktree на ту же ветку git не даст, и это правильно
-  const busy = list.split("\n\n").find((b) => b.includes(`branch refs/heads/${branch}`));
-  if (busy) die(`ветка ${branch} уже открыта в ${busy.split("\n")[0].replace("worktree ", "")} — работайте там или закройте ту копию`);
+  // Ветка уже где-то открыта — второй worktree на ту же ветку git не даст, и это правильно.
+  // Сравниваем строку целиком: b.includes("task/DEV-2") нашёл бы блок task/DEV-25 как подстроку.
+  const busy = list.split("\n\n").find((b) => b.split("\n").includes(`branch refs/heads/${branch}`));
+  if (busy) throw new Error(`ветка ${branch} уже открыта в ${busy.split("\n")[0].replace("worktree ", "")} — работайте там или закройте ту копию`);
   tryGit(["fetch", "-q", "origin"], ROOT);
   fs.mkdirSync(WT, { recursive: true });
   if (tryGit(["rev-parse", "--verify", "-q", `refs/heads/${branch}`], ROOT)) git(["worktree", "add", dir, branch], ROOT);
@@ -366,7 +367,16 @@ async function takeTask(key) {
   const t = r.task;
   const branch = t.branch || `task/${t.key}`;
   // Задача без кода у воркера «Продукт и не-код»: результат — в карточке, рабочая копия с веткой не нужна
-  const { dir, created } = agent.startsWith("nocode") && t.layer === "none" ? { dir: ROOT, created: false } : ensureWorktree(t.key, branch);
+  let dir, created;
+  try {
+    ({ dir, created } = agent.startsWith("nocode") && t.layer === "none" ? { dir: ROOT, created: false } : ensureWorktree(t.key, branch));
+  } catch (err) {
+    // Рабочую копию создать не удалось — снимаем аренду, возвращаем задачу в очередь, пишем в ленту.
+    const reason = err?.message || String(err);
+    await api("POST", null, { action: "handoff", agent, key: t.key, text: `Аренда снята автоматически: создать рабочую копию не удалось — ${reason}` }, true);
+    await api("POST", null, { action: "note", agent, key: t.key, text: `Аренда снята автоматически: создать рабочую копию не удалось — ${reason}`, kind: "error" }, true);
+    die(reason);
+  }
   writeState(t.key, { agent, branch, dir, takenAt: new Date().toISOString() });
   if (flags.json) return console.log(JSON.stringify({ task: t.key, agent, dir, branch, role: roleForTask(t), estimate: t.estimate ?? null }));
   if (auto) console.log(`Ваше имя агента: ${agent} — используйте его во всех командах этого чата (--agent ${agent}).\n`);
