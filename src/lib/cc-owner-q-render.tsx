@@ -13,8 +13,9 @@ function isDevLine(line: string): boolean {
 /**
  * Рендерит текст блокировки для владельца: заголовки, списки, жирный текст.
  * Блоки кода, команды и пути к файлам сворачиваются под <details>.
+ * devOnlyLabel — переведённая метка спойлера (ключ admin.cc.you.devOnly).
  */
-export function renderOwnerText(text: string): ReactNode {
+export function renderOwnerText(text: string, devOnlyLabel: string): ReactNode {
   const lines = text.split("\n");
   const result: ReactNode[] = [];
   let i = 0;
@@ -35,7 +36,7 @@ export function renderOwnerText(text: string): ReactNode {
       if (i < lines.length) { codeLines.push(lines[i]); i++; }
       result.push(
         <details key={k()} className="my-1">
-          <summary className="btn-ghost btn-sm text-muted cursor-pointer">для исполнителя</summary>
+          <summary className="btn-ghost btn-sm text-muted cursor-pointer">{devOnlyLabel}</summary>
           <pre className="rounded bg-surface p-2 text-xs text-muted overflow-x-auto whitespace-pre-wrap">
             {codeLines.join("\n")}
           </pre>
@@ -54,7 +55,7 @@ export function renderOwnerText(text: string): ReactNode {
       }
       result.push(
         <details key={k()} className="my-1">
-          <summary className="btn-ghost btn-sm text-muted cursor-pointer">для исполнителя</summary>
+          <summary className="btn-ghost btn-sm text-muted cursor-pointer">{devOnlyLabel}</summary>
           <pre className="rounded bg-surface p-2 text-xs text-muted overflow-x-auto">{tableLines.join("\n")}</pre>
         </details>
       );
@@ -65,7 +66,7 @@ export function renderOwnerText(text: string): ReactNode {
     if (isDevLine(line)) {
       result.push(
         <details key={k()} className="my-1">
-          <summary className="btn-ghost btn-sm text-muted cursor-pointer">для исполнителя</summary>
+          <summary className="btn-ghost btn-sm text-muted cursor-pointer">{devOnlyLabel}</summary>
           <pre className="rounded bg-surface p-2 text-xs text-muted overflow-x-auto whitespace-pre-wrap">{line}</pre>
         </details>
       );

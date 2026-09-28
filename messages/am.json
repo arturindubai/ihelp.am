@@ -1100,6 +1100,8 @@
           "rule": "",
           "other": ""
         },
+        "headerWithReview": "",
+        "headerReviewOnly": "",
         "devOnly": "",
         "textMayCut": "",
         "returnedRuns": "",

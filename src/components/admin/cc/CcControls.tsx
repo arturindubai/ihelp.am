@@ -826,7 +826,7 @@ function QuestionBlock({
       {block.question && (
         <div className="mb-2 text-sm font-medium">
           {blockCount > 1 && <span className="mr-1 text-muted">{blockIdx + 1}.</span>}
-          {renderOwnerText(block.question)}
+          {renderOwnerText(block.question, t("devOnly"))}
         </div>
       )}
       {block.variants ? (
@@ -950,9 +950,11 @@ function YouQuestionCard({ card, onDone }: { card: YouCard; onDone: (id: string)
 export function YouQuestionsSection({
   cards,
   postponed,
+  nocodeReviewCount = 0,
 }: {
   cards: YouCard[];
   postponed: YouPostponedTask[];
+  nocodeReviewCount?: number;
 }) {
   const t = useTranslations("admin.cc.you");
   const [filter, setFilter] = useState<"all" | "urgent" | "postponed">("all");
@@ -981,11 +983,18 @@ export function YouQuestionsSection({
 
   const allEmpty = activeCount === 0 && postponedCount === 0;
 
+  const headerText = (() => {
+    if (allEmpty && nocodeReviewCount === 0) return t("allDone");
+    if (nocodeReviewCount > 0 && activeCount > 0) return t("headerWithReview", { q: activeCount, m: nocodeReviewCount });
+    if (nocodeReviewCount > 0) return t("headerReviewOnly", { m: nocodeReviewCount });
+    return t("headerCount", { n: activeCount });
+  })();
+
   return (
     <div className="space-y-4">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-base font-semibold">
-          {allEmpty ? t("allDone") : t("headerCount", { n: activeCount })}
+          {headerText}
         </h2>
       </div>
 

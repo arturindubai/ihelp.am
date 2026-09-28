@@ -1497,6 +1497,8 @@
         "empty": "Nothing needs your decision right now ✓",
         "allDone": "All done — thank you!",
         "headerCount": "{n, plural, one {# card waiting for answer} other {# cards waiting for answer}}",
+        "headerWithReview": "{q, plural, one {# question} other {# questions}} + {m} in review",
+        "headerReviewOnly": "{m, plural, one {# task in review} other {# tasks in review}}",
         "filterAll": "All ({n})",
         "filterUrgent": "Urgent ({n})",
         "filterPostponed": "Postponed ({n})",

@@ -42,15 +42,15 @@ export async function ccCounts() {
     db.task.groupBy({ by: ["status"], _count: true }),
     db.task.count({ where: { status: "review", layer: { not: "none" } } }),
     db.task.count({ where: { status: "review", layer: "none" } }),
-    // fetch задач (не count): нужно группировать по вопросу, чтобы бейдж считал карточки, а не задачи
-    db.task.findMany({ where: { status: "blocked", blockedOn: { in: ["owner", "product"] }, triagedAt: { not: null } }, select: { blockedReason: true } }),
+    // fetch задач (не count): нужно группировать по восстановленному тексту вопроса (как в YouTab)
+    db.task.findMany({ where: { status: "blocked", blockedOn: { in: ["owner", "product"] }, triagedAt: { not: null } }, select: { blockedReason: true, comments: { orderBy: { createdAt: "desc" }, take: 20, select: { text: true, kind: true } } } }),
     unreadForOwner(),
     db.workerRun.count({ where: { status: "running" } }),
     db.task.count({ where: DESIGN_PENDING }),
   ]);
   const n = (s: string) => byStatus.find((r) => r.status === s)?._count ?? 0;
-  // cardCount — число уникальных карточек (групп задач с одним вопросом); совпадает с заголовком YouQuestionsSection
-  const cardCount = countOwnerCards(ownerBlockedTasks);
+  // cardCount — через восстановленные тексты, чтобы совпадать с группировкой в YouTab (fullReason ?? blockedReason)
+  const cardCount = countOwnerCards(ownerBlockedTasks.map((t) => ({ blockedReason: recoverFullReason(t.blockedReason, t.comments) })));
   return {
     backlog: OPEN_STATUSES.reduce((sum, s) => sum + n(s), 0),
     // «Нужен ты»: карточки (сгруппированные вопросы) + приёмка не-кода; упавшие/брошенные — в других вкладках

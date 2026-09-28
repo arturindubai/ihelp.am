@@ -112,7 +112,7 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
       {/* Интерактивные вопросы: фильтры, группы, карточки */}
       {(cards.length > 0 || postponed.length > 0) && (
         <Card>
-          <YouQuestionsSection cards={cards} postponed={postponed} />
+          <YouQuestionsSection cards={cards} postponed={postponed} nocodeReviewCount={data.nocodeReview.length} />
         </Card>
       )}
 

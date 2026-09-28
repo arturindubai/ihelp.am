@@ -1568,6 +1568,8 @@
         "empty": "Сейчас ничего не ждёт вашего решения ✓",
         "allDone": "Всё решено — спасибо!",
         "headerCount": "{n, plural, one {# карточка ждёт ответа} few {# карточки ждут ответа} other {# карточек ждут ответа}}",
+        "headerWithReview": "{q, plural, one {# вопрос} few {# вопроса} other {# вопросов}} + {m} на приёмке",
+        "headerReviewOnly": "{m, plural, one {# задача на приёмке} few {# задачи на приёмке} other {# задач на приёмке}}",
         "filterAll": "Все ({n})",
         "filterUrgent": "Срочные ({n})",
         "filterPostponed": "Отложенные ({n})",
