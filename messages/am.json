@@ -985,7 +985,11 @@
         "title": "",
         "placeholder": "",
         "submit": "",
-        "hint": ""
+        "hint": "",
+        "dropActive": "",
+        "pasteHint": "",
+        "dropTypeError": "",
+        "dropSizeError": ""
       },
       "workers": {
         "title": "",
