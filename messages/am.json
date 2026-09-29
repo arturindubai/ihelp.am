@@ -1097,6 +1097,14 @@
           "active": "Ակտիվ",
           "empty": "",
           "error": ""
+        },
+        "push": {
+          "title": "Push ծանուցումներ",
+          "purpose": "",
+          "ready": "",
+          "notReady": "",
+          "noEncKey": "",
+          "createdAt": ""
         }
       },
       "team": {

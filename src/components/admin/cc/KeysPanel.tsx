@@ -9,7 +9,7 @@ import { cn } from "@/lib/format";
 /** Даты приходят уже подписанными с сервера: так разметка сервера и браузера совпадает */
 type Row = { path: string; group: string; check?: string; url?: string; present: boolean; changedLabel: string | null; changedBy: string | null };
 type Team = { token: boolean; username: string; webhook: string | null; lastError: string | null; members: { telegramId: number; name: string; addedLabel: string }[] };
-type VapidStatus = { present: boolean; createdLabel: string | null };
+type VapidStatus = { present: boolean; createdLabel: string | null; noEncKey?: boolean };
 
 const idOf = (path: string) => path.replace(/\./g, "_");
 
@@ -164,14 +164,14 @@ function KeyRow({ row }: { row: Row }) {
 /** VAPID-ключи для push: создаются автоматически, показываем только статус без возможности изменить */
 function VapidStatusSection({ status }: { status: VapidStatus }) {
   const t = useTranslations("admin.cc.keys.push");
+  const chipClass = status.present ? "bg-ok-50 text-ok" : status.noEncKey ? "bg-bad-50 text-bad" : "bg-surface text-muted";
+  const chipLabel = status.present ? t("ready") : status.noEncKey ? t("noEncKey") : t("notReady");
   return (
     <section className="card overflow-hidden">
       <div className="border-b border-line bg-surface/60 px-4 py-2 text-sm font-semibold">{t("title")}</div>
       <div className="px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className={cn("chip text-[10px]", status.present ? "bg-ok-50 text-ok" : "bg-surface text-muted")}>
-            {status.present ? t("ready") : t("notReady")}
-          </span>
+          <span className={cn("chip text-[10px]", chipClass)}>{chipLabel}</span>
         </div>
         <p className="mt-1 text-sm text-muted">{t("purpose")}</p>
         {status.present && status.createdLabel && (

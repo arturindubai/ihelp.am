@@ -162,6 +162,7 @@ export async function setNameAction(name: string) {
   return { ok: true };
 }
 
-export async function logoutAction() {
-  await logout();
+/** endpoint — адрес push-подписки этого браузера (необязателен); сервер удалит только её одну */
+export async function logoutAction(endpoint?: string) {
+  await logout(endpoint);
 }

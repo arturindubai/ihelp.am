@@ -19,7 +19,7 @@ export default async function KeysPage({ params }: { params: Promise<{ locale: s
     getTranslations("admin.cc.keys"),
     keysOverview(),
     teamBotStatus(),
-    getVapidStatus().catch(() => ({ present: false, createdAt: null })),
+    getVapidStatus().catch(() => ({ present: false, createdAt: null, noEncKey: false })),
   ]);
   const when = (d: Date) => `${dateLabel(d, locale, { day: "numeric", month: "short", year: "numeric" })}, ${timeLabel(d)}`;
   return (
@@ -29,7 +29,7 @@ export default async function KeysPage({ params }: { params: Promise<{ locale: s
       <KeysPanel
         rows={rows.map(({ changedAt, ...r }) => ({ ...r, changedLabel: changedAt ? when(changedAt) : null }))}
         team={{ ...team, members: team.members.map((m) => ({ telegramId: m.telegramId, name: m.name, addedLabel: when(new Date(m.addedAt)) })) }}
-        vapidStatus={{ present: vapidStatus.present, createdLabel: vapidStatus.createdAt ? when(new Date(vapidStatus.createdAt)) : null }}
+        vapidStatus={{ present: vapidStatus.present, createdLabel: vapidStatus.createdAt ? when(new Date(vapidStatus.createdAt)) : null, noEncKey: vapidStatus.noEncKey }}
       />
     </div>
   );
