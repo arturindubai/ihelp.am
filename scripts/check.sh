@@ -22,7 +22,7 @@ docker run --rm \
     # Типы маршрутов .next/types в образе собраны с main: в ветке без этих маршрутов они дают ложные ошибки
     rm -rf .next
     echo "▶ Проверка типов"; npx tsc --noEmit -p . || exit 1
-    echo "▶ Тесты"; npx vitest run 2>&1 | tail -n 25; vitest_exit=${PIPESTATUS[0]}
+    echo "▶ Тесты"; npx vitest run --maxWorkers=2 2>&1 | tail -n 25; vitest_exit=${PIPESTATUS[0]}
     echo "▶ Миграции"; if [ -f tools/check-migrations.mjs ]; then node tools/check-migrations.mjs || exit 1; else echo "  ! проверка миграций пропущена: рядом с check.sh нет check-migrations.mjs"; fi
     echo "▶ Демо-данные в seed"; if [ -f tools/check-seed.mjs ]; then node tools/check-seed.mjs || exit 1; else echo "  ! проверка seed пропущена: рядом с check.sh нет check-seed.mjs"; fi
     echo "▶ Хардкод строк"; count=$(grep -rn --include="*.tsx" --include="*.ts" "На главную\|Русский\|English" src/ 2>/dev/null | grep -v "backlog\.ts\|SettingsEditor\.tsx\|\.test\." | wc -l); [ "$count" = "0" ] && echo "  OK — зашитых строк нет" || { echo "  FAIL — найдено зашитых строк: $count"; grep -rn --include="*.tsx" --include="*.ts" "На главную\|Русский\|English" src/ 2>/dev/null | grep -v "backlog\.ts\|SettingsEditor\.tsx\|\.test\."; exit 1; }
