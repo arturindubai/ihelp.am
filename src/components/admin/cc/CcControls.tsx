@@ -319,10 +319,15 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
             {listening && <p className="mt-1 text-xs text-muted">🎙 {interim || t("listening")}</p>}
             {voiceError && <p className="mt-1 rounded-lg bg-warn-50 px-3 py-1.5 text-xs text-warn">{voiceError}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              {speech && (
+              {speech ? (
                 <button type="button" className={cn("btn-sm gap-1.5", listening ? "btn-danger" : "btn-outline")} onClick={toggleVoice}>
                   {listening ? <MicOff size={15} /> : <Mic size={15} />} {listening ? t("voiceStop") : t("voice")}
                 </button>
+              ) : (
+                <span className="flex items-center gap-1 text-xs text-muted" title={t("voiceErrors.unsupported")}>
+                  <Mic size={13} className="opacity-50" />
+                  {t("voiceUnsupported")}
+                </span>
               )}
               <label className="btn-outline btn-sm cursor-pointer gap-1.5">
                 <Paperclip size={15} /> {t("attach")}
