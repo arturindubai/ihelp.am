@@ -371,7 +371,7 @@ export function PricesManager({ rows }: Props) {
                   {previewMode && someSelected && (
                     <td className="px-3 py-2 text-right tabular-nums">
                       {isSelected ? (
-                        previewPrice === null || previewPrice === 0 && price === 0
+                        previewPrice === null || price === 0
                           ? <span className="text-muted">—</span>
                           : <span className="font-bold text-ok">{previewPrice} ֏</span>
                       ) : null}
