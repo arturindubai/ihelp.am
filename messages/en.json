@@ -901,6 +901,8 @@
       "emailTaken": "This email is already linked to another account",
       "emailInvalid": "Invalid email format",
       "revokeAccess": "Revoke access",
+      "cannotRemoveOwner": "Cannot change the role of another owner",
+      "lastOwner": "Last owner",
       "revokeConfirm": "Revoke access for {label}? Role will change to Client and all sessions will be terminated.",
       "lastLogin": "Last login:",
       "lastLoginNever": "never logged in",
