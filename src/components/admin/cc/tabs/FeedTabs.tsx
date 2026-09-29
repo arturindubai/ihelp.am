@@ -147,7 +147,7 @@ export async function NotifyTab({ locale, taskHref }: { locale: string; taskHref
         title={
           <span className="flex min-w-0 flex-1 items-center gap-2">
             <span>{tn("inbox")}</span>
-            {unreadCount > 0 && <span className="chip bg-brand text-[10px] text-white">{unreadCount}</span>}
+            {unreadCount > 0 && <span className="chip bg-brand text-[10px] text-on-action">{unreadCount}</span>}
           </span>
         }
         actions={<MarkAllReadButton unreadCount={unreadCount} />}
