@@ -16,7 +16,7 @@ const revalidateAll = () => revalidatePath("/", "layout");
 
 export async function saveCategoryAction(input: unknown) {
   const u = await requireSection("services");
-  const p = z.object({ id: z.string().optional(), slug, title: i18nReq, description: i18n.nullable().optional(), image: img, sort: z.number().int(), active: z.boolean(), comingSoon: z.boolean() }).safeParse(input);
+  const p = z.object({ id: z.string().optional(), slug, title: i18nReq, description: i18n.nullable().optional(), image: img, sort: z.number().int(), active: z.boolean(), comingSoon: z.boolean(), archived: z.boolean().optional() }).safeParse(input);
   if (!p.success) return { ok: false as const, error: p.error.issues[0]?.path.join(".") };
   const { id, ...d } = p.data;
   const data = { ...d, description: J(d.description) };
@@ -31,6 +31,37 @@ export async function saveCategoryAction(input: unknown) {
   }
 }
 
+export async function archiveCategoryAction(id: string, archived: boolean) {
+  const u = await requireSection("services");
+  await db.category.update({ where: { id }, data: { archived } });
+  await audit(u.id, archived ? "category.archive" : "category.restore", "Category", id);
+  revalidateAll();
+  return { ok: true as const };
+}
+
+export async function reorderCategoriesAction(ids: string[]) {
+  await requireSection("services");
+  await db.$transaction(ids.map((id, i) => db.category.update({ where: { id }, data: { sort: i } })));
+  revalidateAll();
+  return { ok: true as const };
+}
+
+export async function reorderServicesAction(ids: string[]) {
+  await requireSection("services");
+  await db.$transaction(ids.map((id, i) => db.service.update({ where: { id }, data: { sort: i } })));
+  revalidateAll();
+  return { ok: true as const };
+}
+
+export async function toggleServiceComingSoonAction(id: string, comingSoon: boolean) {
+  const u = await requireSection("services");
+  await db.service.update({ where: { id }, data: { comingSoon } });
+  await audit(u.id, "service.toggleComingSoon", "Service", id, { comingSoon });
+  revalidateAll();
+  return { ok: true as const };
+}
+
+/** @deprecated используйте archiveCategoryAction — удаление категорий запрещено */
 export async function deleteCategoryAction(id: string) {
   const u = await requireSection("services");
   const n = await db.service.count({ where: { categoryId: id } });
@@ -62,6 +93,8 @@ const planSchema = z.object({ id: z.string().optional(), kind: z.enum(["ONE_TIME
 const serviceSchema = z.object({
   slug, categoryId: z.string(), title: i18nReq, subtitle: i18n.nullable().optional(), description: i18n.nullable().optional(), badge: i18n.nullable().optional(), image: img, bannerImage: img, active: z.boolean(), sort: z.number().int(),
   isNew: z.boolean().default(false), arrivalHours: z.number().int().min(0).max(168).nullable().optional(),
+  includesText: i18n.nullable().optional(),
+  excludesText: i18n.nullable().optional(),
   groups: z.array(groupSchema).max(20), plans: z.array(planSchema).max(20),
   content: z.object({ note: z.object({ title: i18n.optional(), body: i18n.optional() }).optional(), benefits: z.array(z.object({ icon: z.string().max(30), title: i18n.optional() })).max(20), howItWorks: z.array(z.object({ title: i18n.optional(), body: i18n.optional() })).max(20), faq: z.array(z.object({ q: i18n.optional(), a: i18n.optional() })).max(50), policy: i18n.optional() }),
   masterIds: z.array(z.string()).max(500),
@@ -77,7 +110,7 @@ export async function saveServiceAction(id: string, input: ServicePayload) {
     await db.$transaction(async (tx) => {
       await tx.service.update({
         where: { id },
-        data: { slug: d.slug, categoryId: d.categoryId, title: d.title, subtitle: J(d.subtitle), description: J(d.description), badge: J(d.badge), image: d.image ?? null, bannerImage: d.bannerImage ?? null, active: d.active, sort: d.sort, isNew: d.isNew, arrivalHours: d.arrivalHours ?? null, content: d.content as Prisma.InputJsonValue, masters: { set: d.masterIds.map((m) => ({ id: m })) } },
+        data: { slug: d.slug, categoryId: d.categoryId, title: d.title, subtitle: J(d.subtitle), description: J(d.description), badge: J(d.badge), image: d.image ?? null, bannerImage: d.bannerImage ?? null, active: d.active, sort: d.sort, isNew: d.isNew, arrivalHours: d.arrivalHours ?? null, content: d.content as Prisma.InputJsonValue, includesText: J(d.includesText), excludesText: J(d.excludesText), masters: { set: d.masterIds.map((m) => ({ id: m })) } },
       });
       // Группы и варианты
       const keepGroups = d.groups.map((g) => g.id).filter(Boolean) as string[];

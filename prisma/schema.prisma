@@ -112,6 +112,7 @@ model Category {
   sort        Int        @default(0)
   active      Boolean    @default(true)
   comingSoon  Boolean    @default(false)
+  archived    Boolean    @default(false)
   services    Service[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
@@ -130,7 +131,12 @@ model Service {
   badge         Json?
   /// Блоки страницы: howItWorks[], benefits[], faq[], policy, note — всё мультиязычно
   content       Json?
+  /// Что включено в услугу — мультиязычный текст, строки разделены \n
+  includesText  Json?
+  /// Что не входит в услугу — мультиязычный текст, строки разделены \n
+  excludesText  Json?
   active        Boolean       @default(true)
+  comingSoon    Boolean       @default(false)
   sort          Int           @default(0)
   isNew         Boolean       @default(false)
   arrivalHours  Int?
@@ -320,6 +326,7 @@ model Order {
 
   visits            Visit[]
   redemptions       PromoRedemption[]
+  clientMessages    ClientMessage[]
 
   @@index([userId])
   @@index([userId, createdAt])
@@ -362,9 +369,36 @@ model Visit {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   review          Review?
+  reviewToken     ReviewToken?
 
   @@index([scheduledAt])
   @@index([masterId, scheduledAt])
+}
+
+/// Одноразовая ссылка для отзыва без повторного входа (NOTIFY-3B)
+model ReviewToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  visitId   String    @unique
+  visit     Visit     @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  usedAt    DateTime?
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+}
+
+/// Лог клиентских сообщений с каналом и статусом доставки (NOTIFY-3B)
+model ClientMessage {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  visitId   String?
+  event     String
+  subject   String
+  channel   String
+  delivered Boolean  @default(false)
+  sentAt    DateTime @default(now())
+
+  @@index([orderId])
 }
 
 enum ReviewStatus {
@@ -508,6 +542,10 @@ model Task {
   /// Ключ эпика (Epic.key). Пусто — простая задача без эпика
   epicKey       String?
   epicRef       Epic?     @relation(fields: [epicKey], references: [key])
+  /// Ключ родительской задачи (если эта задача — часть разбитой крупной). Родитель с открытыми частями не уходит в работу
+  parentKey     String?
+  parentRef     Task?     @relation("TaskParts", fields: [parentKey], references: [key], onDelete: SetNull)
+  parts         Task[]    @relation("TaskParts")
   area          String
   /// back | front | fullstack | infra | none
   layer         String
@@ -574,6 +612,8 @@ model Task {
   mockupApprovedBy  String?
   /// Когда утвердили макет
   mockupApprovedAt  DateTime?
+  /// Нужно описание дизайна: ставит триаж при разборе; true — задача идёт к дизайнеру, false — разработчик возьмёт без ожидания
+  needsDesign       Boolean?
   /// «Что изменилось для людей» — 1–2 предложения простым языком для Release Notes
   releaseNote   String?
   /// Резюме для владельца: что сделано, что проверить, риск — до трёх строк
@@ -582,6 +622,10 @@ model Task {
   nextSteps     String[]  @default([]) @map("next_steps")
   /// Код-задача, по которой работа оказалась не нужна: сдана без коммита, уходит на подтверждение тестировщику
   noWork        Boolean   @default(false) @map("no_work")
+  /// Исходный текст владельца из Intake — сохраняется неизменным, не перезаписывается триажем
+  intakeText       String?
+  /// Карта просьб при закрытии intake: каждая просьба → ключ задачи или причина отказа. Обязательна для source=intake при закрытии
+  intakeClosingMap String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -593,6 +637,7 @@ model Task {
   @@index([stage])
   @@index([area])
   @@index([epicKey])
+  @@index([parentKey])
 }
 
 /// Эпик — крупная область работы с собственными требованиями, дизайном, статусом проверки и готовности к деплою.

@@ -7,7 +7,9 @@ import { BLOCKED_ON_LABELS, STATUSES } from "@/lib/backlog-labels";
 import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, doneGate, isDesignerTask, isProductTask, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
 import { isAgentAuthor, findBlockingError } from "@/lib/cc-triage";
 import { nextIntakeKey, intakeTitle } from "@/lib/cc-lanes";
+import { intakeClosingMapValid, parseDuplicateOriginalKey } from "@/lib/cc-intake";
 import { needsLibrary, buildSummaryText, buildLibraryTitle } from "@/lib/cc-overflow";
+import { refreshEpicStatus } from "./epics";
 import type { Prisma, Task } from "@prisma/client";
 
 /**
@@ -93,6 +95,8 @@ export type TransitionInput = {
   nextSteps?: string[];
   /** Код-задача, по которой работа оказалась не нужна: сдаётся без коммита, уходит на подтверждение тестировщику */
   noWork?: boolean;
+  /** Карта просьб при закрытии intake (source=intake, to=done|cancelled): каждая просьба → ключ задачи или причина */
+  intakeClosingMap?: string;
 };
 
 /** Смена статуса с проверкой прав, гейтов и записью в историю. Возвращает обновлённую задачу */
@@ -155,6 +159,7 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   if (to === "blocked") {
     const on = input.blockedOn || "tech";
     if (!(BLOCKED_ON as readonly string[]).includes(on)) throw new CcError("bad_blocked_on");
+    if (on === "external" && !input.blockedUntil) throw new CcError("until_required", "external block requires --until");
     data.blockedOn = on;
     data.blockedReason = text.slice(0, 2000) || null;
     data.blockedFrom = from;
@@ -171,6 +176,14 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   // Проверка относится к конкретному коммиту: возврат на доработку и новая сдача её обнуляют
   if (to === "review" || (from === "review" && to === "ready")) Object.assign(data, { testedSha: null, testedBy: null, testedAt: null });
   if (from === "done") Object.assign(data, { doneAt: null, deployedSha: null, proof: null });
+  // Гейт: закрытие входящей без карты просьб не разрешается
+  if (task.source === "intake" && (to === "done" || to === "cancelled") && !force) {
+    const map = input.intakeClosingMap?.trim() ?? "";
+    if (!intakeClosingMapValid(map)) throw new CcError("intake_closing_map_required");
+    data.intakeClosingMap = map;
+  } else if (input.intakeClosingMap?.trim()) {
+    data.intakeClosingMap = input.intakeClosingMap.trim();
+  }
 
   // Условие на прежний статус: если кто-то успел изменить задачу раньше, не затираем его изменение
   const r = await db.task.updateMany({ where: { id: task.id, status: from }, data });
@@ -188,11 +201,21 @@ export async function transition(key: string, input: TransitionInput, actor: Act
     : commentBody;
   await say(task.id, actor.name, kindFor(from, to, actor, task.claimedBy), commentText, key);
   if (to === "done" || to === "cancelled") await releaseDependents(key);
+  if (to === "done" || to === "cancelled") await maybeCloseParent(key, to).catch(() => null);
   // После приёмки не-код задачи с указанными следующими шагами — карточка в очередь триажа
   if (to === "done" && task.layer === "none" && task.nextSteps.length > 0) {
     await createNextStepsIntake(key, task.title, task.nextSteps, actor.name).catch(async (err) => {
       await say(task.id, "system", "note", `⚠️ Не удалось завести карточку следующих шагов: ${String(err).slice(0, 200)}`, key).catch(() => null);
     });
+  }
+  // Обновляем статус эпика по итогу изменения задачи
+  if (task.epicKey) await refreshEpicStatus(task.epicKey).catch(() => null);
+  // Уведомление владельцу: входящая закрыта как дубль — сообщаем, где оригинал
+  if (task.source === "intake" && to === "cancelled" && input.intakeClosingMap) {
+    const origKey = parseDuplicateOriginalKey(input.intakeClosingMap);
+    if (origKey) {
+      await createDuplicateNotice(key, origKey, actor.name).catch(() => null);
+    }
   }
   // task получен до обновления — передаём свежие значения из input для review-перехода
   const taskForBot = {
@@ -308,6 +331,9 @@ export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Tas
         if (actor.role === "designer" && !isDesignerTask({ ...t, hasAttachments: t._count.attachments > 0 })) throw new CcError("forbidden_role", "designer: not a designer task");
         // Продакт берёт только задачи с открытыми вопросами к нему
         if (actor.role === "product" && !isProductTask(t)) throw new CcError("forbidden_role", "product: no open needs");
+        // Родитель с открытыми частями не берётся в работу: части делаются отдельно
+        const openParts = await tx.task.count({ where: { parentKey: t.key, status: { notIn: CLOSED_STATUSES } } });
+        if (openParts > 0 && !takeover) throw new CcError("parent_has_open_parts", `${openParts}`);
         const missing = t.depends.filter((d) => !closed.has(d));
         if (missing.length && !takeover) throw new CcError("deps_open", missing.join(","));
         const clash = busy.filter((b) => b.key !== t.key && scopeOverlap(t.scope, b.scope).length > 0);
@@ -320,12 +346,16 @@ export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Tas
         return { task: await tx.task.findUniqueOrThrow({ where: { id: t.id } }), event: takeover ? ("takeover" as const) : ("claim" as const), prev: t };
       }
 
-      const filter: Prisma.TaskWhereInput = { status: "ready" };
+      const filter: Prisma.TaskWhereInput = {
+        status: "ready",
+        // Родитель с открытыми частями не уходит в работу: части делаются отдельно
+        NOT: { parts: { some: { status: { notIn: CLOSED_STATUSES } } } },
+      };
       if (opts.area) filter.area = opts.area;
       if (opts.layer) filter.layer = opts.layer;
       if (opts.priority) filter.priority = opts.priority;
       if (actor.role === "nocode") Object.assign(filter, { layer: "none", needs: { isEmpty: true } });
-      else if (actor.role === "designer") Object.assign(filter, { OR: [{ mockupRequired: true, mockupApprovedBy: null, mockupUrl: null }, { assignee: "designer" }, { layer: { in: ["front", "fullstack"] }, OR: [{ design: null }, { design: "" }], attachments: { none: {} } }] });
+      else if (actor.role === "designer") Object.assign(filter, { OR: [{ mockupRequired: true, mockupApprovedBy: null, mockupUrl: null }, { assignee: "designer" }, { needsDesign: true, OR: [{ design: null }, { design: "" }], attachments: { none: {} } }] });
       else if (actor.role === "product") Object.assign(filter, { needs: { isEmpty: false } });
       else if (opts.auto) Object.assign(filter, { layer: opts.layer ?? { not: "none" }, owner: { not: "product" }, needs: { isEmpty: true } });
       const candidates = await tx.task.findMany({ where: filter, take: 200 });
@@ -743,35 +773,125 @@ async function designToCanon(t: { key: string; title: string; design: string | n
 }
 
 /** Сменить адресата блокировки с записью в историю — используется командой reblock */
-export async function reblockOn(key: string, newBlockedOn: string, reason: string, actor: Actor): Promise<Task> {
+export async function reblockOn(key: string, newBlockedOn: string, reason: string, actor: Actor, blockedUntil?: Date | null): Promise<Task> {
   if (!(BLOCKED_ON as readonly string[]).includes(newBlockedOn)) throw new CcError("bad_blocked_on");
   if (reason.trim().length < 5) throw new CcError("reason_required");
-  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, blockedOn: true } });
+  if (newBlockedOn === "external" && !blockedUntil) throw new CcError("until_required", "external block requires --until");
+  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, blockedOn: true, blockedUntil: true } });
   if (!t) throw new CcError("not_found");
   if (t.status !== "blocked") throw new CcError("wrong_status", t.status);
   const prev = t.blockedOn;
-  await db.task.update({ where: { id: t.id }, data: { blockedOn: newBlockedOn, blockedReason: reason.trim().slice(0, 2000) } });
+  const updateData: Prisma.TaskUpdateInput = { blockedOn: newBlockedOn, blockedReason: reason.trim().slice(0, 2000) };
+  if (blockedUntil !== undefined) updateData.blockedUntil = blockedUntil;
+  await db.task.update({ where: { id: t.id }, data: updateData });
   await log(t.id, actor.name, "blockedOn", prev, newBlockedOn);
-  await say(t.id, actor.name, "note", `Адресат блокировки изменён: ${prev ?? "—"} → ${newBlockedOn}. ${reason.trim()}`, key);
+  if (blockedUntil !== undefined) {
+    const prevUntil = t.blockedUntil ? t.blockedUntil.toISOString().slice(0, 10) : null;
+    const nextUntil = blockedUntil ? blockedUntil.toISOString().slice(0, 10) : null;
+    if (prevUntil !== nextUntil) await log(t.id, actor.name, "blockedUntil", prevUntil, nextUntil);
+  }
+  const untilStr = blockedUntil ? ` (авторазблокировка ${blockedUntil.toISOString().slice(0, 10)})` : "";
+  await say(t.id, actor.name, "note", `Адресат блокировки изменён: ${prev ?? "—"} → ${newBlockedOn}${untilStr}. ${reason.trim()}`, key);
   return db.task.findUniqueOrThrow({ where: { id: t.id } });
 }
 
-/** Вернуть дизайн дизайнеру: задача блокируется на дизайне с причиной, утверждение и ссылка на макет снимаются */
+/** Вернуть дизайн дизайнеру: задача блокируется на дизайне с причиной, утверждение, ссылка на макет и изображения снимаются */
 export async function returnDesign(key: string, actor: Actor, reason: string) {
-  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true } });
+  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, blockedOn: true } });
   if (!t) throw new CcError("not_found");
   if (reason.trim().length < 5) throw new CcError("reason_required");
-  // Сбросить утверждение и ссылку на макет: дизайнер должен сделать новый макет с чистого листа
+  // Сбросить утверждение, ссылку на макет и загруженные изображения: дизайнер делает всё заново
   await db.task.update({ where: { key }, data: { mockupApprovedBy: null, mockupApprovedAt: null, mockupUrl: null } });
-  if (t.status !== "blocked") return transition(key, { to: "blocked", blockedOn: "design", text: `Дизайн возвращён: ${reason.trim()}` }, actor);
+  await db.attachment.deleteMany({ where: { taskId: t.id, mime: { startsWith: "image/" } } });
+  if (t.status !== "blocked") {
+    return transition(key, { to: "blocked", blockedOn: "design", text: `Дизайн возвращён: ${reason.trim()}` }, actor);
+  }
+  // Задача уже заблокирована (например, на владельце) — переключаем адресата на дизайн с записью в историю
+  const prevBlockedOn = t.blockedOn;
+  await db.task.update({ where: { id: t.id }, data: { blockedOn: "design", blockedReason: reason.trim().slice(0, 2000) } });
+  await log(t.id, actor.name, "blockedOn", prevBlockedOn, "design");
   await say(t.id, actor.name, "note", `Дизайн возвращён: ${reason.trim()}`, key);
   return db.task.findUniqueOrThrow({ where: { key } });
+}
+
+/**
+ * Если закрытая задача — часть родителя, проверяем: если все части закрыты,
+ * родитель закрываем автоматически (done), снимая его из очереди.
+ * Обходим transition() напрямую: пути ready→done нет в TRANSITIONS ни для одной роли.
+ */
+async function maybeCloseParent(partKey: string, _closedTo: "done" | "cancelled") {
+  const part = await db.task.findUnique({ where: { key: partKey }, select: { parentKey: true } });
+  if (!part?.parentKey) return;
+  const parentKey = part.parentKey;
+  const parent = await db.task.findUnique({ where: { key: parentKey }, select: { id: true, status: true, epicKey: true } });
+  if (!parent) return;
+  if ((CLOSED_STATUSES as readonly string[]).includes(parent.status)) return;
+  const openParts = await db.task.count({ where: { parentKey, status: { notIn: CLOSED_STATUSES } } });
+  if (openParts > 0) return;
+  const from = parent.status as TaskStatusKey;
+  const text = `Все части закрыты (последней — ${partKey}). Родительская задача закрыта автоматически.`;
+  const data: Prisma.TaskUpdateManyMutationInput = {
+    status: "done",
+    doneAt: new Date(),
+    proof: text.slice(0, 2000),
+    blockedOn: null,
+    blockedReason: null,
+    blockedUntil: null,
+    blockedFrom: null,
+  };
+  if (from === "in_progress") Object.assign(data, { claimedBy: null, claimUntil: null, staleAt: null, session: null });
+  if (from === "review") Object.assign(data, { claimedBy: null, claimUntil: null });
+  const r = await db.task.updateMany({ where: { id: parent.id, status: from }, data });
+  if (!r.count) return;
+  await log(parent.id, "watchdog", "status", from, "done");
+  await say(parent.id, "watchdog", "system", text, parentKey);
+  await releaseDependents(parentKey).catch(() => null);
+  if (parent.epicKey) await refreshEpicStatus(parent.epicKey).catch(() => null);
 }
 
 /**
  * Создаёт intake-карточку IN-N с указанием следующих шагов после принятия задачи.
  * Не импортирует из ccBoard.ts (цикл: ccBoard → cc.ts → ccWork.ts), поэтому реализация встроена.
  */
+/** Создаёт уведомление владельцу во «Нужен ты»: входящая закрыта как дубль — указываем, где оригинал */
+async function createDuplicateNotice(intakeKey: string, origKey: string, by: string) {
+  const orig = await db.task.findUnique({ where: { key: origKey }, select: { title: true } });
+  const origTitle = orig?.title ?? origKey;
+  const existing = (await db.task.findMany({ where: { key: { startsWith: "IN-" } }, select: { key: true } })).map((t) => t.key);
+  const sort = ((await db.task.aggregate({ _max: { sort: true } }))._max.sort ?? 0) + 1;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const key = nextIntakeKey(existing);
+    try {
+      const task = await db.task.create({
+        data: {
+          key,
+          title: `${intakeKey} закрыта как дубль`,
+          summary: `Входящая ${intakeKey} закрыта как дубль. Оригинал: ${origKey} ${origTitle}`,
+          area: "product",
+          layer: "none",
+          priority: "p2",
+          stage: "later",
+          owner: "product",
+          source: "intake",
+          createdBy: by,
+          status: "blocked",
+          blockedOn: "owner",
+          blockedFrom: "backlog",
+          blockedReason: `Входящая ${intakeKey} закрыта как дубль. Оригинал: ${origKey} ${origTitle}`,
+          triagedAt: new Date(),
+          triagedBy: by,
+          sort,
+        },
+      });
+      await db.taskEvent.create({ data: { taskId: task.id, actor: by, field: "created", from: null, to: key } });
+      await db.taskEvent.create({ data: { taskId: task.id, actor: by, field: "status", from: "backlog", to: "blocked" } });
+      return task;
+    } catch {
+      existing.push(key);
+    }
+  }
+}
+
 async function createNextStepsIntake(doneKey: string, doneTitle: string, steps: string[], by: string) {
   if (!steps.length) return;
   const existing = (await db.task.findMany({ where: { key: { startsWith: "IN-" } }, select: { key: true } })).map((t) => t.key);
