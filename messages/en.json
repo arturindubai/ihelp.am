@@ -526,7 +526,8 @@
       "title": "Title",
       "subtitle": "Subtitle",
       "description": "Description",
-      "badge": "Badge"
+      "badge": "Badge",
+      "unsaved": "Unsaved"
     },
     "dashboard": {
       "today": "Visits today",

@@ -528,7 +528,8 @@
       "title": "Название",
       "subtitle": "Подзаголовок",
       "description": "Описание",
-      "badge": "Бейдж"
+      "badge": "Бейдж",
+      "unsaved": "Не сохранено"
     },
     "dashboard": {
       "today": "Визиты сегодня",
