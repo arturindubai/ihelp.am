@@ -1013,6 +1013,9 @@
           "login": "",
           "stop": "",
           "logs": ""
+        },
+        "reasons": {
+          "needs": ""
         }
       },
       "logs": {

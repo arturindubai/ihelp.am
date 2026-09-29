@@ -100,6 +100,12 @@ async function syncEpics() {
 async function syncBacklog() {
   // Задача не указала epicKey явно — находим эпик по совпадению старой текстовой метки epic с названием эпика
   const epicKeyByTitle = new Map((await db.epic.findMany({ select: { key: true, title: true } })).map((e) => [e.title, e.key]));
+  // Задачи, у которых triagedAt был сброшен при ретриаже: их поля всё равно нельзя перезаписывать из кода.
+  // Событие "retriage" создаётся ccWork.retriage() при сбросе triagedAt и никогда не удаляется.
+  const retriagedTaskIds = new Set(
+    (await db.taskEvent.findMany({ where: { field: "retriage" }, select: { taskId: true }, distinct: ["taskId"] }))
+      .map((e) => e.taskId)
+  );
   let created = 0;
   for (const [i, t] of BACKLOG.entries()) {
     const content = {
@@ -128,18 +134,18 @@ async function syncBacklog() {
     // Задачу, отредактированную в админке, деплой не перезаписывает
     if (existing) {
       if (existing.source === "code") {
-        // У уже разобранных задач (triagedAt != null) поля, которые правит команда, не сбрасываются:
-        // needs, owner, scope, depends, estimate — решения триажа и продакта, а не данные из кода
-        const triaged = !!existing.triagedAt;
+        // У разобранных задач (triagedAt != null) или возвращённых на повторный разбор (событие "retriage")
+        // поля команды не сбрасываются: needs, owner, scope, depends, estimate — решения триажа и продакта
+        const fieldsProtected = !!existing.triagedAt || retriagedTaskIds.has(existing.id);
         await db.task.update({
           where: { key: t.key },
           data: {
             ...content,
-            needs: triaged ? undefined : content.needs,
-            owner: triaged ? undefined : content.owner,
-            scope: triaged ? undefined : content.scope,
-            depends: triaged ? undefined : content.depends,
-            estimate: triaged ? undefined : content.estimate,
+            needs: fieldsProtected ? undefined : content.needs,
+            owner: fieldsProtected ? undefined : content.owner,
+            scope: fieldsProtected ? undefined : content.scope,
+            depends: fieldsProtected ? undefined : content.depends,
+            estimate: fieldsProtected ? undefined : content.estimate,
           },
         });
       }

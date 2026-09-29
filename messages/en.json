@@ -62,6 +62,12 @@
     "why1": "Verified pros with ratings and reviews",
     "why2": "Transparent pricing with no hidden fees",
     "why3": "Reschedule or cancel in just a few clicks",
+    "heroTitle": "What service do you need?",
+    "heroSearch": "Find a service…",
+    "promisesTitle": "Promises we keep",
+    "faqTitle": "Frequently asked questions",
+    "ctaTitle": "Have questions?",
+    "ctaSubtitle": "We're available on WhatsApp",
     "whatsapp": "Have questions?",
     "whatsappSub": "Write to us — we'll reply quickly",
     "writeUs": "Contact us",
@@ -95,6 +101,12 @@
     },
     "firstOffer": "−{percent}% off the first visit for new customers",
     "notFound": "Service not found",
+    "guarantee1": "Guarantee of result",
+    "guarantee2": "Cancellation 24 h in advance",
+    "guarantee3": "Verified pros",
+    "perVisitSaving": "−{amount} per visit",
+    "firstVisitBannerTitle": "New client discount",
+    "firstVisitBannerText": "−{percent}% off the first visit",
     "includes": "Included",
     "excludes": "Not included"
   },
@@ -349,7 +361,14 @@
       "REFUNDED": "Refunded"
     },
     "card": "Card online",
-    "everyWeeks": "every {n} wks."
+    "everyWeeks": "every {n} wks.",
+    "visitTiming": {
+      "scheduled": "Scheduled",
+      "started": "Started",
+      "lateMin": "late {n} min",
+      "earlyMin": "{n} min early",
+      "onTime": "on time"
+    }
   },
   "master": {
     "about": "About the pro",
@@ -1945,6 +1964,30 @@
       }
     }
   },
+  "notFound": {
+    "title": "404",
+    "back": "Go home"
+  },
+  "notify": {
+    "master": {
+      "assigned": "📋 New visit\nClient: {clientName}\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}",
+      "rescheduled": "🔄 Visit rescheduled\n{serviceName}\nNew date: {date}, {time}",
+      "cancelled": "❌ Visit cancelled\n{serviceName}, {date}",
+      "tomorrow": "📅 Tomorrow's visits ({date}):\n{list}",
+      "tomorrowItem": "• {time} — {serviceName} · {clientName} · {address}",
+      "staffBotConnect": "Hello! I'm iHelp Staff Bot. Tap the button below to link your pro profile and receive visit notifications.",
+      "staffBotConnected": "✓ Done! You'll now receive visit notifications here.",
+      "staffBotNotMaster": "This bot is for iHelp pros only.",
+      "sharePhone": "📱 Share phone number"
+    },
+    "order": {
+      "created": "✅ Order confirmed\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}\nTotal: {price}\nThank you for choosing iHelp! We will assign a master soon.",
+      "masterAssigned": "👷 Master assigned\nService: {serviceName}, {date} at {time}\nMaster: {masterName}\nFeel free to contact us with any questions.",
+      "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}",
+      "cancelled": "❌ Visit cancelled\nService: {serviceName}, {date}\nWant to reschedule? Place a new order on the website.",
+      "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}"
+    }
+  },
   "review": {
     "title": "Your review of the visit",
     "placeholder": "What did you like, what could be improved?",
@@ -1965,15 +2008,6 @@
       "label": "Receive promotional offers",
       "hint": "Email and SMS",
       "notifications": "Notifications"
-    }
-  },
-  "notify": {
-    "order": {
-      "created": "✅ Order confirmed\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}\nTotal: {price}\nThank you for choosing iHelp! We will assign a master soon.",
-      "masterAssigned": "👷 Master assigned\nService: {serviceName}, {date} at {time}\nMaster: {masterName}\nFeel free to contact us with any questions.",
-      "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}",
-      "cancelled": "❌ Visit cancelled\nService: {serviceName}, {date}\nWant to reschedule? Place a new order on the website.",
-      "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}"
     }
   }
 }
