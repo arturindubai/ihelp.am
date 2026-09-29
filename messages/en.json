@@ -1227,6 +1227,7 @@
         "stopDone": "Remove stop",
         "stopping": "Stopping…",
         "triageBatch": "Triage: cards per run",
+        "deployBatch": "Deploy batch size (1–5)",
         "sweepEveryH": "Backlog sweep every N hours (0 — off)",
         "modes": {
           "auto": "Auto",
