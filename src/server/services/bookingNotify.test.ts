@@ -29,6 +29,10 @@ const visitStore = new Map<
   }
 >();
 
+vi.mock("./reviews", () => ({
+  createReviewToken: vi.fn().mockResolvedValue("test-review-token"),
+}));
+
 const userStore = new Map<
   string,
   { telegramId: string | null; email: string | null; name: string | null }
@@ -64,6 +68,9 @@ vi.mock("../db", () => ({
       findUnique: vi.fn().mockImplementation(({ where }: { where: { id: string } }) =>
         Promise.resolve(userStore.get(where.id) ?? null),
       ),
+    },
+    clientMessage: {
+      create: vi.fn().mockResolvedValue({}),
     },
   },
 }));
@@ -311,12 +318,12 @@ describe("подстановка переменных", () => {
     expect(text).toContain("2026-09-28");
   });
 
-  it("completed — текст содержит имя мастера и ссылку на заказ по id", async () => {
+  it("completed — текст содержит имя мастера и одноразовую ссылку на отзыв", async () => {
     makeVisit("v1");
     makeUser("u1", "telegram");
     await notifyClientVisitCompleted("v1");
     const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
     expect(text).toContain("Иван Петров");
-    expect(text).toContain("/account/orders/order-id-1");
+    expect(text).toContain("/review/test-review-token");
   });
 });

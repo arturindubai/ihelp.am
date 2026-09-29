@@ -96,7 +96,9 @@
     "firstOffer": "−{percent}% off the first visit for new customers",
     "notFound": "Service not found",
     "perVisitSaving": "−{amount} per visit",
-    "packageSaving": "Save {amount}"
+    "packageSaving": "Save {amount}",
+    "includes": "Included",
+    "excludes": "Not included"
   },
   "booking": {
     "title": "Checkout",
@@ -576,6 +578,21 @@
         "promo": "promo code",
         "plan+promo": "plan + promo",
         "first+promo": "first order + promo"
+      },
+      "messages": "Client messages",
+      "noMessages": "No messages",
+      "msgDelivered": "delivered",
+      "msgNotDelivered": "not delivered",
+      "msgChannels": {
+        "telegram": "Telegram",
+        "email": "email",
+        "alert": "operator alert",
+        "none": "not sent"
+      },
+      "msgEvents": {
+        "created": "Order accepted",
+        "cancelled": "Cancellation",
+        "completed": "Visit completed"
       }
     },
     "schedule": {
@@ -652,6 +669,9 @@
       "deleteCategory": "Delete category",
       "categoryHasServices": "Category has services — move or delete them first",
       "openOnSite": "Open on website",
+      "includesText": "What's included",
+      "excludesText": "What's not included",
+      "includesExcludesPlaceholder": "Each line is a separate item",
       "rating": "Rating",
       "bookings": "Bookings"
     },
@@ -883,6 +903,8 @@
       "emailTaken": "This email is already linked to another account",
       "emailInvalid": "Invalid email format",
       "revokeAccess": "Revoke access",
+      "cannotRemoveOwner": "Cannot change the role of another owner",
+      "lastOwner": "Last owner",
       "revokeConfirm": "Revoke access for {label}? Role will change to Client and all sessions will be terminated.",
       "lastLogin": "Last login:",
       "lastLoginNever": "never logged in",
@@ -1229,6 +1251,7 @@
         "stopDone": "Remove stop",
         "stopping": "Stopping…",
         "triageBatch": "Triage: cards per run",
+        "deployBatch": "Deploy batch size (1–5)",
         "sweepEveryH": "Backlog sweep every N hours (0 — off)",
         "modes": {
           "auto": "Auto",
@@ -1286,6 +1309,7 @@
           "holding": "no verdict, retry in {detail}",
           "question": "question: {detail}",
           "nodesign": "no design description",
+          "returned": "Returned",
           "deploy": "tested"
         },
         "more": "and {n} more — in Backlog tab",
@@ -1417,8 +1441,8 @@
         "link": "View mockup",
         "canon": "Library record",
         "return": "Return to designer",
-        "returnPh": "What to fix",
-        "returned": "Returned to designer",
+        "returnPh": "Remark (required)",
+        "returned": "Sent to designer",
         "failed": "Error: {error}"
       },
       "imageViewer": {
@@ -1501,6 +1525,8 @@
         "empty": "Nothing needs your decision right now ✓",
         "allDone": "All done — thank you!",
         "headerCount": "{n, plural, one {# card waiting for answer} other {# cards waiting for answer}}",
+        "headerWithReview": "{q, plural, one {# question} other {# questions}} + {m} in review",
+        "headerReviewOnly": "{m, plural, one {# task in review} other {# tasks in review}}",
         "filterAll": "All ({n})",
         "filterUrgent": "Urgent ({n})",
         "filterPostponed": "Postponed ({n})",
@@ -1509,9 +1535,12 @@
         "urgent": "Urgent",
         "groups": {
           "variant": "Choose an option",
+          "price": "Name a price or number",
           "data": "Send data or document",
           "auth": "Sign in to a service",
-          "rule": "Approve a rule"
+          "approve": "Approve or agree",
+          "rule": "Approve a system rule",
+          "other": "Other"
         },
         "postpone3days": "Postpone for 3 days",
         "paused": "Workers paused until {until}.",
@@ -1530,17 +1559,26 @@
         "replySend": "Reply",
         "postpone": "Postpone",
         "postponePh": "Reason (optional)…",
+        "postponeDatePh": "Until date",
         "postponeConfirm": "Postpone",
         "stale": "Stale or without assignee",
         "stuckReview": "Review stuck",
         "nocodeReview": "Awaiting your approval",
         "nocodeReviewHint": "No-code in review: documents, decisions, content. Accept or return with feedback.",
+        "devOnly": "for assignee",
+        "textMayCut": "⚠ text may be truncated — open task for full text",
+        "returnedRuns": "Returned for revision",
+        "returnedRunsHint": "Deployer returned the task due to merge conflict or feedback — production not affected, task back in queue.",
         "failedRuns": "Failed worker runs in the last 24 hours",
         "techBlocked": "Blocked on tech/external reasons",
         "techBlockedHint": "These tasks are waiting for a technical solution or external service response. Unblock with cc.mjs unblock KEY.",
         "techBlockedUntil": "until {date}",
         "alertMissing": "⚠️ Tech alerts are not delivered: no recipient configured.",
-        "alertMissingLink": "Configure notifications"
+        "alertMissingLink": "Configure notifications",
+        "waitingDeps": "Waiting for dependencies",
+        "waitingDepsHint": "Tasks that cannot start: their dependencies are open and have no one to act on them",
+        "waitingDepsMore": "{n} more",
+        "unblocks": "{n, plural, one {Unblocks: # task} other {Unblocks: # tasks}}"
       },
       "devTab": {
         "empty": "Nothing is being worked on now",
@@ -1594,18 +1632,23 @@
         "noCode": "no code"
       },
       "notify": {
-        "inbox": "Owner inbox",
-        "inboxEmpty": "No messages",
-        "compose": "Write",
-        "outbox": "Sent to roles",
-        "outboxEmpty": "Nothing sent yet",
+        "inbox": "Notifications",
+        "inboxEmpty": "No new notifications",
+        "markAllRead": "Mark all read",
+        "markAllReadDone": "All read",
+        "compose": "Write to workers",
+        "outbox": "Sent",
+        "outboxEmpty": "Nothing yet",
         "to": "To:",
         "roles": {
           "owner": "Owner",
           "cto": "CTO",
           "workers": "All workers",
           "triage": "Triage",
+          "product": "Product",
+          "designer": "Designer",
           "dev": "Developers",
+          "nocode": "No-code",
           "tester": "Tester",
           "deployer": "Deployer"
         },
@@ -1640,11 +1683,14 @@
         "remove": "remove",
         "send": "Send to triage",
         "sending": "Sending…",
+        "retrying": "Retrying {n}/3…",
         "sent": "Card {key} is in the triage queue.",
         "open": "Open",
         "tooShort": "Please describe in at least a few words — 10 characters minimum",
         "error": "Failed to send",
         "close": "Close",
+        "draftRestored": "Draft restored after page refresh",
+        "draftBadge": "Unsaved draft",
         "history": "Queue & history",
         "empty": "No intake yet",
         "states": {
@@ -1710,11 +1756,25 @@
             "in_progress_stale": "In progress without pulse for over an hour"
           }
         },
+        "depChains": "Chains with blocked root",
+        "depChainsBacklog": "in backlog",
+        "depChainsWaiting": "waiting",
         "tips": {
           "dispatcher": "Dispatcher silent for more than 3 minutes — on server: systemctl status ihelp-dispatcher.timer; install — deploy/systemd/install.sh.",
           "login": "Workers say 'Not logged in' — sign in to subscription: scripts/claude-login.sh, then 'Resume' in Workers tab.",
           "stop": "Stop everything immediately: 'Stop all' in Workers tab or on server systemctl stop 'ihelp-w-*' ihelp-dispatcher.timer.",
           "logs": "App errors — Logs page; full log — docker compose logs app."
+        },
+        "denials": {
+          "title": "Worker permission denials in 24 hours",
+          "share": "{pct}%",
+          "shareHint": "runs with a denied command: {denied} of {total}. Target — below {target}%",
+          "noData": "No data yet: the dispatcher writes denials to the run log, the first numbers will appear after the next worker runs.",
+          "none": "No denied commands in 24 hours.",
+          "top": "Most frequent denied commands",
+          "times": "×{n}",
+          "skipped": "Runs without denial data: {n} — not counted in the share.",
+          "hint": "A denial is a command blocked by the role rules (scripts/worker-run.sh). Only the command form is shown, without text or keys. To check instructions against the rules: node scripts/check-role-commands.mjs."
         }
       },
       "logs": {
@@ -1886,6 +1946,14 @@
         "unarchive": "Restore from archive"
       }
     }
+  },
+  "review": {
+    "title": "Your review of the visit",
+    "placeholder": "What did you like, what could be improved?",
+    "send": "Submit review",
+    "thanks": "Thank you! Your review has been received.",
+    "invalid": "This link is invalid or has already been used.",
+    "alreadyLeft": "You have already left a review for this visit."
   },
   "cookies": {
     "title": "We use cookies",

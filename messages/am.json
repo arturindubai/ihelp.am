@@ -96,7 +96,9 @@
     "firstOffer": "",
     "notFound": "",
     "perVisitSaving": "",
-    "packageSaving": ""
+    "packageSaving": "",
+    "includes": "",
+    "excludes": ""
   },
   "booking": {
     "title": "",
@@ -576,6 +578,21 @@
         "promo": "",
         "plan+promo": "",
         "first+promo": ""
+      },
+      "messages": "",
+      "noMessages": "",
+      "msgDelivered": "",
+      "msgNotDelivered": "",
+      "msgChannels": {
+        "telegram": "",
+        "email": "",
+        "alert": "",
+        "none": ""
+      },
+      "msgEvents": {
+        "created": "",
+        "cancelled": "",
+        "completed": ""
       }
     },
     "schedule": {
@@ -652,6 +669,9 @@
       "deleteCategory": "",
       "categoryHasServices": "",
       "openOnSite": "",
+      "includesText": "",
+      "excludesText": "",
+      "includesExcludesPlaceholder": "",
       "rating": "",
       "bookings": ""
     },
@@ -880,6 +900,8 @@
       "emailTaken": "",
       "emailInvalid": "",
       "revokeAccess": "",
+      "cannotRemoveOwner": "",
+      "lastOwner": "",
       "revokeConfirm": "",
       "lastLogin": "",
       "lastLoginNever": "",
@@ -1092,12 +1114,48 @@
       "you": {
         "postpone": "Հետաձգել",
         "postponePh": "",
-        "postponeConfirm": "Հետաձգել"
+        "postponeConfirm": "Հետաձգել",
+        "groups": {
+          "variant": "",
+          "price": "",
+          "data": "",
+          "auth": "",
+          "approve": "",
+          "rule": "",
+          "other": ""
+        },
+        "headerWithReview": "",
+        "headerReviewOnly": "",
+        "devOnly": "",
+        "textMayCut": "",
+        "returnedRuns": "",
+        "returnedRunsHint": ""
       },
       "gate": {
         "needs_open": "Կան բաց հարցեր արտադրանքի վերաբերյալ — նախ ստացեք պատասխան"
+      },
+      "healthPage": {
+        "denials": {
+          "title": "",
+          "share": "",
+          "shareHint": "",
+          "noData": "",
+          "none": "",
+          "top": "",
+          "times": "",
+          "skipped": "",
+          "hint": ""
+        }
       }
     }
+  },
+  "review": {
+    "title": "",
+    "placeholder": "",
+    "send": "",
+    "thanks": "",
+    "invalid": "",
+    "alreadyLeft": ""
   },
   "cookies": {
     "title": "",
