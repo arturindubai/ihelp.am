@@ -94,7 +94,9 @@
       "PACKAGE": "Պակետ"
     },
     "firstOffer": "",
-    "notFound": ""
+    "notFound": "",
+    "includes": "",
+    "excludes": ""
   },
   "booking": {
     "title": "",
@@ -574,6 +576,21 @@
         "promo": "",
         "plan+promo": "",
         "first+promo": ""
+      },
+      "messages": "",
+      "noMessages": "",
+      "msgDelivered": "",
+      "msgNotDelivered": "",
+      "msgChannels": {
+        "telegram": "",
+        "email": "",
+        "alert": "",
+        "none": ""
+      },
+      "msgEvents": {
+        "created": "",
+        "cancelled": "",
+        "completed": ""
       }
     },
     "schedule": {
@@ -585,12 +602,28 @@
     },
     "services": {
       "title": "",
+      "catalogTitle": "",
       "categories": "",
       "services": "",
       "newCategory": "",
       "newService": "",
       "category": "",
       "comingSoon": "",
+      "comingSoonLabel": "",
+      "archived": "",
+      "archiveCategory": "",
+      "restoreCategory": "",
+      "categoryHiddenBanner": "",
+      "categoryArchivedBanner": "",
+      "filterAll": "",
+      "filterActive": "",
+      "filterHidden": "",
+      "filterSoon": "",
+      "searchPlaceholder": "",
+      "draft": "",
+      "minPrice": "",
+      "noServicesInCategory": "",
+      "addFirstService": "",
       "tabs": {
         "main": "",
         "options": "",
@@ -650,6 +683,9 @@
       "deleteCategory": "",
       "categoryHasServices": "",
       "openOnSite": "",
+      "includesText": "",
+      "excludesText": "",
+      "includesExcludesPlaceholder": "",
       "rating": "",
       "bookings": ""
     },
@@ -878,6 +914,8 @@
       "emailTaken": "",
       "emailInvalid": "",
       "revokeAccess": "",
+      "cannotRemoveOwner": "",
+      "lastOwner": "",
       "revokeConfirm": "",
       "lastLogin": "",
       "lastLoginNever": "",
@@ -965,7 +1003,15 @@
         "title": "",
         "placeholder": "",
         "submit": "",
-        "hint": ""
+        "hint": "",
+        "dropActive": "",
+        "pasteHint": "",
+        "dropTypeError": "",
+        "dropSizeError": "",
+        "dropLimitError": "",
+        "retrying": "",
+        "draftRestored": "",
+        "draftBadge": ""
       },
       "workers": {
         "title": "",
@@ -991,6 +1037,9 @@
           "login": "",
           "stop": "",
           "logs": ""
+        },
+        "reasons": {
+          "needs": ""
         }
       },
       "logs": {
@@ -1090,12 +1139,49 @@
       "you": {
         "postpone": "Հետաձգել",
         "postponePh": "",
-        "postponeConfirm": "Հետաձգել"
+        "postponeConfirm": "Հետաձգել",
+        "groups": {
+          "variant": "",
+          "approve": "",
+          "do": "",
+          "price": "",
+          "data": "",
+          "auth": "",
+          "rule": "",
+          "other": ""
+        },
+        "headerWithReview": "",
+        "headerReviewOnly": "",
+        "devOnly": "",
+        "textMayCut": "",
+        "returnedRuns": "",
+        "returnedRunsHint": ""
       },
       "gate": {
         "needs_open": "Կան բաց հարցեր արտադրանքի վերաբերյալ — նախ ստացեք պատասխան"
+      },
+      "healthPage": {
+        "denials": {
+          "title": "",
+          "share": "",
+          "shareHint": "",
+          "noData": "",
+          "none": "",
+          "top": "",
+          "times": "",
+          "skipped": "",
+          "hint": ""
+        }
       }
     }
+  },
+  "review": {
+    "title": "",
+    "placeholder": "",
+    "send": "",
+    "thanks": "",
+    "invalid": "",
+    "alreadyLeft": ""
   },
   "cookies": {
     "title": "",

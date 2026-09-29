@@ -82,3 +82,11 @@ export async function cleanUnusedImages(now: Date): Promise<{ deleted: number; e
   console.log(`[cron] clean-images: удалено ${deleted} файл(ов)${errors ? `, ошибок: ${errors}` : ""}`);
   return { deleted, errors };
 }
+
+/** Удаляет записи журнала действий сотрудников старше 6 месяцев (180 дней) */
+export async function cleanOldAuditLogs(now: Date): Promise<number> {
+  const cutoff = new Date(now.getTime() - 180 * 24 * 3600_000);
+  const { count } = await db.auditLog.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  console.log(`[cron] clean-audit-log: удалено ${count} запис(ей)`);
+  return count;
+}

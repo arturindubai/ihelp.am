@@ -62,6 +62,8 @@ export function ServiceEditor({ id, initial, categories, masters, rules }: { id:
               <div className="md:col-span-2"><I18nInput label={t("common.title")} required value={s.title} onChange={(v) => up({ title: v })} /></div>
               <div className="md:col-span-2"><I18nInput label={t("common.subtitle")} value={s.subtitle} onChange={(v) => up({ subtitle: v })} /></div>
               <div className="md:col-span-2"><I18nInput label={t("common.description")} multiline value={s.description} onChange={(v) => up({ description: v })} /></div>
+              <div className="md:col-span-2"><I18nInput label={t("services.includesText")} multiline placeholder={t("services.includesExcludesPlaceholder")} value={s.includesText} onChange={(v) => up({ includesText: v })} /></div>
+              <div className="md:col-span-2"><I18nInput label={t("services.excludesText")} multiline placeholder={t("services.includesExcludesPlaceholder")} value={s.excludesText} onChange={(v) => up({ excludesText: v })} /></div>
               <TextInput label={t("common.slug")} hint={t("common.slugHint")} value={s.slug} onChange={(v) => up({ slug: v })} />
               <div><label className="label">{t("services.category")}</label><select className="input" value={s.categoryId} onChange={(e) => up({ categoryId: e.target.value })}>{categories.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}</select></div>
               <NumInput label={t("common.sort")} value={s.sort} onChange={(v) => up({ sort: v ?? 0 })} />
