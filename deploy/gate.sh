@@ -65,9 +65,10 @@ else
 fi
 
 # ── 4. Демо-данные вне блока SEED_FLAG ───────────────────────────────────────
-# Нарушение: seed.ts или миграция создаёт записи Review/Order/Visit/Master вне
-# блока, закрытого флагом _seed. При первом деплое на чистую базу такие записи
-# появились бы на живом сайте от имени несуществующих клиентов (инцидент DSN-1).
+# Нарушение: seed.ts создаёт или изменяет записи Review/Order/Visit/Master/User
+# (create, createMany, upsert, update, updateMany, delete, deleteMany) вне блока,
+# закрытого флагом _seed. Seed выполняется при каждой выкладке — такие операции
+# меняют живые данные прода (инциденты DSN-1, NOTIFY-2B).
 echo "Гейт: демо-данные вне блока SEED_FLAG"
 if command -v node >/dev/null 2>&1; then
   if seed_out=$(node scripts/check-seed.mjs 2>&1); then
