@@ -242,6 +242,7 @@ function hint(code) {
     sha_required: "\n  Нужен коммит в main: --sha <коммит>.",
     reason_required: "\n  Этот переход требует причину словами.",
     forbidden_transition: "\n  Этой роли такой переход не разрешён (docs/DEV_SYSTEM.md, раздел «Статусы»).",
+    triaged_refused: "\n  Запись человека в ленте новее события разбора — задача вернётся в очередь триажа автоматически.",
     not_your_task: "\n  Задачу держит другой исполнитель.",
     no_update_fields: "\n  Укажите поля: --design-file, --details-file, --summary-file или --data '{\"поле\":\"значение\"}'.",
   };
@@ -882,7 +883,8 @@ async function main() {
     case "triaged": {
       const k = needKey();
       if (text().length < 10) die("нужен вердикт словами: что проверено и что решено (в очередь, вопрос, отложено, разбито на …)");
-      await api("POST", null, { action: "triaged", agent: agentFor(k), key: k, text: text() });
+      const r = await api("POST", null, { action: "triaged", agent: agentFor(k), key: k, text: text() });
+      if (!r?.ok) die(`${k}: сервер не принял отметку триажа`);
       console.log(`✓ ${k} разобрана триажем`);
       return;
     }

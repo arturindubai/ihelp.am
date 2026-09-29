@@ -116,6 +116,7 @@
     "address": "Address",
     "addAddress": "New address",
     "dateTime": "Date and time",
+    "dateAndMaster": "Date & pro",
     "availableTime": "Available times",
     "startDate": "First visit date",
     "noSlots": "No available times for this day",
@@ -127,6 +128,7 @@
     "anyMasterSub": "We'll assign the best available",
     "masterBusy": "Busy at this time",
     "chooseTimeFirst": "Please select a date and time first",
+    "whoComes": "Who's coming",
     "serviceLabel": "Service",
     "wishes": "Preferences",
     "noCallLabel": "No call needed before arrival",
@@ -793,11 +795,59 @@
       "rulesHint": "The promo code applies to the first paid visit. Without the 'stackable' flag the client gets the best discount."
     },
     "banners": {
-      "title": "Home page banners",
-      "newBanner": "New banner",
+      "title": "Banners",
+      "newBanner": "+ New banner",
       "link": "Link",
-      "promoCode": "Promo code on banner",
-      "bg": "Background color"
+      "promoCode": "Promo code",
+      "bg": "Background color",
+      "empty": "No banners for this placement",
+      "placement": "Placement",
+      "type": "Type",
+      "audience": "Audience",
+      "segment": "Segment",
+      "startsAt": "Show from",
+      "endsAt": "Show until",
+      "views": "Views",
+      "clicks": "Clicks",
+      "ctr": "CTR",
+      "generate": "Generate",
+      "stats": "Statistics",
+      "placements": {
+        "CAROUSEL_HOME": "Home — carousel",
+        "HERO_HOME": "Home — hero",
+        "CATALOG": "Catalog",
+        "SERVICE": "Service page",
+        "CHECKOUT": "Checkout",
+        "SUCCESS": "Success",
+        "EMAIL": "Email",
+        "CLIENT_CABINET": "Client cabinet",
+        "MASTER_CABINET": "Master cabinet"
+      },
+      "types": {
+        "PROMO": "Promo",
+        "ANNOUNCEMENT": "Announcement",
+        "UPSELL": "Upsell",
+        "CROSS_SELL": "Cross-sell"
+      },
+      "audiences": {
+        "ALL": "Everyone",
+        "LOGGED_IN": "Logged in only",
+        "GUESTS": "Guests only"
+      },
+      "segments": {
+        "ALL": "All",
+        "NEW": "New",
+        "RETURNING": "Returning"
+      },
+      "tabs": {
+        "all": "All"
+      },
+      "status": {
+        "active": "Active",
+        "paused": "Paused",
+        "scheduled": "Scheduled",
+        "expired": "Expired"
+      }
     },
     "pages": {
       "title": "Pages",
@@ -1161,7 +1211,8 @@
           "design": "For UI: design described in text or file",
           "mockup": "Mockup approved by owner",
           "size": "Estimated S or M (L should be split)",
-          "scope": "Affected files listed"
+          "scope": "Affected files listed",
+          "scope_messages_folder": "Task scope lists files, not the entire messages folder"
         }
       },
       "move": {
@@ -1570,13 +1621,15 @@
         "urgent": "Urgent",
         "groups": {
           "variant": "Choose an option",
+          "approve": "Approve or agree",
+          "do": "Do it yourself",
           "price": "Name a price or number",
           "data": "Send data or document",
           "auth": "Sign in to a service",
-          "approve": "Approve or agree",
           "rule": "Approve a system rule",
           "other": "Other"
         },
+        "postponedUntil": "returns {date}",
         "postpone3days": "Postpone for 3 days",
         "paused": "Workers paused until {until}.",
         "toWorkers": "Open 'Workers'",
@@ -1606,7 +1659,7 @@
         "returnedRunsHint": "Deployer returned the task due to merge conflict or feedback — production not affected, task back in queue.",
         "failedRuns": "Failed worker runs in the last 24 hours",
         "techBlocked": "Blocked on tech/external reasons",
-        "techBlockedHint": "These tasks are waiting for a technical solution or external service response. Unblock with cc.mjs unblock KEY.",
+        "techBlockedHint": "These tasks are waiting for a technical solution or external service response. When resolved, write in the task feed.",
         "techBlockedUntil": "until {date}",
         "alertMissing": "⚠️ Tech alerts are not delivered: no recipient configured.",
         "alertMissingLink": "Configure notifications",
@@ -1706,6 +1759,7 @@
         "placeholder": "What needs to be done and why. Multiple tasks at once — triage will split them.",
         "voice": "Voice",
         "voiceStop": "Stop recording",
+        "voiceUnsupported": "Voice — Chrome only",
         "listening": "listening…",
         "stale": "Site was updated while the window was open. Refresh — draft is saved and will return.",
         "voiceErrors": {
@@ -2040,6 +2094,11 @@
       "hint": "Email and SMS",
       "notifications": "Notifications"
     }
+  },
+  "cart": {
+    "itemsCount": "{count, plural, one {# item} other {# items}}",
+    "total": "{amount} ֏",
+    "checkout": "Book now"
   },
   "push": {
     "title": "Visit notifications",

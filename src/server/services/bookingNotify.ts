@@ -9,6 +9,7 @@ import { amd } from "@/lib/format";
 import { sendMail, mailTemplate } from "./mail";
 import { notifyTech, html } from "../notify";
 import { createReviewToken } from "./reviews";
+import { getEmailBannerHtml } from "./banners";
 import defaultTemplates from "../../../messages/ru.json";
 
 type AddressSnapshot = { street?: string; building?: string; apartment?: string };
@@ -86,7 +87,8 @@ async function sendToClient(
           .replace(/&lt;/g, "<")
           .replace(/&gt;/g, ">");
         const lines = plainText.split("\n").filter(Boolean);
-        const htmlBody = mailTemplate({ title: mailSubject, lines, brand });
+        const bannerHtml = await getEmailBannerHtml("ru").catch(() => null);
+        const htmlBody = mailTemplate({ title: mailSubject, lines, brand, ...(bannerHtml ? { bannerHtml } : {}) });
         const r = await sendMail({ to: user.email, subject: mailSubject, html: htmlBody, text: plainText });
         if (r.ok) channel = "email";
       }

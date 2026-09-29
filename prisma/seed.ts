@@ -199,8 +199,8 @@ const DURATIONS: { h: number; price: number; hint?: [string, string]; schedule: 
 const HOURS = Object.fromEntries([1, 2, 3, 4, 5, 6].map((d) => [String(d), [["09:00", "19:00"]]]));
 
 async function main() {
-  // Настройки: владелец
   const ownerPhone = process.env.ADMIN_PHONE || "+37400000000";
+
   // Роль владельца подтверждается при каждой выкладке: при смене ADMIN_PHONE новый номер сразу получает права.
   // Исключение из проверки гейта задано маркером — только для этой одной строки (инцидент NOTIFY-2B).
   await db.user.upsert({ where: { phone: ownerPhone }, create: { phone: ownerPhone, role: "OWNER", name: "Owner" }, update: { role: "OWNER" } }); // seed-gate:owner-only
@@ -215,7 +215,7 @@ async function main() {
   const SEED_FLAG = "_seed";
   if ((await db.setting.findUnique({ where: { key: SEED_FLAG } })) || (await db.service.count())) {
     await db.setting.upsert({ where: { key: SEED_FLAG }, create: { key: SEED_FLAG, value: { at: new Date().toISOString() } }, update: {} });
-    console.log("Seed: demo data already applied, skipped. Owner phone:", ownerPhone);
+    console.log("Seed: demo data already applied, skipped.");
     return;
   }
 
@@ -354,15 +354,16 @@ async function main() {
   }
 
   if (!(await db.banner.count())) {
-    await db.banner.create({
-      data: {
-        title: t("−25% на первый визит", "−25% off your first visit"),
-        subtitle: t("При подписке или пакете от 4 визитов", "With a subscription or 4+ visit pack"),
-        link: "/s/regular-cleaning",
-        bg: "#1c1917",
-        sort: 0,
-      },
-    });
+    const demoBanners = [
+      { placement: "CAROUSEL_HOME", title: t("−25% на первый визит", "−25% off your first visit"), subtitle: t("При подписке или пакете от 4 визитов", "With a subscription or 4+ visit pack"), link: "/s/regular-cleaning", bg: "#1c1917", sort: 0 },
+      { placement: "CHECKOUT", title: t("Первый визит бесплатно", "First visit free"), subtitle: t("При покупке пакета от 4 визитов", "With a 4-visit pack"), link: "/s/regular-cleaning", bg: "#5B3DF5", sort: 0 },
+      { placement: "SUCCESS", title: t("Оцените нашу работу", "Rate our service"), subtitle: t("Поставьте оценку в личном кабинете", "Leave a review in your account"), link: "/account/orders", bg: "#1e7e3e", sort: 0 },
+      { placement: "CLIENT_CABINET", title: t("Специальное предложение", "Special offer"), subtitle: t("Скидка 10% на следующий заказ", "10% off your next order"), link: "/services", bg: "#5B3DF5", sort: 0 },
+      { placement: "MASTER_CABINET", title: t("Новые правила расписания", "New schedule rules"), subtitle: t("Смотрите обновление в настройках", "Check updates in settings"), bg: "#1c1917", sort: 0 },
+    ] as const;
+    for (const data of demoBanners) {
+      await db.banner.create({ data });
+    }
   }
 
   const pages: [string, string, string][] = [
@@ -375,7 +376,7 @@ async function main() {
   }
   await db.setting.create({ data: { key: SEED_FLAG, value: { at: new Date().toISOString() } } });
 
-  console.log("Seed done. Owner phone:", ownerPhone);
+  console.log("Seed done.");
 }
 
 main().finally(() => db.$disconnect());

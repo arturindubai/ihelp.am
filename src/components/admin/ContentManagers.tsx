@@ -3,54 +3,13 @@ import { useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Plus, ExternalLink } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
-import { deleteBannerAction, deleteFeatureAction, deleteFaqAction, deletePageAction, saveBannerAction, saveFeatureAction, saveFaqAction, savePageAction, type BannerPayload, type FeaturePayload, type FaqPayload } from "@/server/actions/admin/misc";
+import { deleteFeatureAction, deleteFaqAction, deletePageAction, saveFeatureAction, saveFaqAction, savePageAction, type FeaturePayload, type FaqPayload } from "@/server/actions/admin/misc";
 import { tr } from "@/i18n/locales";
 import { ICON_NAMES, Icon } from "@/components/Icon";
 import { Sheet } from "@/components/ui/Sheet";
-import { I18nInput, ImageInput, NumInput, TextInput, Toggle, type I18n } from "./fields";
+import { I18nInput, NumInput, TextInput, Toggle, type I18n } from "./fields";
 
-export function BannerManager({ banners }: { banners: { id: string; data: BannerPayload }[] }) {
-  const t = useTranslations("admin");
-  const locale = useLocale();
-  const router = useRouter();
-  const [edit, setEdit] = useState<{ id: string | null; data: BannerPayload } | null>(null);
-  const [pending, start] = useTransition();
-  const d = edit?.data;
-  const up = (p: Partial<BannerPayload>) => edit && setEdit({ ...edit, data: { ...edit.data, ...p } });
-  return (
-    <div>
-      <button className="btn-dark mb-3" onClick={() => setEdit({ id: null, data: { title: {}, subtitle: {}, image: null, link: "", promoCode: "", bg: "#1c1917", active: true, sort: banners.length } })}><Plus size={18} /> {t("banners.newBanner")}</button>
-      <div className="space-y-2">
-        {banners.map((b) => (
-          <button key={b.id} onClick={() => setEdit(b)} className={`flex h-24 w-full flex-col justify-end overflow-hidden rounded-2xl p-3 text-left text-inverse ${b.data.active ? "" : "opacity-50"}`} style={{ background: b.data.bg || "#1c1917" }}>
-            <span className="text-lg font-bold">{tr(b.data.title, locale)}</span>
-            <span className="text-sm opacity-80">{tr(b.data.subtitle, locale)}</span>
-          </button>
-        ))}
-      </div>
-      <Sheet open={!!edit} onClose={() => setEdit(null)} title={t("banners.title")} footer={
-        <div className="flex gap-2">
-          {edit?.id && <button className="btn-danger" disabled={pending} onClick={() => confirm(t("common.deleteConfirm")) && start(async () => { await deleteBannerAction(edit.id!); setEdit(null); router.refresh(); })}>{t("common.delete")}</button>}
-          <button className="btn-primary flex-1" disabled={pending} onClick={() => start(async () => { await saveBannerAction(edit!.id, edit!.data); setEdit(null); router.refresh(); })}>{t("common.save")}</button>
-        </div>
-      }>
-        {d && (
-          <div className="space-y-3">
-            <div className="flex h-28 flex-col justify-end rounded-2xl p-3 text-inverse" style={{ background: d.bg || "#1c1917" }}><span className="text-lg font-bold">{tr(d.title, locale) || "…"}</span><span className="text-sm opacity-80">{tr(d.subtitle, locale)}</span></div>
-            <I18nInput label={t("common.title")} value={d.title} onChange={(v) => up({ title: v })} />
-            <I18nInput label={t("common.subtitle")} value={d.subtitle} onChange={(v) => up({ subtitle: v })} />
-            <TextInput label={t("banners.link")} placeholder="/s/regular-cleaning" value={d.link} onChange={(v) => up({ link: v })} />
-            <TextInput label={t("banners.promoCode")} value={d.promoCode} onChange={(v) => up({ promoCode: v.toUpperCase() })} />
-            <div><label className="label">{t("banners.bg")}</label><input type="color" className="h-11 w-20 rounded-lg border border-line" value={d.bg || "#1c1917"} onChange={(e) => up({ bg: e.target.value })} /></div>
-            <ImageInput label={t("common.image")} value={d.image} onChange={(v) => up({ image: v })} />
-            <NumInput label={t("common.sort")} value={d.sort} onChange={(v) => up({ sort: v ?? 0 })} />
-            <Toggle label={t("common.active")} checked={d.active} onChange={(v) => up({ active: v })} />
-          </div>
-        )}
-      </Sheet>
-    </div>
-  );
-}
+export { BannerManager } from "./BannerManager";
 
 export function FeatureManager({ features }: { features: { id: string; data: FeaturePayload }[] }) {
   const t = useTranslations("admin");
