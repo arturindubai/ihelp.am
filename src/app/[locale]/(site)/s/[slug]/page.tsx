@@ -13,6 +13,7 @@ import { Icon } from "@/components/Icon";
 import { Rating, StarRow } from "@/components/Stars";
 import { ServiceConfigurator } from "@/components/service/ServiceConfigurator";
 import { Img } from "@/components/Img";
+import { PromoSlot } from "@/components/PromoSlot";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;
@@ -54,6 +55,41 @@ export default async function ServicePage({ params }: { params: Promise<{ locale
       )}
       {Number.isFinite(minPrice) && <p className="mt-1 text-sm font-medium">{t("startsAt", { price: amd(minPrice) })}</p>}
       {s.description && <p className="mt-2 text-[15px] text-muted">{s.description}</p>}
+
+      <PromoSlot placement="SERVICE" locale={locale} />
+
+      {(s.includesItems.length > 0 || s.excludesItems.length > 0) && (
+        <section className="mt-4 card overflow-hidden">
+          <div className="flex divide-x divide-line">
+            {s.includesItems.length > 0 && (
+              <div className={`p-4 bg-ok-50 ${s.excludesItems.length > 0 ? "flex-1" : "w-full"}`}>
+                <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-ok">{t("includes")}</div>
+                <ul className="space-y-1.5">
+                  {s.includesItems.map((item, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="mt-0.5 size-4 shrink-0 rounded-full bg-ok" />
+                      <span className="text-[13px] leading-snug">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {s.excludesItems.length > 0 && (
+              <div className={`p-4 bg-bad-50 ${s.includesItems.length > 0 ? "flex-1" : "w-full"}`}>
+                <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-bad">{t("excludes")}</div>
+                <ul className="space-y-1.5">
+                  {s.excludesItems.map((item, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="mt-0.5 size-4 shrink-0 rounded-full bg-bad" />
+                      <span className="text-[13px] leading-snug">{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       <ServiceConfigurator s={s} rules={settings.pricing} isFirstOrder={first} policy={s.policy ?? undefined} />
 

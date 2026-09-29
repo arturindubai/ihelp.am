@@ -1,0 +1,26 @@
+import { NextResponse } from "next/server";
+import { db } from "@/server/db";
+import { verifyUnsubscribeToken } from "@/lib/emailToken";
+
+const APP_URL = () => (process.env.APP_URL || "https://ihelp.am").replace(/\/$/, "");
+
+/** GET /api/email/unsubscribe?token=<signed-token>
+ *  Устанавливает emailUnsubscribedAt у пользователя; редиректит на страницу с подтверждением. */
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const token = searchParams.get("token") || "";
+  const locale = searchParams.get("locale") || "ru";
+  const safeLocale = ["ru", "en", "am"].includes(locale) ? locale : "ru";
+
+  const userId = verifyUnsubscribeToken(token);
+  if (!userId) {
+    return NextResponse.redirect(`${APP_URL()}/${safeLocale}`);
+  }
+
+  await db.user.updateMany({
+    where: { id: userId, emailUnsubscribedAt: null },
+    data: { emailUnsubscribedAt: new Date() },
+  });
+
+  return NextResponse.redirect(`${APP_URL()}/${safeLocale}/email/unsubscribed`);
+}

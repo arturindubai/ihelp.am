@@ -4,11 +4,18 @@ import { escapeHtml } from "@/lib/html";
 import { sendTelegramDirect } from "./notifyQueue";
 import { getSettings, getUiOverrides } from "../settings";
 import { tr } from "@/i18n/locales";
-import { hm, ymd } from "@/lib/time";
-import { amd } from "@/lib/format";
+import { hm, ymd, isQuietHour } from "@/lib/time";
+import { amd, dateLabel, timeLabel } from "@/lib/format";
 import { sendMail, mailTemplate } from "./mail";
 import { notifyTech, html } from "../notify";
+import { alertTech } from "../alerts";
+import { createUnsubscribeToken } from "@/lib/emailToken";
+import { createReviewToken } from "./reviews";
+import { getEmailBannerHtml } from "./banners";
 import defaultTemplates from "../../../messages/ru.json";
+import enMessages from "../../../messages/en.json";
+
+const APP_URL = () => (process.env.APP_URL || "https://ihelp.am").replace(/\/$/, "");
 
 type AddressSnapshot = { street?: string; building?: string; apartment?: string };
 type Config = { service?: { title?: unknown }; plan?: { title?: unknown } | null };
@@ -19,10 +26,10 @@ function addrLine(snapshot: unknown): string {
   return `${a.street} ${a.building ?? ""}${a.apartment ? ", кв. " + a.apartment : ""}`.trim();
 }
 
-function serviceTitle(config: unknown): string {
+function serviceTitle(config: unknown, locale = "ru"): string {
   const c = config as Config | null;
-  const svc = tr(c?.service?.title, "ru");
-  const plan = tr(c?.plan?.title ?? null, "ru");
+  const svc = tr(c?.service?.title, locale);
+  const plan = tr(c?.plan?.title ?? null, locale);
   return [svc, plan].filter(Boolean).join(" · ");
 }
 
@@ -31,7 +38,12 @@ function fill(template: string, params: Record<string, string>): string {
   return Object.entries(params).reduce((s, [k, v]) => s.replace(new RegExp(`\\{${k}\\}`, "g"), escapeHtml(v)), template);
 }
 
-/** Шаблоны уведомлений с учётом правок из Админки → Переводы (правятся без пересборки) */
+/** Подставить параметры в шаблон без экранирования (для строк, которые затем экранирует mailTemplate) */
+function fillPlain(template: string, params: Record<string, string>): string {
+  return Object.entries(params).reduce((s, [k, v]) => s.replace(new RegExp(`\\{${k}\\}`, "g"), v), template);
+}
+
+/** Шаблоны уведомлений с учётом правок из Админки → Переводы */
 async function getOrderTemplates(): Promise<typeof defaultTemplates.notify.order> {
   const overrides = await getUiOverrides("ru");
   const tmpl = { ...defaultTemplates.notify.order };
@@ -44,6 +56,42 @@ async function getOrderTemplates(): Promise<typeof defaultTemplates.notify.order
   return tmpl;
 }
 
+/** Клиентские шаблоны с поддержкой локали (для писем reminders/reviews) */
+function clientTemplates(locale: string): typeof defaultTemplates.notify.client {
+  return (locale === "en" ? (enMessages.notify as typeof defaultTemplates.notify)?.client : null) ?? defaultTemplates.notify.client;
+}
+
+/** HMAC-подписанная ссылка отписки от писем */
+function unsubscribeUrl(userId: string): string {
+  return `${APP_URL()}/api/email/unsubscribe?token=${encodeURIComponent(createUnsubscribeToken(userId))}`;
+}
+
+/** HTML-подвал письма со ссылкой отписки */
+function unsubscribeFooterHtml(userId: string, locale: string): string {
+  const tmpl = clientTemplates(locale);
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const link = `<a href="${unsubscribeUrl(userId)}" style="color:#78716c">${esc(tmpl.unsubscribeLink)}</a>`;
+  return esc(tmpl.unsubscribeText).replace("{link}", link);
+}
+
+/** Выбор канала для cron-уведомлений: Telegram → email → none.
+ *  Проверяет emailUnsubscribedAt и настройки почты. */
+async function selectClientChannel(user: {
+  id: string;
+  telegramId: string | null;
+  email: string | null;
+  emailUnsubscribedAt: Date | null;
+}) {
+  const s = await getSettings();
+  if (user.telegramId && s.notify.telegramBotToken) {
+    return { channel: "telegram" as const, token: s.notify.telegramBotToken, telegramId: user.telegramId };
+  }
+  if (user.email && !user.emailUnsubscribedAt && s.mail.enabled && s.mail.apiKey && s.mail.from) {
+    return { channel: "email" as const, email: user.email };
+  }
+  return { channel: "none" as const };
+}
+
 /** Отправить клиентское уведомление по наиболее доступному каналу:
  *  Telegram (прямая отправка, при сбое — fallback) → email → алерт оператору. */
 async function sendToClient(
@@ -51,11 +99,14 @@ async function sendToClient(
   text: string,
   mailSubject: string,
   tag: string,
+  log?: { orderId: string; visitId?: string; event: string },
 ): Promise<"telegram" | "email" | "alert" | "none"> {
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { telegramId: true, email: true, name: true },
+    select: { telegramId: true, email: true, name: true, emailUnsubscribedAt: true },
   });
+
+  let channel: "telegram" | "email" | "alert" | "none" = "none";
 
   if (user?.telegramId) {
     try {
@@ -63,41 +114,63 @@ async function sendToClient(
       const token = s.notify.telegramBotToken;
       if (token) {
         await sendTelegramDirect(token, user.telegramId, text);
-        return "telegram";
+        channel = "telegram";
       }
     } catch (e) {
       console.error(`[bookingNotify:${tag}] telegram failed, trying email`, e);
     }
   }
 
-  if (user?.email) {
+  if (channel === "none" && user?.email && !user.emailUnsubscribedAt) {
     try {
       const s = await getSettings();
       if (s.mail.enabled) {
         const brand = s.brand.name || "iHelp";
-        // Убрать HTML-теги и снять HTML-экранирование для plain text email
         const plainText = text
           .replace(/<[^>]+>/g, "")
           .replace(/&amp;/g, "&")
           .replace(/&lt;/g, "<")
           .replace(/&gt;/g, ">");
         const lines = plainText.split("\n").filter(Boolean);
-        const htmlBody = mailTemplate({ title: mailSubject, lines, brand });
+        const footer = unsubscribeFooterHtml(userId, "ru");
+        const bannerHtml = await getEmailBannerHtml("ru").catch(() => null);
+        const htmlBody = mailTemplate({ title: mailSubject, lines, brand, footer, ...(bannerHtml ? { bannerHtml } : {}) });
         const r = await sendMail({ to: user.email, subject: mailSubject, html: htmlBody, text: plainText });
-        if (r.ok) return "email";
+        if (r.ok) channel = "email";
       }
     } catch (e) {
       console.error(`[bookingNotify:${tag}] email failed`, e);
     }
   }
 
-  // Нет канала — алерт оператору (без персональных данных клиента)
-  try {
-    await notifyTech(html`⚠️ Нет канала доставки для уведомления: ${mailSubject}`);
-  } catch (e) {
-    console.error(`[bookingNotify:${tag}] alert failed`, e);
+  if (channel === "none") {
+    // Нет канала — алерт оператору (без персональных данных клиента)
+    try {
+      await notifyTech(html`⚠️ Нет канала доставки для уведомления: ${mailSubject}`);
+    } catch (e) {
+      console.error(`[bookingNotify:${tag}] alert failed`, e);
+    }
+    channel = "alert";
   }
-  return "alert";
+
+  if (log) {
+    try {
+      await db.clientMessage.create({
+        data: {
+          orderId: log.orderId,
+          visitId: log.visitId ?? null,
+          event: log.event,
+          subject: mailSubject,
+          channel,
+          delivered: channel === "telegram" || channel === "email",
+        },
+      });
+    } catch (e) {
+      console.error(`[bookingNotify:${tag}] log failed`, e);
+    }
+  }
+
+  return channel;
 }
 
 /** Проверить, что событие ещё не было отправлено для заказа, и добавить его в список. */
@@ -155,7 +228,10 @@ export async function notifyClientOrderCreated(orderId: string): Promise<void> {
       price: amd(order.firstVisitPrice),
     });
 
-    await sendToClient(order.userId, text, `Заказ №${order.number} принят`, "client:created");
+    await sendToClient(order.userId, text, `Заказ №${order.number} принят`, "client:created", {
+      orderId,
+      event: "created",
+    });
   } catch (e) {
     console.error("[bookingNotify:created] ошибка", e);
   }
@@ -174,6 +250,7 @@ export async function notifyClientMasterAssigned(visitId: string): Promise<void>
         master: { select: { name: true } },
         order: {
           select: {
+            id: true,
             number: true,
             userId: true,
             config: true,
@@ -196,7 +273,11 @@ export async function notifyClientMasterAssigned(visitId: string): Promise<void>
       masterName,
     });
 
-    await sendToClient(visit.order.userId, text, `Мастер назначен — заказ №${visit.order.number}`, "client:masterAssigned");
+    await sendToClient(visit.order.userId, text, `Мастер назначен — заказ №${visit.order.number}`, "client:masterAssigned", {
+      orderId: visit.order.id,
+      visitId,
+      event: `masterAssigned:${visit.masterId}`,
+    });
   } catch (e) {
     console.error("[bookingNotify:masterAssigned] ошибка", e);
   }
@@ -211,6 +292,7 @@ export async function notifyClientRescheduled(visitId: string): Promise<void> {
         scheduledAt: true,
         order: {
           select: {
+            id: true,
             number: true,
             userId: true,
             config: true,
@@ -221,7 +303,6 @@ export async function notifyClientRescheduled(visitId: string): Promise<void> {
     });
     if (!visit?.scheduledAt) return;
 
-    // Ключ включает дату назначения: повторный перенос на другую дату даёт новое уведомление
     const eventKey = `rescheduled:${visit.scheduledAt.toISOString()}`;
     const ok = await markVisitEvent(visitId, eventKey);
     if (!ok) return;
@@ -234,7 +315,11 @@ export async function notifyClientRescheduled(visitId: string): Promise<void> {
       address: addrLine(visit.order.addressSnapshot),
     });
 
-    await sendToClient(visit.order.userId, text, `Визит перенесён — заказ №${visit.order.number}`, "client:rescheduled");
+    await sendToClient(visit.order.userId, text, `Визит перенесён — заказ №${visit.order.number}`, "client:rescheduled", {
+      orderId: visit.order.id,
+      visitId,
+      event: `rescheduled:${visit.scheduledAt.toISOString()}`,
+    });
   } catch (e) {
     console.error("[bookingNotify:rescheduled] ошибка", e);
   }
@@ -271,7 +356,10 @@ export async function notifyClientCancelled(orderId: string): Promise<void> {
       date: dateStr,
     });
 
-    await sendToClient(order.userId, text, `Заказ №${order.number} отменён`, "client:cancelled");
+    await sendToClient(order.userId, text, `Заказ №${order.number} отменён`, "client:cancelled", {
+      orderId,
+      event: "cancelled",
+    });
   } catch (e) {
     console.error("[bookingNotify:cancelled] ошибка", e);
   }
@@ -289,6 +377,7 @@ export async function notifyClientVisitCancelled(visitId: string): Promise<void>
         scheduledAt: true,
         order: {
           select: {
+            id: true,
             number: true,
             userId: true,
             config: true,
@@ -305,115 +394,16 @@ export async function notifyClientVisitCancelled(visitId: string): Promise<void>
       date: dateStr,
     });
 
-    await sendToClient(visit.order.userId, text, `Визит ${dateStr} отменён — заказ №${visit.order.number}`, "client:visitCancelled");
+    await sendToClient(visit.order.userId, text, `Визит ${dateStr} отменён — заказ №${visit.order.number}`, "client:visitCancelled", {
+      orderId: visit.order.id,
+      visitId,
+      event: "cancelled",
+    });
   } catch (e) {
     console.error("[bookingNotify:visitCancelled] ошибка", e);
   }
 }
 
-const HOUR_MS = 3_600_000;
-
-/** Час в ереванском времени (UTC+4, без летнего времени) */
-function toYerevanHour(d: Date): number {
-  return new Date(d.getTime() + 4 * 3_600_000).getUTCHours();
-}
-
-/**
- * 6. Напоминания клиентам: за 24 часа (окно 22–26 ч) и за 2 часа (окно 1.5–2.5 ч).
- * Дедупликация через clientNotifiedEvents: ключи "reminder24h" и "reminder2h".
- * Отменённые визиты исключены статусным фильтром (SCHEDULED/CONFIRMED).
- *
- * Тихий период (по умолчанию 21:00–09:00 по Еревану, QUIET_HOURS_START/QUIET_HOURS_END):
- * — в тихое время уведомления не отправляются.
- * — напоминание за 2 часа для визитов на 09:00–10:30 (окно 2h целиком в тихом периоде)
- *   уходит вместе с напоминанием за сутки (накануне вечером до 21:00).
- */
-export async function sendVisitReminders(now: Date): Promise<{ sent: number }> {
-  const quietStart = parseInt(process.env.QUIET_HOURS_START ?? "21", 10);
-  const quietEnd = parseInt(process.env.QUIET_HOURS_END ?? "9", 10);
-
-  // В тихое время уведомления не отправляем
-  const nowHour = toYerevanHour(now);
-  if (nowHour >= quietStart || nowHour < quietEnd) {
-    return { sent: 0 };
-  }
-
-  const windows = [
-    { key: "reminder24h" as const, minMs: 22 * HOUR_MS, maxMs: 26 * HOUR_MS },
-    { key: "reminder2h" as const, minMs: 90 * 60_000, maxMs: 150 * 60_000 },
-  ];
-
-  let sent = 0;
-
-  for (const { key, minMs, maxMs } of windows) {
-    const from = new Date(now.getTime() + minMs);
-    const to = new Date(now.getTime() + maxMs);
-
-    const visits = await db.visit.findMany({
-      where: {
-        status: { in: ["SCHEDULED", "CONFIRMED"] },
-        scheduledAt: { gte: from, lte: to },
-      },
-      select: {
-        id: true,
-        scheduledAt: true,
-        clientNotifiedEvents: true,
-        master: { select: { name: true } },
-        order: {
-          select: {
-            number: true,
-            userId: true,
-            config: true,
-            addressSnapshot: true,
-          },
-        },
-      },
-    });
-
-    for (const visit of visits) {
-      if (visit.clientNotifiedEvents.includes(key)) continue;
-      if (!visit.scheduledAt) continue;
-
-      const ok = await markVisitEvent(visit.id, key);
-      if (!ok) continue;
-
-      try {
-        const tmpl = await getOrderTemplates();
-        const params = {
-          serviceName: serviceTitle(visit.order.config),
-          date: ymd(visit.scheduledAt),
-          time: hm(visit.scheduledAt),
-          address: addrLine(visit.order.addressSnapshot),
-          masterName: visit.master ? tr(visit.master.name, "ru") : "—",
-        };
-        const text = fill(tmpl[key], params);
-        await sendToClient(visit.order.userId, text, `Напоминание — заказ №${visit.order.number}`, `client:${key}`);
-        sent++;
-
-        // Визиты на 09:00–10:30: окно 2h целиком попадает в тихий период (06:30–09:00).
-        // К 09:00 такой визит уже ближе 1.5ч — нормальный крон его не поймает.
-        // Отправляем 2h-напоминание вместе с суточным (накануне до 21:00).
-        if (key === "reminder24h") {
-          const before1h30 = new Date(visit.scheduledAt.getTime() - 90 * 60_000);
-          const h = toYerevanHour(before1h30);
-          const twoHInQuiet = h >= quietStart || h < quietEnd;
-          if (twoHInQuiet && !visit.clientNotifiedEvents.includes("reminder2h")) {
-            const ok2h = await markVisitEvent(visit.id, "reminder2h");
-            if (ok2h) {
-              const text2h = fill(tmpl["reminder2h"], params);
-              await sendToClient(visit.order.userId, text2h, `Напоминание — заказ №${visit.order.number}`, "client:reminder2h");
-              sent++;
-            }
-          }
-        }
-      } catch (e) {
-        console.error(`[bookingNotify:${key}] ошибка для визита ${visit.id}`, e);
-      }
-    }
-  }
-
-  return { sent };
-}
 
 /** 5. Визит завершён (статус DONE) */
 export async function notifyClientVisitCompleted(visitId: string): Promise<void> {
@@ -437,17 +427,312 @@ export async function notifyClientVisitCompleted(visitId: string): Promise<void>
     if (!visit) return;
 
     const masterName = visit.master ? tr(visit.master.name, "ru") : "—";
-    const appUrl = process.env.APP_URL || "";
-    const reviewLink = `${appUrl}/ru/account/orders/${visit.order.id}`;
 
     const tmpl = await getOrderTemplates();
-    const text = fill(tmpl.completed, {
-      masterName,
-      reviewLink,
-    });
+    const text = fill(tmpl.completed, { masterName });
 
-    await sendToClient(visit.order.userId, text, `Как прошёл визит? — заказ №${visit.order.number}`, "client:completed");
+    await sendToClient(visit.order.userId, text, `Визит завершён — заказ №${visit.order.number}`, "client:completed", {
+      orderId: visit.order.id,
+      visitId,
+      event: "completed",
+    });
   } catch (e) {
     console.error("[bookingNotify:completed] ошибка", e);
   }
+}
+
+/** 6. Напоминания о визитах: визиты через 22–26 часов с remindedAt=null.
+ *  Вызывается из cron каждые 15 минут. В тихий период (по умолчанию 21:00–09:00 Ереван) не отправляет. */
+export async function sendVisitReminders(now: Date): Promise<number> {
+  const s0 = await getSettings();
+  if (isQuietHour(now, s0.notify.quietHourStart, s0.notify.quietHourEnd)) return 0;
+
+  const from = new Date(now.getTime() + 22 * 3600_000);
+  const to = new Date(now.getTime() + 26 * 3600_000);
+
+  const visits = await db.visit.findMany({
+    where: {
+      scheduledAt: { gte: from, lte: to },
+      status: { in: ["SCHEDULED", "CONFIRMED"] },
+      remindedAt: null,
+    },
+    select: {
+      id: true,
+      scheduledAt: true,
+      order: {
+        select: {
+          number: true,
+          config: true,
+          addressSnapshot: true,
+          locale: true,
+          userId: true,
+          user: { select: { id: true, telegramId: true, email: true, emailUnsubscribedAt: true } },
+        },
+      },
+      master: { select: { name: true } },
+    },
+  });
+
+  let sent = 0;
+  for (const v of visits) {
+    if (!v.scheduledAt || !v.order.user) continue;
+
+    // Актуальная проверка статуса перед отправкой
+    const liveVisit = await db.visit.findUnique({
+      where: { id: v.id },
+      select: { status: true, order: { select: { status: true } } },
+    });
+    if (!liveVisit || liveVisit.status === "CANCELLED" || liveVisit.order.status === "CANCELLED") {
+      await db.visit.update({ where: { id: v.id }, data: { remindedAt: new Date() } });
+      continue;
+    }
+
+    const locale = v.order.locale || "ru";
+    const ch = await selectClientChannel(v.order.user);
+    if (ch.channel === "none") {
+      await db.visit.update({ where: { id: v.id }, data: { remindedAt: new Date() } });
+      continue;
+    }
+
+    const tmpl = clientTemplates(locale);
+    const brand = (await getSettings()).brand.name || "iHelp";
+    const service = serviceTitle(v.order.config, locale);
+    const date = dateLabel(v.scheduledAt, locale);
+    const time = timeLabel(v.scheduledAt);
+    const address = addrLine(v.order.addressSnapshot);
+    const master = v.master ? tr(v.master.name, locale) : "—";
+
+    try {
+      let deliveryOk = false;
+      if (ch.channel === "telegram") {
+        const text =
+          html`📅 <b>${fill(tmpl.reminder.title, {})}</b>\n` +
+          html`${fill(tmpl.reminder.service, { service })}\n` +
+          html`${fill(tmpl.reminder.date, { date, time })}\n` +
+          html`${fill(tmpl.reminder.master, { master })}\n` +
+          html`${fill(tmpl.reminder.address, { address })}`;
+        await sendTelegramDirect(ch.token, ch.telegramId, text);
+        deliveryOk = true;
+      } else {
+        const lines = [
+          fillPlain(tmpl.reminder.service, { service }),
+          fillPlain(tmpl.reminder.date, { date, time }),
+          fillPlain(tmpl.reminder.master, { master }),
+          fillPlain(tmpl.reminder.address, { address }),
+        ];
+        const htmlBody = mailTemplate({
+          brand,
+          title: tmpl.reminder.title,
+          lines,
+          footer: unsubscribeFooterHtml(v.order.user.id, locale),
+          button: { text: tmpl.reminder.button, url: `${APP_URL()}/${locale}/account/orders` },
+        });
+        const r = await sendMail({ to: ch.email, subject: tmpl.reminder.subject, html: htmlBody });
+        if (r.ok) {
+          deliveryOk = true;
+        } else {
+          console.error(`[bookingNotify:reminder] не отправлено visit=${v.id}`, r.error);
+        }
+      }
+      if (deliveryOk) {
+        await db.visit.update({ where: { id: v.id }, data: { remindedAt: new Date() } });
+        sent++;
+      }
+    } catch (e) {
+      console.error(`[bookingNotify:reminder] ошибка visit=${v.id}`, e);
+      await alertTech(
+        `bookingNotify:reminder:${v.id}`,
+        html`❌ Напоминание не отправлено\nВизит ${v.id}\n<code>${String((e as Error).message ?? e).slice(0, 200)}</code>`,
+        60,
+      );
+    }
+  }
+  return sent;
+}
+
+/** 7. Запросы отзыва: визиты со статусом DONE, finishedAt 2–6 часов назад, reviewRequestedAt=null.
+ *  Вызывается из cron каждые 15 минут. В тихий период (по умолчанию 21:00–09:00 Ереван) не отправляет. */
+export async function sendReviewRequests(now: Date): Promise<number> {
+  const s0 = await getSettings();
+  if (isQuietHour(now, s0.notify.quietHourStart, s0.notify.quietHourEnd)) return 0;
+
+  const from = new Date(now.getTime() - 6 * 3600_000);
+  const to = new Date(now.getTime() - 2 * 3600_000);
+
+  const visits = await db.visit.findMany({
+    where: {
+      status: "DONE",
+      finishedAt: { gte: from, lte: to },
+      reviewRequestedAt: null,
+    },
+    select: {
+      id: true,
+      order: {
+        select: {
+          id: true,
+          locale: true,
+          userId: true,
+          user: { select: { id: true, telegramId: true, email: true, emailUnsubscribedAt: true } },
+        },
+      },
+    },
+  });
+
+  let sent = 0;
+  for (const v of visits) {
+    if (!v.order.user) continue;
+
+    const locale = v.order.locale || "ru";
+    const ch = await selectClientChannel(v.order.user);
+    if (ch.channel === "none") {
+      await db.visit.update({ where: { id: v.id }, data: { reviewRequestedAt: new Date() } });
+      continue;
+    }
+
+    const tmpl = clientTemplates(locale);
+    const brand = (await getSettings()).brand.name || "iHelp";
+    const reviewToken = await createReviewToken(v.id);
+    const reviewUrl = `${APP_URL()}/${locale}/review/${reviewToken}`;
+
+    try {
+      let deliveryOk = false;
+      if (ch.channel === "telegram") {
+        const text = html`⭐ <b>${tmpl.review.title}</b>\n${tmpl.review.line1}\n${reviewUrl}`;
+        await sendTelegramDirect(ch.token, ch.telegramId, text);
+        deliveryOk = true;
+      } else {
+        const htmlBody = mailTemplate({
+          brand,
+          title: tmpl.review.title,
+          lines: [tmpl.review.line1, tmpl.review.line2],
+          footer: unsubscribeFooterHtml(v.order.user.id, locale),
+          button: { text: tmpl.review.button, url: reviewUrl },
+        });
+        const r = await sendMail({ to: ch.email, subject: tmpl.review.subject, html: htmlBody });
+        if (r.ok) {
+          deliveryOk = true;
+        } else {
+          console.error(`[bookingNotify:review] не отправлено visit=${v.id}`, r.error);
+        }
+      }
+      if (deliveryOk) {
+        await db.visit.update({ where: { id: v.id }, data: { reviewRequestedAt: new Date() } });
+        sent++;
+      }
+    } catch (e) {
+      console.error(`[bookingNotify:review] ошибка visit=${v.id}`, e);
+      await alertTech(
+        `bookingNotify:review:${v.id}`,
+        html`❌ Запрос отзыва не отправлен\nВизит ${v.id}\n<code>${String((e as Error).message ?? e).slice(0, 200)}</code>`,
+        60,
+      );
+    }
+  }
+  return sent;
+}
+
+/** 8. Напоминания клиентам за 2 часа до визита (окно 90–150 минут).
+ *  Дедупликация через clientNotifiedEvents с ключом "reminder2h".
+ *  В тихий период (notify.quietHourStart–quietHourEnd) — не отправляет. */
+export async function sendVisit2hReminders(now: Date): Promise<number> {
+  const s0 = await getSettings();
+  if (isQuietHour(now, s0.notify.quietHourStart, s0.notify.quietHourEnd)) return 0;
+
+  const from = new Date(now.getTime() + 90 * 60_000);
+  const to = new Date(now.getTime() + 150 * 60_000);
+
+  const visits = await db.visit.findMany({
+    where: {
+      scheduledAt: { gte: from, lte: to },
+      status: { in: ["SCHEDULED", "CONFIRMED"] },
+    },
+    select: {
+      id: true,
+      scheduledAt: true,
+      clientNotifiedEvents: true,
+      order: {
+        select: {
+          number: true,
+          config: true,
+          addressSnapshot: true,
+          locale: true,
+          userId: true,
+          user: { select: { id: true, telegramId: true, email: true, emailUnsubscribedAt: true } },
+        },
+      },
+      master: { select: { name: true } },
+    },
+  });
+
+  let sent = 0;
+  for (const v of visits) {
+    if (!v.scheduledAt || !v.order.user) continue;
+    if (v.clientNotifiedEvents.includes("reminder2h")) continue;
+
+    // Актуальная проверка перед отправкой
+    const liveVisit = await db.visit.findUnique({
+      where: { id: v.id },
+      select: { status: true, clientNotifiedEvents: true, order: { select: { status: true } } },
+    });
+    if (!liveVisit || liveVisit.status === "CANCELLED" || liveVisit.order.status === "CANCELLED") continue;
+    if (liveVisit.clientNotifiedEvents.includes("reminder2h")) continue;
+
+    const locale = v.order.locale || "ru";
+    const ch = await selectClientChannel(v.order.user);
+    if (ch.channel === "none") continue;
+
+    const tmpl = clientTemplates(locale);
+    const brand = (await getSettings()).brand.name || "iHelp";
+    const service = serviceTitle(v.order.config, locale);
+    const date = dateLabel(v.scheduledAt, locale);
+    const time = timeLabel(v.scheduledAt);
+    const address = addrLine(v.order.addressSnapshot);
+    const master = v.master ? tr(v.master.name, locale) : "—";
+
+    try {
+      let deliveryOk = false;
+      if (ch.channel === "telegram") {
+        const text =
+          html`⏰ <b>${fill(tmpl.reminder2h.title, {})}</b>\n` +
+          html`${fill(tmpl.reminder2h.service, { service })}\n` +
+          html`${fill(tmpl.reminder2h.date, { date, time })}\n` +
+          html`${fill(tmpl.reminder2h.master, { master })}\n` +
+          html`${fill(tmpl.reminder2h.address, { address })}`;
+        await sendTelegramDirect(ch.token, ch.telegramId, text);
+        deliveryOk = true;
+      } else {
+        const lines = [
+          fillPlain(tmpl.reminder2h.service, { service }),
+          fillPlain(tmpl.reminder2h.date, { date, time }),
+          fillPlain(tmpl.reminder2h.master, { master }),
+          fillPlain(tmpl.reminder2h.address, { address }),
+        ];
+        const htmlBody = mailTemplate({
+          brand,
+          title: tmpl.reminder2h.title,
+          lines,
+          footer: unsubscribeFooterHtml(v.order.user.id, locale),
+          button: { text: tmpl.reminder2h.button, url: `${APP_URL()}/${locale}/account/orders` },
+        });
+        const r = await sendMail({ to: ch.email, subject: tmpl.reminder2h.subject, html: htmlBody });
+        if (r.ok) {
+          deliveryOk = true;
+        } else {
+          console.error(`[bookingNotify:reminder2h] не отправлено visit=${v.id}`, r.error);
+        }
+      }
+      if (deliveryOk) {
+        await db.visit.update({ where: { id: v.id }, data: { clientNotifiedEvents: { push: "reminder2h" } } });
+        sent++;
+      }
+    } catch (e) {
+      console.error(`[bookingNotify:reminder2h] ошибка visit=${v.id}`, e);
+      await alertTech(
+        `bookingNotify:reminder2h:${v.id}`,
+        html`❌ Напоминание 2ч не отправлено\nВизит ${v.id}\n<code>${String((e as Error).message ?? e).slice(0, 200)}</code>`,
+        60,
+      );
+    }
+  }
+  return sent;
 }

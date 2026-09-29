@@ -7,6 +7,7 @@ import { contactLinks, contactTitle } from "@/lib/contacts";
 import { getCurrentUser, STAFF_ROLES } from "@/server/auth";
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { BottomNav } from "@/components/BottomNav";
+import { StickyCartBar } from "@/components/StickyCartBar";
 import { Logo } from "@/components/Logo";
 
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
@@ -53,6 +54,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
         </div>
       </footer>
       <BottomNav />
+      <StickyCartBar />
     </div>
   );
 }

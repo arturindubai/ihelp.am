@@ -1,8 +1,12 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "fs";
+import { join } from "path";
 import {
   checkSeedContent,
   checkMigrationContent,
   findSeedFlagGuardLine,
+  PROTECTED_MODELS,
+  PROTECTED_METHODS,
 } from "./check-seed";
 
 const withGuard = (before: string, after: string) => `
@@ -69,12 +73,75 @@ describe("checkSeedContent — заказы и визиты", () => {
   });
 });
 
+describe("checkSeedContent — мутации (update/delete) вне блока", () => {
+  it("master.update вне блока — нарушение (сценарий NOTIFY-2B)", () => {
+    const content = withGuard(
+      "  await db.master.update({ where: { id: 'x' }, data: { userId: 'owner-id' } });",
+      ""
+    );
+    const v = checkSeedContent(content);
+    expect(v).toHaveLength(1);
+    expect(v[0].reason).toMatch(/SEED_FLAG/);
+  });
+
+  it("master.update внутри блока — проход (сценарий NOTIFY-2B)", () => {
+    const content = withGuard(
+      "",
+      "  await db.master.update({ where: { id: 'x' }, data: { userId: 'owner-id' } });"
+    );
+    expect(checkSeedContent(content)).toHaveLength(0);
+  });
+
+  it("master.updateMany вне блока — нарушение", () => {
+    const content = withGuard("  await db.master.updateMany({ data: {} });", "");
+    expect(checkSeedContent(content)).toHaveLength(1);
+  });
+
+  it("visit.delete вне блока — нарушение", () => {
+    const content = withGuard("  await db.visit.delete({ where: { id: 'x' } });", "");
+    expect(checkSeedContent(content)).toHaveLength(1);
+  });
+
+  it("order.deleteMany вне блока — нарушение", () => {
+    const content = withGuard("  await db.order.deleteMany({ where: {} });", "");
+    expect(checkSeedContent(content)).toHaveLength(1);
+  });
+});
+
+describe("checkSeedContent — модель user", () => {
+  it("user.upsert вне блока — нарушение", () => {
+    const content = withGuard(
+      "  await db.user.upsert({ where: { phone: '' }, create: {}, update: {} });",
+      ""
+    );
+    expect(checkSeedContent(content)).toHaveLength(1);
+  });
+
+  it("user.upsert внутри блока — проход", () => {
+    const content = withGuard(
+      "",
+      "  await db.user.upsert({ where: { phone: '' }, create: {}, update: {} });"
+    );
+    expect(checkSeedContent(content)).toHaveLength(0);
+  });
+
+  it("user.update вне блока — нарушение", () => {
+    const content = withGuard("  await db.user.update({ where: { id: 'x' }, data: {} });", "");
+    expect(checkSeedContent(content)).toHaveLength(1);
+  });
+});
+
 describe("checkSeedContent — чистый seed", () => {
   it("seed без защищённых моделей — проход", () => {
     const content = withGuard(
       "  await db.category.create({ data: {} });",
       "  await db.service.create({ data: {} });"
     );
+    expect(checkSeedContent(content)).toHaveLength(0);
+  });
+
+  it("task.update вне блока — проход (не защищённая модель)", () => {
+    const content = withGuard("  await db.task.update({ where: { key: 'x' }, data: {} });", "");
     expect(checkSeedContent(content)).toHaveLength(0);
   });
 
@@ -94,6 +161,57 @@ async function main() {
     const v = checkSeedContent(content);
     expect(v).toHaveLength(1);
     expect(v[0].reason).toMatch(/без защиты SEED_FLAG/);
+  });
+});
+
+describe("checkSeedContent — исключение seed-gate:owner-only", () => {
+  it("db.user.upsert с маркером seed-gate:owner-only вне блока — проход", () => {
+    const content = withGuard(
+      "  await db.user.upsert({ where: { phone: ownerPhone }, create: {}, update: { role: 'OWNER' } }); // seed-gate:owner-only",
+      ""
+    );
+    expect(checkSeedContent(content)).toHaveLength(0);
+  });
+
+  it("db.user.update без маркера вне блока — нарушение (исключение не распространяется на другие строки)", () => {
+    const content = withGuard(
+      "  await db.user.update({ where: { phone: 'x' }, data: { role: 'OWNER' } }); // не владелец",
+      ""
+    );
+    expect(checkSeedContent(content)).toHaveLength(1);
+  });
+
+  it("db.user.upsert без маркера вне блока — нарушение", () => {
+    const content = withGuard(
+      "  await db.user.upsert({ where: { phone: 'x' }, create: {}, update: {} });",
+      ""
+    );
+    expect(checkSeedContent(content)).toHaveLength(1);
+  });
+});
+
+describe("синхронизация констант .ts и .mjs", () => {
+  const mjsPath = join(process.cwd(), "scripts/check-seed.mjs");
+  const mjsContent = readFileSync(mjsPath, "utf8");
+
+  it("PROTECTED_MODELS в .mjs и .ts совпадают", () => {
+    const match = mjsContent.match(/const PROTECTED_MODELS\s*=\s*\[([^\]]+)\]/);
+    expect(match).toBeTruthy();
+    const mjsModels = match![1]
+      .split(",")
+      .map((s) => s.trim().replace(/['"]/g, "").trim())
+      .filter(Boolean);
+    expect(mjsModels).toEqual([...PROTECTED_MODELS]);
+  });
+
+  it("PROTECTED_METHODS в .mjs и .ts совпадают", () => {
+    const match = mjsContent.match(/const PROTECTED_METHODS\s*=\s*\[([^\]]+)\]/);
+    expect(match).toBeTruthy();
+    const mjsMethods = match![1]
+      .split(",")
+      .map((s) => s.trim().replace(/['"]/g, "").trim())
+      .filter(Boolean);
+    expect(mjsMethods).toEqual([...PROTECTED_METHODS]);
   });
 });
 

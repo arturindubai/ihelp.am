@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Banknote, CreditCard, Tag, Check, UsersRound, ArrowLeft, Phone } from "lucide-react";
+import { Banknote, CreditCard, Tag, Check, UsersRound, ArrowLeft } from "lucide-react";
 import { useRouter, Link } from "@/i18n/navigation";
 import { calculatePrice, type PricePromo, type PricingRules } from "@/lib/pricing";
 import { amd, cn, dateLabel, durationLabel } from "@/lib/format";
@@ -16,6 +16,13 @@ import { contactLink } from "@/lib/contacts";
 type Line = { groupTitle: string; optionTitle: string; price: number; discountable: boolean; durationMin: number };
 type Plan = { id: string; kind: "ONE_TIME" | "SUBSCRIPTION" | "PACKAGE"; title: string; discountPercent: number; packageVisits: number | null; visitsPerWeek: number | null } | null;
 type MasterCard = { id: string; name: string; photo: string | null; rating: number; reviewsCount: number; experienceYears: number; languages: string[] };
+
+const AVATAR_PALETTES = ["bg-brand-50 text-brand-text", "bg-ok-50 text-ok", "bg-surface text-muted"];
+function masterAvatarBg(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTES[h % AVATAR_PALETTES.length];
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -62,6 +69,9 @@ export function Checkout(props: {
   const [time, setTime] = useState<string>();
   const [slotRace, setSlotRace] = useState(false);
   const [masterId, setMasterId] = useState<string | null>(null);
+  const [filterMasterId, setFilterMasterId] = useState<string | null>(null);
+  const [masterSheetSlot, setMasterSheetSlot] = useState<string | null>(null);
+  const [masterSheetChoice, setMasterSheetChoice] = useState<string | null>(null);
   const [weekdays, setWeekdays] = useState<number[]>([]);
   const [payment, setPayment] = useState<"CASH" | "CARD">(props.cashEnabled ? "CASH" : "CARD");
   const [promoInput, setPromoInput] = useState("");
@@ -75,10 +85,12 @@ export function Checkout(props: {
 
   const multiDays = props.plan?.kind === "SUBSCRIPTION" && (props.plan.visitsPerWeek || 0) > 1;
   const wdNames = t("weekdaysShort").split(",");
+  const masterById = useMemo(() => new Map(props.masters.map((m) => [m.id, m])), [props.masters]);
 
   useEffect(() => {
     setTime(undefined);
     setSlotRace(false);
+    setMasterSheetSlot(null);
     const d = date;
     startSlots(async () => {
       const r = await slotsAction(props.service.id, d, props.durationMin);
@@ -95,7 +107,6 @@ export function Checkout(props: {
     }
   }, [slots, date, days, autoSkipped]);
 
-  const slot = slots?.find((s) => s.time === time);
   const price = calculatePrice({ lines: props.lines, plan: props.plan ? { kind: props.plan.kind, discountPercent: props.plan.discountPercent, packageVisits: props.plan.packageVisits } : null, isFirstOrder: props.isFirstOrder, promo, rules: props.rules });
 
   async function applyPromo() {
@@ -185,8 +196,8 @@ export function Checkout(props: {
           )}
         </Section>
 
-        {/* Дата и время */}
-        <Section title={t("dateTime")}>
+        {/* Дата и мастер */}
+        <Section title={props.allowChooseMaster && props.masters.length > 0 ? t("dateAndMaster") : t("dateTime")}>
           {/* Лента дней */}
           <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1">
             {days.map((d) => {
@@ -210,37 +221,105 @@ export function Checkout(props: {
             })}
           </div>
 
-          {/* Слоты */}
+          {/* Фильтр-чипы мастеров */}
+          {props.allowChooseMaster && props.masters.length > 0 && (
+            <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
+              <button
+                onClick={() => { setFilterMasterId(null); setTime(undefined); setMasterId(null); }}
+                className={cn(
+                  "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition",
+                  filterMasterId === null ? "border-action bg-brand-50 text-brand" : "border-line bg-paper"
+                )}
+              >
+                <span className="grid size-[26px] shrink-0 place-items-center rounded-full bg-brand text-[11px] text-on-action">★</span>
+                <span>{t("anyMaster")}</span>
+              </button>
+              {props.masters.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => { setFilterMasterId(m.id); setTime(undefined); setMasterId(null); }}
+                  className={cn(
+                    "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition",
+                    filterMasterId === m.id ? "border-action bg-brand-50 text-brand" : "border-line bg-paper"
+                  )}
+                >
+                  {m.photo ? (
+                    <Img src={m.photo} width={26} className="size-[26px] shrink-0 rounded-full object-cover" />
+                  ) : (
+                    <span className={cn("grid size-[26px] shrink-0 place-items-center rounded-full text-[10px] font-bold", masterAvatarBg(m.name))}>
+                      {m.name.slice(0, 2).toUpperCase()}
+                    </span>
+                  )}
+                  <span>{m.name.split(" ")[0]}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Слоты с аватарами */}
           <div className="mt-3">
-            <p className="mb-2 text-sm font-medium text-muted">{t("availableTime")}</p>
             {slotRace && (
               <div className="mb-2 rounded-xl bg-bad-50 px-3 py-2 text-sm text-bad">{t("errors.slot_taken")}</div>
             )}
             <div className="min-h-24">
               {loadingSlots || !slots ? (
-                <div className="grid grid-cols-4 gap-1.5">
-                  {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-11 animate-pulse rounded-xl bg-surface" />)}
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-surface" />)}
                 </div>
               ) : slots.length === 0 ? (
                 <p className="text-sm text-muted">{t("noSlots")}</p>
               ) : (
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                   {slots.map((s) => {
                     const on = s.time === time;
                     const occupied = !s.available;
+                    const slotMasters = s.masterIds.map((id) => masterById.get(id)).filter(Boolean) as MasterCard[];
+                    const dimmed = !occupied && props.allowChooseMaster && filterMasterId !== null && !s.masterIds.includes(filterMasterId);
                     return (
                       <button
                         key={s.time}
                         disabled={occupied}
-                        onClick={() => { setTime(s.time); setSlotRace(false); if (masterId && !s.masterIds.includes(masterId)) setMasterId(null); }}
+                        onClick={() => {
+                          setTime(s.time);
+                          setSlotRace(false);
+                          if (!props.allowChooseMaster || props.masters.length === 0) {
+                            setMasterId(null);
+                          } else if (filterMasterId !== null) {
+                            setMasterId(filterMasterId);
+                          } else if (props.masters.length === 1) {
+                            setMasterId(props.masters[0].id);
+                          } else {
+                            setMasterId(null);
+                            setMasterSheetChoice(null);
+                            setMasterSheetSlot(s.time);
+                          }
+                        }}
                         className={cn(
-                          "flex min-h-11 items-center justify-center rounded-xl border text-sm font-semibold transition",
-                          on ? "border-action bg-action text-on-action"
-                            : occupied ? "cursor-not-allowed border-line text-muted line-through"
-                            : "border-line bg-paper"
+                          "flex flex-col items-center gap-1.5 rounded-xl border py-2 text-center transition",
+                          on ? "border-action bg-brand-50 ring-1 ring-action" : "border-line bg-paper",
+                          occupied && "cursor-not-allowed text-muted line-through",
+                          dimmed && "pointer-events-none opacity-35"
                         )}
                       >
-                        {s.time}
+                        <span className="text-sm font-bold">{s.time}</span>
+                        {props.allowChooseMaster && slotMasters.length > 0 && (
+                          <div className="flex items-center">
+                            {slotMasters.slice(0, 3).map((m, idx) => (
+                              m.photo ? (
+                                <Img key={m.id} src={m.photo} width={20} className={cn("size-5 rounded-full border-[1.5px] border-paper object-cover", idx > 0 && "-ml-1")} />
+                              ) : (
+                                <span key={m.id} className={cn("grid size-5 place-items-center rounded-full border-[1.5px] border-paper text-[8px] font-bold", idx > 0 && "-ml-1", masterAvatarBg(m.name))}>
+                                  {m.name.slice(0, 1)}
+                                </span>
+                              )
+                            ))}
+                            {slotMasters.length > 3 && (
+                              <span className="-ml-1 flex size-5 items-center justify-center rounded-full border-[1.5px] border-paper bg-surface text-[8px] font-medium text-muted">
+                                +{slotMasters.length - 3}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </button>
                     );
                   })}
@@ -276,83 +355,6 @@ export function Checkout(props: {
             </div>
           )}
         </Section>
-
-        {/* Мастер */}
-        {props.allowChooseMaster && props.masters.length > 0 && (
-          <Section title={t("master")}>
-            {!time && <p className="mb-2 text-sm text-muted">{t("chooseTimeFirst")}</p>}
-            <div className="space-y-2">
-              {/* Любой свободный */}
-              <button
-                onClick={() => setMasterId(null)}
-                className={cn(
-                  "flex w-full flex-row items-center gap-3 rounded-xl border p-3 text-left transition",
-                  masterId === null ? "border-action bg-brand-50" : "border-line bg-paper"
-                )}
-              >
-                <span className="grid size-11 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-text">
-                  <UsersRound size={20} />
-                </span>
-                <span className="flex-1">
-                  <span className="block text-sm font-semibold">{t("anyMaster")}</span>
-                  <span className="block text-xs text-muted">{t("anyMasterSub")}</span>
-                </span>
-                <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition", masterId === null ? "border-action bg-action" : "border-line-strong")}>
-                  {masterId === null && <span className="size-2 rounded-full bg-on-action" />}
-                </span>
-              </button>
-
-              {/* Конкретные мастера */}
-              {props.masters.map((m) => {
-                const free = !slot || slot.masterIds.includes(m.id);
-                const on = masterId === m.id;
-                return (
-                  <button
-                    key={m.id}
-                    disabled={!time || !free}
-                    onClick={() => setMasterId(m.id)}
-                    className={cn(
-                      "flex w-full flex-row items-center gap-3 rounded-xl border p-3 text-left transition",
-                      on ? "border-action bg-brand-50" : "border-line bg-paper",
-                      (!time || !free) && "opacity-50"
-                    )}
-                  >
-                    {m.photo ? (
-                      <Img src={m.photo} width={44} className="size-11 shrink-0 rounded-full object-cover" />
-                    ) : (
-                      <span className="grid size-11 shrink-0 place-items-center rounded-full bg-surface text-sm font-bold text-muted">
-                        {m.name.slice(0, 1)}
-                      </span>
-                    )}
-                    <span className="flex-1 min-w-0">
-                      <span className="block text-sm font-semibold">{m.name}</span>
-                      <span className="block text-xs text-muted">
-                        {time && !free
-                          ? t("masterBusy")
-                          : [
-                              m.reviewsCount ? `★ ${m.rating.toFixed(1)} · ${tc("reviews", { count: m.reviewsCount })}` : tc("new"),
-                              m.experienceYears > 0 ? tc("yearsExp", { count: m.experienceYears }) : null,
-                            ].filter(Boolean).join(" · ")}
-                      </span>
-                      {m.languages.length > 0 && (
-                        <span className="mt-1 flex flex-wrap gap-1">
-                          {m.languages.map((lang) => (
-                            <span key={lang} className="rounded-full border border-line bg-surface px-2 py-0.5 text-[10px] text-muted">
-                              {tc(`langNames.${lang}` as Parameters<typeof tc>[0]) || lang}
-                            </span>
-                          ))}
-                        </span>
-                      )}
-                    </span>
-                    <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition", on ? "border-action bg-action" : "border-line-strong")}>
-                      {on && <span className="size-2 rounded-full bg-on-action" />}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </Section>
-        )}
 
         {/* Пожелания */}
         <Section title={t("wishes")}>
@@ -502,6 +504,75 @@ export function Checkout(props: {
           </button>
         </div>
       </div>
+
+      {/* Sheet выбора мастера — открывается при нажатии на слот когда фильтр «любой» и мастеров > 1 */}
+      <Sheet
+        open={masterSheetSlot !== null}
+        onClose={() => setMasterSheetSlot(null)}
+        title={t("whoComes")}
+        footer={
+          <button
+            className="btn-dark w-full"
+            onClick={() => { setMasterId(masterSheetChoice); setMasterSheetSlot(null); }}
+          >
+            {tc("done")}
+          </button>
+        }
+      >
+        <div className="space-y-2">
+          <button
+            onClick={() => setMasterSheetChoice(null)}
+            className={cn(
+              "flex w-full flex-row items-center gap-3 rounded-xl border p-3 text-left transition",
+              masterSheetChoice === null ? "border-action bg-brand-50" : "border-line bg-paper"
+            )}
+          >
+            <span className="grid size-11 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-text">
+              <UsersRound size={20} />
+            </span>
+            <span className="flex-1">
+              <span className="block text-sm font-semibold">{t("anyMaster")}</span>
+              <span className="block text-xs text-muted">{t("anyMasterSub")}</span>
+            </span>
+            <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition", masterSheetChoice === null ? "border-action bg-action" : "border-line-strong")}>
+              {masterSheetChoice === null && <span className="size-2 rounded-full bg-on-action" />}
+            </span>
+          </button>
+          {(masterSheetSlot ? (slots?.find((s) => s.time === masterSheetSlot)?.masterIds ?? []) : []).map((mid) => {
+            const m = masterById.get(mid);
+            if (!m) return null;
+            const on = masterSheetChoice === mid;
+            return (
+              <button
+                key={mid}
+                onClick={() => setMasterSheetChoice(mid)}
+                className={cn(
+                  "flex w-full flex-row items-center gap-3 rounded-xl border p-3 text-left transition",
+                  on ? "border-action bg-brand-50" : "border-line bg-paper"
+                )}
+              >
+                {m.photo ? (
+                  <Img src={m.photo} width={44} className="size-11 shrink-0 rounded-full object-cover" />
+                ) : (
+                  <span className={cn("grid size-11 shrink-0 place-items-center rounded-full text-sm font-bold", masterAvatarBg(m.name))}>
+                    {m.name.slice(0, 2).toUpperCase()}
+                  </span>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">{m.name}</span>
+                  <span className="block text-xs text-muted">
+                    {m.reviewsCount ? `★ ${m.rating.toFixed(1)} · ${tc("reviews", { count: m.reviewsCount })}` : tc("new")}
+                    {m.experienceYears > 0 && ` · ${tc("yearsExp", { count: m.experienceYears })}`}
+                  </span>
+                </span>
+                <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition", on ? "border-action bg-action" : "border-line-strong")}>
+                  {on && <span className="size-2 rounded-full bg-on-action" />}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </Sheet>
 
       {/* Sheet адреса — список + добавить новый */}
       <Sheet open={addrOpen} onClose={() => setAddrOpen(false)} title={t("address")}>
