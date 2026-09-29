@@ -2,11 +2,10 @@ import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { activityFeed, doneFeed } from "@/server/services/ccBoard";
 import { listEpics } from "@/server/services/epics";
-import { listMessages, listOwnerInbox, MESSAGE_ROLES } from "@/server/services/ccMessages";
-import { roleOf } from "@/lib/cc-flow";
+import { autoMarkQuestionMessages, convertOrphanQuestions, listOwnerInbox } from "@/server/services/ccMessages";
 import { BLOCKED_ON_LABELS, COMMENT_KIND_LABELS, EPIC_STATUSES, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { Card } from "@/components/admin/fields";
-import { MessageActions, MessageComposer } from "@/components/admin/cc/CcControls";
+import { MarkAllReadButton, MessageActions } from "@/components/admin/cc/CcControls";
 import { Empty, RUN_TONE, ago } from "./shared";
 import { cn, dateLabel, timeLabel } from "@/lib/format";
 
@@ -123,62 +122,57 @@ export async function DoneTab({ locale, taskHref }: { locale: string; taskHref: 
   );
 }
 
-/** «Сообщения», как Notify в LIA: написать роли или всем воркерам; входящие владельцу — прочитано, в бэклог, ответить */
+/**
+ * «Сообщения» — только уведомления владельцу (что выложено, что принято, что изменилось).
+ * Вопросы воркеров (сообщения, у которых задача заблокирована на владельце) на эту вкладку не попадают —
+ * они уже видны в «Нужен ты». Форма «Написать воркерам» и «Отправленные» перенесены на вкладку «Воркеры».
+ */
 export async function NotifyTab({ locale, taskHref }: { locale: string; taskHref: Href }) {
-  const [tn, inbox, outboxAll] = await Promise.all([getTranslations("admin.cc.notify"), listOwnerInbox(100), listMessages(80)]);
+  // Шаг 1: сообщения с taskKey, где задача уже заблокирована на owner/product → прочитано со ссылкой
+  await autoMarkQuestionMessages("system");
+  // Шаг 2: сообщения-вопросы (содержат «?») без карточки → задача блокируется на owner (только backlog/ready)
+  await convertOrphanQuestions("system");
+
+  const [tn, ownerMsgs] = await Promise.all([getTranslations("admin.cc.notify"), listOwnerInbox(100)]);
   const when = (d: Date) => `${dateLabel(d, locale, { day: "numeric", month: "short" })}, ${timeLabel(d)}`;
-  const outbox = outboxAll.filter((m) => m.toRole !== "owner");
-  // Ответ уходит роли отправителя: dev-2 → разработчикам, triage → триажу; человеку из админки ответить нечем
-  const replyRole = (from: string) => {
-    const r = roleOf(from);
-    return (MESSAGE_ROLES as readonly string[]).includes(r) && r !== "owner" && /^[a-z]/.test(from) ? r : null;
-  };
+
+  // Показываем только уведомления владельцу (не вопросы)
+  const inbox = ownerMsgs.filter((m) => !m.isQuestion);
+  const unreadCount = inbox.filter((m) => !m.readAt).length;
   return (
-    <div className="grid gap-4 lg:grid-cols-5">
-      <div className="space-y-4 lg:col-span-3">
-        <Card title={`${tn("inbox")} · ${inbox.filter((m) => !m.readAt).length}`}>
-          {inbox.length === 0 && <p className="text-sm text-muted">{tn("inboxEmpty")}</p>}
-          <ul className="divide-y divide-line">
-            {inbox.map((m) => (
-              <li key={m.id} className={cn("py-3 text-sm", !m.readAt && "bg-brand-50/40 -mx-4 px-4")}>
-                <div className="text-xs text-muted">
-                  {!m.readAt && <span className="mr-1 inline-block size-2 rounded-full bg-brand" />}
-                  <b className="text-ink">{m.fromAgent}</b> · {when(m.createdAt)}
-                  {m.taskKey && (
-                    <>
-                      {" · "}
-                      <Link href={taskHref(m.taskKey)} scroll={false} className="font-mono text-brand hover:underline">
-                        {m.taskKey}
-                      </Link>
-                    </>
-                  )}
-                  {m.readAt && ` · ${tn("readBy", { who: m.readBy ?? "" })}`}
-                </div>
-                <p className="mt-1 whitespace-pre-line">{m.text}</p>
-                <MessageActions id={m.id} unread={!m.readAt} replyTo={replyRole(m.fromAgent)} />
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </div>
-      <div className="space-y-4 lg:col-span-2">
-        <Card title={tn("compose")}>
-          <MessageComposer roles={MESSAGE_ROLES.filter((r) => r !== "owner")} />
-        </Card>
-        <Card title={tn("outbox")}>
-          {outbox.length === 0 && <p className="text-sm text-muted">{tn("outboxEmpty")}</p>}
-          <ul className="divide-y divide-line">
-            {outbox.slice(0, 30).map((m) => (
-              <li key={m.id} className="py-2 text-sm">
-                <div className="text-xs text-muted">
-                  {m.fromAgent} → <b className="text-ink">{tn(`roles.${m.toRole}` as "roles.owner")}</b> · {when(m.createdAt)} · {m.readAt ? tn("readBy", { who: m.readBy ?? "" }) : tn("unread")}
-                </div>
-                <p className="line-clamp-3 whitespace-pre-line">{m.text}</p>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </div>
+    <div className="space-y-4">
+      <Card
+        title={
+          <span className="flex min-w-0 flex-1 items-center gap-2">
+            <span>{tn("inbox")}</span>
+            {unreadCount > 0 && <span className="chip bg-brand text-[10px] text-on-action">{unreadCount}</span>}
+          </span>
+        }
+        actions={<MarkAllReadButton unreadCount={unreadCount} />}
+      >
+        {inbox.length === 0 && <p className="text-sm text-muted">{tn("inboxEmpty")}</p>}
+        <ul className={cn("divide-y divide-line", inbox.length > 80 && "overflow-y-auto max-h-[600px]")}>
+          {inbox.map((m) => (
+            <li key={m.id} className={cn("py-3 text-sm", !m.readAt && "-mx-4 bg-brand-50/40 px-4")}>
+              <div className="text-xs text-muted">
+                {!m.readAt && <span className="mr-1 inline-block size-2 rounded-full bg-brand" />}
+                <b className="text-ink">{m.fromAgent}</b> · {when(m.createdAt)}
+                {m.taskKey && (
+                  <>
+                    {" · "}
+                    <Link href={taskHref(m.taskKey)} scroll={false} className="font-mono text-brand hover:underline">
+                      {m.taskKey}
+                    </Link>
+                  </>
+                )}
+                {m.readAt && ` · ${tn("readBy", { who: m.readBy ?? "" })}`}
+              </div>
+              <p className="mt-1 line-clamp-4 whitespace-pre-line">{m.text}</p>
+              <MessageActions id={m.id} unread={!m.readAt} replyTo={null} notifyOnly />
+            </li>
+          ))}
+        </ul>
+      </Card>
     </div>
   );
 }

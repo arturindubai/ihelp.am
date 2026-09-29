@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { renderOwnerText } from "@/lib/cc-owner-q-render";
 import { useTranslations } from "next-intl";
 import { Mic, MicOff, Paperclip, Play, Sparkles, Square, X } from "lucide-react";
 import { Link, useRouter } from "@/i18n/navigation";
@@ -14,6 +15,7 @@ import {
   ccOwnerAnswerManyAction,
   ccOwnerPostpone3DaysAction,
   ccOwnerPostponeAction,
+  ccReadAllMessagesAction,
   ccReadMessageAction,
   ccRejectManyAction,
   ccReturnManyAction,
@@ -555,7 +557,17 @@ export function DesignReturnButton({ taskKey }: { taskKey: string }) {
   const { pending, error, done, run } = useAct();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
-  if (done) return <p className="text-xs text-warn">{t("returned")}</p>;
+  const [sentReason, setSentReason] = useState("");
+  if (done) return (
+    <div className="flex max-w-sm flex-col items-end gap-1">
+      <span className="chip bg-warn-50 text-warn">{t("returned")}</span>
+      {sentReason && (
+        <span className="line-clamp-1 text-xs text-muted" title={sentReason}>
+          {sentReason.length > 60 ? sentReason.slice(0, 60) + "…" : sentReason}
+        </span>
+      )}
+    </div>
+  );
   return (
     <div className="flex flex-col items-end gap-1">
       {!open ? (
@@ -567,6 +579,7 @@ export function DesignReturnButton({ taskKey }: { taskKey: string }) {
           className="flex w-full max-w-sm gap-1.5"
           onSubmit={(e) => {
             e.preventDefault();
+            setSentReason(reason);
             run(() => ccReturnDesignAction(taskKey, reason), () => setOpen(false));
           }}
         >
@@ -590,6 +603,7 @@ export function OwnerQuestionCard({ taskKey, title, blockedReason, taskHref }: {
   const [replyText, setReplyText] = useState("");
   const [postponeOpen, setPostponeOpen] = useState(false);
   const [postponeReason, setPostponeReason] = useState("");
+  const [postponeDate, setPostponeDate] = useState("");
 
   if (answered) return null;
 
@@ -599,8 +613,8 @@ export function OwnerQuestionCard({ taskKey, title, blockedReason, taskHref }: {
   const answer = (text: string) => run(() => ccOwnerAnswerAction(taskKey, text), () => setAnswered(true));
   const postpone = () =>
     run(
-      () => ccOwnerPostponeAction(taskKey, postponeReason || undefined),
-      () => { setAnswered(true); setPostponeOpen(false); setPostponeReason(""); },
+      () => ccOwnerPostponeAction(taskKey, postponeDate, postponeReason || undefined),
+      () => { setAnswered(true); setPostponeOpen(false); setPostponeReason(""); setPostponeDate(""); },
     );
 
   return (
@@ -656,19 +670,32 @@ export function OwnerQuestionCard({ taskKey, title, blockedReason, taskHref }: {
       )}
       {postponeOpen && (
         <form
-          className="flex gap-1.5"
+          className="flex flex-col gap-1.5"
           onSubmit={(e) => {
             e.preventDefault();
             postpone();
           }}
         >
-          <input className="input h-9 flex-1 py-1 text-sm" value={postponeReason} onChange={(e) => setPostponeReason(e.target.value)} placeholder={t("postponePh")} />
-          <button className="btn-outline btn-sm" disabled={pending}>
-            {t("postponeConfirm")}
-          </button>
-          <button type="button" className="btn-ghost btn-sm" onClick={() => setPostponeOpen(false)}>
-            ×
-          </button>
+          <div className="flex gap-1.5">
+            <input
+              type="date"
+              className="input h-9 w-40 py-1 text-sm"
+              value={postponeDate}
+              onChange={(e) => setPostponeDate(e.target.value)}
+              min={new Date(Date.now() + 86400_000).toISOString().slice(0, 10)}
+              required
+              placeholder={t("postponeDatePh")}
+            />
+            <input className="input h-9 flex-1 py-1 text-sm" value={postponeReason} onChange={(e) => setPostponeReason(e.target.value)} placeholder={t("postponePh")} />
+          </div>
+          <div className="flex gap-1.5">
+            <button className="btn-outline btn-sm" disabled={pending || !postponeDate}>
+              {t("postponeConfirm")}
+            </button>
+            <button type="button" className="btn-ghost btn-sm" onClick={() => setPostponeOpen(false)}>
+              ×
+            </button>
+          </div>
         </form>
       )}
       {error && <p className="text-xs text-bad">{error}</p>}
@@ -677,6 +704,25 @@ export function OwnerQuestionCard({ taskKey, title, blockedReason, taskHref }: {
 }
 
 /* ───────────── Сообщения ───────────── */
+
+/** Кнопка «Прочитать всё»: отмечает непрочитанными все уведомления владельца за один клик */
+export function MarkAllReadButton({ unreadCount }: { unreadCount: number }) {
+  const t = useTranslations("admin.cc.notify");
+  const { pending, error, done, run } = useAct();
+  return (
+    <div className="flex shrink-0 flex-col items-end gap-1">
+      <button
+        className="btn-outline btn-sm"
+        disabled={pending || unreadCount === 0}
+        onClick={() => run(() => ccReadAllMessagesAction())}
+      >
+        {pending && <span className="mr-1 inline-block size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />}
+        {done ? t("markAllReadDone") : t("markAllRead")}
+      </button>
+      {error && <p className="text-xs text-bad">{t("failed")}</p>}
+    </div>
+  );
+}
 
 export function MessageComposer({ roles, initialTo = "workers", taskKey }: { roles: readonly string[]; initialTo?: string; taskKey?: string }) {
   const t = useTranslations("admin.cc.notify");
@@ -713,7 +759,11 @@ export function MessageComposer({ roles, initialTo = "workers", taskKey }: { rol
   );
 }
 
-export function MessageActions({ id, unread, replyTo }: { id: string; unread: boolean; replyTo: string | null }) {
+/**
+ * Кнопки под уведомлением. notifyOnly=true: показывает только «Прочитано» (без «Ответить» и «В бэклог»).
+ * Используется в NotifyTab, где уведомления не требуют действий кроме отметки прочитанным.
+ */
+export function MessageActions({ id, unread, replyTo, notifyOnly }: { id: string; unread: boolean; replyTo: string | null; notifyOnly?: boolean }) {
   const t = useTranslations("admin.cc.notify");
   const { pending, run } = useAct();
   const [reply, setReply] = useState(false);
@@ -727,26 +777,28 @@ export function MessageActions({ id, unread, replyTo }: { id: string; unread: bo
             {t("read")}
           </button>
         )}
-        <button
-          className="btn-outline btn-sm"
-          disabled={pending}
-          onClick={() =>
-            run(async () => {
-              const r = await ccMessageToIntakeAction(id);
-              if (r.ok) router.push(`/admin/control?task=${r.key}`);
-              return r;
-            })
-          }
-        >
-          {t("toBacklog")}
-        </button>
-        {replyTo && (
+        {!notifyOnly && (
+          <button
+            className="btn-outline btn-sm"
+            disabled={pending}
+            onClick={() =>
+              run(async () => {
+                const r = await ccMessageToIntakeAction(id);
+                if (r.ok) router.push(`/admin/control?task=${r.key}`);
+                return r;
+              })
+            }
+          >
+            {t("toBacklog")}
+          </button>
+        )}
+        {!notifyOnly && replyTo && (
           <button className="btn-ghost btn-sm" onClick={() => setReply(!reply)}>
             {t("reply")}
           </button>
         )}
       </div>
-      {reply && replyTo && (
+      {reply && replyTo && !notifyOnly && (
         <form
           className="mt-1.5 flex gap-1.5"
           onSubmit={(e) => {
@@ -777,10 +829,18 @@ export type YouCardTask = { key: string; title: string; href: string; priority: 
 export type YouCard = {
   id: string;
   question: string;
-  groupType: "variant" | "data" | "auth" | "rule";
+  groupType: "variant" | "price" | "data" | "auth" | "approve" | "rule" | "other";
   tasks: YouCardTask[];
   variants: { id: string; text: string }[] | null;
+  multiQuestion: { question: string; variants: { id: string; text: string }[] | null }[] | null;
   isUrgent: boolean;
+  textMayCut: boolean;
+  /** Ссылка на задачу-оригинал при уведомлении о дубле */
+  origTaskHref?: string;
+  /** Ключ задачи-оригинала для отображения в ссылке */
+  origTaskKey?: string;
+  /** Сколько задач разблокирует ответ на этот вопрос */
+  unblocksCount?: number;
 };
 export type YouPostponedTask = {
   key: string;
@@ -793,59 +853,47 @@ export type YouPostponedTask = {
 
 const GROUP_ICONS: Record<YouCard["groupType"], string> = {
   variant: "🗳️",
+  price: "💰",
   data: "📎",
   auth: "🔑",
-  rule: "✅",
+  approve: "✅",
+  rule: "📋",
+  other: "💬",
 };
 
-/** Карточка одного вопроса: полный текст, чипы задач, кнопки вариантов или ввод текста, «Отложить на 3 дня» */
-function YouQuestionCard({ card, onDone }: { card: YouCard; onDone: (id: string) => void }) {
+/** Один блок вопроса с вариантами или текстовым вводом */
+function QuestionBlock({
+  block,
+  blockIdx,
+  blockCount,
+  pending,
+  onAnswer,
+}: {
+  block: { question: string; variants: { id: string; text: string }[] | null };
+  blockIdx: number;
+  blockCount: number;
+  pending: boolean;
+  onAnswer: (text: string) => void;
+}) {
   const t = useTranslations("admin.cc.you");
-  const { pending, error, run } = useAct();
   const [replyText, setReplyText] = useState("");
-  const [visible, setVisible] = useState(true);
-
-  const answer = (text: string) =>
-    run(() => ccOwnerAnswerManyAction(card.tasks.map((x) => x.key), text), () => {
-      setVisible(false);
-      setTimeout(() => onDone(card.id), 300);
-    });
-
-  const postpone = () =>
-    run(() => ccOwnerPostpone3DaysAction(card.tasks.map((x) => x.key)), () => {
-      setVisible(false);
-      setTimeout(() => onDone(card.id), 300);
-    });
 
   return (
-    <div
-      className={cn(
-        "rounded-card border bg-paper p-4 transition-all duration-300",
-        card.isUrgent ? "border-bad-50 bg-bad-50/20" : "border-line",
-        !visible && "pointer-events-none scale-95 opacity-0",
-      )}
-    >
-      {card.isUrgent && (
-        <span className="chip mb-2 inline-block bg-bad-50 text-[10px] text-bad">{t("urgent")}</span>
-      )}
-      {card.question && <p className="mb-2 whitespace-pre-wrap text-sm font-medium">{card.question}</p>}
-      {card.tasks.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          {card.tasks.map((task) => (
-            <Link key={task.key} href={task.href} scroll={false} className="chip bg-surface text-[11px] hover:bg-brand-50 hover:text-brand">
-              {task.key}
-            </Link>
-          ))}
+    <div>
+      {block.question && (
+        <div className="mb-2 text-sm font-medium">
+          {blockCount > 1 && <span className="mr-1 text-muted">{blockIdx + 1}.</span>}
+          {renderOwnerText(block.question, t("devOnly"))}
         </div>
       )}
-      {card.variants ? (
+      {block.variants ? (
         <div className="flex flex-wrap gap-2">
-          {card.variants.map((v) => (
+          {block.variants.map((v) => (
             <button
               key={v.id}
               disabled={pending}
               className="rounded-lg border border-brand px-3 py-1.5 text-sm text-brand transition-colors hover:bg-brand hover:text-inverse disabled:opacity-50"
-              onClick={() => answer(t("answerVariant", { id: v.id }))}
+              onClick={() => onAnswer(blockCount > 1 ? `[Вопрос ${blockIdx + 1}] ${t("answerVariant", { id: v.id })}` : t("answerVariant", { id: v.id }))}
             >
               {v.id}) {v.text}
             </button>
@@ -856,7 +904,7 @@ function YouQuestionCard({ card, onDone }: { card: YouCard; onDone: (id: string)
           className="flex gap-1.5"
           onSubmit={(e) => {
             e.preventDefault();
-            answer(replyText);
+            onAnswer(replyText);
           }}
         >
           <input
@@ -870,6 +918,90 @@ function YouQuestionCard({ card, onDone }: { card: YouCard; onDone: (id: string)
           </button>
         </form>
       )}
+    </div>
+  );
+}
+
+/** Карточка одного вопроса: полный текст, чипы задач, кнопки вариантов или ввод текста, «Отложить на 3 дня» */
+function YouQuestionCard({ card, onDone }: { card: YouCard; onDone: (id: string) => void }) {
+  const t = useTranslations("admin.cc.you");
+  const { pending, error, run } = useAct();
+  const [visible, setVisible] = useState(true);
+  const [hiddenBlocks, setHiddenBlocks] = useState<Set<number>>(new Set());
+
+  const answer = (text: string, blockIdx?: number) =>
+    run(() => ccOwnerAnswerManyAction(card.tasks.map((x) => x.key), text), () => {
+      if (blockIdx !== undefined && card.multiQuestion && card.multiQuestion.length > 1) {
+        setHiddenBlocks((prev) => new Set([...prev, blockIdx]));
+        if (hiddenBlocks.size + 1 >= card.multiQuestion.length) {
+          setVisible(false);
+          setTimeout(() => onDone(card.id), 300);
+        }
+      } else {
+        setVisible(false);
+        setTimeout(() => onDone(card.id), 300);
+      }
+    });
+
+  const postpone = () =>
+    run(() => ccOwnerPostpone3DaysAction(card.tasks.map((x) => x.key)), () => {
+      setVisible(false);
+      setTimeout(() => onDone(card.id), 300);
+    });
+
+  const blocks = card.multiQuestion ?? [{ question: card.question, variants: card.variants }];
+  const visibleBlocks = blocks.filter((_, idx) => !hiddenBlocks.has(idx));
+
+  return (
+    <div
+      className={cn(
+        "rounded-card border bg-paper p-4 transition-all duration-300",
+        card.isUrgent ? "border-bad-50 bg-bad-50/20" : "border-line",
+        !visible && "pointer-events-none scale-95 opacity-0",
+      )}
+    >
+      {card.isUrgent && (
+        <span className="chip mb-2 inline-block bg-bad-50 text-[10px] text-bad">{t("urgent")}</span>
+      )}
+      {card.textMayCut && (
+        <p className="mb-2 text-xs text-warn">{t("textMayCut")}</p>
+      )}
+      {card.origTaskHref && card.origTaskKey && (
+        <p className="mb-2 text-sm">
+          <Link href={card.origTaskHref} scroll={false} className="font-mono text-brand hover:underline">
+            {card.origTaskKey}
+          </Link>
+        </p>
+      )}
+      {card.tasks.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {card.tasks.map((task) => (
+            <Link key={task.key} href={task.href} scroll={false} className="chip bg-surface text-[11px] hover:bg-brand-50 hover:text-brand">
+              {task.key}
+            </Link>
+          ))}
+        </div>
+      )}
+      {(card.unblocksCount ?? 0) >= 1 && (
+        <p className="mb-2">
+          <span className="chip bg-brand-50 text-xs text-brand">{t("unblocks", { n: card.unblocksCount ?? 0 })}</span>
+        </p>
+      )}
+      <div className="space-y-4">
+        {visibleBlocks.map((block) => {
+          const blockIdx = blocks.indexOf(block);
+          return (
+            <QuestionBlock
+              key={blockIdx}
+              block={block}
+              blockIdx={blockIdx}
+              blockCount={blocks.length}
+              pending={pending}
+              onAnswer={(text) => answer(text, blockIdx)}
+            />
+          );
+        })}
+      </div>
       <div className="mt-2 flex justify-end">
         <button className="btn-ghost btn-sm text-muted" disabled={pending} onClick={postpone}>
           {t("postpone3days")}
@@ -887,9 +1019,11 @@ function YouQuestionCard({ card, onDone }: { card: YouCard; onDone: (id: string)
 export function YouQuestionsSection({
   cards,
   postponed,
+  nocodeReviewCount = 0,
 }: {
   cards: YouCard[];
   postponed: YouPostponedTask[];
+  nocodeReviewCount?: number;
 }) {
   const t = useTranslations("admin.cc.you");
   const [filter, setFilter] = useState<"all" | "urgent" | "postponed">("all");
@@ -907,19 +1041,29 @@ export function YouQuestionsSection({
   const byGroup = (
     [
       ["variant", displayCards.filter((c) => c.groupType === "variant")],
+      ["price", displayCards.filter((c) => c.groupType === "price")],
       ["data", displayCards.filter((c) => c.groupType === "data")],
       ["auth", displayCards.filter((c) => c.groupType === "auth")],
+      ["approve", displayCards.filter((c) => c.groupType === "approve")],
       ["rule", displayCards.filter((c) => c.groupType === "rule")],
+      ["other", displayCards.filter((c) => c.groupType === "other")],
     ] as [YouCard["groupType"], YouCard[]][]
   ).filter(([, g]) => g.length > 0);
 
   const allEmpty = activeCount === 0 && postponedCount === 0;
 
+  const headerText = (() => {
+    if (allEmpty && nocodeReviewCount === 0) return t("allDone");
+    if (nocodeReviewCount > 0 && activeCount > 0) return t("headerWithReview", { q: activeCount, m: nocodeReviewCount });
+    if (nocodeReviewCount > 0) return t("headerReviewOnly", { m: nocodeReviewCount });
+    return t("headerCount", { n: activeCount });
+  })();
+
   return (
     <div className="space-y-4">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-base font-semibold">
-          {allEmpty ? t("allDone") : t("headerCount", { n: activeCount })}
+          {headerText}
         </h2>
       </div>
 

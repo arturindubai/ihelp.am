@@ -108,6 +108,34 @@ describe("план диспетчера", () => {
   it("задачу без отправленной ветки не тестируем и не выкладываем", () => {
     expect(planDispatch(state({ heads: {}, review: [review("A")] }), noon)).toEqual([]);
   });
+  it("deployBatch=1 — прежнее поведение: одна задача с key", () => {
+    const heads = { "task/A": "aaa", "task/B": "bbb" };
+    const s = state({ config: { ...on, deployBatch: 1 }, heads, review: [review("A", { testedSha: "aaa" }), review("B", { testedSha: "bbb" })] });
+    const plan = planDispatch(s, noon).filter((a) => a.pool === "deployer");
+    expect(plan).toHaveLength(1);
+    expect(plan[0].key).toBeDefined();
+    expect(plan[0].keys).toBeUndefined();
+  });
+  it("deployBatch=3 — деплоер получает пачку из трёх задач через keys", () => {
+    const heads = { "task/A": "aaa", "task/B": "bbb", "task/C": "ccc", "task/D": "ddd" };
+    const s = state({
+      config: { ...on, deployBatch: 3 },
+      heads,
+      review: [review("A", { testedSha: "aaa" }), review("B", { testedSha: "bbb" }), review("C", { testedSha: "ccc" }), review("D", { testedSha: "ddd" })],
+    });
+    const plan = planDispatch(s, noon).filter((a) => a.pool === "deployer");
+    expect(plan).toHaveLength(1);
+    expect(plan[0].keys).toHaveLength(3);
+    expect(plan[0].key).toBeUndefined();
+  });
+  it("deployBatch=3 с одной задачей — используется key, а не keys", () => {
+    const heads = { "task/A": "aaa" };
+    const s = state({ config: { ...on, deployBatch: 3 }, heads, review: [review("A", { testedSha: "aaa" })] });
+    const plan = planDispatch(s, noon).filter((a) => a.pool === "deployer");
+    expect(plan).toHaveLength(1);
+    expect(plan[0].key).toBe("A");
+    expect(plan[0].keys).toBeUndefined();
+  });
 });
 
 describe("имена и итоги запусков", () => {
@@ -418,7 +446,7 @@ describe("кнопки владельца: Пауза, Стоп, Старт, П�
 });
 
 describe("отбор очереди дизайнера", () => {
-  const base = { mockupRequired: false, mockupApprovedBy: null, mockupUrl: null, design: null, layer: "front", blockedOn: null, hasImageAttachments: false, hasAnyAttachments: false };
+  const base = { mockupRequired: false, mockupApprovedBy: null, mockupUrl: null, design: null, layer: "front", blockedOn: null, hasImageAttachments: false, hasAnyAttachments: false, needsDesign: null as boolean | null };
 
   it("задача заблокирована на дизайне без поданного макета — в очереди", () => {
     expect(inDesignerQueue({ ...base, status: "blocked", blockedOn: "design" })).toBe(true);
@@ -440,23 +468,25 @@ describe("отбор очереди дизайнера", () => {
     expect(inDesignerQueue({ ...base, status: "ready", mockupRequired: true, mockupApprovedBy: "owner" })).toBe(false);
     expect(inDesignerQueue({ ...base, status: "ready", layer: "front", design: null, mockupApprovedBy: "cto" })).toBe(false);
   });
-  it("задача фронта без описания дизайна и без файлов — в очереди", () => {
-    expect(inDesignerQueue({ ...base, status: "backlog", layer: "front" })).toBe(true);
-    expect(inDesignerQueue({ ...base, status: "ready", layer: "front" })).toBe(true);
+  it("задача с флагом needsDesign без описания дизайна и без файлов — в очереди", () => {
+    expect(inDesignerQueue({ ...base, status: "backlog", layer: "front", needsDesign: true })).toBe(true);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "front", needsDesign: true })).toBe(true);
+    // любой слой с флагом — к дизайнеру
+    expect(inDesignerQueue({ ...base, status: "backlog", layer: "back", needsDesign: true })).toBe(true);
+    expect(inDesignerQueue({ ...base, status: "backlog", layer: "fullstack", needsDesign: true })).toBe(true);
   });
-  it("задача бэк+фронт без описания дизайна и без файлов — в очереди", () => {
-    expect(inDesignerQueue({ ...base, status: "backlog", layer: "fullstack" })).toBe(true);
-    expect(inDesignerQueue({ ...base, status: "ready", layer: "fullstack" })).toBe(true);
-    expect(inDesignerQueue({ ...base, status: "ready", layer: "fullstack", design: "Экран..." })).toBe(false);
-    expect(inDesignerQueue({ ...base, status: "ready", layer: "fullstack", hasAnyAttachments: true })).toBe(false);
-  });
-  it("задача фронта с описанием дизайна или файлами — не в очереди", () => {
-    expect(inDesignerQueue({ ...base, status: "ready", layer: "front", design: "Экран списка..." })).toBe(false);
-    expect(inDesignerQueue({ ...base, status: "ready", layer: "front", hasAnyAttachments: true })).toBe(false);
-  });
-  it("бэк-задача без дизайна не в очереди дизайнера — только front и fullstack", () => {
+  it("задача без флага needsDesign не идёт к дизайнеру независимо от слоя", () => {
+    expect(inDesignerQueue({ ...base, status: "backlog", layer: "front" })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "front" })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "backlog", layer: "fullstack" })).toBe(false);
     expect(inDesignerQueue({ ...base, status: "backlog", layer: "back" })).toBe(false);
     expect(inDesignerQueue({ ...base, status: "backlog", layer: "none" })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "backlog", layer: "front", needsDesign: false })).toBe(false);
+  });
+  it("задача с флагом needsDesign, но описание или файлы уже есть — не в очереди", () => {
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "front", needsDesign: true, design: "Экран списка..." })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "fullstack", needsDesign: true, hasAnyAttachments: true })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "front", needsDesign: true, mockupApprovedBy: "owner" })).toBe(false);
   });
   it("заблокирована не на дизайне — не в очереди дизайнера", () => {
     expect(inDesignerQueue({ ...base, status: "blocked", blockedOn: "product" })).toBe(false);

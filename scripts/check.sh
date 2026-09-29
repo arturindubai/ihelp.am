@@ -11,6 +11,7 @@ self=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 tools=()
 [ -f "$self/check-migrations.mjs" ] && tools+=(-v "$self/check-migrations.mjs:/app/tools/check-migrations.mjs:ro")
 [ -f "$self/check-seed.mjs" ] && tools+=(-v "$self/check-seed.mjs:/app/tools/check-seed.mjs:ro")
+[ -f "$self/check-colors.sh" ] && tools+=(-v "$self/check-colors.sh:/app/tools/check-colors.sh:ro")
 docker run --rm \
   -v "$root/src:/app/src" -v "$root/prisma:/app/prisma" -v "$root/messages:/app/messages" \
   -v "$root/deploy:/app/deploy:ro" -v "$root/scripts:/app/scripts:ro" \
@@ -25,6 +26,8 @@ docker run --rm \
     echo "▶ Миграции"; if [ -f tools/check-migrations.mjs ]; then node tools/check-migrations.mjs || exit 1; else echo "  ! проверка миграций пропущена: рядом с check.sh нет check-migrations.mjs"; fi
     echo "▶ Демо-данные в seed"; if [ -f tools/check-seed.mjs ]; then node tools/check-seed.mjs || exit 1; else echo "  ! проверка seed пропущена: рядом с check.sh нет check-seed.mjs"; fi
     echo "▶ Хардкод строк"; count=$(grep -rn --include="*.tsx" --include="*.ts" "На главную\|Русский\|English" src/ 2>/dev/null | grep -v "backlog\.ts\|SettingsEditor\.tsx\|\.test\." | wc -l); [ "$count" = "0" ] && echo "  OK — зашитых строк нет" || { echo "  FAIL — найдено зашитых строк: $count"; grep -rn --include="*.tsx" --include="*.ts" "На главную\|Русский\|English" src/ 2>/dev/null | grep -v "backlog\.ts\|SettingsEditor\.tsx\|\.test\."; exit 1; }
+    echo "▶ Строки мимо переводов"; cyr_out=$(grep -rnP ">\p{Cyrillic}" src/ --include="*.tsx" | grep -v "not-found\.tsx" || true); [ -z "$cyr_out" ] && echo "  OK — кириллица напрямую в JSX не найдена" || { echo "  FAIL — кириллица напрямую в JSX:"; echo "$cyr_out" | head -10; exit 1; }
+    echo "▶ Хардкод цветов"; if [ -f tools/check-colors.sh ]; then bash tools/check-colors.sh || exit 1; else echo "  ! проверка цветов пропущена: рядом с check.sh нет check-colors.sh"; fi
     if [ "$vitest_exit" != "0" ]; then echo "✗ Тесты упали"; exit "$vitest_exit"; fi' 2>&1
 code=$?
 [ "$code" = 0 ] && echo "CHECK OK" || echo "CHECK FAILED"
