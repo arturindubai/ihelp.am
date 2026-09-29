@@ -7,7 +7,7 @@ import { requireSection } from "../../admin";
 import { audit } from "../../audit";
 import { recalcRatings } from "../../services/catalog";
 import { invalidateUiCache, saveSettingsSection, getSettings, SECRET_PATHS, type Settings } from "../../settings";
-import { notifyTeam, notifyTech } from "../../notify";
+import { html, notifyTeam, notifyTech } from "../../notify";
 import { envContacts } from "../../contacts";
 import { sendMail, mailTemplate } from "../../services/mail";
 import { registerTelegramWebhook } from "../../services/telegramBot";
@@ -114,14 +114,50 @@ export async function deletePromoAction(id: string) {
 }
 
 /* ───── Баннеры ───── */
-const bannerSchema = z.object({ title: i18n, subtitle: i18n.nullable().optional(), image: z.string().max(500).nullable().optional(), link: z.string().max(300).nullable().optional(), promoCode: z.string().max(40).nullable().optional(), bg: z.string().max(20).nullable().optional(), active: z.boolean(), sort: z.number().int() });
+const PLACEMENTS = ["CAROUSEL_HOME", "HERO_HOME", "CATALOG", "SERVICE", "CHECKOUT", "SUCCESS", "EMAIL", "CLIENT_CABINET", "MASTER_CABINET"] as const;
+const BANNER_TYPES = ["PROMO", "ANNOUNCEMENT", "UPSELL", "CROSS_SELL"] as const;
+const AUDIENCES = ["ALL", "LOGGED_IN", "GUESTS"] as const;
+const SEGMENTS = ["ALL", "NEW", "RETURNING"] as const;
+
+const bannerSchema = z.object({
+  title: i18n,
+  subtitle: i18n.nullable().optional(),
+  image: z.string().max(500).nullable().optional(),
+  link: z.string().max(300).nullable().optional(),
+  promoCode: z.string().max(40).nullable().optional(),
+  bg: z.string().max(20).nullable().optional(),
+  active: z.boolean(),
+  sort: z.number().int(),
+  placement: z.enum(PLACEMENTS).default("CAROUSEL_HOME"),
+  bannerType: z.enum(BANNER_TYPES).default("PROMO"),
+  startsAt: z.string().nullable().optional(),
+  endsAt: z.string().nullable().optional(),
+  audience: z.enum(AUDIENCES).default("ALL"),
+  segment: z.enum(SEGMENTS).default("ALL"),
+});
 export type BannerPayload = z.infer<typeof bannerSchema>;
 
 export async function saveBannerAction(id: string | null, input: BannerPayload) {
   const u = await requireSection("banners");
   const p = bannerSchema.safeParse(input);
   if (!p.success) return { ok: false };
-  const d = { ...p.data, subtitle: J(p.data.subtitle) };
+  // "YYYY-MM-DDTHH:mm" (datetime-local) интерпретируем как Ереван UTC+4; ISO строки из БД тоже принимаем
+  const parseDate = (s: string | null | undefined): Date | null | "invalid" => {
+    if (!s) return null;
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) return new Date(`${s}:00+04:00`);
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? "invalid" : d;
+  };
+  const startsAt = parseDate(p.data.startsAt);
+  const endsAt = parseDate(p.data.endsAt);
+  if (startsAt === "invalid") return { ok: false as const, error: "startsAt" };
+  if (endsAt === "invalid") return { ok: false as const, error: "endsAt" };
+  const d = {
+    ...p.data,
+    subtitle: J(p.data.subtitle),
+    startsAt,
+    endsAt,
+  };
   const r = id ? await db.banner.update({ where: { id }, data: d }) : await db.banner.create({ data: d });
   await audit(u.id, "banner.save", "Banner", r.id);
   rAll();
@@ -307,11 +343,26 @@ export async function setRoleAction(phoneRaw: string, role: Role, name?: string)
   const u = await requireSection("staff");
   const phone = normalizePhone(phoneRaw);
   if (!phone) return { ok: false as const, error: "phone" };
-  if (phone === u.phone && role !== "OWNER") return { ok: false as const, error: "self" };
+
+  const target = await db.user.findUnique({ where: { phone }, select: { id: true, role: true } });
+  if (target?.role === "OWNER") {
+    // Вариант А: роль другого владельца менять нельзя
+    if (phone !== u.phone) return { ok: false as const, error: "cannotRemoveOwner" };
+    // Последнего владельца нельзя понизить ни при каком варианте
+    const ownerCount = await db.user.count({ where: { role: "OWNER" } });
+    if (ownerCount <= 1) return { ok: false as const, error: "lastOwner" };
+  } else {
+    if (phone === u.phone && role !== "OWNER") return { ok: false as const, error: "self" };
+  }
+
   const namePatch = name ? { name } : {};
   const r = await db.user.upsert({ where: { phone }, create: { phone, role, ...namePatch }, update: { role, ...namePatch } });
   if (role === "CLIENT") await db.session.deleteMany({ where: { userId: r.id } });
   await audit(u.id, "staff.role", "User", r.id, { role });
+  // Тех-алерт при изменении роли владельца (понижение или повышение)
+  if (target?.role === "OWNER" || role === "OWNER") {
+    await notifyTech(html`⚠️ Смена роли владельца: <b>${r.id}</b> → <code>${role}</code> (оператор: <b>${u.name || u.id}</b>)`);
+  }
   return { ok: true as const };
 }
 
