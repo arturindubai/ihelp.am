@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { setRequestLocale } from "next-intl/server";
 import { pageUser } from "@/server/adminPage";
 import { Forbidden } from "@/components/admin/ui";
@@ -24,6 +25,12 @@ export default async function ControlCenter({ params, searchParams }: { params: 
   setRequestLocale(locale);
   if (!(await pageUser("control"))) return <Forbidden />;
   const sp = await searchParams;
+  if (sp.tab === "messages") {
+    const next: Record<string, string> = {};
+    for (const [k, v] of Object.entries(sp)) if (v && k !== "tab") next[k] = v;
+    next.tab = "notify";
+    redirect(`/${locale}/admin/control?${new URLSearchParams(next)}`);
+  }
   const tab: Tab = (TABS as readonly string[]).includes(sp.tab ?? "") ? (sp.tab as Tab) : "backlog";
   const taskHref = (key: string) => ccHref(sp, { task: key });
 

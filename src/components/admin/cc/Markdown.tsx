@@ -51,6 +51,21 @@ function renderInline(nodes: Inline[], docPath?: string | null, key = ""): React
 
 const inline = (s: string, docPath?: string | null) => renderInline(parseInline(s), docPath);
 
+/** Строчная разметка с переводами строк — для уведомлений и коротких текстов в списках */
+export function MarkdownText({ text, className }: { text: string; className?: string }) {
+  const lines = text.split(/\r?\n/);
+  return (
+    <span className={className}>
+      {lines.map((line, i) => (
+        <Fragment key={i}>
+          {i > 0 && <br />}
+          {renderInline(parseInline(line))}
+        </Fragment>
+      ))}
+    </span>
+  );
+}
+
 function renderBlock(b: Block, i: number, docPath?: string | null): React.ReactNode {
   switch (b.type) {
     case "h": {

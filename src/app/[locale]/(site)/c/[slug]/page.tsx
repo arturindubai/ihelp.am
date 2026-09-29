@@ -6,6 +6,7 @@ import { ServiceCard } from "@/components/ServiceCard";
 import { Link } from "@/i18n/navigation";
 import { NotifyForm } from "@/components/catalog/NotifyForm";
 import { cn } from "@/lib/format";
+import { PromoSlot } from "@/components/PromoSlot";
 
 export default async function CategoryPage({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;
@@ -61,10 +62,13 @@ export default async function CategoryPage({ params }: { params: Promise<{ local
           </div>
         </div>
       ) : (
-        <div className="mt-4 space-y-3">
-          {c.services.map((svc) => (
-            <ServiceCard key={svc.slug} s={svc} />
-          ))}
+        <div className="mt-4">
+          <PromoSlot placement="CATALOG" locale={locale} />
+          <div className="mt-4 space-y-3">
+            {c.services.map((svc) => (
+              <ServiceCard key={svc.slug} s={svc} />
+            ))}
+          </div>
         </div>
       )}
     </div>

@@ -9,6 +9,7 @@ import path from "path";
 import { PrismaClient } from "@prisma/client";
 import { BACKLOG } from "../src/server/backlog";
 import { EPIC_SEED } from "../src/server/epics";
+import { computeEpicStatus } from "../src/lib/cc-flow";
 import { REPO_DOC_ROOTS, kindOfPath, titleOf } from "../src/lib/library";
 const db = new PrismaClient();
 
@@ -99,6 +100,12 @@ async function syncEpics() {
 async function syncBacklog() {
   // Задача не указала epicKey явно — находим эпик по совпадению старой текстовой метки epic с названием эпика
   const epicKeyByTitle = new Map((await db.epic.findMany({ select: { key: true, title: true } })).map((e) => [e.title, e.key]));
+  // Задачи, у которых triagedAt был сброшен при ретриаже: их поля всё равно нельзя перезаписывать из кода.
+  // Событие "retriage" создаётся ccWork.retriage() при сбросе triagedAt и никогда не удаляется.
+  const retriagedTaskIds = new Set(
+    (await db.taskEvent.findMany({ where: { field: "retriage" }, select: { taskId: true }, distinct: ["taskId"] }))
+      .map((e) => e.taskId)
+  );
   let created = 0;
   for (const [i, t] of BACKLOG.entries()) {
     const content = {
@@ -127,18 +134,18 @@ async function syncBacklog() {
     // Задачу, отредактированную в админке, деплой не перезаписывает
     if (existing) {
       if (existing.source === "code") {
-        // У уже разобранных задач (triagedAt != null) поля, которые правит команда, не сбрасываются:
-        // needs, owner, scope, depends, estimate — решения триажа и продакта, а не данные из кода
-        const triaged = !!existing.triagedAt;
+        // У разобранных задач (triagedAt != null) или возвращённых на повторный разбор (событие "retriage")
+        // поля команды не сбрасываются: needs, owner, scope, depends, estimate — решения триажа и продакта
+        const fieldsProtected = !!existing.triagedAt || retriagedTaskIds.has(existing.id);
         await db.task.update({
           where: { key: t.key },
           data: {
             ...content,
-            needs: triaged ? undefined : content.needs,
-            owner: triaged ? undefined : content.owner,
-            scope: triaged ? undefined : content.scope,
-            depends: triaged ? undefined : content.depends,
-            estimate: triaged ? undefined : content.estimate,
+            needs: fieldsProtected ? undefined : content.needs,
+            owner: fieldsProtected ? undefined : content.owner,
+            scope: fieldsProtected ? undefined : content.scope,
+            depends: fieldsProtected ? undefined : content.depends,
+            estimate: fieldsProtected ? undefined : content.estimate,
           },
         });
       }
@@ -155,6 +162,24 @@ async function syncBacklog() {
   }
   const extra = await db.task.findMany({ where: { key: { notIn: BACKLOG.map((t) => t.key) } }, select: { key: true } });
   console.log(`Backlog: ${BACKLOG.length} tasks (${created} new)${extra.length ? `, not in code: ${extra.map((e) => e.key).join(", ")}` : ""}`);
+}
+
+/**
+ * Пересчитывает статус всех code-эпиков по текущим задачам.
+ * Запускается после syncBacklog: деплой не перезаписывает вручную выставленный статус у ui-эпиков.
+ */
+async function refreshAllEpicStatuses() {
+  const epics = await db.epic.findMany({ where: { source: "code" }, select: { key: true } });
+  const counts = await db.task.groupBy({ by: ["epicKey", "status"], _count: true, where: { epicKey: { not: null } } });
+  let updated = 0;
+  for (const e of epics) {
+    const rows = counts.filter((c) => c.epicKey === e.key);
+    const statuses = rows.flatMap((r) => Array(r._count).fill(r.status) as string[]);
+    const newStatus = computeEpicStatus(statuses);
+    await db.epic.update({ where: { key: e.key }, data: { status: newStatus } });
+    updated++;
+  }
+  console.log(`Epics статусы: обновлено ${updated}`);
 }
 
 const t = (ru: string, en = "", am = "") => ({ ru, en, am });
@@ -174,20 +199,23 @@ const DURATIONS: { h: number; price: number; hint?: [string, string]; schedule: 
 const HOURS = Object.fromEntries([1, 2, 3, 4, 5, 6].map((d) => [String(d), [["09:00", "19:00"]]]));
 
 async function main() {
-  // Настройки: владелец
   const ownerPhone = process.env.ADMIN_PHONE || "+37400000000";
-  await db.user.upsert({ where: { phone: ownerPhone }, create: { phone: ownerPhone, role: "OWNER", name: "Owner" }, update: { role: "OWNER" } });
+
+  // Роль владельца подтверждается при каждой выкладке: при смене ADMIN_PHONE новый номер сразу получает права.
+  // Исключение из проверки гейта задано маркером — только для этой одной строки (инцидент NOTIFY-2B).
+  await db.user.upsert({ where: { phone: ownerPhone }, create: { phone: ownerPhone, role: "OWNER", name: "Owner" }, update: { role: "OWNER" } }); // seed-gate:owner-only
 
   // Демо-каталог заливается один раз. Seed выполняется при каждом деплое, и без флага
   // удалённые в админке демо-мастера, баннер, категории и страницы возвращались бы после обновления.
   await syncEpics();
   await syncBacklog();
+  await refreshAllEpicStatuses();
   await syncLibrary().catch((e) => console.error("Library: снимок документов не удался —", (e as Error).message));
 
   const SEED_FLAG = "_seed";
   if ((await db.setting.findUnique({ where: { key: SEED_FLAG } })) || (await db.service.count())) {
     await db.setting.upsert({ where: { key: SEED_FLAG }, create: { key: SEED_FLAG, value: { at: new Date().toISOString() } }, update: {} });
-    console.log("Seed: demo data already applied, skipped. Owner phone:", ownerPhone);
+    console.log("Seed: demo data already applied, skipped.");
     return;
   }
 
@@ -327,15 +355,16 @@ async function main() {
   }
 
   if (!(await db.banner.count())) {
-    await db.banner.create({
-      data: {
-        title: t("−25% на первый визит", "−25% off your first visit"),
-        subtitle: t("При подписке или пакете от 4 визитов", "With a subscription or 4+ visit pack"),
-        link: "/s/regular-cleaning",
-        bg: "#1c1917",
-        sort: 0,
-      },
-    });
+    const demoBanners = [
+      { placement: "CAROUSEL_HOME", title: t("−25% на первый визит", "−25% off your first visit"), subtitle: t("При подписке или пакете от 4 визитов", "With a subscription or 4+ visit pack"), link: "/s/regular-cleaning", bg: "#1c1917", sort: 0 },
+      { placement: "CHECKOUT", title: t("Первый визит бесплатно", "First visit free"), subtitle: t("При покупке пакета от 4 визитов", "With a 4-visit pack"), link: "/s/regular-cleaning", bg: "#5B3DF5", sort: 0 },
+      { placement: "SUCCESS", title: t("Оцените нашу работу", "Rate our service"), subtitle: t("Поставьте оценку в личном кабинете", "Leave a review in your account"), link: "/account/orders", bg: "#1e7e3e", sort: 0 },
+      { placement: "CLIENT_CABINET", title: t("Специальное предложение", "Special offer"), subtitle: t("Скидка 10% на следующий заказ", "10% off your next order"), link: "/services", bg: "#5B3DF5", sort: 0 },
+      { placement: "MASTER_CABINET", title: t("Новые правила расписания", "New schedule rules"), subtitle: t("Смотрите обновление в настройках", "Check updates in settings"), bg: "#1c1917", sort: 0 },
+    ] as const;
+    for (const data of demoBanners) {
+      await db.banner.create({ data });
+    }
   }
 
   const pages: [string, string, string][] = [
@@ -348,7 +377,7 @@ async function main() {
   }
   await db.setting.create({ data: { key: SEED_FLAG, value: { at: new Date().toISOString() } } });
 
-  console.log("Seed done. Owner phone:", ownerPhone);
+  console.log("Seed done.");
 }
 
 main().finally(() => db.$disconnect());
