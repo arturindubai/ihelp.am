@@ -574,6 +574,21 @@
         "promo": "promo code",
         "plan+promo": "plan + promo",
         "first+promo": "first order + promo"
+      },
+      "messages": "Client messages",
+      "noMessages": "No messages",
+      "msgDelivered": "delivered",
+      "msgNotDelivered": "not delivered",
+      "msgChannels": {
+        "telegram": "Telegram",
+        "email": "email",
+        "alert": "operator alert",
+        "none": "not sent"
+      },
+      "msgEvents": {
+        "created": "Order accepted",
+        "cancelled": "Cancellation",
+        "completed": "Visit completed"
       }
     },
     "schedule": {
@@ -1907,6 +1922,14 @@
         "unarchive": "Restore from archive"
       }
     }
+  },
+  "review": {
+    "title": "Your review of the visit",
+    "placeholder": "What did you like, what could be improved?",
+    "send": "Submit review",
+    "thanks": "Thank you! Your review has been received.",
+    "invalid": "This link is invalid or has already been used.",
+    "alreadyLeft": "You have already left a review for this visit."
   },
   "cookies": {
     "title": "We use cookies",
