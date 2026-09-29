@@ -806,6 +806,7 @@
         "CHECKOUT": "",
         "SUCCESS": "",
         "EMAIL": "",
+        "CLIENT_CABINET": "",
         "MASTER_CABINET": ""
       },
       "types": {

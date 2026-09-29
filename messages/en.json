@@ -825,6 +825,7 @@
         "CHECKOUT": "Checkout",
         "SUCCESS": "Success",
         "EMAIL": "Email",
+        "CLIENT_CABINET": "Client cabinet",
         "MASTER_CABINET": "Master cabinet"
       },
       "types": {

@@ -478,7 +478,7 @@ model Banner {
   bg          String?
   active      Boolean   @default(true)
   sort        Int       @default(0)
-  /// Место размещения: CAROUSEL_HOME | HERO_HOME | CATALOG | SERVICE | CHECKOUT | SUCCESS | EMAIL | MASTER_CABINET
+  /// Место размещения: CAROUSEL_HOME | HERO_HOME | CATALOG | SERVICE | CHECKOUT | SUCCESS | EMAIL | CLIENT_CABINET | MASTER_CABINET
   placement   String    @default("CAROUSEL_HOME")
   /// Тип: PROMO | ANNOUNCEMENT | UPSELL | CROSS_SELL
   bannerType  String    @default("PROMO")
