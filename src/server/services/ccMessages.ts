@@ -147,6 +147,18 @@ export async function convertOrphanQuestions(by: string): Promise<number> {
 }
 
 /**
+ * При закрытии задачи (done/cancelled) — отмечаем все непрочитанные уведомления владельца
+ * по этой задаче как прочитанные автоматически.
+ */
+export async function markReadForClosedTask(taskKey: string, by: string): Promise<number> {
+  const result = await db.ccMessage.updateMany({
+    where: { toRole: "owner", readAt: null, taskKey },
+    data: { readAt: new Date(), readBy: `auto:closed→${taskKey}`.slice(0, 60) },
+  });
+  return result.count;
+}
+
+/**
  * Счётчик непрочитанных уведомлений владельца. Исключает:
  * — сообщения-вопросы (taskKey → задача заблокирована на owner/product, уже в «Нужен ты»)
  */

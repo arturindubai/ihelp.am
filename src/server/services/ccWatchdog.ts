@@ -41,7 +41,7 @@ export async function checkCtoMessages(now = new Date()) {
     const hours = Math.floor((now.getTime() - m.createdAt.getTime()) / 3600_000);
     await alertTech(
       `cc:cto-unread:${m.id}`,
-      html`✉️ Непрочитанное роли <b>cto</b> уже ${hours} ч\nОт: ${m.fromAgent}${m.taskKey ? ` · ${m.taskKey}` : ""}\n${m.text.slice(0, 500)}\nПрочитать: /ru/admin/control?tab=messages`,
+      html`✉️ Непрочитанное роли <b>cto</b> уже ${hours} ч\nОт: ${m.fromAgent}${m.taskKey ? ` · ${m.taskKey}` : ""}\n${m.text.slice(0, 500)}\nПрочитать: /ru/admin/control?tab=notify`,
       CTO_MSG_HOURS * 60,
     );
   }
