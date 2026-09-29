@@ -7,6 +7,8 @@ import { getSettings } from "../settings";
 import { html, notifyTeam } from "../notify";
 import { notifyCancelOrderTeam, notifyCancelVisitTeam, notifyRescheduleVisitTeam } from "../services/teamNotify";
 import { notifyMasterCancelled, notifyMasterRescheduled } from "../services/workerNotify";
+import { notifyClientCancelled, notifyClientRescheduled } from "../services/bookingNotify";
+import { consumeReviewToken } from "../services/reviews";
 import { headers } from "next/headers";
 import { sendOtp, verifyOtp } from "../otp";
 import { normalizeEmail } from "@/lib/email";
@@ -79,6 +81,8 @@ export async function cancelVisitAction(visitId: string) {
   await db.visit.update({ where: { id: v.id }, data: { status, ...(status === "UNSCHEDULED" ? { scheduledAt: null, masterId: null } : {}) } });
   if (v.order.kind === "ONE_TIME") await db.order.update({ where: { id: v.orderId }, data: { status: "CANCELLED", cancelReason: "client" } });
   await notifyCancelVisitTeam(v.orderId, v.scheduledAt, status === "SKIPPED");
+  // Клиент: уведомление об отмене (только для разовых заказов; для подписки SKIPPED — без уведомления)
+  if (v.order.kind === "ONE_TIME") await notifyClientCancelled(v.orderId).catch(() => {});
   revalidatePath(`/[locale]/account/orders/${v.orderId}`, "page");
   return { ok: true };
 }
@@ -101,6 +105,7 @@ export async function rescheduleVisitAction(visitId: string, date: string, time:
   }
   await notifyRescheduleVisitTeam(v.orderId, date, time);
   await notifyMasterRescheduled(v.id).catch(() => {});
+  await notifyClientRescheduled(v.id).catch(() => {});
   return { ok: true };
 }
 
@@ -121,6 +126,7 @@ export async function cancelOrderAction(orderId: string) {
     db.order.update({ where: { id: o.id }, data: { status: "CANCELLED", cancelReason: "client" } }),
   ]);
   await notifyCancelOrderTeam(o.id, late, s.booking.freeCancelHours);
+  await notifyClientCancelled(o.id).catch(() => {});
   return { ok: true };
 }
 
@@ -158,6 +164,39 @@ export async function reviewAction(visitId: string, rating: number, text: string
   if (exists) return { ok: false };
   await db.review.create({ data: { visitId, userId: u.id, masterId: v.masterId, serviceId: v.order.serviceId, rating: r, text: text.trim().slice(0, 2000) || null, authorName: u.name, status: "PENDING" } });
   await notifyTeam(html`⭐ Новый отзыв ${r}/5 · заказ №${v.order.number} — на модерации`);
+  return { ok: true };
+}
+
+/** Оставить отзыв по одноразовому токену из сообщения (без входа в аккаунт). */
+export async function reviewByTokenAction(token: string, rating: number, text: string) {
+  const data = await consumeReviewToken(token);
+  if (!data) return { ok: false, reason: "invalid" as const };
+
+  const { visitId, userId } = data;
+  const visit = await db.visit.findUnique({
+    where: { id: visitId },
+    select: { status: true, masterId: true, order: { select: { number: true, serviceId: true } } },
+  });
+  if (!visit || visit.status !== "DONE") return { ok: false, reason: "invalid" as const };
+
+  const exists = await db.review.findUnique({ where: { visitId } });
+  if (exists) return { ok: false, reason: "already" as const };
+
+  const user = await db.user.findUnique({ where: { id: userId }, select: { name: true } });
+  const r = Math.min(5, Math.max(1, Math.round(rating)));
+  await db.review.create({
+    data: {
+      visitId,
+      userId,
+      masterId: visit.masterId,
+      serviceId: visit.order.serviceId,
+      rating: r,
+      text: text.trim().slice(0, 2000) || null,
+      authorName: user?.name ?? null,
+      status: "PENDING",
+    },
+  });
+  await notifyTeam(html`⭐ Новый отзыв ${r}/5 · заказ №${visit.order.number} — на модерации`);
   return { ok: true };
 }
 

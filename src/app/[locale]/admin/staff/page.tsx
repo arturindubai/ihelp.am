@@ -3,17 +3,37 @@ import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
 import { formatPhone } from "@/lib/phone";
 import { ymd } from "@/lib/time";
+import { sectionsFor } from "@/lib/adminAccess";
 import { PageHead, Forbidden } from "@/components/admin/ui";
 import { StaffManager } from "@/components/admin/StaffManager";
 
 export default async function AdminStaff() {
-  if (!(await pageUser("staff"))) return <Forbidden />;
+  const me = await pageUser("staff");
+  if (!me) return <Forbidden />;
   const t = await getTranslations("admin");
-  const staff = await db.user.findMany({ where: { role: { in: ["OPERATOR", "ADMIN", "OWNER", "MASTER"] } }, orderBy: [{ role: "desc" }, { createdAt: "asc" }] });
+  const staff = await db.user.findMany({
+    where: { role: { in: ["OPERATOR", "ADMIN", "OWNER", "MASTER"] } },
+    orderBy: [{ role: "desc" }, { createdAt: "asc" }],
+    select: { id: true, phone: true, email: true, name: true, role: true, lastLoginAt: true, telegramId: true, sectionDelta: true },
+  });
   return (
-    <div className="max-w-3xl">
-      <PageHead title={t("staff.title")} sub={t("staff.hint")} />
-      <StaffManager staff={staff.map((u) => ({ phone: u.phone, email: u.email, label: `${u.name || "—"} · ${formatPhone(u.phone)}`, role: u.role, lastLoginAt: u.lastLoginAt ? ymd(u.lastLoginAt) : null }))} />
+    <div className="max-w-5xl">
+      <PageHead title={t("staff.title")} sub={t("staff.manageSub")} />
+      <StaffManager
+        currentUserPhone={me.phone}
+        staff={staff.map((u) => ({
+          id: u.id,
+          phone: u.phone,
+          email: u.email,
+          telegramId: u.telegramId,
+          name: u.name ?? null,
+          label: `${u.name || "—"} · ${formatPhone(u.phone)}`,
+          role: u.role,
+          lastLoginAt: u.lastLoginAt ? ymd(u.lastLoginAt) : null,
+          roleBase: sectionsFor(u.role),
+          sectionDelta: (u.sectionDelta as { added?: string[]; removed?: string[] } | null) ?? null,
+        }))}
+      />
     </div>
   );
 }

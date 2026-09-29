@@ -97,6 +97,7 @@ const full = (t: Task) => ({
   mockupUrl: t.mockupUrl,
   mockupApprovedBy: t.mockupApprovedBy,
   mockupApprovedAt: t.mockupApprovedAt,
+  needsDesign: t.needsDesign,
   releaseNote: t.releaseNote,
   ownerSummary: t.ownerSummary,
   nextSteps: t.nextSteps,
@@ -140,7 +141,7 @@ export async function GET(req: Request) {
         blocking: data.blocking.map((b) => ({ key: b.key, title: b.title, status: b.status })),
         readiness: data.readiness,
         health: data.health,
-        comments: task.comments.map((c) => ({ kind: c.kind, author: c.author, text: c.text, at: c.createdAt })),
+        comments: task.comments.map((c) => ({ kind: c.kind, author: c.author, text: c.text, at: c.createdAt, libraryNoteId: c.libraryNoteId ?? null })),
         events: task.events.slice(0, 50).map((e) => ({ actor: e.actor, field: e.field, from: e.from, to: e.to, at: e.createdAt })),
         attachments: task.attachments.map((a) => ({ fileName: a.fileName, url: a.url, size: a.size })),
       });
@@ -324,7 +325,7 @@ export async function POST(req: Request) {
         const blockedUntilRaw = str(body.blockedUntil);
         const blockedUntil = blockedUntilRaw ? (() => { const d = new Date(blockedUntilRaw); return isNaN(d.getTime()) ? undefined : d; })() : undefined;
         const nextSteps = Array.isArray(body.nextSteps) ? (body.nextSteps as unknown[]).filter((s) => typeof s === "string").map(String) : undefined;
-        const input: TransitionInput = { to, text, force: body.force === true, blockedOn: str(body.on), blockedUntil, sha: str(body.sha), branch: str(body.branch), releaseNote: str(body.releaseNote), ownerSummary: str(body.ownerSummary), nextSteps, noWork: body.noWork === true };
+        const input: TransitionInput = { to, text, force: body.force === true, blockedOn: str(body.on), blockedUntil, sha: str(body.sha), branch: str(body.branch), releaseNote: str(body.releaseNote), ownerSummary: str(body.ownerSummary), nextSteps, noWork: body.noWork === true, intakeClosingMap: str(body.intakeClosingMap) };
         const task = await transition(key, input, actor);
         return json({ ok: true, status: task.status, task: brief(task) });
       }
@@ -333,7 +334,9 @@ export async function POST(req: Request) {
         if (!key) return json({ error: "key_required" }, 400);
         const newOn = str(body.on);
         if (!newOn) return json({ error: "on_required" }, 400);
-        const task = await reblockOn(key, newOn, text, actor);
+        const reblockUntilRaw = str(body.blockedUntil);
+        const reblockUntil = reblockUntilRaw ? (() => { const d = new Date(reblockUntilRaw); return isNaN(d.getTime()) ? undefined : d; })() : undefined;
+        const task = await reblockOn(key, newOn, text, actor, reblockUntil);
         return json({ ok: true, task: brief(task) });
       }
       case "report": {
@@ -360,7 +363,7 @@ export async function POST(req: Request) {
           if (Object.keys(patch).length === 0) {
             const available = role === "designer"
               ? DESIGNER_FIELDS.join(", ")
-              : "title, summary, details, requirements, design, qaNotes, deployNotes, needs, depends, docs, epicKey, area, layer, priority, stage, owner, estimate, scope, mockupRequired, mockupUrl";
+              : "title, summary, details, requirements, design, qaNotes, deployNotes, needs, depends, docs, epicKey, area, layer, priority, stage, owner, estimate, scope, mockupRequired, mockupUrl, needsDesign";
             return json({ error: "no_update_fields", detail: `нет полей для обновления; допустимые поля: ${available}` }, 400);
           }
           content = { ...full(current), ...patch, key };
