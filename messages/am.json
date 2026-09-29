@@ -1109,6 +1109,19 @@
       },
       "gate": {
         "needs_open": "Կան բաց հարցեր արտադրանքի վերաբերյալ — նախ ստացեք պատասխան"
+      },
+      "healthPage": {
+        "denials": {
+          "title": "",
+          "share": "",
+          "shareHint": "",
+          "noData": "",
+          "none": "",
+          "top": "",
+          "times": "",
+          "skipped": "",
+          "hint": ""
+        }
       }
     }
   },

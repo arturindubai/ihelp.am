@@ -28,8 +28,8 @@ export type PoolConfig = {
   model: (typeof MODELS)[number];
   /** Модель для задач размера L — только для пула dev; остальные пулы игнорируют это поле */
   modelForL: (typeof MODELS)[number];
-  /** Сколько запусков пула в сутки, чтобы не съесть лимит подписки */
-  dailyCap: number;
+  /** Сколько запусков пула в сутки; null — без лимита. От перерасхода подписки защищает пауза по ответу Claude о лимите */
+  dailyCap: number | null;
   mode: Mode;
   /** Для режима «по расписанию»: не чаще раза в столько минут */
   everyMin: number;
@@ -45,6 +45,8 @@ export type WorkersConfig = {
   deployWindow: [number, number];
   /** Сколько карточек триаж разбирает за один запуск */
   triageBatch: number;
+  /** Размер пачки выкладки: сколько протестированных задач деплоер сливает и собирает за один раз; 1 — по одной (старое поведение), максимум 5 */
+  deployBatch: number;
   /** Раз в столько часов триаж пересматривает весь бэклог и готовые задачи; 0 — не пересматривать */
   sweepEveryH: number;
   /** Пауза после исчерпанного лимита подписки или отказа входа: до этого момента никого не запускаем */
@@ -57,6 +59,11 @@ export type WorkersConfig = {
   plannedStart: boolean;
   /** Opus на лимите до этого момента: L-задачи в пуле dev переключаются на Sonnet; null — лимит не известен */
   opusLimitUntil: string | null;
+  /**
+   * Суточный лимит необязателен (решение владельца 28.09.2026). Настройки, сохранённые до этого признака,
+   * хранят обязательные лимиты — они считаются снятыми один раз; заданные после этого значения сохраняются
+   */
+  capsOptional: boolean;
 };
 
 export const DEFAULT_WORKERS: WorkersConfig = {
@@ -64,24 +71,26 @@ export const DEFAULT_WORKERS: WorkersConfig = {
   dryRun: false,
   pools: {
     // Триаж: каждая входящая IN-N — отдельный запуск, пачка бэклога — ещё один; 12 в сутки не хватало и очередь вставала
-    triage: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 40, mode: "auto", everyMin: 30 },
-    dev: { enabled: true, max: 2, model: "sonnet", modelForL: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
-    nocode: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
+    triage: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: null, mode: "auto", everyMin: 30 },
+    dev: { enabled: true, max: 2, model: "sonnet", modelForL: "sonnet", dailyCap: null, mode: "auto", everyMin: 30 },
+    nocode: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: null, mode: "auto", everyMin: 30 },
     // Продакт: отвечает на вопросы, заблокированные «на продукте», раз в сутки проходит бэклог на качество требований
-    product: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
+    product: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: null, mode: "auto", everyMin: 30 },
     // Дизайнер: интерфейсные задачи без описания дизайна и вопросы «на дизайне»
-    designer: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
-    tester: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
-    deployer: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
+    designer: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: null, mode: "auto", everyMin: 30 },
+    tester: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: null, mode: "auto", everyMin: 30 },
+    deployer: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: null, mode: "auto", everyMin: 30 },
   },
   deployWindow: [10, 20],
   triageBatch: 6,
+  deployBatch: 1,
   sweepEveryH: 24,
   pausedUntil: null,
   pausedReason: null,
   stopRunning: false,
   plannedStart: false,
   opusLimitUntil: null,
+  capsOptional: true,
 };
 
 const clamp = (v: unknown, min: number, max: number, fallback: number) => {
@@ -89,9 +98,24 @@ const clamp = (v: unknown, min: number, max: number, fallback: number) => {
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 };
 
+/** Верхняя граница суточного лимита, если он задан */
+export const DAILY_CAP_MAX = 1000;
+
+/** Суточный лимит из сохранённого значения: пусто, null или не число — без лимита; число — в границах 0…DAILY_CAP_MAX */
+export function normalizeDailyCap(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.min(DAILY_CAP_MAX, Math.max(0, n)) : null;
+}
+
+/** Остаток запусков пула на сегодня; без лимита — бесконечность */
+export const capLeft = (dailyCap: number | null, today: number) => (dailyCap === null ? Infinity : Math.max(0, dailyCap - today));
+
 /** Настройки из базы поверх значений по умолчанию: старое или битое значение не ломает диспетчер */
 export function normalizeWorkers(raw: unknown): WorkersConfig {
   const r = (raw && typeof raw === "object" ? raw : {}) as Partial<WorkersConfig>;
+  // Настройки без признака сохранены при обязательном лимите: прежние значения считаются снятыми
+  const capsOptional = r.capsOptional === true;
   const pools = {} as Record<Pool, PoolConfig>;
   for (const p of POOLS) {
     const src = (r.pools?.[p] ?? {}) as Partial<PoolConfig>;
@@ -101,7 +125,7 @@ export function normalizeWorkers(raw: unknown): WorkersConfig {
       max: SINGLE.includes(p) ? 1 : clamp(src.max ?? d.max, 0, 4, d.max),
       model: (MODELS as readonly string[]).includes(String(src.model)) ? (src.model as PoolConfig["model"]) : d.model,
       modelForL: (MODELS as readonly string[]).includes(String((src as Partial<PoolConfig>).modelForL)) ? ((src as Partial<PoolConfig>).modelForL as PoolConfig["modelForL"]) : d.modelForL,
-      dailyCap: clamp(src.dailyCap ?? d.dailyCap, 0, 100, d.dailyCap),
+      dailyCap: capsOptional ? normalizeDailyCap(src.dailyCap) : null,
       mode: (MODES as readonly string[]).includes(String(src.mode)) ? (src.mode as Mode) : d.mode,
       everyMin: (EVERY_MIN as readonly number[]).includes(Number(src.everyMin)) ? Number(src.everyMin) : d.everyMin,
     };
@@ -115,6 +139,7 @@ export function normalizeWorkers(raw: unknown): WorkersConfig {
     pools,
     deployWindow: [from, to],
     triageBatch: clamp(r.triageBatch ?? DEFAULT_WORKERS.triageBatch, 1, 15, DEFAULT_WORKERS.triageBatch),
+    deployBatch: clamp(r.deployBatch ?? DEFAULT_WORKERS.deployBatch, 1, 5, DEFAULT_WORKERS.deployBatch),
     sweepEveryH: clamp(r.sweepEveryH ?? DEFAULT_WORKERS.sweepEveryH, 0, 168, DEFAULT_WORKERS.sweepEveryH),
     pausedUntil: typeof r.pausedUntil === "string" ? r.pausedUntil : null,
     pausedReason: typeof r.pausedReason === "string" ? r.pausedReason.slice(0, 300) : null,
@@ -122,6 +147,7 @@ export function normalizeWorkers(raw: unknown): WorkersConfig {
     // Запланированный старт без времени бессмыслен: без pausedUntil — обычная работа
     plannedStart: r.plannedStart === true && typeof r.pausedUntil === "string",
     opusLimitUntil: typeof r.opusLimitUntil === "string" ? r.opusLimitUntil : null,
+    capsOptional: true,
   };
 }
 
@@ -333,7 +359,7 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
   }
 
   if (!config.enabled) return actions;
-  const left = (p: Pool) => Math.max(0, config.pools[p].dailyCap - (s.today[p] ?? 0));
+  const left = (p: Pool) => capLeft(config.pools[p].dailyCap, s.today[p] ?? 0);
   const due = (p: Pool) => {
     const pc = config.pools[p];
     if (!pc.enabled || pc.mode === "manual" || left(p) <= 0 || free(p) <= 0) return false;
@@ -344,8 +370,23 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
 
   const hour = yerevanHour(now);
   if (due("deployer") && hour >= config.deployWindow[0] && hour < config.deployWindow[1]) {
-    const t = nextDeploy();
-    if (t) actions.push({ pool: "deployer", agent: "deployer", key: t.key });
+    const batchSize = config.deployBatch ?? 1;
+    if (batchSize <= 1) {
+      const t = nextDeploy();
+      if (t) actions.push({ pool: "deployer", agent: "deployer", key: t.key });
+    } else {
+      const batchKeys: string[] = [];
+      for (let i = 0; i < batchSize; i++) {
+        const t = q.deploy.find((x) => !taken().has(x.key) && !batchKeys.includes(x.key));
+        if (!t) break;
+        batchKeys.push(t.key);
+      }
+      if (batchKeys.length === 1) {
+        actions.push({ pool: "deployer", agent: "deployer", key: batchKeys[0] });
+      } else if (batchKeys.length > 1) {
+        actions.push({ pool: "deployer", agent: "deployer", keys: batchKeys });
+      }
+    }
   }
 
   if (due("tester")) {

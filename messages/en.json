@@ -1183,6 +1183,7 @@
         "max": "Concurrent",
         "model": "Model",
         "dailyCap": "Runs per day",
+        "dailyCapNone": "no limit",
         "window": "Deploy window — Yerevan hours, from and to",
         "windowHint": "Deployer deploys only tested commits, one task at a time, in the deploy window; 'Run now' — any time. Failed smoke test — rollback and task returned, each deploy notified to tech chat.",
         "save": "Save",
@@ -1226,6 +1227,7 @@
         "stopDone": "Remove stop",
         "stopping": "Stopping…",
         "triageBatch": "Triage: cards per run",
+        "deployBatch": "Deploy batch size (1–5)",
         "sweepEveryH": "Backlog sweep every N hours (0 — off)",
         "modes": {
           "auto": "Auto",
@@ -1252,6 +1254,7 @@
         "poolCapOut": "daily limit reached ({n} of {cap})",
         "runNow": "Run now",
         "todayOf": "Today {n} of {cap}",
+        "todayNoCap": "Today {n}, no limit",
         "lastStart": "last run {ago}",
         "windowOpen": "Deploy window open",
         "windowClosed": "Deploy window {from}:00–{to}:00 Yerevan, currently closed",
@@ -1720,6 +1723,17 @@
           "login": "Workers say 'Not logged in' — sign in to subscription: scripts/claude-login.sh, then 'Resume' in Workers tab.",
           "stop": "Stop everything immediately: 'Stop all' in Workers tab or on server systemctl stop 'ihelp-w-*' ihelp-dispatcher.timer.",
           "logs": "App errors — Logs page; full log — docker compose logs app."
+        },
+        "denials": {
+          "title": "Worker permission denials in 24 hours",
+          "share": "{pct}%",
+          "shareHint": "runs with a denied command: {denied} of {total}. Target — below {target}%",
+          "noData": "No data yet: the dispatcher writes denials to the run log, the first numbers will appear after the next worker runs.",
+          "none": "No denied commands in 24 hours.",
+          "top": "Most frequent denied commands",
+          "times": "×{n}",
+          "skipped": "Runs without denial data: {n} — not counted in the share.",
+          "hint": "A denial is a command blocked by the role rules (scripts/worker-run.sh). Only the command form is shown, without text or keys. To check instructions against the rules: node scripts/check-role-commands.mjs."
         }
       },
       "logs": {
