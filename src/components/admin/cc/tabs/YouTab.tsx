@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { needsYou } from "@/server/services/ccBoard";
 import { parseMultiQuestion } from "@/lib/cc-owner-q";
+import { parseDuplicateOriginalKey } from "@/lib/cc-intake";
 import { BLOCKED_ON_LABELS, PRIORITIES } from "@/lib/backlog-labels";
 import { QuickMove } from "@/components/admin/cc/TaskControls";
 import { silentLabel } from "@/components/admin/cc/TaskBadges";
@@ -40,6 +41,7 @@ function groupOwnerQuestions(tasks: OwnerTask[], taskHref: Href): YouCard[] {
     const reason = group[0].fullReason ?? group[0].blockedReason ?? "";
     const multiQuestion = reason ? parseMultiQuestion(reason) : [{ question: reason, variants: null }];
     const hasVariants = multiQuestion.some((b) => b.variants !== null);
+    const origKey = parseDuplicateOriginalKey(reason);
     return {
       id: group[0].key,
       question: multiQuestion[0].question,
@@ -49,6 +51,8 @@ function groupOwnerQuestions(tasks: OwnerTask[], taskHref: Href): YouCard[] {
       multiQuestion: multiQuestion.length > 1 ? multiQuestion : null,
       isUrgent: group.some((t) => t.priority === "p0"),
       textMayCut: group.some((t) => t.textMayCut),
+      origTaskKey: origKey ?? undefined,
+      origTaskHref: origKey ? taskHref(origKey) : undefined,
     };
   });
 }

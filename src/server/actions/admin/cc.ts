@@ -51,6 +51,8 @@ const transitionSchema = z.object({
   force: z.boolean().optional(),
   blockedOn: z.enum(BLOCKED_ON).optional(),
   sha: z.string().max(40).optional(),
+  /** Карта просьб при закрытии входящей (source=intake) */
+  intakeClosingMap: z.string().max(4000).optional(),
 });
 
 /**

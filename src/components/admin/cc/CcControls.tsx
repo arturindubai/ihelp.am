@@ -556,7 +556,17 @@ export function DesignReturnButton({ taskKey }: { taskKey: string }) {
   const { pending, error, done, run } = useAct();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
-  if (done) return <p className="text-xs text-warn">{t("returned")}</p>;
+  const [sentReason, setSentReason] = useState("");
+  if (done) return (
+    <div className="flex max-w-sm flex-col items-end gap-1">
+      <span className="chip bg-warn-50 text-warn">{t("returned")}</span>
+      {sentReason && (
+        <span className="line-clamp-1 text-xs text-muted" title={sentReason}>
+          {sentReason.length > 60 ? sentReason.slice(0, 60) + "…" : sentReason}
+        </span>
+      )}
+    </div>
+  );
   return (
     <div className="flex flex-col items-end gap-1">
       {!open ? (
@@ -568,6 +578,7 @@ export function DesignReturnButton({ taskKey }: { taskKey: string }) {
           className="flex w-full max-w-sm gap-1.5"
           onSubmit={(e) => {
             e.preventDefault();
+            setSentReason(reason);
             run(() => ccReturnDesignAction(taskKey, reason), () => setOpen(false));
           }}
         >
@@ -784,6 +795,10 @@ export type YouCard = {
   multiQuestion: { question: string; variants: { id: string; text: string }[] | null }[] | null;
   isUrgent: boolean;
   textMayCut: boolean;
+  /** Ссылка на задачу-оригинал при уведомлении о дубле */
+  origTaskHref?: string;
+  /** Ключ задачи-оригинала для отображения в ссылке */
+  origTaskKey?: string;
 };
 export type YouPostponedTask = {
   key: string;
@@ -908,6 +923,13 @@ function YouQuestionCard({ card, onDone }: { card: YouCard; onDone: (id: string)
       )}
       {card.textMayCut && (
         <p className="mb-2 text-xs text-warn">{t("textMayCut")}</p>
+      )}
+      {card.origTaskHref && card.origTaskKey && (
+        <p className="mb-2 text-sm">
+          <Link href={card.origTaskHref} scroll={false} className="font-mono text-brand hover:underline">
+            {card.origTaskKey}
+          </Link>
+        </p>
       )}
       {card.tasks.length > 0 && (
         <div className="mb-3 flex flex-wrap gap-1.5">
