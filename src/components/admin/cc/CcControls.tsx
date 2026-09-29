@@ -99,6 +99,8 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [dropError, setDropError] = useState<string | null>(null);
   // Черновик живёт в браузере: выкладка, случайное закрытие окна или ошибка не стирают набранное
   const wantStop = useRef(false);
   const [pending, start] = useTransition();
@@ -131,6 +133,33 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
   const edit = (v: string) => {
     setText(v);
     writeDraft(v);
+  };
+
+  const addFiles = (incoming: FileList | File[]) => {
+    setDropError(null);
+    const arr = Array.from(incoming);
+    const valid: File[] = [];
+    let typeRejected = false;
+    let sizeRejected = false;
+    for (const f of arr) {
+      if (!f.type.startsWith("image/") && f.type !== "application/pdf") { typeRejected = true; continue; }
+      if (f.size > 20 * 1024 * 1024) { sizeRejected = true; continue; }
+      valid.push(f);
+    }
+    if (!valid.length) {
+      if (typeRejected) setDropError(t("dropTypeError"));
+      else if (sizeRejected) setDropError(t("dropSizeError"));
+      return;
+    }
+    const merged = [...files, ...valid];
+    if (merged.length > 6) {
+      setDropError(t("dropLimitError", { n: Math.max(0, 6 - files.length) }));
+      setFiles(merged.slice(0, 6));
+    } else {
+      if (typeRejected) setDropError(t("dropTypeError"));
+      else if (sizeRejected) setDropError(t("dropSizeError"));
+      setFiles(merged);
+    }
   };
 
   const toggleVoice = () => {
@@ -246,9 +275,23 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
         {hasDraft && <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-warn" aria-label={t("draftBadge")} />}
       </button>
       {open && (
-        <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" onDragOver={(e) => e.preventDefault()} onDrop={(e) => e.preventDefault()}>
           <button className="absolute inset-0 bg-overlay/40" onClick={() => setOpen(false)} aria-label={t("close")} />
-          <div className="absolute inset-x-0 top-0 mx-auto max-h-dvh w-full max-w-2xl overflow-y-auto bg-paper p-4 shadow-xl sm:top-10 sm:rounded-2xl sm:p-6">
+          <div
+            className={cn(
+              "absolute inset-x-0 top-0 mx-auto max-h-dvh w-full max-w-2xl overflow-y-auto bg-paper p-4 shadow-xl transition-colors sm:top-10 sm:rounded-2xl sm:p-6",
+              dragOver ? "border-2 border-brand bg-brand-50" : "border-2 border-transparent",
+            )}
+            onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false); }}
+            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(false); addFiles(e.dataTransfer.files); }}
+          >
+            {dragOver && (
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-[inherit]">
+                <p className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-on-action">{t("dropActive")}</p>
+              </div>
+            )}
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
                 <div className="text-lg font-bold">{t("title")}</div>
@@ -258,7 +301,19 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
                 <X size={18} />
               </button>
             </div>
-            <textarea className="input min-h-40 w-full" value={text} onChange={(e) => edit(e.target.value)} placeholder={t("placeholder")} autoFocus />
+            <textarea
+              className="input min-h-40 w-full"
+              value={text}
+              onChange={(e) => edit(e.target.value)}
+              placeholder={t("placeholder")}
+              autoFocus
+              onPaste={(e) => {
+                if (e.clipboardData.files.length > 0 && !e.clipboardData.getData("text/plain")) {
+                  e.preventDefault();
+                  addFiles(e.clipboardData.files);
+                }
+              }}
+            />
             {hasDraft && !sent && <p className="mt-1 rounded-lg bg-warn-50 px-3 py-1.5 text-xs text-warn">{t("draftRestored")}</p>}
             {listening && <p className="mt-1 text-xs text-muted">🎙 {interim || t("listening")}</p>}
             {voiceError && <p className="mt-1 rounded-lg bg-warn-50 px-3 py-1.5 text-xs text-warn">{voiceError}</p>}
@@ -290,6 +345,8 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
                 {pending ? (retryAttempt > 1 ? t("retrying", { n: retryAttempt }) : t("sending")) : t("send")}
               </button>
             </div>
+            <p className="mt-1.5 text-xs text-muted">{t("pasteHint")}</p>
+            {dropError && <p className="mt-2 rounded-lg bg-warn-50 px-3 py-1.5 text-xs text-warn">{dropError}</p>}
             {error && <p className="mt-2 rounded-lg bg-bad-50 px-3 py-2 text-xs text-bad">{error}</p>}
             {sent && (
               <p className="mt-2 rounded-lg bg-ok-50 px-3 py-2 text-sm text-ok">
