@@ -989,7 +989,8 @@
         "dropActive": "",
         "pasteHint": "",
         "dropTypeError": "",
-        "dropSizeError": ""
+        "dropSizeError": "",
+        "dropLimitError": ""
       },
       "workers": {
         "title": "",

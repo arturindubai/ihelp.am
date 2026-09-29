@@ -130,9 +130,20 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
       if (f.size > 20 * 1024 * 1024) { sizeRejected = true; continue; }
       valid.push(f);
     }
-    if (typeRejected) setDropError(t("dropTypeError"));
-    else if (sizeRejected) setDropError(t("dropSizeError"));
-    if (valid.length) setFiles((prev) => [...prev, ...valid].slice(0, 6));
+    if (!valid.length) {
+      if (typeRejected) setDropError(t("dropTypeError"));
+      else if (sizeRejected) setDropError(t("dropSizeError"));
+      return;
+    }
+    const merged = [...files, ...valid];
+    if (merged.length > 6) {
+      setDropError(t("dropLimitError", { n: Math.max(0, 6 - files.length) }));
+      setFiles(merged.slice(0, 6));
+    } else {
+      if (typeRejected) setDropError(t("dropTypeError"));
+      else if (sizeRejected) setDropError(t("dropSizeError"));
+      setFiles(merged);
+    }
   };
 
   const toggleVoice = () => {
@@ -256,7 +267,7 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
               placeholder={t("placeholder")}
               autoFocus
               onPaste={(e) => {
-                if (e.clipboardData.files.length > 0) {
+                if (e.clipboardData.files.length > 0 && !e.clipboardData.getData("text/plain")) {
                   e.preventDefault();
                   addFiles(e.clipboardData.files);
                 }
