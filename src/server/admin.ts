@@ -1,23 +1,12 @@
 import "server-only";
-import type { Role } from "@prisma/client";
 import { getCurrentUser } from "./auth";
+import { sectionsForUser, type Section } from "@/lib/adminAccess";
 
-export type Section = "control" | "dashboard" | "orders" | "schedule" | "clients" | "reviews" | "services" | "masters" | "promos" | "banners" | "pages" | "content" | "translations" | "settings" | "staff" | "log" | "analytics";
-
-const ACCESS: Record<Role, Section[]> = {
-  CLIENT: [],
-  MASTER: [],
-  OPERATOR: ["dashboard", "orders", "schedule", "clients", "reviews"],
-  ADMIN: ["control", "dashboard", "orders", "schedule", "clients", "reviews", "services", "masters", "promos", "banners", "pages", "content", "translations", "analytics", "log"],
-  OWNER: ["control", "dashboard", "orders", "schedule", "clients", "reviews", "services", "masters", "promos", "banners", "pages", "content", "translations", "analytics", "settings", "staff", "log"],
-};
-
-export function sectionsFor(role: Role) {
-  return ACCESS[role] || [];
-}
+export type { Section } from "@/lib/adminAccess";
+export { sectionsFor, sectionsForUser, DELEGATABLE_SECTIONS } from "@/lib/adminAccess";
 
 export async function requireSection(section: Section) {
   const u = await getCurrentUser();
-  if (!u || !sectionsFor(u.role).includes(section)) throw new Error("forbidden");
+  if (!u || !sectionsForUser(u).includes(section)) throw new Error("forbidden");
   return u;
 }

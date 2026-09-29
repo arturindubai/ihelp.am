@@ -66,7 +66,8 @@
     "whatsappSub": "",
     "writeUs": "",
     "reviewsTitle": "",
-    "stickyOrder": ""
+    "stickyOrder": "",
+    "subCatClose": ""
   },
   "service": {
     "startsAt": "",
@@ -94,7 +95,9 @@
       "PACKAGE": "Պակետ"
     },
     "firstOffer": "",
-    "notFound": ""
+    "notFound": "",
+    "includes": "",
+    "excludes": ""
   },
   "booking": {
     "title": "",
@@ -102,6 +105,7 @@
     "address": "",
     "addAddress": "",
     "dateTime": "",
+    "dateAndMaster": "",
     "availableTime": "",
     "startDate": "",
     "noSlots": "",
@@ -113,6 +117,7 @@
     "anyMasterSub": "",
     "masterBusy": "",
     "chooseTimeFirst": "",
+    "whoComes": "",
     "serviceLabel": "",
     "wishes": "",
     "noCallLabel": "",
@@ -386,7 +391,16 @@
     "note": "",
     "client": "",
     "stats": "",
-    "schedule": ""
+    "schedule": "",
+    "settingsTab": "Կարգավորումներ",
+    "settings": {
+      "notifyTitle": "Ծանուցումներ",
+      "receiveNotify": "Ստանալ ծանուցումներ այցի մասին",
+      "notifyOff": "Դուք չեք ստանա ծանուցումներ այցերի մասին",
+      "notConnected": "Telegram-ը կապված չէ:",
+      "writeBot": "Գրել բոտին",
+      "saveError": "Չհաջողվեց պահել: Կրկին փորձեք:"
+    }
   },
   "operator": {
     "title": "",
@@ -570,6 +584,21 @@
         "promo": "",
         "plan+promo": "",
         "first+promo": ""
+      },
+      "messages": "",
+      "noMessages": "",
+      "msgDelivered": "",
+      "msgNotDelivered": "",
+      "msgChannels": {
+        "telegram": "",
+        "email": "",
+        "alert": "",
+        "none": ""
+      },
+      "msgEvents": {
+        "created": "",
+        "cancelled": "",
+        "completed": ""
       }
     },
     "schedule": {
@@ -581,12 +610,28 @@
     },
     "services": {
       "title": "",
+      "catalogTitle": "",
       "categories": "",
       "services": "",
       "newCategory": "",
       "newService": "",
       "category": "",
       "comingSoon": "",
+      "comingSoonLabel": "",
+      "archived": "",
+      "archiveCategory": "",
+      "restoreCategory": "",
+      "categoryHiddenBanner": "",
+      "categoryArchivedBanner": "",
+      "filterAll": "",
+      "filterActive": "",
+      "filterHidden": "",
+      "filterSoon": "",
+      "searchPlaceholder": "",
+      "draft": "",
+      "minPrice": "",
+      "noServicesInCategory": "",
+      "addFirstService": "",
       "tabs": {
         "main": "",
         "options": "",
@@ -646,6 +691,9 @@
       "deleteCategory": "",
       "categoryHasServices": "",
       "openOnSite": "",
+      "includesText": "",
+      "excludesText": "",
+      "includesExcludesPlaceholder": "",
       "rating": "",
       "bookings": ""
     },
@@ -738,7 +786,55 @@
       "newBanner": "",
       "link": "",
       "promoCode": "",
-      "bg": ""
+      "bg": "",
+      "empty": "",
+      "placement": "",
+      "type": "",
+      "audience": "",
+      "segment": "",
+      "startsAt": "",
+      "endsAt": "",
+      "views": "",
+      "clicks": "",
+      "ctr": "",
+      "generate": "",
+      "stats": "",
+      "placements": {
+        "CAROUSEL_HOME": "",
+        "HERO_HOME": "",
+        "CATALOG": "",
+        "SERVICE": "",
+        "CHECKOUT": "",
+        "SUCCESS": "",
+        "EMAIL": "",
+        "CLIENT_CABINET": "",
+        "MASTER_CABINET": ""
+      },
+      "types": {
+        "PROMO": "",
+        "ANNOUNCEMENT": "",
+        "UPSELL": "",
+        "CROSS_SELL": ""
+      },
+      "audiences": {
+        "ALL": "",
+        "LOGGED_IN": "",
+        "GUESTS": ""
+      },
+      "segments": {
+        "ALL": "",
+        "NEW": "",
+        "RETURNING": ""
+      },
+      "tabs": {
+        "all": ""
+      },
+      "status": {
+        "active": "",
+        "paused": "",
+        "scheduled": "",
+        "expired": ""
+      }
     },
     "pages": {
       "title": "",
@@ -854,6 +950,7 @@
     },
     "staff": {
       "title": "",
+      "manageSub": "",
       "hint": "",
       "phone": "",
       "role": "",
@@ -873,9 +970,52 @@
       "emailTaken": "",
       "emailInvalid": "",
       "revokeAccess": "",
+      "cannotRemoveOwner": "",
+      "lastOwner": "",
       "revokeConfirm": "",
       "lastLogin": "",
-      "lastLoginNever": ""
+      "lastLoginNever": "",
+      "empty": "",
+      "loginMethods": "",
+      "permissions": "",
+      "fieldPhone": "",
+      "fieldEmail": "",
+      "fieldTelegram": "",
+      "notLinked": "",
+      "editField": "",
+      "saveField": "",
+      "cancelField": "",
+      "fromRole": "",
+      "savePermissions": "",
+      "confirmPermissions": "",
+      "confirmYes": "",
+      "confirmNo": "",
+      "settingsStaffOwnerOnly": "",
+      "saveError": "",
+      "phoneInvalid": "",
+      "phoneTaken": "",
+      "phoneRequired": "",
+      "telegramInvalid": "",
+      "telegramTaken": "",
+      "savedMsg": "",
+      "ownerFullAccess": "",
+      "sections": {
+        "control": "",
+        "dashboard": "",
+        "orders": "",
+        "schedule": "",
+        "clients": "",
+        "reviews": "",
+        "services": "",
+        "masters": "",
+        "promos": "",
+        "banners": "",
+        "pages": "",
+        "content": "",
+        "translations": "",
+        "analytics": "",
+        "log": ""
+      }
     },
     "log": {
       "title": "",
@@ -919,7 +1059,15 @@
         "title": "",
         "placeholder": "",
         "submit": "",
-        "hint": ""
+        "hint": "",
+        "dropActive": "",
+        "pasteHint": "",
+        "dropTypeError": "",
+        "dropSizeError": "",
+        "dropLimitError": "",
+        "retrying": "",
+        "draftRestored": "",
+        "draftBadge": ""
       },
       "workers": {
         "title": "",
@@ -945,6 +1093,9 @@
           "login": "",
           "stop": "",
           "logs": ""
+        },
+        "reasons": {
+          "needs": ""
         }
       },
       "logs": {
@@ -1044,12 +1195,49 @@
       "you": {
         "postpone": "Հետաձգել",
         "postponePh": "",
-        "postponeConfirm": "Հետաձգել"
+        "postponeConfirm": "Հետաձգել",
+        "groups": {
+          "variant": "",
+          "approve": "",
+          "do": "",
+          "price": "",
+          "data": "",
+          "auth": "",
+          "rule": "",
+          "other": ""
+        },
+        "headerWithReview": "",
+        "headerReviewOnly": "",
+        "devOnly": "",
+        "textMayCut": "",
+        "returnedRuns": "",
+        "returnedRunsHint": ""
       },
       "gate": {
         "needs_open": "Կան բաց հարցեր արտադրանքի վերաբերյալ — նախ ստացեք պատասխան"
+      },
+      "healthPage": {
+        "denials": {
+          "title": "",
+          "share": "",
+          "shareHint": "",
+          "noData": "",
+          "none": "",
+          "top": "",
+          "times": "",
+          "skipped": "",
+          "hint": ""
+        }
       }
     }
+  },
+  "review": {
+    "title": "",
+    "placeholder": "",
+    "send": "",
+    "thanks": "",
+    "invalid": "",
+    "alreadyLeft": ""
   },
   "cookies": {
     "title": "",
@@ -1064,5 +1252,19 @@
       "hint": "",
       "notifications": ""
     }
+  },
+  "notify": {
+    "order": {
+      "created": "",
+      "masterAssigned": "",
+      "rescheduled": "",
+      "cancelled": "",
+      "completed": ""
+    }
+  },
+  "cart": {
+    "itemsCount": "{count, plural, one {# ծառայություն} other {# ծառայություն}}",
+    "total": "{amount} ֏",
+    "checkout": "Ձևակերպել"
   }
 }

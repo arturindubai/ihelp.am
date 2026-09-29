@@ -13,6 +13,7 @@ const NAMES = {
   blocked_answered: "человек ответил после блокировки — ждёт триажа",
   blocked_deps_closed: "заблокирована на зависимостях, а они уже закрыты",
   backlog_untriaged: "в бэклоге без разбора триажем",
+  backlog_deps_closed: "в бэклоге, зависимости закрыты, не переразобрана",
   ready_open_deps: "в очереди с открытыми зависимостями",
   review_no_branch: "на проверке без ветки в репозитории",
   review_open_deps: "на проверке с открытыми зависимостями",
@@ -20,6 +21,7 @@ const NAMES = {
   deps_unknown: "зависимость на несуществующую задачу",
   in_progress_unclaimed: "в работе без исполнителя",
   in_progress_stale: "в работе без пульса больше часа",
+  no_epic_key: "открытая задача без эпика — не IN-* и не intake",
 };
 if (!KEY) { console.error("CC_AGENT_KEY пуст — API Control Center выключено"); process.exit(2); }
 const res = await fetch(`${URL_BASE}?resource=audit`, { headers: { "x-cc-key": KEY }, signal: AbortSignal.timeout(30000) }).catch((e) => { console.error(`Control Center не отвечает: ${e.message}`); process.exit(2); });

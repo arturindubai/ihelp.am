@@ -121,6 +121,7 @@ type TaskShape = {
   design?: string | null;
   estimate?: string | null;
   epicKey?: string | null;
+  parentKey?: string | null;
   scope?: string[];
   mockupRequired?: boolean;
   mockupApprovedBy?: string | null;
@@ -145,6 +146,8 @@ export function readiness(t: TaskShape, closedKeys: Set<string>, attachments = 0
     { key: "mockup", ok: !t.mockupRequired || !!t.mockupApprovedBy, hard: true },
     { key: "size", ok: !!t.estimate && t.estimate !== "L", hard: false },
     { key: "scope", ok: t.layer === "none" || (t.scope?.length ?? 0) > 0, hard: false },
+    // Папка messages целиком — слишком широко: задача зацепит все три языка и заблокирует любой перевод
+    { key: "scope_messages_folder", ok: !(t.scope ?? []).map(normPath).some((p) => p === "messages"), hard: false },
   ];
 }
 
@@ -205,6 +208,30 @@ export function isOwnerQuestion(task: { status: string; blockedOn: string | null
   return task.status === "blocked" && (task.blockedOn === "owner" || task.blockedOn === "product");
 }
 
+/**
+ * Дизайнер берёт: задачи с флагом макета; дизайн-исследования (assignee=designer);
+ * фронт/бэк+фронт без описания дизайна и без вложений — задача ждёт дизайна, а не кода.
+ * Логика совпадает с designerQueue() в workers.ts.
+ */
+export function isDesignerTask(t: { layer: string; mockupRequired?: boolean | null; assignee?: string | null; design?: string | null; hasAttachments?: boolean }): boolean {
+  if (t.mockupRequired) return true;
+  if (t.assignee === "designer") return true;
+  if (t.layer === "front" || t.layer === "fullstack") {
+    return !t.design?.trim() && !t.hasAttachments;
+  }
+  return false;
+}
+
+/** Продакт берёт только задачи с открытыми вопросами к нему */
+export function isProductTask(t: { needs: string[] }): boolean {
+  return t.needs.length > 0;
+}
+
+/** Роли, которым разрешено брать задачи в работу через claim (deployer, watchdog, triage и tester работают иначе) */
+export function canClaimRole(role: Role): boolean {
+  return role !== "deployer" && role !== "watchdog" && role !== "triage" && role !== "tester";
+}
+
 /** Гейт «Сделано»: код-задача — коммит в main и что проверено после выкладки; прочие — доказательство словами или файлом */
 export function doneGate(t: { layer: string; noWork?: boolean }, proof: { sha?: string | null; text?: string | null; attachments?: number }): string | null {
   if (isCodeTask(t.layer) && !t.noWork && !SHA_RE.test(proof.sha?.trim() ?? "")) return "sha_required";
@@ -214,11 +241,19 @@ export function doneGate(t: { layer: string; noWork?: boolean }, proof: { sha?: 
 
 const normPath = (p: string) => p.trim().replace(/^\.\//, "").replace(/\/+$/, "");
 
-/** Пересечение областей кода: один путь — префикс другого (папка и файл в ней тоже пересекаются) */
+/**
+ * Файл перевода в папке messages: messages/ru.json, messages/en.json и т. д.
+ * Такие пути НЕ считаются пересечением — над переводами всегда работают несколько задач.
+ * Папка messages целиком (без уточнения файла) — всё ещё пересечение.
+ */
+const isMsgFile = (p: string) => /^messages\/[^/]+\.json$/.test(p);
+
+/** Пересечение областей кода: один путь — префикс другого (папка и файл в ней тоже пересекаются).
+ *  Файлы messages/*.json из проверки исключаются: их правят параллельно все задачи с переводами. */
 export function scopeOverlap(a: string[], b: string[]): string[] {
   const out: string[] = [];
-  for (const x of a.map(normPath).filter(Boolean)) {
-    for (const y of b.map(normPath).filter(Boolean)) {
+  for (const x of a.map(normPath).filter((p) => p && !isMsgFile(p))) {
+    for (const y of b.map(normPath).filter((p) => p && !isMsgFile(p))) {
       if (x === y || x.startsWith(`${y}/`) || y.startsWith(`${x}/`)) out.push(x.length <= y.length ? x : y);
     }
   }
@@ -292,6 +327,20 @@ export function taskHealth(t: HealthTask, closedKeys: Set<string>, now = new Dat
 }
 
 export const needsAttention = (h: Health) => h.stale || h.phantom || h.stuckReview || h.needsOwner;
+
+/**
+ * Вычисляет статус эпика из списка статусов его задач (без доступа к базе).
+ * Правило: «горячий» статус побеждает — наличие in_progress важнее review, review важнее backlog.
+ * Если задач нет или все закрыты — «planned»/«done» соответственно.
+ */
+export function computeEpicStatus(taskStatuses: string[]): string {
+  const open = taskStatuses.filter((s) => !(CLOSED_STATUSES as readonly string[]).includes(s));
+  if (open.length === 0) return taskStatuses.length > 0 ? "done" : "planned";
+  if (open.some((s) => s === "in_progress")) return "in_progress";
+  if (open.some((s) => s === "review")) return "testing";
+  if (open.some((s) => s === "ready")) return "in_progress";
+  return "planned";
+}
 
 export type WatchdogPlan = {
   /** Впервые заметили брошенную аренду — отметить и сообщить */

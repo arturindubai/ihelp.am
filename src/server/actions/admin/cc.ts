@@ -4,16 +4,18 @@ import { z } from "zod";
 import { requireSection } from "../../admin";
 import { audit } from "../../audit";
 import { addComment, linkErrorToTask, saveTask, updateTask, type TaskContent } from "../../services/cc";
-import { CcError, approveMockup, retriage, returnDesign, transition } from "../../services/ccWork";
+import { CcError, approveMockup, reblockOn, retriage, returnDesign, transition, type Actor } from "../../services/ccWork";
 import { saveEpic, type EpicContent } from "../../services/epics";
 import { deleteAttachment } from "../../services/attachments";
 import { EPIC_STATUSES, OWNERS, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
+import { buildPostponeReason } from "@/lib/cc-owner-q";
 import { BLOCKED_ON, type TaskStatusKey } from "@/lib/cc-flow";
 import { taskContentSchema } from "@/lib/cc-schema";
-import { EVERY_MIN, MODELS, MODES, POOLS, WORKERS_COMMANDS, type Pool } from "@/lib/workers";
+import { POOLS, WORKERS_COMMANDS, type Pool } from "@/lib/workers";
+import { workersPatchSchema } from "@/lib/workers-schema";
 import { requestRun, requestStop, saveWorkersConfig, workersControl } from "../../services/workers";
 import { intakeCreate } from "../../services/ccBoard";
-import { MESSAGE_ROLES, markRead, sendMessage } from "../../services/ccMessages";
+import { MESSAGE_ROLES, markAllReadForOwner, markRead, sendMessage } from "../../services/ccMessages";
 import { db } from "../../db";
 import { KeyError, checkKey, clearKey, setKey } from "../../services/keys";
 import { TeamBotError, connectTeamBot, removeMember, startLink } from "../../services/teamBot";
@@ -49,6 +51,8 @@ const transitionSchema = z.object({
   force: z.boolean().optional(),
   blockedOn: z.enum(BLOCKED_ON).optional(),
   sha: z.string().max(40).optional(),
+  /** Карта просьб при закрытии входящей (source=intake) */
+  intakeClosingMap: z.string().max(4000).optional(),
 });
 
 /**
@@ -103,19 +107,27 @@ export async function ccCommentAction(key: string, text: string) {
 }
 
 /**
- * Отложить вопрос из «Нужен ты»: blockedOn меняется с owner/product на external,
- * карточка исчезает из секции вопросов, воркеры её не тронут до разблокировки владельцем
+ * Отложить вопрос из «Нужен ты»: blockedOn меняется с owner/product на external.
+ * Требует дату авторазблокировки (YYYY-MM-DD) — блокировка без срока запрещена.
+ * Смена адресата записывается в историю через reblockOn().
  */
-export async function ccOwnerPostponeAction(key: string, reason?: string) {
+export async function ccOwnerPostponeAction(key: string, until: string, reason?: string) {
   const u = await requireSection("control");
-  const text = (reason?.trim() || "Отложено владельцем").slice(0, 500);
+  if (!until || !/^\d{4}-\d{2}-\d{2}$/.test(until)) return { ok: false as const, error: "until_required" };
+  // Парсим дату в зоне Asia/Yerevan (UTC+4); блокировка в прошлом не разрешена
+  const untilDate = new Date(`${until}T00:00:00+04:00`);
+  if (isNaN(untilDate.getTime()) || untilDate.getTime() <= Date.now()) return { ok: false as const, error: "until_required" };
   const task = await db.task.findUnique({ where: { key }, select: { key: true, status: true, blockedOn: true } });
   if (!task) return { ok: false as const, error: "not_found" };
   if (task.status !== "blocked" || !["owner", "product"].includes(task.blockedOn ?? "")) {
     return { ok: false as const, error: "invalid_state" };
   }
-  await db.task.update({ where: { key }, data: { blockedOn: "external", blockedReason: text, updatedAt: new Date() } });
-  await addComment(key, `Отложено: ${text}`, who(u));
+  const text = `Отложено до ${until}${reason?.trim() ? `: ${reason.trim()}` : ""}`;
+  try {
+    await reblockOn(key, "external", text, { name: who(u), role: "owner", via: "ui" }, untilDate);
+  } catch (e) {
+    return { ok: false as const, error: e instanceof CcError ? e.code : (e as Error).message };
+  }
   await audit(u.id, "cc.owner.postpone", "Task", key);
   rAll();
   return { ok: true as const };
@@ -133,6 +145,51 @@ export async function ccOwnerAnswerAction(key: string, text: string) {
   // Сбрасываем triagedAt — задача возвращается в очередь триажа для повторного разбора
   await retriage(key);
   await audit(u.id, "cc.owner.answer", "Task", key);
+  rAll();
+  return { ok: true as const };
+}
+
+/**
+ * Пакетный ответ владельца на сгруппированный вопрос: один ответ закрывает все задачи карточки.
+ * Используется из новой вкладки «Нужен ты», где несколько задач с одинаковым вопросом → одна карточка.
+ */
+export async function ccOwnerAnswerManyAction(keys: string[], text: string) {
+  const u = await requireSection("control");
+  const t = text.trim();
+  if (t.length < 2) return { ok: false as const, error: "empty" };
+  if (!keys.length) return { ok: false as const, error: "empty" };
+  for (const key of keys) {
+    await addComment(key, `Ответ владельца: ${t}`, who(u));
+    await retriage(key);
+    await audit(u.id, "cc.owner.answer", "Task", key);
+  }
+  rAll();
+  return { ok: true as const };
+}
+
+/**
+ * Отложить группу вопросов на 3 дня: blockedOn меняется на external с blockedUntil.
+ * Исходный вопрос сохраняется в причине («Отложено до <дата>. <вопрос>»), событие пишется в историю.
+ * Сторож вернёт задачу на разбор через 3 дня, триаж увидит вопрос в причине блокировки.
+ */
+export async function ccOwnerPostpone3DaysAction(keys: string[]) {
+  const u = await requireSection("control");
+  if (!keys.length) return { ok: false as const, error: "empty" };
+  const until = new Date(Date.now() + 3 * 24 * 3600_000);
+  const untilStr = until.toLocaleDateString("ru-RU", { timeZone: "Asia/Yerevan", day: "numeric", month: "long" });
+  const actor: Actor = { name: who(u), role: u.role === "OWNER" ? "owner" : "cto", via: "ui" };
+  for (const key of keys) {
+    const task = await db.task.findUnique({ where: { key }, select: { id: true, status: true, blockedOn: true, blockedReason: true } });
+    if (!task || task.status !== "blocked" || !["owner", "product"].includes(task.blockedOn ?? "")) continue;
+    const originalReason = task.blockedReason?.trim() ?? "";
+    // Сохраняем исходный вопрос: триаж сможет восстановить блокировку на владельце после разблокировки по дате
+    const newReason = buildPostponeReason(untilStr, originalReason);
+    // reblockOn записывает событие в историю (как reblock) и пишет комментарий в ленту
+    await reblockOn(key, "external", newReason, actor);
+    // blockedUntil устанавливается отдельно — reblockOn его не трогает
+    await db.task.update({ where: { id: task.id }, data: { blockedUntil: until } });
+    await audit(u.id, "cc.owner.postpone", "Task", key);
+  }
   rAll();
   return { ok: true as const };
 }
@@ -208,43 +265,11 @@ export async function ccDeleteAttachmentAction(id: string) {
 
 /* ───── Воркеры ───── */
 
-const poolSchema = z
-  .object({
-    enabled: z.boolean(),
-    max: z.number().int().min(0).max(4),
-    model: z.enum(MODELS),
-    dailyCap: z.number().int().min(0).max(100),
-    mode: z.enum(MODES),
-    everyMin: z.number().int().refine((n) => (EVERY_MIN as readonly number[]).includes(n)),
-  })
-  .partial();
-const workersSchema = z.object({
-  enabled: z.boolean().optional(),
-  dryRun: z.boolean().optional(),
-  pools: z
-    .object({
-      triage: poolSchema,
-      product: poolSchema,
-      designer: poolSchema,
-      dev: poolSchema,
-      nocode: poolSchema,
-      tester: poolSchema,
-      deployer: poolSchema,
-    })
-    .strict()
-    .partial()
-    .optional(),
-  deployWindow: z.tuple([z.number().int().min(0).max(23), z.number().int().min(1).max(24)]).optional(),
-  triageBatch: z.number().int().min(1).max(15).optional(),
-  sweepEveryH: z.number().int().min(0).max(168).optional(),
-  stopRunning: z.boolean().optional(),
-  pausedUntil: z.null().optional(),
-});
 
 /** Настройки воркеров из Control Center: выключатель, пробный режим, пулы, окно выкладки, триаж, стоп-кран, снятие паузы */
-export async function ccSaveWorkersAction(patch: z.infer<typeof workersSchema>) {
+export async function ccSaveWorkersAction(patch: z.infer<typeof workersPatchSchema>) {
   const u = await requireSection("control");
-  const parsed = workersSchema.safeParse(patch);
+  const parsed = workersPatchSchema.safeParse(patch);
   if (!parsed.success) return { ok: false as const, error: "invalid" };
   await saveWorkersConfig(parsed.data, who(u));
   await audit(u.id, "cc.workers", "Setting", "cc.workers", parsed.data);
@@ -324,6 +349,15 @@ export async function ccReadMessageAction(id: string) {
   await markRead(id, who(u));
   rAll();
   return { ok: true as const };
+}
+
+/** Отметить прочитанными все уведомления владельца (не вопросы) */
+export async function ccReadAllMessagesAction() {
+  const u = await requireSection("control");
+  const count = await markAllReadForOwner(who(u));
+  await audit(u.id, "cc.message.readAll", "CcMessage", "owner", { count });
+  rAll();
+  return { ok: true as const, count };
 }
 
 /** Сообщение → в бэклог: текст уходит в Intake и дальше в триаж, сообщение отмечается прочитанным */

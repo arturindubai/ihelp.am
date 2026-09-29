@@ -3,10 +3,15 @@ import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { getSettings } from "@/server/settings";
 import { generateSubscriptionVisitsSafe, resumeSubscription } from "@/server/services/booking";
-import { cleanUnusedImages } from "@/server/services/cleanup";
+import { cleanUnusedImages, cleanOldAuditLogs } from "@/server/services/cleanup";
 import { runWatchdog } from "@/server/services/ccWork";
+import { checkTechBlocks, checkCtoMessages } from "@/server/services/ccWatchdog";
 import { getTick } from "@/server/services/workers";
 import { processQueue, cleanQueue } from "@/server/services/notifyQueue";
+import { findExpiringPackages } from "@/server/services/packages";
+import { runLogWatcher } from "@/server/services/logWatcher";
+import { sendMasterTomorrowSchedule } from "@/server/services/workerNotify";
+import { sendVisitReminders, sendReviewRequests } from "@/server/services/bookingNotify";
 import { html, notifyTeam } from "@/server/notify";
 import { alertTech } from "@/server/alerts";
 import { ymd } from "@/lib/time";
@@ -95,6 +100,19 @@ export async function GET(req: Request) {
     0,
   );
 
+  // 3а. Предупреждения об истечении пакетов: за 7 и за 2 дня — команда свяжется с клиентом вручную
+  const daysForm = (n: number) => n === 1 ? "день" : n >= 2 && n <= 4 ? "дня" : "дней";
+  let pkgWarn = 0;
+  await step("pkg-warn", () => daily("pkg-warn", 9, async () => {
+    for (const days of [7, 2]) {
+      const packages = await findExpiringPackages(now, days);
+      for (const p of packages) {
+        await notifyTeam(html`⏳ Пакет '${p.packageName}' клиента ${p.clientName}, ${p.clientPhone} истекает через ${days} ${daysForm(days)} (${ymd(p.expiresAt)}). Визитов осталось: ${p.remainingVisits}. Свяжитесь с клиентом.`);
+        pkgWarn++;
+      }
+    }
+  }), undefined);
+
   // 4. Визиты завтра без мастера — предупреждение команде раз в день после 18:00
   let unassigned = 0;
   await step("unassigned", () => daily("unassigned", 18, async () => {
@@ -102,16 +120,33 @@ export async function GET(req: Request) {
     if (unassigned) await notifyTeam(html`⚠️ Визитов без мастера на ближайшие сутки: ${unassigned}`);
   }), undefined);
 
-  // 5. Очистка: коды входа (с IP) старше 7 дней и истёкшие сессии — персональные данные не храним дольше нужного
-  let cleaned = { otp: 0, sessions: 0 };
+  // 4a. Расписание мастерам на завтра — каждому личным сообщением около 20:00 по Еревану
+  let masterScheduleSent = 0;
+  await step("master-tomorrow", () => daily("master-tomorrow", 20, async () => {
+    masterScheduleSent = await sendMasterTomorrowSchedule(now);
+  }), undefined);
+
+  // 4б. Напоминания клиентам о визитах через ~24 часа
+  const remindedCount = await step("client-reminders", () => sendVisitReminders(now), 0);
+
+  // 4в. Запросы отзыва через ~2 часа после завершения визита
+  const reviewRequestCount = await step("client-reviews", () => sendReviewRequests(now), 0);
+
+  // 5. Очистка: коды входа (с IP) старше 7 дней, истёкшие сессии, журнал действий старше 6 месяцев
+  let cleaned = { otp: 0, sessions: 0, auditLogs: 0 };
   await step("cleanup", () => daily("cleanup", 4, async () => {
     const otp = await db.otpCode.deleteMany({ where: { createdAt: { lt: new Date(now.getTime() - 7 * 24 * HOUR) } } });
     const sessions = await db.session.deleteMany({ where: { expiresAt: { lt: now } } });
-    cleaned = { otp: otp.count, sessions: sessions.count };
+    const auditLogs = await cleanOldAuditLogs(now);
+    cleaned = { otp: otp.count, sessions: sessions.count, auditLogs };
   }), undefined);
 
   // 5а. Сторож Control Center: брошенные задачи, возврат в очередь, снятие блокировок по зависимостям (docs/DEV_SYSTEM.md)
   const cc = await step("cc-watchdog", () => runWatchdog(now), null);
+
+  // 5а''. Алерты: блокировки на технике > 4 ч и непрочитанные сообщения CTO > 2 ч
+  await step("cc-tech-blocks", () => checkTechBlocks(now).then(() => undefined), undefined);
+  await step("cc-cto-messages", () => checkCtoMessages(now).then(() => undefined), undefined);
 
   // 5а'. Задачи «На проверке» без ветки в репозитории: скорее всего выложены, но cc done не прошла
   await step("cc-review-no-branch", async () => {
@@ -152,6 +187,9 @@ export async function GET(req: Request) {
     cleanImages = await cleanUnusedImages(now);
   }), undefined);
 
+  // 5д. Лог-вотчер: ошибки прода становятся входящими карточками IN-N
+  const lw = await step("log-watcher", () => runLogWatcher(), { created: 0, updated: 0, limited: false });
+
   // 6. Бэкапы: отметки пишет контейнер backup (Setting `_backup`)
   const b = await step("backup-state", async () => ((await db.setting.findUnique({ where: { key: "_backup" } }))?.value ?? null) as BackupState | null, null);
   if (b ? now.getTime() - time(b.lastOkAt) > 26 * HOUR : process.uptime() > 26 * 3600) {
@@ -174,5 +212,5 @@ export async function GET(req: Request) {
     console.error("[cron] disk check failed", e);
   }
 
-  return NextResponse.json({ ok: true, resumed, created, expired, unassigned, cleaned, cleanImages, diskFreePct, cc, nq });
+  return NextResponse.json({ ok: true, resumed, created, expired, pkgWarn, unassigned, masterScheduleSent, remindedCount, reviewRequestCount, cleaned, cleanImages, diskFreePct, cc, nq, lw });
 }

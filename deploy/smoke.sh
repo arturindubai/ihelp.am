@@ -49,6 +49,82 @@ og="$(curl -s -m 20 "$BASE/ru" | grep -oE '<meta property="og:image" content="[^
 og_ok() { [ -n "$og" ] && [ "$(curl -s -o /dev/null -m 30 -w '%{http_code} %{content_type}' "$BASE/${og#*://*/}")" = "200 image/png" ]; }
 check "превью ссылок (og:image) → PNG" og_ok
 
+echo "Control Center"
+# Ключ агента читается без вывода в лог: env_val возвращает значение, не эхо
+cc_api_ok() {
+  local key response http_code body
+  key="$(env_val CC_AGENT_KEY)"
+  [ -z "$key" ] && return 1
+  response=$(curl -s -m 20 -w '\n%{http_code}' -H "x-cc-key: $key" "$BASE/api/cc")
+  http_code=$(echo "$response" | tail -n1)
+  body=$(echo "$response" | head -n-1)
+  [ "$http_code" = "200" ] || return 1
+  # Список задач непустой: JSON содержит хотя бы один объект задачи
+  echo "$body" | grep -q '"tasks":\[{'
+}
+check "API воркеров: список задач (200, не пуст)" cc_api_ok
+db_schema_ok() {
+  # Проверяет, что все поля Task, Epic, WorkerRun из schema.prisma реально есть в базе.
+  # Если миграция добавила столбец с неверным именем, запрос упадёт с ERROR: column "..." does not exist.
+  # stdout (✓-строки) скрыт; stderr (имя отсутствующей таблицы/колонки) виден в логе smoke.
+  node scripts/check-migrations.mjs --db >/dev/null
+}
+check "схема Prisma и база согласованы (Task, Epic, WorkerRun)" db_schema_ok
+
+echo "Счётчики данных (выкладка не должна создавать записи)"
+# Сверка выполняется только при запуске через deploy/update.sh — тот передаёт PREDEPLOY_COUNTS_FILE.
+# Прямой запуск smoke.sh (тестировщик, вручную, rollback.sh) сверку пропускает.
+counts_file="${PREDEPLOY_COUNTS_FILE:-}"
+if [ -n "$counts_file" ] && [ -f "$counts_file" ]; then
+  file_age=$(( $(date +%s) - $(stat -c %Y "$counts_file") ))
+  if [ "$file_age" -gt 1200 ]; then
+    echo "  ⚠ файл счётчиков устарел (${file_age}с > 20 мин) — пропускаю"
+    rm -f "$counts_file"
+  else
+    mismatches=""
+    while IFS=: read -r name before; do
+      [ -z "$name" ] && continue
+      case "$name" in
+        Review)     sql="SELECT COUNT(*) FROM \"Review\"";;
+        Order)      sql="SELECT COUNT(*) FROM \"Order\"";;
+        UserClient) sql="SELECT COUNT(*) FROM \"User\" WHERE role = 'CLIENT'";;
+        *) continue;;
+      esac
+      after=$(docker exec homecare-db-1 psql -U app -d homeservices -tAc "$sql" 2>/dev/null | tr -d '[:space:]')
+      if [ "$before" = "?" ]; then
+        echo "  ⚠ $name: счётчик до выкладки неизвестен — пропускаю"
+      elif [ "$before" != "$after" ]; then
+        echo "  ! $name: до выкладки $before, после $after"
+        mismatches="${mismatches}${name}: было ${before}, стало ${after}; "
+      else
+        echo "  ✓ $name: $after (без изменений)"
+      fi
+    done < "$counts_file"
+    rm -f "$counts_file"
+    if [ -n "$mismatches" ]; then
+      echo "  ⚠ счётчики изменились: возможно клиент зарегистрировался во время выкладки или seed создал записи"
+      cc_key="$(env_val CC_AGENT_KEY)"
+      if [ -n "$cc_key" ]; then
+        alert_msg="⚠ Счётчики данных изменились при выкладке: ${mismatches%%; }"
+        alert_json="{\"message\":\"${alert_msg}\"}"
+        if curl -s -m 20 -X POST \
+            -H "Content-Type: application/json" \
+            -H "x-cc-key: ${cc_key}" \
+            --data-binary "$alert_json" \
+            "$BASE/api/internal/alert" | grep -q '"ok":true'; then
+          echo "  ✓ тех-алерт отправлен"
+        else
+          echo "  ⚠ тех-алерт не отправлен (API недоступно или ключ неверен)"
+        fi
+      else
+        echo "  ⚠ тех-алерт не отправлен (CC_AGENT_KEY не задан)"
+      fi
+    fi
+  fi
+else
+  echo "  ⚠ сверка пропущена (только при запуске через deploy/update.sh)"
+fi
+
 echo "Логи приложения"
 # Первые 60 секунд после запуска контейнера — не должно быть MISSING_MESSAGE (next-intl) или
 # необработанных исключений Node.js, которые сигнализируют о пропавших ключах перевода / багах.

@@ -4,6 +4,7 @@ import { alertTech } from "../alerts";
 import { html, notifyTech } from "../notify";
 import { CLOSED_STATUSES, pickNext, scopeOverlap } from "@/lib/cc-flow";
 import { transition, WATCHDOG } from "./ccWork";
+import { TEST_HOLD_MIN, testHoldUntil } from "@/lib/test-hold";
 import { controlPatch, filterDesignerCooldown, normalizeWorkers, planDispatch, POOLS, reviewQueues, yerevanHour, type DispatchAction, type DispatchState, type Pool, type RunRequest, type WorkersCommand, type WorkersConfig } from "@/lib/workers";
 
 /**
@@ -169,8 +170,6 @@ export async function readyForAutoNocode() {
   return takeable(await readyQueue("nocode"));
 }
 
-/** Запуск тестировщика без вердикта — задачу ему снова не даём столько минут */
-const TEST_HOLD_MIN = 60;
 
 /**
  * Код-задачи «На проверке». Старые карточки сданы без записи ветки — по правилам проекта она task/<КЛЮЧ>.
@@ -188,11 +187,21 @@ async function reviewTasks() {
   ]);
   const lastRun = new Map<string, Date>();
   for (const r of recent) if (r.taskKey && r.finishedAt && !lastRun.has(r.taskKey)) lastRun.set(r.taskKey, r.finishedAt);
-  return rows.map((t) => {
-    const ended = lastRun.get(t.key);
-    const noVerdict = !!ended && (!t.testedAt || t.testedAt < ended);
-    return { ...t, branch: t.branch || `task/${t.key}`, testHoldUntil: noVerdict ? new Date(ended.getTime() + TEST_HOLD_MIN * 60_000) : null };
-  });
+  // Когда задача в последний раз сдана на проверку: возврат тестировщика и повторная сдача — это вердикт, паузы нет
+  const entered = lastRun.size
+    ? await db.taskEvent.findMany({
+        where: { field: "status", to: "review", createdAt: { gte: since }, task: { key: { in: [...lastRun.keys()] } } },
+        select: { createdAt: true, task: { select: { key: true } } },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
+  const enteredAt = new Map<string, Date>();
+  for (const e of entered) if (!enteredAt.has(e.task.key)) enteredAt.set(e.task.key, e.createdAt);
+  return rows.map((t) => ({
+    ...t,
+    branch: t.branch || `task/${t.key}`,
+    testHoldUntil: testHoldUntil({ lastRunEnded: lastRun.get(t.key), testedAt: t.testedAt, enteredReviewAt: enteredAt.get(t.key) }),
+  }));
 }
 
 /**
@@ -231,7 +240,7 @@ export async function designerQueue() {
         // Заблокирована на дизайне, но макет ещё не подан (mockupUrl не задан)
         { status: "blocked", blockedOn: "design", mockupUrl: null },
         { status: open, mockupRequired: true, mockupApprovedBy: null, mockupUrl: null, attachments: { none: { mime: { startsWith: "image/" } } } },
-        { status: { in: ["backlog", "ready"] }, layer: { in: ["front", "fullstack"] }, mockupApprovedBy: null, mockupUrl: null, OR: [{ design: null }, { design: "" }], attachments: { none: {} } },
+        { status: { in: ["backlog", "ready"] }, needsDesign: true, mockupApprovedBy: null, mockupUrl: null, OR: [{ design: null }, { design: "" }], attachments: { none: {} } },
       ],
     },
     select: { key: true, title: true, priority: true, stage: true, status: true, sort: true, source: true, blockedOn: true, blockedReason: true, mockupRequired: true, updatedAt: true },
@@ -313,7 +322,7 @@ async function todayCounts() {
 export async function dispatchState(heads: Record<string, string>): Promise<DispatchState> {
   const config = await getWorkersConfig();
   const [running, today, review, readyForDev, readyForNocode, triage, sweep, lastStart, requests, product, productSweep, productHold, designer, designerSweep, inProgress] = await Promise.all([
-    db.workerRun.findMany({ where: { status: "running" }, select: { pool: true, agent: true } }),
+    db.workerRun.findMany({ where: { status: "running" }, select: { pool: true, agent: true, keys: true } }),
     todayCounts(),
     reviewTasks(),
     readyForAutoDev(),
@@ -327,11 +336,11 @@ export async function dispatchState(heads: Record<string, string>): Promise<Disp
     productHoldKeys(),
     designerQueue(),
     sweepDue(config, "designer"),
-    db.task.findMany({ where: { status: "in_progress", claimedBy: { not: null } }, select: { claimedBy: true, layer: true, claimUntil: true, key: true } }),
+    db.task.findMany({ where: { status: "in_progress", claimedBy: { not: null } }, select: { claimedBy: true, layer: true, claimUntil: true, heartbeatAt: true, key: true } }),
   ]);
   return {
     config,
-    running: running.map((r) => ({ pool: r.pool as Pool, agent: r.agent })),
+    running: running.map((r) => ({ pool: r.pool as Pool, agent: r.agent, keys: r.keys })),
     claimedAgents: inProgress.map((t) => ({ pool: (t.layer === "none" ? "nocode" : "dev") as Pool, agent: t.claimedBy! })),
     today,
     review,
@@ -347,7 +356,7 @@ export async function dispatchState(heads: Record<string, string>): Promise<Disp
     designerSweepDue: designerSweep,
     lastStart,
     requests: requests.filter((r) => Date.now() - Date.parse(r.at) < 30 * 60_000),
-    inProgressClaims: inProgress.map((t) => ({ key: t.key, agent: t.claimedBy!, claimUntil: t.claimUntil?.toISOString() ?? null })),
+    inProgressClaims: inProgress.map((t) => ({ key: t.key, agent: t.claimedBy!, claimUntil: t.claimUntil?.toISOString() ?? null, heartbeatAt: t.heartbeatAt?.toISOString() ?? null })),
   };
 }
 
@@ -526,7 +535,7 @@ export async function workersOverview() {
         reason: t.status === "blocked" ? "question" : "needs",
         detail: t.status === "blocked" ? (t.blockedReason ?? "").slice(0, 80) : (t.needs?.[0] ?? "").slice(0, 80),
       })),
-      designer: designer.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, reason: t.status === "blocked" ? "question" : t.mockupRequired ? "mockup" : "nodesign", detail: (t.blockedReason ?? "").slice(0, 80) })),
+      designer: designer.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, reason: t.status === "blocked" && t.blockedOn === "design" ? "returned" : t.status === "blocked" ? "question" : t.mockupRequired ? "mockup" : "nodesign", detail: (t.blockedReason ?? "").slice(0, 80) })),
       dev,
       nocode,
       tester: [
@@ -542,7 +551,7 @@ export async function workersOverview() {
         ...q.noBranch.filter((t) => !q.held.some((h) => h.key === t.key)).map((t) => item(t.key, "nobranch")),
       ],
     },
-    deployWindowOpen: hour >= config.deployWindow[0] && hour < config.deployWindow[1],
+    deployWindowOpen: config.deployWindow === null || (hour >= config.deployWindow[0] && hour < config.deployWindow[1]),
     readyDev: takeable(dev),
     readyNocode: takeable(nocode),
   };

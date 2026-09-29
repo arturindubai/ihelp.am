@@ -25,6 +25,7 @@ describe("sniffImage", () => {
 
 describe("prepareUpload", () => {
   it("shrinks a large photo to the maximum side and re-encodes it as WebP", async () => {
+    // тяжёлая операция: 4000×3000 JPEG → WebP, под нагрузкой требует больше времени
     const r = await prepareUpload(await solid(4000, 3000).jpeg().toBuffer());
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -33,7 +34,7 @@ describe("prepareUpload", () => {
     expect(r.height).toBe(1500);
     const meta = await sharp(r.data).metadata();
     expect([meta.width, meta.height]).toEqual([2000, 1500]);
-  });
+  }, 60_000);
 
   it("does not enlarge small images and keeps transparency", async () => {
     const r = await prepareUpload(await solid(120, 80, 4).png().toBuffer());

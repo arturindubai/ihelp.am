@@ -6,6 +6,9 @@ import { getCurrentUser } from "../auth";
 import { getSettings } from "../settings";
 import { html, notifyTeam } from "../notify";
 import { notifyCancelOrderTeam, notifyCancelVisitTeam, notifyRescheduleVisitTeam } from "../services/teamNotify";
+import { notifyMasterCancelled, notifyMasterRescheduled } from "../services/workerNotify";
+import { notifyClientCancelled, notifyClientRescheduled } from "../services/bookingNotify";
+import { consumeReviewToken } from "../services/reviews";
 import { headers } from "next/headers";
 import { sendOtp, verifyOtp } from "../otp";
 import { normalizeEmail } from "@/lib/email";
@@ -73,9 +76,13 @@ export async function cancelVisitAction(visitId: string) {
   if (!BUSY_STATUSES.includes(v.status) || v.status === "IN_PROGRESS" || v.status === "ON_WAY") return { ok: false, error: "state" };
   if (v.scheduledAt && v.scheduledAt.getTime() - Date.now() < s.booking.freeCancelHours * 3600_000) return { ok: false, error: "late" };
   const status = v.order.kind === "SUBSCRIPTION" ? "SKIPPED" : v.order.kind === "PACKAGE" ? "UNSCHEDULED" : "CANCELLED";
+  // Уведомить мастера до изменения статуса, пока masterId ещё доступен
+  if (v.masterId) await notifyMasterCancelled(v.id).catch(() => {});
   await db.visit.update({ where: { id: v.id }, data: { status, ...(status === "UNSCHEDULED" ? { scheduledAt: null, masterId: null } : {}) } });
   if (v.order.kind === "ONE_TIME") await db.order.update({ where: { id: v.orderId }, data: { status: "CANCELLED", cancelReason: "client" } });
   await notifyCancelVisitTeam(v.orderId, v.scheduledAt, status === "SKIPPED");
+  // Клиент: уведомление об отмене (только для разовых заказов; для подписки SKIPPED — без уведомления)
+  if (v.order.kind === "ONE_TIME") await notifyClientCancelled(v.orderId).catch(() => {});
   revalidatePath(`/[locale]/account/orders/${v.orderId}`, "page");
   return { ok: true };
 }
@@ -97,6 +104,8 @@ export async function rescheduleVisitAction(visitId: string, date: string, time:
     throw e;
   }
   await notifyRescheduleVisitTeam(v.orderId, date, time);
+  await notifyMasterRescheduled(v.id).catch(() => {});
+  await notifyClientRescheduled(v.id).catch(() => {});
   return { ok: true };
 }
 
@@ -109,11 +118,15 @@ export async function cancelOrderAction(orderId: string) {
   // Визиты внутри срока бесплатной отмены отмечаем отдельно — команде нужно знать о поздней отмене.
   const limit = new Date(Date.now() + s.booking.freeCancelHours * 3600_000);
   const late = o.visits.filter((v) => ["SCHEDULED", "CONFIRMED"].includes(v.status) && v.scheduledAt && v.scheduledAt <= limit).length;
+  // Уведомить мастеров ДО транзакции отмены
+  const vsToNotify = o.visits.filter((v) => ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"].includes(v.status) && v.masterId);
+  for (const v of vsToNotify) await notifyMasterCancelled(v.id).catch(() => {});
   await db.$transaction([
     db.visit.updateMany({ where: { orderId: o.id, status: { in: ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"] } }, data: { status: "CANCELLED" } }),
     db.order.update({ where: { id: o.id }, data: { status: "CANCELLED", cancelReason: "client" } }),
   ]);
   await notifyCancelOrderTeam(o.id, late, s.booking.freeCancelHours);
+  await notifyClientCancelled(o.id).catch(() => {});
   return { ok: true };
 }
 
@@ -151,6 +164,39 @@ export async function reviewAction(visitId: string, rating: number, text: string
   if (exists) return { ok: false };
   await db.review.create({ data: { visitId, userId: u.id, masterId: v.masterId, serviceId: v.order.serviceId, rating: r, text: text.trim().slice(0, 2000) || null, authorName: u.name, status: "PENDING" } });
   await notifyTeam(html`⭐ Новый отзыв ${r}/5 · заказ №${v.order.number} — на модерации`);
+  return { ok: true };
+}
+
+/** Оставить отзыв по одноразовому токену из сообщения (без входа в аккаунт). */
+export async function reviewByTokenAction(token: string, rating: number, text: string) {
+  const data = await consumeReviewToken(token);
+  if (!data) return { ok: false, reason: "invalid" as const };
+
+  const { visitId, userId } = data;
+  const visit = await db.visit.findUnique({
+    where: { id: visitId },
+    select: { status: true, masterId: true, order: { select: { number: true, serviceId: true } } },
+  });
+  if (!visit || visit.status !== "DONE") return { ok: false, reason: "invalid" as const };
+
+  const exists = await db.review.findUnique({ where: { visitId } });
+  if (exists) return { ok: false, reason: "already" as const };
+
+  const user = await db.user.findUnique({ where: { id: userId }, select: { name: true } });
+  const r = Math.min(5, Math.max(1, Math.round(rating)));
+  await db.review.create({
+    data: {
+      visitId,
+      userId,
+      masterId: visit.masterId,
+      serviceId: visit.order.serviceId,
+      rating: r,
+      text: text.trim().slice(0, 2000) || null,
+      authorName: user?.name ?? null,
+      status: "PENDING",
+    },
+  });
+  await notifyTeam(html`⭐ Новый отзыв ${r}/5 · заказ №${visit.order.number} — на модерации`);
   return { ok: true };
 }
 
