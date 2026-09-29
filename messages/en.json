@@ -797,7 +797,21 @@
       "newBanner": "New banner",
       "link": "Link",
       "promoCode": "Promo code on banner",
-      "bg": "Background color"
+      "bg": "Background color",
+      "type": "Banner type",
+      "startsAt": "Show from",
+      "endsAt": "Show until",
+      "audience": "Audience",
+      "segment": "Segment",
+      "stats": "Statistics",
+      "views": "Views",
+      "clicks": "Clicks",
+      "ctr": "CTR",
+      "empty": "No banners yet",
+      "placement": "Placement",
+      "tabs": {
+        "all": "All"
+      }
     },
     "pages": {
       "title": "Pages",
