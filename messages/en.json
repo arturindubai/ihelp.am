@@ -1594,6 +1594,7 @@
         "expand": "expand",
         "collapse": "collapse",
         "replyPh": "Your answer…",
+        "replyOrWritePh": "or write your answer",
         "replySend": "Reply",
         "postpone": "Postpone",
         "postponePh": "Reason (optional)…",

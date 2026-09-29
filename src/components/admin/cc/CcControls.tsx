@@ -931,7 +931,9 @@ export type YouCard = {
   groupType: OwnerCardGroupType;
   tasks: YouCardTask[];
   variants: { id: string; text: string }[] | null;
-  multiQuestion: { question: string; variants: { id: string; text: string }[] | null }[] | null;
+  /** Текст отдельным абзацем после вариантов (рекомендация, пояснение) */
+  trailingText?: string;
+  multiQuestion: { question: string; variants: { id: string; text: string }[] | null; trailingText?: string }[] | null;
   isUrgent: boolean;
   textMayCut: boolean;
   /** Ссылка на задачу-оригинал при уведомлении о дубле */
@@ -972,7 +974,7 @@ function QuestionBlock({
   pending,
   onAnswer,
 }: {
-  block: { question: string; variants: { id: string; text: string }[] | null };
+  block: { question: string; variants: { id: string; text: string }[] | null; trailingText?: string };
   blockIdx: number;
   blockCount: number;
   pending: boolean;
@@ -981,6 +983,7 @@ function QuestionBlock({
   const t = useTranslations("admin.cc.you");
   const [replyText, setReplyText] = useState("");
   const [textExpanded, setTextExpanded] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const questionLines = block.question ? block.question.split("\n") : [];
   const isLong = questionLines.length > QUESTION_COLLAPSE_LINES;
@@ -988,6 +991,15 @@ function QuestionBlock({
     isLong && !textExpanded
       ? questionLines.slice(0, QUESTION_COLLAPSE_LINES).join("\n")
       : block.question;
+
+  // Вариант «другое/напишите» не отправляет ответ сразу — фокусирует поле свободного ввода
+  const handleVariantClick = (v: { id: string; text: string }) => {
+    if (/другое|другая|напишите|своё/i.test(v.text)) {
+      inputRef.current?.focus();
+    } else {
+      onAnswer(blockCount > 1 ? `[Вопрос ${blockIdx + 1}] ${t("answerVariant", { id: v.id })}` : t("answerVariant", { id: v.id }));
+    }
+  };
 
   return (
     <div>
@@ -1007,18 +1019,41 @@ function QuestionBlock({
         </div>
       )}
       {block.variants ? (
-        <div className="flex flex-wrap gap-2">
-          {block.variants.map((v) => (
-            <button
-              key={v.id}
-              disabled={pending}
-              className="rounded-lg border border-brand px-3 py-1.5 text-sm text-brand transition-colors hover:bg-brand hover:text-inverse disabled:opacity-50"
-              onClick={() => onAnswer(blockCount > 1 ? `[Вопрос ${blockIdx + 1}] ${t("answerVariant", { id: v.id })}` : t("answerVariant", { id: v.id }))}
-            >
-              {v.id}) {v.text}
+        <>
+          <div className="flex flex-wrap gap-2">
+            {block.variants.map((v) => (
+              <button
+                key={v.id}
+                disabled={pending}
+                className="rounded-lg border border-brand px-3 py-1.5 text-sm text-brand transition-colors hover:bg-brand hover:text-inverse disabled:opacity-50"
+                onClick={() => handleVariantClick(v)}
+              >
+                {v.id}) {v.text}
+              </button>
+            ))}
+          </div>
+          {block.trailingText && (
+            <p className="mt-2 whitespace-pre-line text-sm text-muted">{block.trailingText}</p>
+          )}
+          <form
+            className="mt-2 flex gap-1.5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              onAnswer(replyText);
+            }}
+          >
+            <input
+              ref={inputRef}
+              className="input h-9 flex-1 py-1 text-sm"
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              placeholder={t("replyOrWritePh")}
+            />
+            <button className="btn-primary btn-sm" disabled={pending || replyText.trim().length < 2}>
+              {t("replySend")}
             </button>
-          ))}
-        </div>
+          </form>
+        </>
       ) : (
         <form
           className="flex gap-1.5"
@@ -1069,7 +1104,7 @@ function YouQuestionCard({ card, onDone }: { card: YouCard; onDone: (id: string)
       setTimeout(() => onDone(card.id), 300);
     });
 
-  const blocks = card.multiQuestion ?? [{ question: card.question, variants: card.variants }];
+  const blocks = card.multiQuestion ?? [{ question: card.question, variants: card.variants, trailingText: card.trailingText }];
   const visibleBlocks = blocks.filter((_, idx) => !hiddenBlocks.has(idx));
 
   return (
