@@ -731,11 +731,15 @@ export async function approveMockup(key: string, actor: Actor, comment: string |
   await log(t.id, actor.name, "mockupApprovedBy", t.mockupApprovedBy, actor.name);
   const text = `${comment ? `Дизайн утверждён: ${comment.trim().slice(0, 500)}` : "Дизайн утверждён."}\nВ Библиотеке: ${canon.slug} (версия ${canon.version}).`;
   await say(t.id, actor.name, "note", text, key);
-  // Если задача заблокирована на дизайне — снять блокировку, вернуть туда, откуда заблокировали
-  if (t.status === "blocked" && t.blockedOn === "design") {
+  // Если задача заблокирована на дизайне/владельце/продакте по причине макета — снять блокировку автоматически
+  const autoUnblock =
+    t.status === "blocked" &&
+    (t.blockedOn === "design" ||
+      ((t.blockedOn === "owner" || t.blockedOn === "product") && /макет/i.test(t.blockedReason ?? "")));
+  if (autoUnblock) {
     const target = unblockTarget(t.blockedFrom, actor.role);
     try {
-      await transition(key, { to: target, text: "Дизайн утверждён, задача возвращена." }, actor);
+      await transition(key, { to: target, text: "Макет утверждён, блокировка снята автоматически." }, actor);
     } catch (e) {
       const code = e instanceof CcError ? e.code : "transition_error";
       const detail = e instanceof CcError && e.detail ? `: ${e.detail}` : "";

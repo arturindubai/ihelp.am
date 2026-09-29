@@ -25,6 +25,7 @@ import {
 } from "@/server/actions/admin/cc";
 import { cn } from "@/lib/format";
 import { parseVariants } from "@/lib/cc-owner-q";
+import type { OwnerCardGroupType } from "@/lib/cc-owner-q";
 
 /** Кнопки и формы пульта Control Center: Intake, запуск и остановка воркеров, согласования, сообщения */
 
@@ -932,7 +933,7 @@ export type YouCardTask = { key: string; title: string; href: string; priority: 
 export type YouCard = {
   id: string;
   question: string;
-  groupType: "variant" | "price" | "data" | "auth" | "approve" | "rule" | "other";
+  groupType: OwnerCardGroupType;
   tasks: YouCardTask[];
   variants: { id: string; text: string }[] | null;
   multiQuestion: { question: string; variants: { id: string; text: string }[] | null }[] | null;
@@ -952,6 +953,7 @@ export type YouPostponedTask = {
   priority: string;
   reason: string | null;
   updatedAt: string;
+  blockedUntil?: string | null;
 };
 
 const GROUP_ICONS: Record<YouCard["groupType"], string> = {
@@ -961,8 +963,11 @@ const GROUP_ICONS: Record<YouCard["groupType"], string> = {
   auth: "🔑",
   approve: "✅",
   rule: "📋",
+  do: "⚙️",
   other: "💬",
 };
+
+const QUESTION_COLLAPSE_LINES = 8;
 
 /** Один блок вопроса с вариантами или текстовым вводом */
 function QuestionBlock({
@@ -980,13 +985,30 @@ function QuestionBlock({
 }) {
   const t = useTranslations("admin.cc.you");
   const [replyText, setReplyText] = useState("");
+  const [textExpanded, setTextExpanded] = useState(false);
+
+  const questionLines = block.question ? block.question.split("\n") : [];
+  const isLong = questionLines.length > QUESTION_COLLAPSE_LINES;
+  const visibleText =
+    isLong && !textExpanded
+      ? questionLines.slice(0, QUESTION_COLLAPSE_LINES).join("\n")
+      : block.question;
 
   return (
     <div>
       {block.question && (
         <div className="mb-2 text-sm font-medium">
           {blockCount > 1 && <span className="mr-1 text-muted">{blockIdx + 1}.</span>}
-          {renderOwnerText(block.question, t("devOnly"))}
+          {renderOwnerText(visibleText, t("devOnly"))}
+          {isLong && (
+            <button
+              type="button"
+              className="mt-0.5 text-xs text-brand hover:underline"
+              onClick={() => setTextExpanded(!textExpanded)}
+            >
+              {textExpanded ? t("collapse") : t("expand")}
+            </button>
+          )}
         </div>
       )}
       {block.variants ? (
@@ -1131,6 +1153,14 @@ export function YouQuestionsSection({
   const t = useTranslations("admin.cc.you");
   const [filter, setFilter] = useState<"all" | "urgent" | "postponed">("all");
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [expandedPostponed, setExpandedPostponed] = useState<Set<string>>(new Set());
+
+  const togglePostponed = (key: string) =>
+    setExpandedPostponed((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
 
   const hide = (id: string) => setHidden((prev) => new Set([...prev, id]));
   const visibleCards = cards.filter((c) => !hidden.has(c.id));
@@ -1144,10 +1174,11 @@ export function YouQuestionsSection({
   const byGroup = (
     [
       ["variant", displayCards.filter((c) => c.groupType === "variant")],
+      ["approve", displayCards.filter((c) => c.groupType === "approve")],
+      ["do", displayCards.filter((c) => c.groupType === "do")],
       ["price", displayCards.filter((c) => c.groupType === "price")],
       ["data", displayCards.filter((c) => c.groupType === "data")],
       ["auth", displayCards.filter((c) => c.groupType === "auth")],
-      ["approve", displayCards.filter((c) => c.groupType === "approve")],
       ["rule", displayCards.filter((c) => c.groupType === "rule")],
       ["other", displayCards.filter((c) => c.groupType === "other")],
     ] as [YouCard["groupType"], YouCard[]][]
@@ -1222,15 +1253,38 @@ export function YouQuestionsSection({
             <p className="text-sm text-muted">{t("postponedSectionHint")}</p>
           )}
           <div className="space-y-2">
-            {postponed.map((task) => (
-              <div key={task.key} className="rounded-card border border-line bg-paper p-3 text-sm">
-                <Link href={task.href} scroll={false} className="font-medium hover:underline">
-                  <span className="mr-2 font-mono text-xs text-muted">{task.key}</span>
-                  {task.title}
-                </Link>
-                {task.reason && <p className="mt-1 text-xs text-muted">{task.reason}</p>}
-              </div>
-            ))}
+            {postponed.map((task) => {
+              const lines = (task.reason ?? "").split("\n").filter(Boolean);
+              const firstLine = lines[0] ?? "";
+              const hasMore = lines.length > 1;
+              const isExpanded = expandedPostponed.has(task.key);
+              return (
+                <div key={task.key} className="rounded-card border border-line bg-paper p-3 text-sm">
+                  <Link href={task.href} scroll={false} className="font-medium hover:underline">
+                    <span className="mr-2 font-mono text-xs text-muted">{task.key}</span>
+                    {task.title}
+                  </Link>
+                  {firstLine && (
+                    <p className="mt-1 text-xs text-muted">
+                      {isExpanded ? task.reason : firstLine}
+                    </p>
+                  )}
+                  {hasMore && (
+                    <button
+                      className="mt-0.5 text-xs text-brand hover:underline"
+                      onClick={() => togglePostponed(task.key)}
+                    >
+                      {isExpanded ? t("collapse") : t("expand")}
+                    </button>
+                  )}
+                  {task.blockedUntil && (
+                    <p className="mt-1 text-xs text-muted">
+                      {t("postponedUntil", { date: new Date(task.blockedUntil).toLocaleDateString("ru-RU", { timeZone: "Asia/Yerevan", day: "numeric", month: "short", year: "numeric" }) })}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </>
       )}

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import ruMessages from "../../messages/ru.json";
+import enMessages from "../../messages/en.json";
 import {
   canClaimRole,
   canCreateTask,
@@ -494,6 +496,33 @@ describe("readiness: предупреждение про папку messages ц�
     expect(check.ok).toBe(false);
     expect(check.hard).toBe(false);
     expect(isReady(items)).toBe(true);
+  });
+});
+
+describe("переводы: все ключи пунктов готовности покрыты в ru.json и en.json", () => {
+  const base = {
+    summary: "Зачем: клиенты не могут войти без кода",
+    requirements: ["Код приходит в Telegram"],
+    needs: [],
+    depends: [],
+    layer: "back",
+    estimate: "M",
+    scope: ["src/server/otp.ts"],
+  };
+  const keys = readiness(base, new Set()).map((i) => i.key);
+  const ruItems = (ruMessages as unknown as { admin: { cc: { dor: { items: Record<string, string> } } } }).admin.cc.dor.items;
+  const enItems = (enMessages as unknown as { admin: { cc: { dor: { items: Record<string, string> } } } }).admin.cc.dor.items;
+
+  it("все ключи есть в русском переводе (ru.json)", () => {
+    for (const key of keys) {
+      expect(ruItems[key], `ключ admin.cc.dor.items.${key} отсутствует в ru.json`).toBeTruthy();
+    }
+  });
+
+  it("все ключи есть в английском переводе (en.json)", () => {
+    for (const key of keys) {
+      expect(enItems[key], `ключ admin.cc.dor.items.${key} отсутствует в en.json`).toBeTruthy();
+    }
   });
 });
 

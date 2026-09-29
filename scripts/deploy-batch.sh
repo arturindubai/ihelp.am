@@ -43,6 +43,10 @@ AGENT="${CC_AGENT:-deployer}"
 cc() { node scripts/cc.mjs "$@" --agent "$AGENT"; }
 stop() { echo "✗ $1"; exit 2; }
 
+# Настройка git merge driver для автоматического слияния файлов переводов (идемпотентно)
+git config merge.translations.name "Слияние файлов переводов JSON"
+git config merge.translations.driver "node scripts/merge-translations.mjs %O %A %B"
+
 # Переменные для dry-run (заполняются при DRY_RUN=1)
 DRY_TMPWT=""
 DRY_LOG=""

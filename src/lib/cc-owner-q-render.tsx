@@ -1,12 +1,16 @@
 import type { ReactNode } from "react";
 
-/** Строки, которые показываются только исполнителю: блоки кода, команды, пути, таблицы */
+/** Строки, которые показываются только исполнителю: блоки кода, команды, пути, таблицы, поля схемы */
 function isDevLine(line: string): boolean {
   return (
     /^```/.test(line) ||
     /^\s*(node |git |docker |npx |npm )/.test(line) ||
-    /\/opt\/|\/src\/|\/docs\/|\/scripts\//.test(line) ||
-    /^\s*\|.+\|/.test(line)
+    /\/opt\/|\/src\/|\/docs\/|\/scripts\/|\/uploads\//.test(line) ||
+    /^\s*\|.+\|/.test(line) ||
+    /cc\.mjs/.test(line) ||
+    /командой:/i.test(line) ||
+    // camelCase-поля схемы вида «mockupUrl: …», «blockedReason: …»
+    /\b[a-z][a-zA-Z]{2,}[A-Z][a-zA-Z]+:\s/.test(line)
   );
 }
 
@@ -74,6 +78,13 @@ export function renderOwnerText(text: string, devOnlyLabel: string): ReactNode {
       continue;
     }
 
+    // Горизонтальный разделитель ---
+    if (/^---+$/.test(line.trim())) {
+      result.push(<hr key={k()} className="my-2 border-line" />);
+      i++;
+      continue;
+    }
+
     // Заголовок ## или ###
     if (/^#{2,3}\s/.test(line)) {
       result.push(
@@ -83,7 +94,7 @@ export function renderOwnerText(text: string, devOnlyLabel: string): ReactNode {
       continue;
     }
 
-    // Список (- item или * item)
+    // Маркированный список (- item или * item)
     if (/^\s*[-*]\s/.test(line)) {
       const items: string[] = [];
       while (i < lines.length && /^\s*[-*]\s/.test(lines[i])) {
@@ -94,6 +105,21 @@ export function renderOwnerText(text: string, devOnlyLabel: string): ReactNode {
         <ul key={k()} className="list-disc ml-4 text-sm">
           {items.map((item, idx) => <li key={idx}>{inlineRender(item)}</li>)}
         </ul>
+      );
+      continue;
+    }
+
+    // Нумерованный список (1. item или 1) item)
+    if (/^\d+[.)]\s/.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\d+[.)]\s/.test(lines[i])) {
+        items.push(lines[i].replace(/^\d+[.)]\s/, ""));
+        i++;
+      }
+      result.push(
+        <ol key={k()} className="list-decimal ml-4 text-sm">
+          {items.map((item, idx) => <li key={idx}>{inlineRender(item)}</li>)}
+        </ol>
       );
       continue;
     }
@@ -112,17 +138,19 @@ export function renderOwnerText(text: string, devOnlyLabel: string): ReactNode {
   return <>{result}</>;
 }
 
-/** Рендерит инлайн-разметку: **жирный** */
+/** Рендерит инлайн-разметку: **жирный** и `код` */
 function inlineRender(text: string): ReactNode {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
   if (parts.length === 1) return text;
   return (
     <>
-      {parts.map((part, i) =>
-        part.startsWith("**") && part.endsWith("**")
-          ? <strong key={i}>{part.slice(2, -2)}</strong>
-          : part
-      )}
+      {parts.map((part, i) => {
+        if (part.startsWith("**") && part.endsWith("**"))
+          return <strong key={i}>{part.slice(2, -2)}</strong>;
+        if (part.startsWith("`") && part.endsWith("`"))
+          return <code key={i} className="rounded bg-surface px-1 font-mono text-xs">{part.slice(1, -1)}</code>;
+        return part;
+      })}
     </>
   );
 }
