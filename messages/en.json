@@ -1472,9 +1472,9 @@
         "confirm": "Confirm",
         "cancel": "Cancel",
         "commentPh": "Comment (optional)",
-        "approved": "Design approved — Library record created",
+        "approved": "Design approved — Canon record created",
         "link": "View mockup",
-        "canon": "Library record",
+        "canon": "Canon record",
         "return": "Return to designer",
         "returnPh": "Remark (required)",
         "returned": "Sent to designer",
@@ -1487,7 +1487,7 @@
         "openNew": "Open in new tab"
       },
       "designTab": {
-        "subtitle": "Design of UI tasks: designer queue, what awaits your approval, what's approved. Approved design goes to Library — that's the canon developers build from.",
+        "subtitle": "Design of UI tasks: designer queue, what awaits your approval, what's approved. Approved design goes to Canon — that's what developers build from.",
         "pool": "Designer",
         "queue": "Designer queue · {n}",
         "queueEmpty": "No UI tasks without design",
@@ -1506,7 +1506,7 @@
         "gate": "mockup required",
         "approved": "Approved in the last two weeks · {n}",
         "approvedEmpty": "Nothing approved yet",
-        "canon": "Library record",
+        "canon": "Canon record",
         "designSnippet": "Design: {text}",
         "files": "files: {n}",
         "approvedAgent": "by {agent}"

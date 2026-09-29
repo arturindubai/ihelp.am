@@ -11,7 +11,12 @@ import { cn, dateLabel, timeLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-type Search = { doc?: string; v?: string; cmp?: string; q?: string; section?: string; archived?: string; edit?: string; new?: string };
+type Search = { doc?: string; v?: string; cmp?: string; q?: string; section?: string; kind?: string; archived?: string; edit?: string; new?: string };
+
+/** Обратный маппинг: kind → section (для обратной совместимости с ?kind=decision) */
+const KIND_TO_SECTION: Record<string, CanonSection> = Object.fromEntries(
+  Object.entries(CANON_SECTIONS).flatMap(([section, kinds]) => kinds.map((k) => [k, section as CanonSection])),
+);
 
 const KIND_TONE: Record<string, string> = {
   rules: "bg-bad-50 text-bad",
@@ -39,7 +44,8 @@ export default async function LibraryPage({ params, searchParams }: { params: Pr
   if (!(await pageUser("control"))) return <Forbidden />;
   const sp = await searchParams;
   const t = await getTranslations("admin.cc.library");
-  const section = (CANON_SECTION_KEYS as string[]).includes(sp.section ?? "") ? (sp.section as CanonSection) : undefined;
+  const sectionFromKind = sp.kind ? KIND_TO_SECTION[sp.kind] : undefined;
+  const section = (CANON_SECTION_KEYS as string[]).includes(sp.section ?? "") ? (sp.section as CanonSection) : sectionFromKind;
   const [list, counts] = await Promise.all([listLibrary({ q: sp.q, kinds: section !== undefined ? CANON_SECTIONS[section] : undefined, archived: sp.archived === "1" }), libraryCounts()]);
   const n = Number(sp.v) || undefined;
   const cmp = Number(sp.cmp) || undefined;

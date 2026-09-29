@@ -51,14 +51,14 @@ async function say(taskId: string, author: string, kind: CommentKind, text: stri
     await db.taskComment.create({ data: { taskId, author, kind, text: trimmed } });
     return;
   }
-  // Текст длиннее лимита: полный материал — в Библиотеку, в ленте — резюме со ссылкой
+  // Текст длиннее лимита: полный материал — в Канон, в ленте — резюме со ссылкой
   let libraryNoteId: string | null = null;
   try {
     const doc = await createNote({ title: buildLibraryTitle(taskKey, author, kind), kind: "knowledge", content: trimmed }, author);
     libraryNoteId = doc.slug;
   } catch {
     // Ошибка сохранения: храним обрезанный текст с пометкой
-    await db.taskComment.create({ data: { taskId, author, kind, text: trimmed.slice(0, 4900) + "\n\n⚠️ Текст обрезан — не удалось сохранить в Библиотеку." } });
+    await db.taskComment.create({ data: { taskId, author, kind, text: trimmed.slice(0, 4900) + "\n\n⚠️ Текст обрезан — не удалось сохранить в Канон." } });
     return;
   }
   await db.taskComment.create({ data: { taskId, author, kind, text: buildSummaryText(trimmed, libraryNoteId), libraryNoteId } });
@@ -206,6 +206,12 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   if (to === "done" && task.layer === "none" && task.nextSteps.length > 0) {
     await createNextStepsIntake(key, task.title, task.nextSteps, actor.name).catch(async (err) => {
       await say(task.id, "system", "note", `⚠️ Не удалось завести карточку следующих шагов: ${String(err).slice(0, 200)}`, key).catch(() => null);
+    });
+  }
+  // Критерий 5: при приёмке не-код задачи результат автоматически попадает в Канон
+  if (to === "done" && task.layer === "none") {
+    await nocodeToCanon(task, actor.name).catch(async (err) => {
+      await say(task.id, "system", "note", `⚠️ Не удалось сохранить результат в Канон: ${String(err).slice(0, 200)}`, key).catch(() => null);
     });
   }
   // Обновляем статус эпика по итогу изменения задачи
@@ -729,7 +735,7 @@ export async function approveMockup(key: string, actor: Actor, comment: string |
     data: { mockupApprovedBy: actor.name, mockupApprovedAt: now, ...(needsClean.length !== t.needs.length ? { needs: needsClean } : {}) },
   });
   await log(t.id, actor.name, "mockupApprovedBy", t.mockupApprovedBy, actor.name);
-  const text = `${comment ? `Дизайн утверждён: ${comment.trim().slice(0, 500)}` : "Дизайн утверждён."}\nВ Библиотеке: ${canon.slug} (версия ${canon.version}).`;
+  const text = `${comment ? `Дизайн утверждён: ${comment.trim().slice(0, 500)}` : "Дизайн утверждён."}\nВ Каноне: ${canon.slug} (версия ${canon.version}).`;
   await say(t.id, actor.name, "note", text, key);
   // Если задача заблокирована на дизайне — снять блокировку, вернуть туда, откуда заблокировали
   if (t.status === "blocked" && t.blockedOn === "design") {
@@ -890,6 +896,24 @@ async function createDuplicateNotice(intakeKey: string, origKey: string, by: str
       existing.push(key);
     }
   }
+}
+
+/**
+ * По типу задачи определяем раздел Канона: инструкции и правила → rules, остальное → knowledge.
+ * Ориентируемся на ключевые слова в заголовке и описании задачи.
+ */
+function inferCanonKind(title: string, summary: string): string {
+  const text = `${title} ${summary}`.toLowerCase();
+  if (/инструкц|правила|регламент|руководство|политик|процесс|процедур|порядок/.test(text)) return "rules";
+  return "knowledge";
+}
+
+/** Критерий 5: при приёмке не-код задачи её результат (ownerSummary или proof) идёт в Канон */
+async function nocodeToCanon(task: { key: string; title: string; summary: string; ownerSummary: string | null; proof: string | null }, actor: string) {
+  const content = task.ownerSummary?.trim() || task.proof?.trim() || task.summary?.trim();
+  if (!content) return;
+  const kind = inferCanonKind(task.title, task.summary);
+  await upsertNote(`nocode-${task.key.toLowerCase()}`, { title: task.title, kind, content }, actor);
 }
 
 async function createNextStepsIntake(doneKey: string, doneTitle: string, steps: string[], by: string) {
