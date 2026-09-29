@@ -1,12 +1,13 @@
 import "server-only";
 import { db } from "../db";
-import { atYerevan, addDays, ymd } from "@/lib/time";
 import {
   calcPeriodStats,
   calcDailyRevenue,
   calcCashByMaster,
   calcMasterRanking,
   noConversionData,
+  mapDbRow,
+  calcPeriodBounds,
   type FinanceVisit,
   type PeriodStats,
   type DailyChannelRow,
@@ -19,8 +20,7 @@ export type { PeriodStats, DailyChannelRow, CashSummary, MasterRankRow, Conversi
 
 /** Загружает выполненные визиты за период [from, to] включительно (по ереванскому времени) */
 async function loadVisits(from: string, to: string): Promise<FinanceVisit[]> {
-  const fromDt = atYerevan(from, "00:00");
-  const toDt = atYerevan(addDays(to, 1), "00:00");
+  const { fromDt, toDt } = calcPeriodBounds(from, to);
 
   const rows = await db.visit.findMany({
     where: {
@@ -31,36 +31,30 @@ async function loadVisits(from: string, to: string): Promise<FinanceVisit[]> {
       price: true,
       finishedAt: true,
       masterId: true,
+      cashCollected: true,
       master: { select: { name: true } },
       order: {
         select: {
           id: true,
           kind: true,
+          status: true,
           paymentMethod: true,
         },
       },
     },
   });
 
-  return rows.map((r) => ({
-    date: ymd(r.finishedAt!),
+  return rows.map((r) => mapDbRow({
+    finishedAt: r.finishedAt!,
     price: r.price,
-    kind: r.order.kind as FinanceVisit["kind"],
+    kind: r.order.kind,
+    orderStatus: r.order.status,
     orderId: r.order.id,
     masterId: r.masterId,
-    masterName: r.master ? extractName(r.master.name) : null,
-    paymentMethod: r.order.paymentMethod as FinanceVisit["paymentMethod"],
+    masterName: r.master?.name ?? null,
+    paymentMethod: r.order.paymentMethod,
+    cashCollected: r.cashCollected,
   }));
-}
-
-/** Вытаскивает русское имя мастера из JSON-поля name: { ru, en, am } */
-function extractName(name: unknown): string {
-  if (typeof name === "string") return name;
-  if (name && typeof name === "object") {
-    const n = name as Record<string, string>;
-    return n.ru ?? n.en ?? n.am ?? "";
-  }
-  return "";
 }
 
 /** Финансовые показатели за период [from, to] */
@@ -71,13 +65,7 @@ export async function getFinanceStats(from: string, to: string): Promise<{
   masters: MasterRankRow[];
   conversion: ConversionInfo;
 }> {
-  // Длина периода в днях для вычисления предыдущего периода
-  const fromDt = new Date(atYerevan(from, "00:00").getTime());
-  const toDt = new Date(atYerevan(addDays(to, 1), "00:00").getTime());
-  const days = Math.round((toDt.getTime() - fromDt.getTime()) / 86_400_000);
-
-  const prevTo = addDays(from, -1);
-  const prevFrom = addDays(from, -days);
+  const { prevFrom, prevTo } = calcPeriodBounds(from, to);
 
   const [visits, prevVisits] = await Promise.all([
     loadVisits(from, to),

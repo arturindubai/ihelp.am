@@ -5,9 +5,14 @@ import {
   calcCashByMaster,
   calcMasterRanking,
   noConversionData,
+  mapDbRow,
+  calcPeriodBounds,
+  extractMasterName,
   type FinanceVisit,
+  type DbFinanceRow,
 } from "./finance";
 
+/** Готовый FinanceVisit для тестов чистых функций расчёта */
 function v(
   overrides: Partial<FinanceVisit> & { date: string; price: number },
 ): FinanceVisit {
@@ -17,9 +22,138 @@ function v(
     masterId: "m-1",
     masterName: "Анна",
     paymentMethod: "CASH",
+    cashCollected: false,
     ...overrides,
   };
 }
+
+/** Минимальная сырая строка БД для тестов mapDbRow */
+function dbRow(overrides: Partial<DbFinanceRow> & { finishedAt: Date; price: number }): DbFinanceRow {
+  return {
+    kind: "ONE_TIME",
+    orderStatus: "ACTIVE",
+    orderId: "ord-1",
+    masterId: "m-1",
+    masterName: { ru: "Анна" },
+    paymentMethod: "CARD",
+    cashCollected: false,
+    ...overrides,
+  };
+}
+
+// ─── mapDbRow ────────────────────────────────────────────────────────────────
+
+describe("mapDbRow", () => {
+  it("визит в 19:59:59Z (23:59 по Еревану) → date=2026-09-15", () => {
+    const fv = mapDbRow(dbRow({ finishedAt: new Date("2026-09-15T19:59:59Z"), price: 5000 }));
+    expect(fv.date).toBe("2026-09-15");
+  });
+
+  it("визит в 20:00:00Z (00:00 по Еревану) → date=2026-09-16", () => {
+    const fv = mapDbRow(dbRow({ finishedAt: new Date("2026-09-15T20:00:00Z"), price: 7000 }));
+    expect(fv.date).toBe("2026-09-16");
+  });
+
+  it("визит отменённого заказа (orderStatus=CANCELLED) — попадает в FinanceVisit без фильтрации", () => {
+    const fv = mapDbRow(dbRow({
+      finishedAt: new Date("2026-09-15T10:00:00Z"),
+      price: 9000,
+      orderStatus: "CANCELLED",
+    }));
+    expect(fv.price).toBe(9000);
+    expect(fv.orderId).toBe("ord-1");
+  });
+
+  it("мастер не назначен → masterId=null, masterName=null", () => {
+    const fv = mapDbRow(dbRow({
+      finishedAt: new Date("2026-09-15T10:00:00Z"),
+      price: 9000,
+      masterId: null,
+      masterName: null,
+    }));
+    expect(fv.masterId).toBeNull();
+    expect(fv.masterName).toBeNull();
+  });
+
+  it("визит со скидкой первого заказа — цена берётся из базы как есть", () => {
+    const fv = mapDbRow(dbRow({ finishedAt: new Date("2026-09-15T10:00:00Z"), price: 6750 }));
+    expect(fv.price).toBe(6750);
+  });
+
+  it("cashCollected=true копируется в FinanceVisit", () => {
+    const fv = mapDbRow(dbRow({
+      finishedAt: new Date("2026-09-15T10:00:00Z"),
+      price: 8000,
+      paymentMethod: "CASH",
+      cashCollected: true,
+    }));
+    expect(fv.cashCollected).toBe(true);
+  });
+});
+
+// ─── extractMasterName ───────────────────────────────────────────────────────
+
+describe("extractMasterName", () => {
+  it("приоритет: ru → en → am", () => {
+    expect(extractMasterName({ ru: "Анна", en: "Anna", am: "Անի" })).toBe("Анна");
+    expect(extractMasterName({ en: "Anna", am: "Անի" })).toBe("Anna");
+    expect(extractMasterName({ am: "Անի" })).toBe("Անի");
+  });
+
+  it("строка возвращается как есть", () => {
+    expect(extractMasterName("Анна")).toBe("Анна");
+  });
+
+  it("null и пустой объект → пустая строка", () => {
+    expect(extractMasterName(null)).toBe("");
+    expect(extractMasterName({})).toBe("");
+    expect(extractMasterName(undefined)).toBe("");
+  });
+});
+
+// ─── calcPeriodBounds ────────────────────────────────────────────────────────
+
+describe("calcPeriodBounds", () => {
+  it("однодневный период — prevTo = день до, prevFrom = тот же день", () => {
+    const b = calcPeriodBounds("2026-09-15", "2026-09-15");
+    expect(b.days).toBe(1);
+    expect(b.prevTo).toBe("2026-09-14");
+    expect(b.prevFrom).toBe("2026-09-14");
+  });
+
+  it("семидневный период — предыдущие 7 дней", () => {
+    const b = calcPeriodBounds("2026-09-08", "2026-09-14");
+    expect(b.days).toBe(7);
+    expect(b.prevTo).toBe("2026-09-07");
+    expect(b.prevFrom).toBe("2026-09-01");
+  });
+
+  it("fromDt — ровно 00:00 по Еревану = 20:00 UTC предыдущего дня", () => {
+    const b = calcPeriodBounds("2026-09-15", "2026-09-15");
+    // 2026-09-15T00:00+04:00 = 2026-09-14T20:00:00.000Z
+    expect(b.fromDt.toISOString()).toBe("2026-09-14T20:00:00.000Z");
+    // 2026-09-16T00:00+04:00 = 2026-09-15T20:00:00.000Z
+    expect(b.toDt.toISOString()).toBe("2026-09-15T20:00:00.000Z");
+  });
+
+  it("визит ровно в fromDt (00:00 по Еревану) попадает в период", () => {
+    const b = calcPeriodBounds("2026-09-15", "2026-09-15");
+    const visitAt = new Date("2026-09-14T20:00:00.000Z"); // ровно fromDt
+    expect(visitAt >= b.fromDt && visitAt < b.toDt).toBe(true);
+  });
+
+  it("визит в 19:59:59Z (23:59 по Еревану 15-го) попадает в период 15-го", () => {
+    const b = calcPeriodBounds("2026-09-15", "2026-09-15");
+    const visitAt = new Date("2026-09-15T19:59:59Z");
+    expect(visitAt >= b.fromDt && visitAt < b.toDt).toBe(true);
+  });
+
+  it("визит в 20:00:00Z (00:00 по Еревану 16-го) не попадает в период 15-го", () => {
+    const b = calcPeriodBounds("2026-09-15", "2026-09-15");
+    const visitAt = new Date("2026-09-15T20:00:00Z");
+    expect(visitAt >= b.fromDt && visitAt < b.toDt).toBe(false);
+  });
+});
 
 // ─── calcPeriodStats ─────────────────────────────────────────────────────────
 
@@ -166,6 +300,8 @@ describe("calcCashByMaster", () => {
   it("нет визитов — пустой итог", () => {
     const s = calcCashByMaster([]);
     expect(s.totalAmount).toBe(0);
+    expect(s.totalToCollect).toBe(0);
+    expect(s.totalReceived).toBe(0);
     expect(s.totalVisits).toBe(0);
     expect(s.masters).toHaveLength(0);
   });
@@ -178,6 +314,38 @@ describe("calcCashByMaster", () => {
     const s = calcCashByMaster(visits);
     expect(s.totalAmount).toBe(5000);
     expect(s.totalVisits).toBe(1);
+  });
+
+  it("визит без мастера (masterId=null) не попадает в наличные", () => {
+    const visits = [
+      v({ date: "2026-09-01", price: 9000, masterId: null, paymentMethod: "CASH" }),
+      v({ date: "2026-09-01", price: 5000, masterId: "m-1", paymentMethod: "CASH", orderId: "ord-2" }),
+    ];
+    const s = calcCashByMaster(visits);
+    expect(s.totalAmount).toBe(5000);
+    expect(s.masters).toHaveLength(1);
+  });
+
+  it("toCollect (cashCollected=false) и received (cashCollected=true) разделены", () => {
+    const visits = [
+      v({ date: "2026-09-01", price: 9000, masterId: "m-1", paymentMethod: "CASH", cashCollected: false, orderId: "ord-1" }),
+      v({ date: "2026-09-02", price: 6000, masterId: "m-1", paymentMethod: "CASH", cashCollected: true, orderId: "ord-2" }),
+    ];
+    const s = calcCashByMaster(visits);
+    expect(s.totalToCollect).toBe(9000);
+    expect(s.totalReceived).toBe(6000);
+    expect(s.totalAmount).toBe(15000);
+    expect(s.masters[0]).toMatchObject({ toCollect: 9000, received: 6000, total: 15000, ordersCount: 2 });
+  });
+
+  it("ordersCount считает уникальные заказы мастера", () => {
+    const visits = [
+      v({ date: "2026-09-01", price: 9000, masterId: "m-1", paymentMethod: "CASH", orderId: "sub-1" }),
+      v({ date: "2026-09-08", price: 9000, masterId: "m-1", paymentMethod: "CASH", orderId: "sub-1" }), // тот же заказ
+      v({ date: "2026-09-15", price: 5000, masterId: "m-1", paymentMethod: "CASH", orderId: "ord-2" }),
+    ];
+    const s = calcCashByMaster(visits);
+    expect(s.masters[0]).toMatchObject({ visitsCount: 3, ordersCount: 2 });
   });
 
   it("наличные из выполненного визита учитываются, даже если заказ отменён", () => {
@@ -198,11 +366,11 @@ describe("calcCashByMaster", () => {
     expect(s.totalAmount).toBe(24000);
     expect(s.totalVisits).toBe(3);
     expect(s.masters).toHaveLength(2);
-    expect(s.masters[0]).toMatchObject({ masterId: "m-1", visitsCount: 2, amount: 17000 });
-    expect(s.masters[1]).toMatchObject({ masterId: "m-2", visitsCount: 1, amount: 7000 });
+    expect(s.masters[0]).toMatchObject({ masterId: "m-1", visitsCount: 2, ordersCount: 2, total: 17000 });
+    expect(s.masters[1]).toMatchObject({ masterId: "m-2", visitsCount: 1, ordersCount: 1, total: 7000 });
   });
 
-  it("мастера отсортированы по убыванию суммы", () => {
+  it("мастера отсортированы по убыванию общей суммы", () => {
     const visits = [
       v({ date: "2026-09-01", price: 3000, masterId: "m-a", masterName: "А", orderId: "ord-a" }),
       v({ date: "2026-09-01", price: 9000, masterId: "m-b", masterName: "Б", orderId: "ord-b" }),
@@ -247,7 +415,7 @@ describe("calcMasterRanking", () => {
     expect(calcMasterRanking(visits)).toHaveLength(10);
   });
 
-  it("средний чек — выручка / уникальных заказов", () => {
+  it("ordersCount считает уникальные заказы, avgCheck = выручка / ordersCount", () => {
     const visits = [
       v({ date: "2026-09-01", price: 9000, masterId: "m-1", orderId: "ord-1" }),
       v({ date: "2026-09-05", price: 9000, masterId: "m-1", orderId: "ord-1" }), // тот же заказ
