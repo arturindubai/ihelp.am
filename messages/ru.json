@@ -116,6 +116,7 @@
     "address": "Адрес",
     "addAddress": "Новый адрес",
     "dateTime": "Дата и время",
+    "dateAndMaster": "Дата и мастер",
     "availableTime": "Доступное время",
     "startDate": "Дата первого визита",
     "noSlots": "На этот день нет свободного времени",
@@ -123,10 +124,11 @@
     "pickDaysHint": "Выберите минимум {count} {count, plural, one {день} few {дня} other {дней}}",
     "weekdaysShort": "Пн,Вт,Ср,Чт,Пт,Сб,Вс",
     "master": "Мастер",
-    "anyMaster": "Любой свободный",
-    "anyMasterSub": "Назначим лучшего из доступных",
+    "anyMaster": "Любой доступный",
+    "anyMasterSub": "Назначим подходящего мастера",
     "masterBusy": "Занят в это время",
     "chooseTimeFirst": "Сначала выберите дату и время",
+    "whoComes": "Кто приедет",
     "serviceLabel": "Услуга",
     "wishes": "Пожелания",
     "noCallLabel": "Не нужен звонок перед приездом",
@@ -2171,5 +2173,10 @@
       "hint": "Email и SMS",
       "notifications": "Уведомления"
     }
+  },
+  "cart": {
+    "itemsCount": "{count, plural, one {# позиция} few {# позиции} other {# позиций}}",
+    "total": "{amount} ֏",
+    "checkout": "Оформить"
   }
 }

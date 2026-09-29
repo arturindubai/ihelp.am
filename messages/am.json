@@ -104,6 +104,7 @@
     "address": "",
     "addAddress": "",
     "dateTime": "",
+    "dateAndMaster": "",
     "availableTime": "",
     "startDate": "",
     "noSlots": "",
@@ -115,6 +116,7 @@
     "anyMasterSub": "",
     "masterBusy": "",
     "chooseTimeFirst": "",
+    "whoComes": "",
     "serviceLabel": "",
     "wishes": "",
     "noCallLabel": "",
@@ -1253,5 +1255,10 @@
       "cancelled": "",
       "completed": ""
     }
+  },
+  "cart": {
+    "itemsCount": "{count, plural, one {# ծառայություն} other {# ծառայություն}}",
+    "total": "{amount} ֏",
+    "checkout": "Ձևակերպել"
   }
 }
