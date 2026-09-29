@@ -41,13 +41,16 @@ function where(f: TaskFilters): Prisma.TaskWhereInput {
   if (f.epicKey) w.epicKey = f.epicKey === "none" ? null : f.epicKey;
   if (f.claimedBy) w.claimedBy = f.claimedBy;
   if (f.q) {
-    const q = f.q.trim();
-    w.OR = [
-      { key: { contains: q, mode: "insensitive" } },
-      { title: { contains: q, mode: "insensitive" } },
-      { summary: { contains: q, mode: "insensitive" } },
-      { details: { contains: q, mode: "insensitive" } },
-    ];
+    // Каждое слово должно встречаться хотя бы в одном поле (AND по словам, OR по полям)
+    const words = f.q.trim().split(/\s+/).filter(Boolean);
+    w.AND = words.map((word) => ({
+      OR: [
+        { key: { contains: word, mode: "insensitive" } },
+        { title: { contains: word, mode: "insensitive" } },
+        { summary: { contains: word, mode: "insensitive" } },
+        { details: { contains: word, mode: "insensitive" } },
+      ],
+    }));
   }
   return w;
 }
