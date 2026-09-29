@@ -272,14 +272,18 @@ describe("очереди и выбор пула", () => {
     expect(poolForTask({ status: "review", layer: "none" })).toBe(null);
     expect(poolForTask({ status: "done", layer: "back" })).toBe(null);
   });
-  it("задача с needs_mockup=true без утверждения идёт к дизайнеру", () => {
-    expect(poolForTask({ status: "ready", layer: "front", mockupRequired: true })).toBe("designer");
-    expect(poolForTask({ status: "ready", layer: "front", mockupRequired: true, mockupApprovedBy: null })).toBe("designer");
-    expect(poolForTask({ status: "ready", layer: "none", mockupRequired: true })).toBe("designer");
-    expect(poolForTask({ status: "ready", layer: "front", mockupRequired: true, mockupApprovedBy: "cto" })).toBe("dev");
-    expect(poolForTask({ status: "ready", layer: "none", mockupRequired: true, mockupApprovedBy: "owner" })).toBe("nocode");
+  it("задача с needs_mockup=true и написанными требованиями идёт к дизайнеру (шаг 2)", () => {
+    expect(poolForTask({ status: "ready", layer: "front", mockupRequired: true, screenRequirements: "Экран списка" })).toBe("designer");
+    expect(poolForTask({ status: "ready", layer: "none", mockupRequired: true, screenRequirements: "Детали" })).toBe("designer");
+    expect(poolForTask({ status: "ready", layer: "front", mockupRequired: true, mockupApprovedBy: "cto", screenRequirements: "Экран" })).toBe("dev");
+    expect(poolForTask({ status: "ready", layer: "none", mockupRequired: true, mockupApprovedBy: "owner", screenRequirements: "Экран" })).toBe("nocode");
     expect(poolForTask({ status: "ready", layer: "front", mockupRequired: false })).toBe("dev");
     expect(poolForTask({ status: "backlog", layer: "front", mockupRequired: true })).toBe("triage");
+  });
+  it("задача с needs_mockup=true без screenRequirements идёт к продакту (шаг 1)", () => {
+    expect(poolForTask({ status: "ready", layer: "front", mockupRequired: true })).toBe("product");
+    expect(poolForTask({ status: "ready", layer: "front", mockupRequired: true, mockupApprovedBy: null, screenRequirements: null })).toBe("product");
+    expect(poolForTask({ status: "ready", layer: "none", mockupRequired: true, screenRequirements: "" })).toBe("product");
   });
 });
 
@@ -454,9 +458,14 @@ describe("отбор очереди дизайнера", () => {
   it("задача заблокирована на дизайне, но mockupUrl уже есть — ждёт утверждения, не в очереди", () => {
     expect(inDesignerQueue({ ...base, status: "blocked", blockedOn: "design", mockupUrl: "/uploads/2026-09/abc.png" })).toBe(false);
   });
-  it("задача с needs_mockup без утверждения и без файлов — в очереди", () => {
-    expect(inDesignerQueue({ ...base, status: "ready", mockupRequired: true })).toBe(true);
-    expect(inDesignerQueue({ ...base, status: "in_progress", mockupRequired: true })).toBe(true);
+  it("задача с needs_mockup, написанными требованиями, без файлов — в очереди дизайнера (шаг 2)", () => {
+    expect(inDesignerQueue({ ...base, status: "ready", mockupRequired: true, screenRequirements: "Экран списка заказов" })).toBe(true);
+    expect(inDesignerQueue({ ...base, status: "in_progress", mockupRequired: true, screenRequirements: "Детальный экран" })).toBe(true);
+  });
+  it("задача с needs_mockup без screenRequirements — НЕ в очереди дизайнера (шаг 1: к продакту)", () => {
+    expect(inDesignerQueue({ ...base, status: "ready", mockupRequired: true })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "ready", mockupRequired: true, screenRequirements: null })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "ready", mockupRequired: true, screenRequirements: "" })).toBe(false);
   });
   it("нужен макет, но mockupUrl или картинки уже есть — ждёт утверждения, не в очереди", () => {
     expect(inDesignerQueue({ ...base, status: "ready", mockupRequired: true, mockupUrl: "/uploads/2026-09/x.png" })).toBe(false);

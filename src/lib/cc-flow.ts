@@ -124,6 +124,7 @@ type TaskShape = {
   scope?: string[];
   mockupRequired?: boolean;
   mockupApprovedBy?: string | null;
+  screenRequirements?: string | null;
 };
 
 export type CheckItem = { key: string; ok: boolean; hard: boolean };
@@ -206,12 +207,17 @@ export function isOwnerQuestion(task: { status: string; blockedOn: string | null
 }
 
 /**
- * Дизайнер берёт: задачи с флагом макета; дизайн-исследования (assignee=designer);
- * фронт/бэк+фронт без описания дизайна и без вложений — задача ждёт дизайна, а не кода.
+ * Дизайнер берёт: задачи с флагом макета (если продакт уже написал требования к экранам);
+ * дизайн-исследования (assignee=designer); фронт/бэк+фронт без описания дизайна и без вложений.
+ * Задача с mockupRequired=true и пустыми screenRequirements сначала идёт к продакту — шаг 1 цепочки.
  * Логика совпадает с designerQueue() в workers.ts.
  */
-export function isDesignerTask(t: { layer: string; mockupRequired?: boolean | null; assignee?: string | null; design?: string | null; hasAttachments?: boolean }): boolean {
-  if (t.mockupRequired) return true;
+export function isDesignerTask(t: { layer: string; mockupRequired?: boolean | null; assignee?: string | null; design?: string | null; hasAttachments?: boolean; screenRequirements?: string | null }): boolean {
+  if (t.mockupRequired) {
+    // Шаг 1 цепочки: требования ещё не написаны → задача идёт к продакту, не к дизайнеру
+    if (!t.screenRequirements?.trim()) return false;
+    return true;
+  }
   if (t.assignee === "designer") return true;
   if (t.layer === "front" || t.layer === "fullstack") {
     return !t.design?.trim() && !t.hasAttachments;
@@ -219,9 +225,11 @@ export function isDesignerTask(t: { layer: string; mockupRequired?: boolean | nu
   return false;
 }
 
-/** Продакт берёт только задачи с открытыми вопросами к нему */
-export function isProductTask(t: { needs: string[] }): boolean {
-  return t.needs.length > 0;
+/** Продакт берёт задачи с открытыми вопросами к нему или задачи шага 1 цепочки макета (mockupRequired без screenRequirements) */
+export function isProductTask(t: { needs: string[]; mockupRequired?: boolean | null; screenRequirements?: string | null }): boolean {
+  if (t.needs.length > 0) return true;
+  if (t.mockupRequired && !t.screenRequirements?.trim()) return true;
+  return false;
 }
 
 /** Роли, которым разрешено брать задачи в работу через claim (deployer, watchdog, triage и tester работают иначе) */
