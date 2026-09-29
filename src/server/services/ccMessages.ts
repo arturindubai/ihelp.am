@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "../db";
 import { html, notifyTech } from "../notify";
+import { transition, reblockOn } from "./ccWork";
 
 /**
  * Сообщения Control Center (вкладка «Сообщения», как Notify в LIA). Владелец пишет роли или всем воркерам —
@@ -79,10 +80,70 @@ export async function autoMarkQuestionMessages(by: string): Promise<number> {
   if (!unread.length) return 0;
   const blocked = await blockedOwnerTaskKeys(unread.map((m) => m.taskKey as string));
   const toMark = unread.filter((m) => m.taskKey && blocked.has(m.taskKey));
-  if (toMark.length) {
-    await db.ccMessage.updateMany({ where: { id: { in: toMark.map((m) => m.id) } }, data: { readAt: new Date(), readBy: `auto:${by}`.slice(0, 60) } });
+  // Каждое сообщение отмечается отдельно — чтобы readBy содержал ключ задачи (ссылка на карточку)
+  for (const m of toMark) {
+    await db.ccMessage.updateMany({
+      where: { id: m.id, readAt: null },
+      data: { readAt: new Date(), readBy: `auto:${by}→${m.taskKey}`.slice(0, 60) },
+    });
   }
   return toMark.length;
+}
+
+/**
+ * Одноразовая конвертация «осиротевших» вопросов в карточки «Нужен ты».
+ * Признак вопроса — текст содержит «?». Исключаются уже обработанные autoMarkQuestionMessages.
+ * Задачи в backlog/ready/in_progress/review с вопросом без карточки → blocked on owner.
+ * Задачи уже в blocked (на другом адресате) → адресат меняется на owner.
+ * Задачи closed (done/cancelled) или в активной работе (in_progress/review) → просто прочитано.
+ */
+export async function convertOrphanQuestions(by: string): Promise<number> {
+  const unread = await db.ccMessage.findMany({
+    where: { toRole: "owner", readAt: null },
+    select: { id: true, taskKey: true, text: true, fromAgent: true },
+  });
+  if (!unread.length) return 0;
+
+  const questions = unread.filter((m) => m.text.includes("?"));
+  if (!questions.length) return 0;
+
+  const taskKeys = questions.filter((m) => m.taskKey).map((m) => m.taskKey as string);
+  const alreadyBlocked = await blockedOwnerTaskKeys(taskKeys);
+  const orphans = questions.filter((m) => !(m.taskKey && alreadyBlocked.has(m.taskKey)));
+  if (!orphans.length) return 0;
+
+  let converted = 0;
+  for (const msg of orphans) {
+    if (!msg.taskKey) {
+      await db.ccMessage.updateMany({ where: { id: msg.id, readAt: null }, data: { readAt: new Date(), readBy: "auto:orphan-no-task" } });
+      converted++;
+      continue;
+    }
+
+    const task = await db.task.findUnique({ where: { key: msg.taskKey }, select: { id: true, status: true } });
+
+    if (!task || ["done", "cancelled", "in_progress", "review"].includes(task.status)) {
+      // Задача закрыта или в активной работе — вопрос, вероятно, уже снят
+      await db.ccMessage.updateMany({ where: { id: msg.id, readAt: null }, data: { readAt: new Date(), readBy: `auto:orphan-${task?.status ?? "unknown"}`.slice(0, 60) } });
+      converted++;
+      continue;
+    }
+
+    const reason = `Вопрос из сообщения ${msg.fromAgent}: ${msg.text.slice(0, 400)}`;
+    try {
+      if (task.status === "blocked") {
+        await reblockOn(msg.taskKey, "owner", reason, { name: `auto:${by}`, role: "owner", via: "api" });
+      } else {
+        await transition(msg.taskKey, { to: "blocked", blockedOn: "owner", text: reason }, { name: `auto:${by}`, role: "owner", via: "api" });
+      }
+      await db.ccMessage.updateMany({ where: { id: msg.id, readAt: null }, data: { readAt: new Date(), readBy: `auto:blocked→${msg.taskKey}`.slice(0, 60) } });
+      converted++;
+    } catch {
+      await db.ccMessage.updateMany({ where: { id: msg.id, readAt: null }, data: { readAt: new Date(), readBy: "auto:orphan-err" } });
+      converted++;
+    }
+  }
+  return converted;
 }
 
 /**

@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { activityFeed, doneFeed } from "@/server/services/ccBoard";
 import { listEpics } from "@/server/services/epics";
-import { autoMarkQuestionMessages, listMessages, MESSAGE_ROLES } from "@/server/services/ccMessages";
+import { autoMarkQuestionMessages, convertOrphanQuestions, listMessages, MESSAGE_ROLES } from "@/server/services/ccMessages";
 import { roleOf } from "@/lib/cc-flow";
 import { BLOCKED_ON_LABELS, COMMENT_KIND_LABELS, EPIC_STATUSES, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { Card } from "@/components/admin/fields";
@@ -129,8 +129,10 @@ export async function DoneTab({ locale, taskHref }: { locale: string; taskHref: 
  * они уже видны в «Нужен ты». Форма «Написать воркерам» и «Отправленные» перенесены на вкладку «Воркеры».
  */
 export async function NotifyTab({ locale, taskHref }: { locale: string; taskHref: Href }) {
-  // Одноразовая чистка: сообщения-вопросы с существующей карточкой в «Нужен ты» → прочитано
+  // Шаг 1: сообщения с taskKey, где задача уже заблокирована на owner/product → прочитано со ссылкой
   await autoMarkQuestionMessages("system");
+  // Шаг 2: сообщения-вопросы (содержат «?») без карточки → задача блокируется на owner (только backlog/ready)
+  await convertOrphanQuestions("system");
 
   const [tn, messages] = await Promise.all([getTranslations("admin.cc.notify"), listMessages(80)]);
   const when = (d: Date) => `${dateLabel(d, locale, { day: "numeric", month: "short" })}, ${timeLabel(d)}`;
