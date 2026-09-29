@@ -840,6 +840,7 @@
         "CHECKOUT": "Оформление",
         "SUCCESS": "Успех",
         "EMAIL": "Email",
+        "CLIENT_CABINET": "Кабинет клиента",
         "MASTER_CABINET": "Кабинет мастера"
       },
       "types": {

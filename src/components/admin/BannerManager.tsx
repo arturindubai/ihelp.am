@@ -9,12 +9,16 @@ import { tr } from "@/i18n/locales";
 import { Sheet } from "@/components/ui/Sheet";
 import { I18nInput, ImageInput, NumInput, TextInput, Toggle } from "./fields";
 
-/** Только места, подключённые в интерфейсе; остальные скрыты до реализации */
 const PLACEMENTS = [
   "CAROUSEL_HOME",
   "HERO_HOME",
   "CATALOG",
   "SERVICE",
+  "CHECKOUT",
+  "SUCCESS",
+  "EMAIL",
+  "CLIENT_CABINET",
+  "MASTER_CABINET",
 ] as const;
 
 const BANNER_TYPES = ["PROMO", "ANNOUNCEMENT", "UPSELL", "CROSS_SELL"] as const;
