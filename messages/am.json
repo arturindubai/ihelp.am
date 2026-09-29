@@ -602,12 +602,28 @@
     },
     "services": {
       "title": "",
+      "catalogTitle": "",
       "categories": "",
       "services": "",
       "newCategory": "",
       "newService": "",
       "category": "",
       "comingSoon": "",
+      "comingSoonLabel": "",
+      "archived": "",
+      "archiveCategory": "",
+      "restoreCategory": "",
+      "categoryHiddenBanner": "",
+      "categoryArchivedBanner": "",
+      "filterAll": "",
+      "filterActive": "",
+      "filterHidden": "",
+      "filterSoon": "",
+      "searchPlaceholder": "",
+      "draft": "",
+      "minPrice": "",
+      "noServicesInCategory": "",
+      "addFirstService": "",
       "tabs": {
         "main": "",
         "options": "",
@@ -1034,7 +1050,15 @@
         "title": "",
         "placeholder": "",
         "submit": "",
-        "hint": ""
+        "hint": "",
+        "dropActive": "",
+        "pasteHint": "",
+        "dropTypeError": "",
+        "dropSizeError": "",
+        "dropLimitError": "",
+        "retrying": "",
+        "draftRestored": "",
+        "draftBadge": ""
       },
       "workers": {
         "title": "",
@@ -1060,6 +1084,9 @@
           "login": "",
           "stop": "",
           "logs": ""
+        },
+        "reasons": {
+          "needs": ""
         }
       },
       "logs": {
@@ -1162,10 +1189,11 @@
         "postponeConfirm": "Հետաձգել",
         "groups": {
           "variant": "",
+          "approve": "",
+          "do": "",
           "price": "",
           "data": "",
           "auth": "",
-          "approve": "",
           "rule": "",
           "other": ""
         },

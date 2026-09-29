@@ -8,9 +8,9 @@ export type LText = string;
 
 export async function getHome(locale: string, userId?: string | null) {
   const [categories, banners, services, features, faq, reviews] = await Promise.all([
-    db.category.findMany({ where: { active: true }, orderBy: { sort: "asc" }, include: { services: { where: { active: true }, orderBy: { sort: "asc" }, select: { slug: true } } } }),
+    db.category.findMany({ where: { active: true, archived: false }, orderBy: { sort: "asc" }, include: { services: { where: { active: true }, orderBy: { sort: "asc" }, select: { slug: true } } } }),
     db.banner.findMany({ where: { placement: "CAROUSEL_HOME" }, orderBy: { sort: "asc" } }),
-    db.service.findMany({ where: { active: true, category: { active: true } }, orderBy: { sort: "asc" }, include: { groups: { where: { active: true, isDuration: true }, include: { options: { where: { active: true } } } }, plans: { where: { active: true } } } }),
+    db.service.findMany({ where: { active: true, category: { active: true, archived: false } }, orderBy: { sort: "asc" }, include: { groups: { where: { active: true, isDuration: true }, include: { options: { where: { active: true } } } }, plans: { where: { active: true } } } }),
     db.siteFeature.findMany({ where: { active: true }, orderBy: { sort: "asc" } }),
     db.siteFaq.findMany({ where: { active: true }, orderBy: { sort: "asc" } }),
     db.review.findMany({ where: { status: "APPROVED" }, orderBy: { createdAt: "desc" }, take: 10, include: { service: { select: { title: true } } } }),
@@ -74,7 +74,7 @@ export function serviceCard(s: SvcCardInput, locale: string) {
 
 export async function getCategories(locale: string) {
   const cats = await db.category.findMany({
-    where: { active: true },
+    where: { active: true, archived: false },
     orderBy: { sort: "asc" },
     include: { services: { where: { active: true }, select: { slug: true } } },
   });
@@ -88,7 +88,7 @@ export async function getCategories(locale: string) {
 
 export async function getCategory(slug: string, locale: string) {
   const c = await db.category.findFirst({
-    where: { slug, active: true },
+    where: { slug, active: true, archived: false },
     include: { services: { where: { active: true }, orderBy: { sort: "asc" }, include: { groups: { where: { active: true, isDuration: true }, include: { options: { where: { active: true } } } }, plans: { where: { active: true } } } } },
   });
   if (!c) return null;
@@ -97,7 +97,7 @@ export async function getCategory(slug: string, locale: string) {
 
 export async function loadServiceRaw(slug: string) {
   return db.service.findFirst({
-    where: { slug, active: true },
+    where: { slug, active: true, category: { archived: false } },
     include: {
       category: true,
       groups: { where: { active: true }, orderBy: { sort: "asc" }, include: { options: { where: { active: true }, orderBy: { sort: "asc" } } } },

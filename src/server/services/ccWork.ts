@@ -5,10 +5,12 @@ import { alertTech } from "../alerts";
 import { html, notifyTech } from "../notify";
 import { BLOCKED_ON_LABELS, STATUSES } from "@/lib/backlog-labels";
 import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, doneGate, isDesignerTask, isProductTask, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
-import { isAgentAuthor, findBlockingError } from "@/lib/cc-triage";
+import { isAgentAuthor, findBlockingError, baselineFor } from "@/lib/cc-triage";
 import { nextIntakeKey, intakeTitle } from "@/lib/cc-lanes";
 import { intakeClosingMapValid, parseDuplicateOriginalKey } from "@/lib/cc-intake";
 import { needsLibrary, buildSummaryText, buildLibraryTitle } from "@/lib/cc-overflow";
+import { refreshEpicStatus } from "./epics";
+import { markReadForClosedTask } from "./ccMessages";
 import type { Prisma, Task } from "@prisma/client";
 
 /**
@@ -163,6 +165,11 @@ export async function transition(key: string, input: TransitionInput, actor: Act
     data.blockedReason = text.slice(0, 2000) || null;
     data.blockedFrom = from;
     if (input.blockedUntil !== undefined) data.blockedUntil = input.blockedUntil;
+    // Критерий 5 (BUG-11): блокировка на владельце/продукте триажем/CTO/product/owner —
+    // задача разобрана, ждёт ответа; устанавливаем triagedAt, чтобы она не попала в секцию «ответил»
+    if ((on === "owner" || on === "product") && ["owner", "cto", "product", "triage"].includes(actor.role)) {
+      Object.assign(data, { triagedAt: new Date(), triagedBy: actor.name });
+    }
   } else {
     data.blockedOn = null;
     data.blockedReason = null;
@@ -200,12 +207,16 @@ export async function transition(key: string, input: TransitionInput, actor: Act
     : commentBody;
   await say(task.id, actor.name, kindFor(from, to, actor, task.claimedBy), commentText, key);
   if (to === "done" || to === "cancelled") await releaseDependents(key);
+  if (to === "done" || to === "cancelled") await maybeCloseParent(key, to).catch(() => null);
+  if (to === "done" || to === "cancelled") await markReadForClosedTask(key, actor.name).catch(() => null);
   // После приёмки не-код задачи с указанными следующими шагами — карточка в очередь триажа
   if (to === "done" && task.layer === "none" && task.nextSteps.length > 0) {
     await createNextStepsIntake(key, task.title, task.nextSteps, actor.name).catch(async (err) => {
       await say(task.id, "system", "note", `⚠️ Не удалось завести карточку следующих шагов: ${String(err).slice(0, 200)}`, key).catch(() => null);
     });
   }
+  // Обновляем статус эпика по итогу изменения задачи
+  if (task.epicKey) await refreshEpicStatus(task.epicKey).catch(() => null);
   // Уведомление владельцу: входящая закрыта как дубль — сообщаем, где оригинал
   if (task.source === "intake" && to === "cancelled" && input.intakeClosingMap) {
     const origKey = parseDuplicateOriginalKey(input.intakeClosingMap);
@@ -327,6 +338,9 @@ export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Tas
         if (actor.role === "designer" && !isDesignerTask({ ...t, hasAttachments: t._count.attachments > 0 })) throw new CcError("forbidden_role", "designer: not a designer task");
         // Продакт берёт только задачи с открытыми вопросами к нему
         if (actor.role === "product" && !isProductTask(t)) throw new CcError("forbidden_role", "product: no open needs");
+        // Родитель с открытыми частями не берётся в работу: части делаются отдельно
+        const openParts = await tx.task.count({ where: { parentKey: t.key, status: { notIn: CLOSED_STATUSES } } });
+        if (openParts > 0 && !takeover) throw new CcError("parent_has_open_parts", `${openParts}`);
         const missing = t.depends.filter((d) => !closed.has(d));
         if (missing.length && !takeover) throw new CcError("deps_open", missing.join(","));
         const clash = busy.filter((b) => b.key !== t.key && scopeOverlap(t.scope, b.scope).length > 0);
@@ -339,7 +353,11 @@ export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Tas
         return { task: await tx.task.findUniqueOrThrow({ where: { id: t.id } }), event: takeover ? ("takeover" as const) : ("claim" as const), prev: t };
       }
 
-      const filter: Prisma.TaskWhereInput = { status: "ready" };
+      const filter: Prisma.TaskWhereInput = {
+        status: "ready",
+        // Родитель с открытыми частями не уходит в работу: части делаются отдельно
+        NOT: { parts: { some: { status: { notIn: CLOSED_STATUSES } } } },
+      };
       if (opts.area) filter.area = opts.area;
       if (opts.layer) filter.layer = opts.layer;
       if (opts.priority) filter.priority = opts.priority;
@@ -413,29 +431,44 @@ export async function markTriaged(key: string, agent: string, text: string) {
   const role = roleOf(agent);
   if (!["triage", "cto", "product", "owner"].includes(role)) throw new CcError("forbidden_role", role);
   if (text.trim().length < 10) throw new CcError("reason_required");
-  const t = await db.task.findUnique({ where: { key }, select: { id: true, title: true } });
+  const t = await db.task.findUnique({ where: { key }, select: { id: true, title: true, status: true, blockedOn: true } });
   if (!t) throw new CcError("not_found");
   // Гонка: владелец мог ответить пока триаж обрабатывал задачу.
-  // retriage() фиксирует момент отправки на разбор — если после него есть человеческий ответ, не затираем его.
-  // Критерий 1: ответом человека считаются только записи не-агентов (владелец и люди из админки).
-  // Записи самого триажа (kind=note/progress от агента) не считаются ответом и не блокируют отметку.
-  const lastRetriage = await db.taskEvent.findFirst({ where: { taskId: t.id, field: "retriage" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } });
-  if (lastRetriage) {
+  // Базовая точка отсчёта — наиболее позднее из: последнего retriage или последнего triaged_refused.
+  // Критерий 1: запись человека, сделанная до базовой точки, уже учтена — не блокирует следующую попытку.
+  // Записи агентов (kind=note/progress от агента) не считаются ответом и не блокируют отметку.
+  const [lastRetriage, lastRefusal] = await Promise.all([
+    db.taskEvent.findFirst({ where: { taskId: t.id, field: "retriage" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
+    db.taskEvent.findFirst({ where: { taskId: t.id, field: "triaged_refused" }, orderBy: { createdAt: "desc" }, select: { createdAt: true } }),
+  ]);
+  const baseline = baselineFor(lastRetriage?.createdAt ?? null, lastRefusal?.createdAt ?? null);
+  if (baseline) {
     const recentComments = await db.taskComment.findMany({
-      where: { taskId: t.id, kind: { notIn: ["system", "triage"] }, createdAt: { gt: lastRetriage.createdAt } },
+      where: { taskId: t.id, kind: { notIn: ["system", "triage"] }, createdAt: { gt: baseline } },
       select: { author: true },
       take: 50,
     });
     const humanAnswer = recentComments.find((c) => !isAgentAuthor(c.author));
     if (humanAnswer) {
-      // Критерий 3: второй подряд отказ по одной задаче — тех-алерт
-      const priorRefusals = await db.taskEvent.count({ where: { taskId: t.id, field: "triaged_refused" } });
       await log(t.id, agent, "triaged_refused", null, humanAnswer.author);
       await say(t.id, agent, "system", "Триаж завершён, но после отправки на разбор пришёл ответ человека — задача остаётся в очереди триажа.", key);
-      if (priorRefusals >= 1) {
-        await alertTech(`cc:triaged_refused:${key}`, html`⚠️ <b>${key}</b> · триаж дважды получил отказ в отметке «разобрано»\n${t.title}`, 60);
+      // Критерий 4: не более 3 отказов в час — при превышении блокируем на технике
+      const hourAgo = new Date(Date.now() - 60 * 60_000);
+      const refusalsInHour = await db.taskEvent.count({ where: { taskId: t.id, field: "triaged_refused", createdAt: { gte: hourAgo } } });
+      if (refusalsInHour >= 3) {
+        const why = "Триаж не может поставить отметку «разобрано»: запись человека в ленте новее события разбора. Проверьте задачу вручную.";
+        const triageActor = { name: agent, role: roleOf(agent), via: "api" as const };
+        if (t.status === "blocked") {
+          await reblockOn(key, "tech", why, triageActor).catch(() => null);
+        } else {
+          await transition(key, { to: "blocked", blockedOn: "tech", text: why }, triageActor).catch(() => null);
+        }
+        await alertTech(`cc:triaged_loop:${key}`, html`🔁 <b>${key}</b> · триаж 3 раза за час получил отказ — задача заблокирована на технике\n${t.title}`, 60);
+      } else if (refusalsInHour >= 2) {
+        await alertTech(`cc:triaged_refused:${key}`, html`⚠️ <b>${key}</b> · триаж дважды за час получил отказ в отметке «разобрано»\n${t.title}`, 60);
       }
-      return;
+      // Критерий 3: команда triaged завершается с ненулевым кодом при отказе
+      throw new CcError("triaged_refused", humanAnswer.author);
     }
   }
   await db.task.update({ where: { key }, data: { triagedAt: new Date(), triagedBy: agent, triageNote: text.trim().slice(0, 1000) } });
@@ -446,11 +479,14 @@ export async function markTriaged(key: string, agent: string, text: string) {
 /** Человек ответил в ленте задачи, заблокированной на нём, или поправил карточку бэклога — триаж посмотрит её снова */
 export async function retriage(key: string) {
   const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, blockedOn: true, triagedAt: true } });
-  if (!t || !t.triagedAt) return;
+  if (!t) return;
   // blockedOn=design добавлен: утверждение дизайна с открытыми вопросами должно попасть к триажу
   if (t.status !== "backlog" && !(t.status === "blocked" && (t.blockedOn === "owner" || t.blockedOn === "product" || t.blockedOn === "design"))) return;
-  await db.task.update({ where: { id: t.id }, data: { triagedAt: null } });
-  // Событие retriage нужно markTriaged(), чтобы не затереть свежий ответ человека
+  // Критерий 2 (BUG-11): сбрасываем отметку только если она была проставлена; событие retriage
+  // записываем всегда — оно нужно markTriaged() как базовая точка отсчёта даже при triagedAt=null
+  if (t.triagedAt) {
+    await db.task.update({ where: { id: t.id }, data: { triagedAt: null } });
+  }
   await db.taskEvent.create({ data: { taskId: t.id, actor: "system", field: "retriage", from: null, to: "pending" } });
 }
 
@@ -720,11 +756,15 @@ export async function approveMockup(key: string, actor: Actor, comment: string |
   await log(t.id, actor.name, "mockupApprovedBy", t.mockupApprovedBy, actor.name);
   const text = `${comment ? `Дизайн утверждён: ${comment.trim().slice(0, 500)}` : "Дизайн утверждён."}\nВ Библиотеке: ${canon.slug} (версия ${canon.version}).`;
   await say(t.id, actor.name, "note", text, key);
-  // Если задача заблокирована на дизайне — снять блокировку, вернуть туда, откуда заблокировали
-  if (t.status === "blocked" && t.blockedOn === "design") {
+  // Если задача заблокирована на дизайне/владельце/продакте по причине макета — снять блокировку автоматически
+  const autoUnblock =
+    t.status === "blocked" &&
+    (t.blockedOn === "design" ||
+      ((t.blockedOn === "owner" || t.blockedOn === "product") && /макет/i.test(t.blockedReason ?? "")));
+  if (autoUnblock) {
     const target = unblockTarget(t.blockedFrom, actor.role);
     try {
-      await transition(key, { to: target, text: "Дизайн утверждён, задача возвращена." }, actor);
+      await transition(key, { to: target, text: "Макет утверждён, блокировка снята автоматически." }, actor);
     } catch (e) {
       const code = e instanceof CcError ? e.code : "transition_error";
       const detail = e instanceof CcError && e.detail ? `: ${e.detail}` : "";
@@ -801,6 +841,41 @@ export async function returnDesign(key: string, actor: Actor, reason: string) {
   await log(t.id, actor.name, "blockedOn", prevBlockedOn, "design");
   await say(t.id, actor.name, "note", `Дизайн возвращён: ${reason.trim()}`, key);
   return db.task.findUniqueOrThrow({ where: { key } });
+}
+
+/**
+ * Если закрытая задача — часть родителя, проверяем: если все части закрыты,
+ * родитель закрываем автоматически (done), снимая его из очереди.
+ * Обходим transition() напрямую: пути ready→done нет в TRANSITIONS ни для одной роли.
+ */
+async function maybeCloseParent(partKey: string, _closedTo: "done" | "cancelled") {
+  const part = await db.task.findUnique({ where: { key: partKey }, select: { parentKey: true } });
+  if (!part?.parentKey) return;
+  const parentKey = part.parentKey;
+  const parent = await db.task.findUnique({ where: { key: parentKey }, select: { id: true, status: true, epicKey: true } });
+  if (!parent) return;
+  if ((CLOSED_STATUSES as readonly string[]).includes(parent.status)) return;
+  const openParts = await db.task.count({ where: { parentKey, status: { notIn: CLOSED_STATUSES } } });
+  if (openParts > 0) return;
+  const from = parent.status as TaskStatusKey;
+  const text = `Все части закрыты (последней — ${partKey}). Родительская задача закрыта автоматически.`;
+  const data: Prisma.TaskUpdateManyMutationInput = {
+    status: "done",
+    doneAt: new Date(),
+    proof: text.slice(0, 2000),
+    blockedOn: null,
+    blockedReason: null,
+    blockedUntil: null,
+    blockedFrom: null,
+  };
+  if (from === "in_progress") Object.assign(data, { claimedBy: null, claimUntil: null, staleAt: null, session: null });
+  if (from === "review") Object.assign(data, { claimedBy: null, claimUntil: null });
+  const r = await db.task.updateMany({ where: { id: parent.id, status: from }, data });
+  if (!r.count) return;
+  await log(parent.id, "watchdog", "status", from, "done");
+  await say(parent.id, "watchdog", "system", text, parentKey);
+  await releaseDependents(parentKey).catch(() => null);
+  if (parent.epicKey) await refreshEpicStatus(parent.epicKey).catch(() => null);
 }
 
 /**

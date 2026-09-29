@@ -53,6 +53,10 @@ flock -n 9 || stop "Уже идёт другая выкладка — жду с�
 git fetch -q origin || stop "Нет связи с GitHub"
 git merge --ff-only -q origin/main || stop "Локальный main разошёлся с origin/main — нужен человек"
 
+# Настройка git merge driver для автоматического слияния файлов переводов (идемпотентно)
+git config merge.translations.name "Слияние файлов переводов JSON"
+git config merge.translations.driver "node scripts/merge-translations.mjs %O %A %B"
+
 branch="task/$KEY"
 card=$(node scripts/cc.mjs show "$KEY" --json) || stop "Задача $KEY не найдена"
 status=$(jq -r '.task.status' <<< "$card")
