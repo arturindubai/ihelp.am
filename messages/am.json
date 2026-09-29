@@ -825,7 +825,15 @@
         "paused": "",
         "scheduled": "",
         "expired": ""
-      }
+      },
+      "aiSuggestTitle": "Առաջարկել վերնագիր",
+      "aiGenerateImage": "Ստեղծել պատկեր",
+      "aiSuggestResults": "Վերնագրի տարբերակներ",
+      "aiImageResults": "Պատկերի տարբերակներ",
+      "aiApply": "Կիրառել",
+      "aiUse": "Օգտագործել",
+      "aiError": "Հնարավոր չեղավ ստանալ պատասխան — կրկին փորձեք",
+      "aiUsageCount": "Հարցումներ այս ամիս: {count}"
     },
     "pages": {
       "title": "",
@@ -1099,6 +1107,47 @@
         "title": "",
         "subtitle": "",
         "note": "",
+        "groups": {
+          "telegram": "Telegram",
+          "codes": "",
+          "mail": "",
+          "login": "",
+          "ai": "ԱԻ օգնական"
+        },
+        "items": {
+          "team_botToken": { "title": "", "purpose": "", "how": "" },
+          "notify_telegramBotToken": { "title": "", "purpose": "", "how": "" },
+          "otp_telegram_gatewayToken": { "title": "", "purpose": "", "how": "" },
+          "otp_sms_authToken": { "title": "", "purpose": "", "how": "" },
+          "otp_whatsapp_accessToken": { "title": "", "purpose": "", "how": "" },
+          "mail_apiKey": { "title": "", "purpose": "", "how": "" },
+          "google_clientSecret": { "title": "", "purpose": "", "how": "" },
+          "apple_privateKey": { "title": "", "purpose": "", "how": "" },
+          "ai_anthropicKey": {
+            "title": "Claude AI (Anthropic)",
+            "purpose": "ԱԻ-ով բանների վերնագրեր և ենթավերնագրեր.",
+            "how": "console.anthropic.com → Settings → API Keys → Create Key"
+          },
+          "ai_higgsfieldKey": {
+            "title": "Higgsfield — պատկերներ",
+            "purpose": "Բաններների համար ԱԻ պատկերներ (Nano Banana Pro).",
+            "how": "app.higgsfield.ai → Settings → API Key"
+          }
+        },
+        "present": "",
+        "missing": "",
+        "where": "",
+        "changed": "",
+        "set": "",
+        "replace": "",
+        "check": "",
+        "checkResult": {
+          "rejected": "",
+          "unreachable": "",
+          "no_check": "",
+          "empty": "",
+          "error": ""
+        },
         "services": {
           "TEAM_BOT": {
             "purpose": "",

@@ -844,7 +844,15 @@
         "paused": "Paused",
         "scheduled": "Scheduled",
         "expired": "Expired"
-      }
+      },
+      "aiSuggestTitle": "Suggest title",
+      "aiGenerateImage": "Generate image",
+      "aiSuggestResults": "Title options",
+      "aiImageResults": "Image options",
+      "aiApply": "Apply",
+      "aiUse": "Use",
+      "aiError": "Could not get a response — please try again",
+      "aiUsageCount": "Requests this month: {count}"
     },
     "pages": {
       "title": "Pages",
@@ -1886,7 +1894,8 @@
           "telegram": "Telegram",
           "codes": "Login codes",
           "mail": "Email",
-          "login": "Google and Apple sign-in"
+          "login": "Google and Apple sign-in",
+          "ai": "AI assistant"
         },
         "items": {
           "team_botToken": {
@@ -1928,6 +1937,16 @@
             "title": "Apple — sign-in",
             "purpose": "Sign in with Apple: full .p8 private key.",
             "how": "developer.apple.com → Certificates, IDs & Profiles → Keys → key with Sign in with Apple"
+          },
+          "ai_anthropicKey": {
+            "title": "Claude AI (Anthropic)",
+            "purpose": "AI-suggested titles and subtitles for banners.",
+            "how": "console.anthropic.com → Settings → API Keys → Create Key"
+          },
+          "ai_higgsfieldKey": {
+            "title": "Higgsfield — images",
+            "purpose": "AI-generated banner images (Nano Banana Pro model).",
+            "how": "app.higgsfield.ai → Settings → API Key"
           }
         },
         "present": "set",

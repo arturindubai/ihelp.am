@@ -866,7 +866,15 @@
         "paused": "Пауза",
         "scheduled": "Запланирован",
         "expired": "Истёк"
-      }
+      },
+      "aiSuggestTitle": "Предложить заголовок",
+      "aiGenerateImage": "Сгенерировать изображение",
+      "aiSuggestResults": "Варианты заголовка",
+      "aiImageResults": "Варианты изображения",
+      "aiApply": "Применить",
+      "aiUse": "Использовать",
+      "aiError": "Не удалось получить ответ — попробуйте ещё раз",
+      "aiUsageCount": "Обращений в этом месяце: {count}"
     },
     "pages": {
       "title": "Страницы",
@@ -1971,7 +1979,8 @@
           "telegram": "Telegram",
           "codes": "Коды входа",
           "mail": "Почта",
-          "login": "Вход через Google и Apple"
+          "login": "Вход через Google и Apple",
+          "ai": "ИИ-помощник"
         },
         "items": {
           "team_botToken": {
@@ -2013,6 +2022,16 @@
             "title": "Apple — вход",
             "purpose": "Sign in with Apple: закрытый ключ .p8 целиком.",
             "how": "developer.apple.com → Certificates, IDs & Profiles → Keys → ключ с Sign in with Apple"
+          },
+          "ai_anthropicKey": {
+            "title": "Claude AI (Anthropic)",
+            "purpose": "Подбор заголовков и подзаголовков для баннеров через ИИ.",
+            "how": "console.anthropic.com → Settings → API Keys → Create Key"
+          },
+          "ai_higgsfieldKey": {
+            "title": "Higgsfield — картинки",
+            "purpose": "Генерация изображений для баннеров (модель Nano Banana Pro).",
+            "how": "app.higgsfield.ai → Settings → API Key"
           }
         },
         "present": "задан",

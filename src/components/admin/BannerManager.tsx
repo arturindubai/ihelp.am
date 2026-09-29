@@ -8,6 +8,7 @@ import { bannerStatus, BANNER_DEFAULT_BG } from "@/lib/banner-select";
 import { tr } from "@/i18n/locales";
 import { Sheet } from "@/components/ui/Sheet";
 import { I18nInput, ImageInput, NumInput, TextInput, Toggle } from "./fields";
+import { BannerAiHelper } from "./BannerAiHelper";
 
 /** Только места, подключённые в интерфейсе; остальные скрыты до реализации */
 const PLACEMENTS = [
@@ -31,6 +32,7 @@ type BannerItem = {
 
 type Props = {
   banners: BannerItem[];
+  aiStatus: { hasAnthropicKey: boolean; hasHiggsfieldKey: boolean; usageCount: number };
 };
 
 const empty: BannerPayload = {
@@ -70,7 +72,7 @@ function toDatetimeLocal(d: Date | null | undefined): string {
   return utc4.toISOString().slice(0, 16);
 }
 
-export function BannerManager({ banners }: Props) {
+export function BannerManager({ banners, aiStatus }: Props) {
   const t = useTranslations("admin");
   const locale = useLocale();
   const router = useRouter();
@@ -283,6 +285,15 @@ export function BannerManager({ banners }: Props) {
             <div className="rounded-xl bg-surface p-3 space-y-3">
               <I18nInput label={t("common.title")} value={d.title} onChange={(v) => up({ title: v })} />
               <I18nInput label={t("common.subtitle")} value={d.subtitle ?? {}} onChange={(v) => up({ subtitle: v })} />
+              <BannerAiHelper
+                hasAnthropicKey={aiStatus.hasAnthropicKey}
+                hasHiggsfieldKey={aiStatus.hasHiggsfieldKey}
+                initialUsageCount={aiStatus.usageCount}
+                bannerTitle={d.title}
+                bannerPlacement={d.placement}
+                onApplyTitle={(title, subtitle) => up({ title, subtitle })}
+                onApplyImage={(url) => up({ image: url })}
+              />
               <TextInput label={t("banners.promoCode")} value={d.promoCode} onChange={(v) => up({ promoCode: v.toUpperCase() })} className="font-mono uppercase" />
               <TextInput label={t("banners.link")} placeholder="/s/regular-cleaning" value={d.link} onChange={(v) => up({ link: v })} />
             </div>
