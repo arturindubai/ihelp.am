@@ -72,7 +72,8 @@
     "whatsappSub": "Напишите нам — ответим быстро",
     "writeUs": "Написать",
     "reviewsTitle": "Отзывы клиентов",
-    "stickyOrder": "Заказать услугу"
+    "stickyOrder": "Заказать услугу",
+    "subCatClose": "Закрыть"
   },
   "service": {
     "startsAt": "от {price} за визит",
@@ -381,9 +382,19 @@
   },
   "catalog": {
     "newService": "Новая услуга",
-    "comingSoonTitle": "Скоро откроем",
-    "comingSoonText": "Готовим услуги и мастеров. Напишите нам — ответим на вопросы",
-    "writeWhatsApp": "Написать в WhatsApp"
+    "comingSoonTitle": "Скоро в Ереване",
+    "comingSoonText": "Мы запускаем эту услугу. Оставьте контакт — сообщим первыми, когда откроем запись.",
+    "writeWhatsApp": "Написать в WhatsApp",
+    "notifyTitle": "Уведомить меня о запуске",
+    "notifySubtitle": "Телефон или e-mail — на выбор",
+    "notifyPlaceholder": "+374 … или name@mail.com",
+    "notifyHint": "Передадим только одно сообщение о запуске",
+    "notifyButton": "Уведомить меня",
+    "notifySuccess": "Записаны! Сообщим, когда откроем запись.",
+    "notifyAlready": "Мы уже получили ваш контакт",
+    "notifyInvalid": "Введите телефон или e-mail",
+    "notifyTooMany": "Слишком много заявок, попробуйте позже",
+    "notifyConsent": "Нажимая кнопку, вы соглашаетесь на обработку контакта для уведомления о запуске. <privacy>Политика конфиденциальности</privacy>"
   },
   "pro": {
     "title": "Кабинет мастера",
@@ -2165,12 +2176,43 @@
       "staffBotNotMaster": "Этот бот предназначен только для мастеров iHelp.",
       "sharePhone": "📱 Поделиться номером"
     },
+    "client": {
+      "confirmation": {
+        "subject": "Заказ №{number} подтверждён",
+        "title": "Ваш заказ принят!",
+        "service": "Услуга: {service}",
+        "date": "Дата и время: {date} в {time}",
+        "address": "Адрес: {address}",
+        "total": "Стоимость: {total}",
+        "button": "Мои заказы"
+      },
+      "reminder": {
+        "subject": "Напоминание о визите завтра",
+        "title": "Напоминаем о визите завтра",
+        "service": "Услуга: {service}",
+        "date": "Дата и время: {date} в {time}",
+        "master": "Мастер: {master}",
+        "address": "Адрес: {address}",
+        "button": "Посмотреть заказ"
+      },
+      "review": {
+        "subject": "Как прошёл визит?",
+        "title": "Как прошёл визит?",
+        "line1": "Надеемся, вам понравилось! Оставьте отзыв — это занимает одну минуту.",
+        "line2": "Ваше мнение помогает нам становиться лучше.",
+        "button": "Оставить отзыв"
+      },
+      "unsubscribeText": "Не хотите получать письма — {link}.",
+      "unsubscribeLink": "отпишитесь здесь",
+      "unsubscribedTitle": "Вы отписались от писем",
+      "unsubscribedBody": "Письма от iHelp больше не будут приходить на ваш адрес."
+    },
     "order": {
       "created": "✅ Заказ принят\nУслуга: {serviceName}\nДата: {date}, {time}\nАдрес: {address}\nСтоимость: {price}\nСпасибо, что выбрали iHelp! Ваш заказ уже у нас — скоро назначим мастера.",
       "masterAssigned": "👷 Мастер назначен\nУслуга: {serviceName}, {date} в {time}\nМастер: {masterName}\nЕсли есть вопросы — напишите нам.",
       "rescheduled": "🔄 Визит перенесён\nУслуга: {serviceName}\nНовая дата: {date}, {time}\nАдрес прежний: {address}",
       "cancelled": "❌ Визит отменён\nУслуга: {serviceName}, {date}\nЕсли хотите перенести — оформите новый заказ на сайте.",
-      "completed": "⭐ Как прошёл визит?\n{masterName} завершил работу. Ваш отзыв помогает другим клиентам и мотивирует мастера.\nОставить отзыв: {reviewLink}"
+      "completed": "⭐ Визит завершён\n{masterName} завершил работу. Спасибо, что выбрали iHelp!"
     }
   },
   "review": {

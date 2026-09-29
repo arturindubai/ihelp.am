@@ -72,7 +72,8 @@
     "whatsappSub": "Write to us — we'll reply quickly",
     "writeUs": "Contact us",
     "reviewsTitle": "Client reviews",
-    "stickyOrder": "Book a service"
+    "stickyOrder": "Book a service",
+    "subCatClose": "Close"
   },
   "service": {
     "startsAt": "from {price} per visit",
@@ -381,9 +382,19 @@
   },
   "catalog": {
     "newService": "New service",
-    "comingSoonTitle": "Opening soon",
-    "comingSoonText": "We're preparing services and pros. Write to us — we'll answer your questions",
-    "writeWhatsApp": "Write on WhatsApp"
+    "comingSoonTitle": "Coming soon in Yerevan",
+    "comingSoonText": "We're launching this service. Leave your contact — we'll be the first to let you know when booking opens.",
+    "writeWhatsApp": "Write on WhatsApp",
+    "notifyTitle": "Notify me at launch",
+    "notifySubtitle": "Phone or e-mail — your choice",
+    "notifyPlaceholder": "+374 … or name@mail.com",
+    "notifyHint": "We'll send only one message when we launch",
+    "notifyButton": "Notify me",
+    "notifySuccess": "You're on the list! We'll message you when booking opens.",
+    "notifyAlready": "We already have your contact",
+    "notifyInvalid": "Enter a phone number or e-mail",
+    "notifyTooMany": "Too many requests, please try again later",
+    "notifyConsent": "By clicking the button, you agree to your contact being processed to notify you at launch. <privacy>Privacy policy</privacy>"
   },
   "pro": {
     "title": "Pro cabinet",
@@ -2078,12 +2089,43 @@
       "staffBotNotMaster": "This bot is for iHelp pros only.",
       "sharePhone": "📱 Share phone number"
     },
+    "client": {
+      "confirmation": {
+        "subject": "Order #{number} confirmed",
+        "title": "Your order is confirmed!",
+        "service": "Service: {service}",
+        "date": "Date and time: {date} at {time}",
+        "address": "Address: {address}",
+        "total": "Total: {total}",
+        "button": "My bookings"
+      },
+      "reminder": {
+        "subject": "Reminder: visit tomorrow",
+        "title": "Your visit is tomorrow",
+        "service": "Service: {service}",
+        "date": "Date and time: {date} at {time}",
+        "master": "Pro: {master}",
+        "address": "Address: {address}",
+        "button": "View booking"
+      },
+      "review": {
+        "subject": "How did your visit go?",
+        "title": "How was the visit?",
+        "line1": "We hope you're satisfied! Leave a review — it takes just a minute.",
+        "line2": "Your feedback helps us improve.",
+        "button": "Leave a review"
+      },
+      "unsubscribeText": "To stop receiving emails — {link}.",
+      "unsubscribeLink": "unsubscribe here",
+      "unsubscribedTitle": "You have unsubscribed",
+      "unsubscribedBody": "You will no longer receive emails from iHelp."
+    },
     "order": {
       "created": "✅ Order confirmed\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}\nTotal: {price}\nThank you for choosing iHelp! We will assign a master soon.",
       "masterAssigned": "👷 Master assigned\nService: {serviceName}, {date} at {time}\nMaster: {masterName}\nFeel free to contact us with any questions.",
       "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}",
       "cancelled": "❌ Visit cancelled\nService: {serviceName}, {date}\nWant to reschedule? Place a new order on the website.",
-      "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}"
+      "completed": "⭐ Visit complete\n{masterName} has finished the work. Thank you for choosing iHelp!"
     }
   },
   "review": {

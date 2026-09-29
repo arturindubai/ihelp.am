@@ -66,7 +66,8 @@
     "whatsappSub": "",
     "writeUs": "",
     "reviewsTitle": "",
-    "stickyOrder": ""
+    "stickyOrder": "",
+    "subCatClose": ""
   },
   "service": {
     "startsAt": "",
@@ -362,9 +363,19 @@
   },
   "catalog": {
     "newService": "Նոր ծառայություն",
-    "comingSoonTitle": "Շուտով կբացենք",
-    "comingSoonText": "Պատրաստում ենք ծառայություններ: Գրեք մեզ՝ ձեր հարցերին կպատասխանենք",
-    "writeWhatsApp": "Գրել WhatsApp-ում"
+    "comingSoonTitle": "Շուտով Երևանում",
+    "comingSoonText": "Մենք գործարկում ենք այս ծառայությունը: Թողեք կոնտակտ — կծանուցենք, երբ ամրագրումը բացվի:",
+    "writeWhatsApp": "Գրել WhatsApp-ում",
+    "notifyTitle": "Ծանուցել գործարկման մասին",
+    "notifySubtitle": "Հեռախոս կամ e-mail — ձեր ընտրությամբ",
+    "notifyPlaceholder": "+374 … կամ name@mail.com",
+    "notifyHint": "Կուղարկենք միայն մեկ հաղորդագրություն",
+    "notifyButton": "Ծանուցել ինձ",
+    "notifySuccess": "Գրանցված ե՛ք! Կծանուցենք, երբ ամրագրումը բացվի:",
+    "notifyAlready": "Մենք արդեն ստացել ենք ձեր կոնտակտը",
+    "notifyInvalid": "Մուտքագրեք հեռախոս կամ e-mail",
+    "notifyTooMany": "Չափազանց շատ հայտեր, խնդրում ենք փորձել ավելի ուշ",
+    "notifyConsent": "Կտտացնելով կոճակը, դուք համաձայնվում եք ձեր կոնտակտի մշակմանը: <privacy>Գաղտնիության քաղաքականություն</privacy>"
   },
   "pro": {
     "title": "",
