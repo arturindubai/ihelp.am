@@ -107,6 +107,7 @@ fi
 VALID_KEYS=()
 RISKY_KEYS=()
 SKIP_KEYS=()
+PREMERGED_KEYS=()
 
 for KEY in "${KEYS[@]}"; do
   branch="task/$KEY"
@@ -247,7 +248,6 @@ fi
 CONFLICT_RETURNED=()
 BATCH_RESULT=()
 declare -A BATCH_MERGE_SHAS
-PREMERGED_KEYS=()
 
 # Попытка смёрджить набор задач; конфликтующие исключаются и возвращаются разработчику.
 # Записывает имена смёрджанных задач в BATCH_MERGED (глобальный массив).
