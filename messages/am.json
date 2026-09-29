@@ -1142,10 +1142,11 @@
         "postponeConfirm": "Հետաձգել",
         "groups": {
           "variant": "",
+          "approve": "",
+          "do": "",
           "price": "",
           "data": "",
           "auth": "",
-          "approve": "",
           "rule": "",
           "other": ""
         },
