@@ -35,7 +35,7 @@ function useGateError() {
  * Переходы статуса в карточке задачи. Кнопки — только разрешённые переходы; переход, которому нужна причина,
  * отчёт или доказательство, открывает поле для текста. Ошибки гейтов показываются словами
  */
-export function TransitionPanel({ taskKey, status, layer, moves }: { taskKey: string; status: string; layer: string; moves: TaskStatusKey[] }) {
+export function TransitionPanel({ taskKey, status, source, layer, moves }: { taskKey: string; status: string; source: string; layer: string; moves: TaskStatusKey[] }) {
   const t = useTranslations("admin.cc");
   const router = useRouter();
   const gateError = useGateError();
@@ -44,17 +44,28 @@ export function TransitionPanel({ taskKey, status, layer, moves }: { taskKey: st
   const [sha, setSha] = useState("");
   const [on, setOn] = useState("owner");
   const [force, setForce] = useState(false);
+  const [closingMap, setClosingMap] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+
+  const needsClosingMap = source === "intake" && (to === "done" || to === "cancelled");
 
   const submit = (target: TaskStatusKey) =>
     start(async () => {
       setError(null);
-      const r = (await ccTransitionAction(taskKey, { to: target, text: text || undefined, sha: sha || undefined, blockedOn: target === "blocked" ? (on as "owner") : undefined, force: force || undefined })) as Result;
+      const r = (await ccTransitionAction(taskKey, {
+        to: target,
+        text: text || undefined,
+        sha: sha || undefined,
+        blockedOn: target === "blocked" ? (on as "owner") : undefined,
+        force: force || undefined,
+        intakeClosingMap: (source === "intake" && (target === "done" || target === "cancelled")) ? (closingMap || undefined) : undefined,
+      })) as Result;
       if (!r.ok) return setError(gateError(r));
       setTo(null);
       setText("");
       setSha("");
+      setClosingMap("");
       setForce(false);
       router.refresh();
     });
@@ -95,6 +106,18 @@ export function TransitionPanel({ taskKey, status, layer, moves }: { taskKey: st
             </div>
           )}
           {to === "done" && isCodeTask(layer) && <TextInput label={t("move.sha")} value={sha} onChange={setSha} placeholder="d149ace" />}
+          {needsClosingMap && (
+            <div>
+              <label className="label">{t("intake.closingMapLabel")}</label>
+              <textarea
+                className="input resize-y py-2 text-sm"
+                rows={4}
+                value={closingMap}
+                onChange={(e) => setClosingMap(e.target.value)}
+                placeholder={t("intake.closingMapPh")}
+              />
+            </div>
+          )}
           <div>
             <label className="label">{label}</label>
             <textarea className="input min-h-20 py-2 text-sm" value={text} onChange={(e) => setText(e.target.value)} />

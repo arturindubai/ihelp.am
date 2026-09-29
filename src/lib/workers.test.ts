@@ -108,6 +108,34 @@ describe("план диспетчера", () => {
   it("задачу без отправленной ветки не тестируем и не выкладываем", () => {
     expect(planDispatch(state({ heads: {}, review: [review("A")] }), noon)).toEqual([]);
   });
+  it("deployBatch=1 — прежнее поведение: одна задача с key", () => {
+    const heads = { "task/A": "aaa", "task/B": "bbb" };
+    const s = state({ config: { ...on, deployBatch: 1 }, heads, review: [review("A", { testedSha: "aaa" }), review("B", { testedSha: "bbb" })] });
+    const plan = planDispatch(s, noon).filter((a) => a.pool === "deployer");
+    expect(plan).toHaveLength(1);
+    expect(plan[0].key).toBeDefined();
+    expect(plan[0].keys).toBeUndefined();
+  });
+  it("deployBatch=3 — деплоер получает пачку из трёх задач через keys", () => {
+    const heads = { "task/A": "aaa", "task/B": "bbb", "task/C": "ccc", "task/D": "ddd" };
+    const s = state({
+      config: { ...on, deployBatch: 3 },
+      heads,
+      review: [review("A", { testedSha: "aaa" }), review("B", { testedSha: "bbb" }), review("C", { testedSha: "ccc" }), review("D", { testedSha: "ddd" })],
+    });
+    const plan = planDispatch(s, noon).filter((a) => a.pool === "deployer");
+    expect(plan).toHaveLength(1);
+    expect(plan[0].keys).toHaveLength(3);
+    expect(plan[0].key).toBeUndefined();
+  });
+  it("deployBatch=3 с одной задачей — используется key, а не keys", () => {
+    const heads = { "task/A": "aaa" };
+    const s = state({ config: { ...on, deployBatch: 3 }, heads, review: [review("A", { testedSha: "aaa" })] });
+    const plan = planDispatch(s, noon).filter((a) => a.pool === "deployer");
+    expect(plan).toHaveLength(1);
+    expect(plan[0].key).toBe("A");
+    expect(plan[0].keys).toBeUndefined();
+  });
 });
 
 describe("имена и итоги запусков", () => {

@@ -28,6 +28,7 @@ export const workersPatchSchema = z.object({
   pools: z.object(poolsShape).strict().partial().optional(),
   deployWindow: z.tuple([z.number().int().min(0).max(23), z.number().int().min(1).max(24)]).optional(),
   triageBatch: z.number().int().min(1).max(15).optional(),
+  deployBatch: z.number().int().min(1).max(5).optional(),
   sweepEveryH: z.number().int().min(0).max(168).optional(),
   stopRunning: z.boolean().optional(),
   pausedUntil: z.null().optional(),

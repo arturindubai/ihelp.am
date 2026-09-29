@@ -177,10 +177,14 @@ export function WorkersMaster({ initial, running }: { initial: WorkersConfig; ru
           <input className="input h-9 w-20 py-1" type="number" min={1} max={15} value={c.triageBatch} onChange={(e) => set({ triageBatch: Number(e.target.value) }, false)} />
         </div>
         <div>
+          <label className="label">{t("deployBatch")}</label>
+          <input className="input h-9 w-20 py-1" type="number" min={1} max={5} value={c.deployBatch} onChange={(e) => set({ deployBatch: Number(e.target.value) }, false)} />
+        </div>
+        <div>
           <label className="label">{t("sweepEveryH")}</label>
           <input className="input h-9 w-20 py-1" type="number" min={0} max={168} value={c.sweepEveryH} onChange={(e) => set({ sweepEveryH: Number(e.target.value) }, false)} />
         </div>
-        <button className="btn-dark btn-sm" disabled={pending} onClick={() => save({ deployWindow: c.deployWindow, triageBatch: c.triageBatch, sweepEveryH: c.sweepEveryH })}>
+        <button className="btn-dark btn-sm" disabled={pending} onClick={() => save({ deployWindow: c.deployWindow, triageBatch: c.triageBatch, deployBatch: c.deployBatch, sweepEveryH: c.sweepEveryH })}>
           {saved ? t("saved") : t("save")}
         </button>
       </div>

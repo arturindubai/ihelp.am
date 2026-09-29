@@ -5,6 +5,7 @@ import { getSettings } from "@/server/settings";
 import { generateSubscriptionVisitsSafe, resumeSubscription } from "@/server/services/booking";
 import { cleanUnusedImages } from "@/server/services/cleanup";
 import { runWatchdog } from "@/server/services/ccWork";
+import { checkTechBlocks, checkCtoMessages } from "@/server/services/ccWatchdog";
 import { getTick } from "@/server/services/workers";
 import { processQueue, cleanQueue } from "@/server/services/notifyQueue";
 import { runLogWatcher } from "@/server/services/logWatcher";
@@ -120,6 +121,10 @@ export async function GET(req: Request) {
 
   // 5а. Сторож Control Center: брошенные задачи, возврат в очередь, снятие блокировок по зависимостям (docs/DEV_SYSTEM.md)
   const cc = await step("cc-watchdog", () => runWatchdog(now), null);
+
+  // 5а''. Алерты: блокировки на технике > 4 ч и непрочитанные сообщения CTO > 2 ч
+  await step("cc-tech-blocks", () => checkTechBlocks(now).then(() => undefined), undefined);
+  await step("cc-cto-messages", () => checkCtoMessages(now).then(() => undefined), undefined);
 
   // 5а'. Задачи «На проверке» без ветки в репозитории: скорее всего выложены, но cc done не прошла
   await step("cc-review-no-branch", async () => {
