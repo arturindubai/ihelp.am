@@ -114,7 +114,7 @@ export async function deletePromoAction(id: string) {
 }
 
 /* ───── Баннеры ───── */
-const PLACEMENTS = ["CAROUSEL_HOME", "HERO_HOME", "CATALOG", "SERVICE", "CHECKOUT", "SUCCESS", "EMAIL", "MASTER_CABINET"] as const;
+const PLACEMENTS = ["CAROUSEL_HOME", "HERO_HOME", "CATALOG", "SERVICE", "CHECKOUT", "SUCCESS", "EMAIL", "CLIENT_CABINET", "MASTER_CABINET"] as const;
 const BANNER_TYPES = ["PROMO", "ANNOUNCEMENT", "UPSELL", "CROSS_SELL"] as const;
 const AUDIENCES = ["ALL", "LOGGED_IN", "GUESTS"] as const;
 const SEGMENTS = ["ALL", "NEW", "RETURNING"] as const;

@@ -9,6 +9,7 @@ import { tr } from "@/i18n/locales";
 import { amd, dateLabel } from "@/lib/format";
 import { contactLink } from "@/lib/contacts";
 import { hm } from "@/lib/time";
+import { PromoSlot } from "@/components/PromoSlot";
 
 export default async function BookSuccessPage({ params, searchParams }: { params: Promise<{ locale: string; slug: string }>; searchParams: Promise<{ orderId?: string }> }) {
   const { locale, slug } = await params;
@@ -140,6 +141,8 @@ export default async function BookSuccessPage({ params, searchParams }: { params
       <Link href="/account/orders" className="btn-primary mt-6 flex w-full items-center justify-center">
         {t("toOrder")}
       </Link>
+
+      <PromoSlot placement="SUCCESS" locale={locale} />
     </div>
   );
 }

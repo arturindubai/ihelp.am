@@ -354,15 +354,16 @@ async function main() {
   }
 
   if (!(await db.banner.count())) {
-    await db.banner.create({
-      data: {
-        title: t("−25% на первый визит", "−25% off your first visit"),
-        subtitle: t("При подписке или пакете от 4 визитов", "With a subscription or 4+ visit pack"),
-        link: "/s/regular-cleaning",
-        bg: "#1c1917",
-        sort: 0,
-      },
-    });
+    const demoBanners = [
+      { placement: "CAROUSEL_HOME", title: t("−25% на первый визит", "−25% off your first visit"), subtitle: t("При подписке или пакете от 4 визитов", "With a subscription or 4+ visit pack"), link: "/s/regular-cleaning", bg: "#1c1917", sort: 0 },
+      { placement: "CHECKOUT", title: t("Первый визит бесплатно", "First visit free"), subtitle: t("При покупке пакета от 4 визитов", "With a 4-visit pack"), link: "/s/regular-cleaning", bg: "#5B3DF5", sort: 0 },
+      { placement: "SUCCESS", title: t("Оцените нашу работу", "Rate our service"), subtitle: t("Поставьте оценку в личном кабинете", "Leave a review in your account"), link: "/account/orders", bg: "#1e7e3e", sort: 0 },
+      { placement: "CLIENT_CABINET", title: t("Специальное предложение", "Special offer"), subtitle: t("Скидка 10% на следующий заказ", "10% off your next order"), link: "/services", bg: "#5B3DF5", sort: 0 },
+      { placement: "MASTER_CABINET", title: t("Новые правила расписания", "New schedule rules"), subtitle: t("Смотрите обновление в настройках", "Check updates in settings"), bg: "#1c1917", sort: 0 },
+    ] as const;
+    for (const data of demoBanners) {
+      await db.banner.create({ data });
+    }
   }
 
   const pages: [string, string, string][] = [

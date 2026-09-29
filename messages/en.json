@@ -116,6 +116,7 @@
     "address": "Address",
     "addAddress": "New address",
     "dateTime": "Date and time",
+    "dateAndMaster": "Date & pro",
     "availableTime": "Available times",
     "startDate": "First visit date",
     "noSlots": "No available times for this day",
@@ -127,6 +128,7 @@
     "anyMasterSub": "We'll assign the best available",
     "masterBusy": "Busy at this time",
     "chooseTimeFirst": "Please select a date and time first",
+    "whoComes": "Who's coming",
     "serviceLabel": "Service",
     "wishes": "Preferences",
     "noCallLabel": "No call needed before arrival",
@@ -524,8 +526,7 @@
       "title": "Title",
       "subtitle": "Subtitle",
       "description": "Description",
-      "badge": "Badge",
-      "unsaved": "Unsaved"
+      "badge": "Badge"
     },
     "dashboard": {
       "today": "Visits today",
@@ -831,6 +832,7 @@
         "CHECKOUT": "Checkout",
         "SUCCESS": "Success",
         "EMAIL": "Email",
+        "CLIENT_CABINET": "Client cabinet",
         "MASTER_CABINET": "Master cabinet"
       },
       "types": {
@@ -2096,5 +2098,10 @@
       "hint": "Email and SMS",
       "notifications": "Notifications"
     }
+  },
+  "cart": {
+    "itemsCount": "{count, plural, one {# item} other {# items}}",
+    "total": "{amount} ֏",
+    "checkout": "Book now"
   }
 }
