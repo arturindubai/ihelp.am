@@ -2,7 +2,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { pageUser } from "@/server/adminPage";
 import { getLibraryDoc, libraryCounts, listLibrary } from "@/server/services/library";
-import { LIBRARY_KINDS, diffHunks, diffLines, diffStat } from "@/lib/library";
+import { CANON_SECTION_KEYS, CANON_SECTIONS, type CanonSection, diffHunks, diffLines, diffStat } from "@/lib/library";
 import { Forbidden } from "@/components/admin/ui";
 import { CcHeader } from "@/components/admin/cc/CcHeader";
 import { Markdown } from "@/components/admin/cc/Markdown";
@@ -11,7 +11,7 @@ import { cn, dateLabel, timeLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-type Search = { doc?: string; v?: string; cmp?: string; q?: string; kind?: string; archived?: string; edit?: string; new?: string };
+type Search = { doc?: string; v?: string; cmp?: string; q?: string; section?: string; archived?: string; edit?: string; new?: string };
 
 const KIND_TONE: Record<string, string> = {
   rules: "bg-bad-50 text-bad",
@@ -30,8 +30,8 @@ function href(sp: Search, patch: Search) {
 }
 
 /**
- * Библиотека — как Canon в админке LIA: инструкции, роли, регламенты, решения, спецификации и знания
- * с историей версий. Документы репозитория снимаются при каждой выкладке, записи команды ведутся здесь
+ * Канон — одно место для решений, правил, дизайна, исследований и документов команды.
+ * Документы репозитория снимаются при каждой выкладке, записи команды ведутся здесь.
  */
 export default async function LibraryPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<Search> }) {
   const { locale } = await params;
@@ -39,27 +39,36 @@ export default async function LibraryPage({ params, searchParams }: { params: Pr
   if (!(await pageUser("control"))) return <Forbidden />;
   const sp = await searchParams;
   const t = await getTranslations("admin.cc.library");
-  const [list, counts] = await Promise.all([listLibrary({ q: sp.q, kind: sp.kind, archived: sp.archived === "1" }), libraryCounts()]);
+  const section = (CANON_SECTION_KEYS as string[]).includes(sp.section ?? "") ? (sp.section as CanonSection) : undefined;
+  const [list, counts] = await Promise.all([listLibrary({ q: sp.q, kinds: section !== undefined ? CANON_SECTIONS[section] : undefined, archived: sp.archived === "1" }), libraryCounts()]);
   const n = Number(sp.v) || undefined;
   const cmp = Number(sp.cmp) || undefined;
   const data = sp.doc ? await getLibraryDoc(sp.doc, n, cmp) : null;
   const when = (d: Date) => `${dateLabel(d, locale, { day: "numeric", month: "short", year: "numeric" })}, ${timeLabel(d)}`;
-  const base = { q: sp.q, kind: sp.kind, archived: sp.archived };
+  const base = { q: sp.q, section: sp.section, archived: sp.archived };
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
+
+  const sectionCounts: Record<CanonSection, number> = {
+    decisions: counts["decision"] ?? 0,
+    rules: (counts["rules"] ?? 0) + (counts["role"] ?? 0) + (counts["process"] ?? 0),
+    design: counts["spec"] ?? 0,
+    research: counts["knowledge"] ?? 0,
+    docs: 0,
+  };
 
   const listPanel = (
     <aside className={cn("space-y-3 lg:block", sp.doc || sp.new ? "hidden" : "block")}>
       <form action={`/${locale}/admin/control/library`} className="flex gap-2">
-        {sp.kind && <input type="hidden" name="kind" value={sp.kind} />}
+        {sp.section && <input type="hidden" name="section" value={sp.section} />}
         <input name="q" defaultValue={sp.q ?? ""} placeholder={t("search")} className="input h-9 flex-1 py-1 text-sm" />
       </form>
-      <div className="flex flex-wrap gap-1.5">
-        <Link href={href({ q: sp.q }, {})} className={cn("chip text-xs", !sp.kind ? "bg-ink text-inverse" : "bg-surface text-ink")}>
+      <div className="flex gap-1.5 overflow-x-auto flex-nowrap">
+        <Link href={href({ q: sp.q }, {})} className={cn("chip text-xs shrink-0", !section ? "bg-ink text-inverse" : "bg-surface text-ink")}>
           {t("all")} <b className="ml-1">{total}</b>
         </Link>
-        {LIBRARY_KINDS.map((k) => (
-          <Link key={k} href={href({ q: sp.q }, { kind: sp.kind === k ? "" : k })} className={cn("chip text-xs", sp.kind === k ? "bg-ink text-inverse" : KIND_TONE[k])}>
-            {t(`kinds.${k}`)} <b className="ml-1">{counts[k] ?? 0}</b>
+        {CANON_SECTION_KEYS.map((s) => (
+          <Link key={s} href={href({ q: sp.q }, { section: section === s ? "" : s })} className={cn("chip text-xs shrink-0", section === s ? "bg-ink text-inverse" : "bg-surface text-ink")}>
+            {t(`sections.${s}`)} <b className="ml-1">{sectionCounts[s]}</b>
           </Link>
         ))}
       </div>
@@ -72,11 +81,11 @@ export default async function LibraryPage({ params, searchParams }: { params: Pr
         </Link>
       </div>
       <ul className="card divide-y divide-line overflow-hidden">
-        {list.length === 0 && <li className="p-4 text-sm text-muted">{sp.q ? t("notFound") : t("empty")}</li>}
+        {list.length === 0 && <li className="p-4 text-sm text-muted">{sp.q ? t("notFound") : section ? t("emptySection") : t("empty")}</li>}
         {list.map((d) => (
           <li key={d.slug}>
             <Link href={href(base, { doc: d.slug })} className={cn("block px-3 py-2.5 hover:bg-surface", sp.doc === d.slug && "bg-brand-50")}>
-              <span className="block text-sm font-medium">{d.title}</span>
+              <span className="block line-clamp-1 text-sm font-medium">{d.title}</span>
               <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
                 <span className={cn("chip text-[10px]", KIND_TONE[d.kind])}>{t(`kinds.${d.kind}` as "kinds.rules")}</span>
                 {d.source === "repo" ? <span className="font-mono">{d.path}</span> : <span>{t("teamNote")}</span>}
@@ -203,6 +212,7 @@ export default async function LibraryPage({ params, searchParams }: { params: Pr
   return (
     <div className="max-w-6xl">
       <CcHeader page="library" locale={locale} />
+      <h2 className="text-2xl font-bold tracking-tight text-ink">{t("title")}</h2>
       <p className="mb-4 text-sm text-muted">{t("subtitle")}</p>
       <div className="grid gap-4 lg:grid-cols-[20rem_1fr]">
         {listPanel}

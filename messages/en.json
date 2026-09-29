@@ -1438,7 +1438,7 @@
         "health": "Health",
         "logs": "Logs",
         "epics": "Epics",
-        "library": "Library",
+        "library": "Canon",
         "keys": "Keys"
       },
       "tabs": {
@@ -1937,9 +1937,17 @@
         }
       },
       "library": {
-        "subtitle": "Instructions, roles, regulations, decisions and knowledge — with version history. Project documents are snapshotted here on each deploy; old versions are not deleted — this is also a backup.",
+        "title": "Canon",
+        "subtitle": "Team decisions, rules, design, research and documents",
         "search": "Search text",
         "all": "All",
+        "sections": {
+          "decisions": "Decisions",
+          "rules": "Rules",
+          "design": "Design",
+          "research": "Research",
+          "docs": "Documents"
+        },
         "kinds": {
           "rules": "Rules",
           "role": "Roles",
@@ -1952,8 +1960,9 @@
         "showActive": "Show active",
         "new": "New record",
         "newTitle": "New record",
-        "empty": "Library is empty — documents will appear after deploy.",
-        "notFound": "Nothing found",
+        "empty": "Canon is empty — documents will appear after deploy.",
+        "emptySection": "No records in this section yet",
+        "notFound": "No documents found",
         "notFoundDoc": "Document not found",
         "pick": "Select a document on the left",
         "teamNote": "team record",

@@ -1128,10 +1128,18 @@
         "title": "",
         "subtitle": "",
         "new": "Նոր",
+        "sections": {
+          "decisions": "",
+          "rules": "",
+          "design": "",
+          "research": "",
+          "docs": ""
+        },
         "tabs": {
           "role": ""
         },
         "empty": "",
+        "emptySection": "",
         "comparePrev": "",
         "repoHint": "",
         "markdownHint": ""
