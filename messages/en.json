@@ -1161,7 +1161,8 @@
           "design": "For UI: design described in text or file",
           "mockup": "Mockup approved by owner",
           "size": "Estimated S or M (L should be split)",
-          "scope": "Affected files listed"
+          "scope": "Affected files listed",
+          "scope_messages_folder": "Task scope lists files, not the entire messages folder"
         }
       },
       "move": {
