@@ -7,6 +7,7 @@ import { roleOf } from "@/lib/cc-flow";
 import { BLOCKED_ON_LABELS, COMMENT_KIND_LABELS, EPIC_STATUSES, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { Card } from "@/components/admin/fields";
 import { MarkAllReadButton, MessageActions } from "@/components/admin/cc/CcControls";
+import { MarkdownText } from "@/components/admin/cc/Markdown";
 import { Empty, RUN_TONE, ago } from "./shared";
 import { cn, dateLabel, timeLabel } from "@/lib/format";
 
@@ -167,9 +168,11 @@ export async function NotifyTab({ locale, taskHref }: { locale: string; taskHref
                     </Link>
                   </>
                 )}
-                {m.readAt && ` · ${tn("readBy", { who: m.readBy ?? "" })}`}
+                {m.readAt && m.readBy && !m.readBy.startsWith("auto:") && ` · ${tn("readBy", { who: m.readBy })}`}
               </div>
-              <p className="mt-1 line-clamp-4 whitespace-pre-line">{m.text}</p>
+              <div className="mt-1 line-clamp-4 text-sm">
+                <MarkdownText text={m.text} />
+              </div>
               <MessageActions id={m.id} unread={!m.readAt} replyTo={null} notifyOnly />
             </li>
           ))}
