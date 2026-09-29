@@ -445,10 +445,22 @@ export function freeName(base: string, taken: string[]): string {
   return `${base}-x`;
 }
 
+/** Слова, которыми Claude сообщает об исчерпанном лимите подписки */
+export const LIMIT_PATTERN = /usage limit|limit reached|rate.?limit|out of (extra )?usage|5-hour limit|weekly limit/i;
+
+/**
+ * Упёрлись ли в лимит подписки. Только для запуска, завершившегося ошибкой: успешный отчёт может
+ * упоминать «rate limit» по делу (задача про ограничение частоты запросов) — это не лимит подписки.
+ * errText — вывод ошибок процесса, когда результата нет вовсе
+ */
+export function isLimitOutcome(result: { is_error?: boolean; result?: string; subtype?: string } | null, errText = ""): boolean {
+  if (result && !result.is_error) return false;
+  return LIMIT_PATTERN.test(`${result?.result ?? ""} ${result?.subtype ?? ""} ${errText}`);
+}
+
 /** Итог запуска по ответу claude -p: закончен, ошибка или упёрлись в лимит подписки */
-export function runOutcome(result: { is_error?: boolean; result?: string; subtype?: string } | null, exitCode: number | null): "done" | "failed" | "limit" | "timeout" {
-  const text = `${result?.result ?? ""} ${result?.subtype ?? ""}`;
-  if (/usage limit|limit reached|rate.?limit|out of (extra )?usage|5-hour limit|weekly limit/i.test(text)) return "limit";
+export function runOutcome(result: { is_error?: boolean; result?: string; subtype?: string } | null, exitCode: number | null, errText = ""): "done" | "failed" | "limit" | "timeout" {
+  if (isLimitOutcome(result, errText)) return "limit";
   if (!result) return exitCode === null ? "timeout" : "failed";
   if (result.subtype === "error_max_turns") return "failed";
   return result.is_error ? "failed" : "done";

@@ -116,7 +116,8 @@ const hasActiveWorkerUnit = (agent) => {
 /** Итог запуска по JSON claude -p: закончен, ошибка, упёрлись в лимит или команда записи в карточку отклонена правами */
 function outcome(result, killed, err = "") {
   const text = `${result?.result ?? ""} ${result?.subtype ?? ""} ${err}`;
-  if (/usage limit|limit reached|rate.?limit|out of (extra )?usage|5-hour limit|weekly limit/i.test(text)) return "limit";
+  // Лимит подписки — только у запуска, завершившегося ошибкой: успешный отчёт может упоминать «rate limit» по делу (src/lib/workers.ts, isLimitOutcome)
+  if ((!result || result.is_error) && /usage limit|limit reached|rate.?limit|out of (extra )?usage|5-hour limit|weekly limit/i.test(text)) return "limit";
   if (!result) return killed ? "timeout" : "failed";
   if (result.subtype === "error_max_turns") return "failed";
   // Запись в карточку отклонена правилами прав: Bash(node scripts/cc.mjs …) с многострочным текстом не прошёл
