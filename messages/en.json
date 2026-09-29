@@ -382,9 +382,19 @@
   },
   "catalog": {
     "newService": "New service",
-    "comingSoonTitle": "Opening soon",
-    "comingSoonText": "We're preparing services and pros. Write to us — we'll answer your questions",
-    "writeWhatsApp": "Write on WhatsApp"
+    "comingSoonTitle": "Coming soon in Yerevan",
+    "comingSoonText": "We're launching this service. Leave your contact — we'll be the first to let you know when booking opens.",
+    "writeWhatsApp": "Write on WhatsApp",
+    "notifyTitle": "Notify me at launch",
+    "notifySubtitle": "Phone or e-mail — your choice",
+    "notifyPlaceholder": "+374 … or name@mail.com",
+    "notifyHint": "We'll send only one message when we launch",
+    "notifyButton": "Notify me",
+    "notifySuccess": "You're on the list! We'll message you when booking opens.",
+    "notifyAlready": "We already have your contact",
+    "notifyInvalid": "Enter a phone number or e-mail",
+    "notifyTooMany": "Too many requests, please try again later",
+    "notifyConsent": "By clicking the button, you agree to your contact being processed to notify you at launch. <privacy>Privacy policy</privacy>"
   },
   "pro": {
     "title": "Pro cabinet",
