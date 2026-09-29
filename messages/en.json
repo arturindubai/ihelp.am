@@ -1535,8 +1535,15 @@
           "lanes": "By lane",
           "flow": "By stage",
           "flat": "List",
-          "board": "Board"
-        }
+          "board": "Board",
+          "epics": "Epics"
+        },
+        "epicProgress": "{done} of {total}",
+        "epicNoTasks": "No tasks in epic",
+        "epicNoEpics": "No epics",
+        "epicWaits": "Waits: {key}",
+        "epicWithout": "No epic · {n}",
+        "epicNoTasksLink": "create the first one"
       },
       "you": {
         "empty": "Nothing needs your decision right now ✓",

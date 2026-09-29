@@ -1589,8 +1589,15 @@
           "lanes": "По дорожкам",
           "flow": "По этапу",
           "flat": "Списком",
-          "board": "Доска"
-        }
+          "board": "Доска",
+          "epics": "Эпики"
+        },
+        "epicProgress": "{done} из {total}",
+        "epicNoTasks": "Задач в эпике нет",
+        "epicNoEpics": "Эпиков нет",
+        "epicWaits": "Ждёт: {key}",
+        "epicWithout": "Без эпика · {n}",
+        "epicNoTasksLink": "создайте первый"
       },
       "you": {
         "empty": "Сейчас ничего не ждёт вашего решения ✓",
