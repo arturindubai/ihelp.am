@@ -130,6 +130,10 @@ model Service {
   badge         Json?
   /// Блоки страницы: howItWorks[], benefits[], faq[], policy, note — всё мультиязычно
   content       Json?
+  /// Что включено в услугу — мультиязычный текст, строки разделены \n
+  includesText  Json?
+  /// Что не входит в услугу — мультиязычный текст, строки разделены \n
+  excludesText  Json?
   active        Boolean       @default(true)
   sort          Int           @default(0)
   rating        Float         @default(0)
