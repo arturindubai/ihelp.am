@@ -75,8 +75,12 @@ dig MX ihelp.am +short                                         # проверк�
 node /opt/ihelp.am/scripts/cc.mjs note КЛЮЧ --text-file /opt/ihelp.am/data/tmp/nocode/note.md --agent nocode-1
 node /opt/ihelp.am/scripts/cc.mjs block КЛЮЧ --on owner --text-file /opt/ihelp.am/data/tmp/nocode/block.md --agent nocode-1
 node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --file /opt/ihelp.am/data/tmp/nocode/fields.json --agent nocode-1
-node /opt/ihelp.am/scripts/cc.mjs msg --to owner --text-file /opt/ihelp.am/data/tmp/nocode/msg.md --agent nocode-1
+node /opt/ihelp.am/scripts/cc.mjs msg --to owner --text-file /opt/ihelp.am/data/tmp/nocode/msg.md --agent nocode-1   # только уведомление, не вопрос
 ```
+
+> **Правило «msg --to owner»:** команда `msg --to owner` — только для уведомлений (отчёт без ответного действия, информация). Вопрос владельцу задаётся **исключительно** через `block КЛЮЧ "Вопрос: …" --on owner`: карточка появляется в «Нужен ты», а не в «Сообщениях».
+> Пример ✅: `msg "DNS для MX-записи добавлен, почта работает" --to owner`
+> Пример ❌ (вопрос через msg): `msg "Какой почтовый сервис выбрать: Mailchimp или Brevo?" --to owner` — так нельзя, нужен `block КЛЮЧ "Вопрос: …" --on owner`.
 
 ## Если команда отклонена
 

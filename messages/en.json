@@ -1603,18 +1603,23 @@
         "noCode": "no code"
       },
       "notify": {
-        "inbox": "Owner inbox",
-        "inboxEmpty": "No messages",
-        "compose": "Write",
-        "outbox": "Sent to roles",
-        "outboxEmpty": "Nothing sent yet",
+        "inbox": "Notifications",
+        "inboxEmpty": "No new notifications",
+        "markAllRead": "Mark all read",
+        "markAllReadDone": "All read",
+        "compose": "Write to workers",
+        "outbox": "Sent",
+        "outboxEmpty": "Nothing yet",
         "to": "To:",
         "roles": {
           "owner": "Owner",
           "cto": "CTO",
           "workers": "All workers",
           "triage": "Triage",
+          "product": "Product",
+          "designer": "Designer",
           "dev": "Developers",
+          "nocode": "No-code",
           "tester": "Tester",
           "deployer": "Deployer"
         },

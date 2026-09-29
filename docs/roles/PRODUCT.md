@@ -85,8 +85,12 @@ node /opt/ihelp.am/scripts/cc.mjs block КЛЮЧ "Вопрос … Вариан�
 node /opt/ihelp.am/scripts/cc.mjs lib --kind decision                          # продуктовый канон
 node /opt/ihelp.am/scripts/cc.mjs lib add --title "…" --kind decision --file /opt/ihelp.am/data/tmp/product/запись.md --agent product
 node /opt/ihelp.am/scripts/cc.mjs lib update note-… --file /opt/ihelp.am/data/tmp/product/запись.md --note "что изменили" --agent product
-node /opt/ihelp.am/scripts/cc.mjs msg "Обзор требований: …" --to owner --agent product
+node /opt/ihelp.am/scripts/cc.mjs msg "Обзор требований: …" --to owner --agent product   # только уведомление, не вопрос
 ```
+
+> **Правило «msg --to owner»:** команда `msg --to owner` — только для уведомлений (итог обзора требований, информация без ответного действия). Вопрос владельцу задаётся **исключительно** через `block КЛЮЧ "Вопрос: …" --on owner`: карточка появляется в «Нужен ты», а не в «Сообщениях».
+> Пример ✅: `msg "Обзор требований: дополнено 4, ждут вас: DEV-50 (цены), DEV-61 (бренд)" --to owner`
+> Пример ❌ (вопрос через msg): `msg "DEV-50: какую скидку давать новым клиентам? А) 0% Б) 5%" --to owner` — так нельзя.
 
 ## Как писать команды
 

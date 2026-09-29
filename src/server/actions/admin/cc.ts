@@ -15,7 +15,7 @@ import { POOLS, WORKERS_COMMANDS, type Pool } from "@/lib/workers";
 import { workersPatchSchema } from "@/lib/workers-schema";
 import { requestRun, requestStop, saveWorkersConfig, workersControl } from "../../services/workers";
 import { intakeCreate } from "../../services/ccBoard";
-import { MESSAGE_ROLES, markRead, sendMessage } from "../../services/ccMessages";
+import { MESSAGE_ROLES, markAllReadForOwner, markRead, sendMessage } from "../../services/ccMessages";
 import { db } from "../../db";
 import { KeyError, checkKey, clearKey, setKey } from "../../services/keys";
 import { TeamBotError, connectTeamBot, removeMember, startLink } from "../../services/teamBot";
@@ -341,6 +341,15 @@ export async function ccReadMessageAction(id: string) {
   await markRead(id, who(u));
   rAll();
   return { ok: true as const };
+}
+
+/** Отметить прочитанными все уведомления владельца (не вопросы) */
+export async function ccReadAllMessagesAction() {
+  const u = await requireSection("control");
+  const count = await markAllReadForOwner(who(u));
+  await audit(u.id, "cc.message.readAll", "CcMessage", "owner", { count });
+  rAll();
+  return { ok: true as const, count };
 }
 
 /** Сообщение → в бэклог: текст уходит в Intake и дальше в триаж, сообщение отмечается прочитанным */
