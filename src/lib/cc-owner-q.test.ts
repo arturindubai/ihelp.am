@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPostponeReason, countOwnerCards, parseMultiQuestion, parseVariants } from "./cc-owner-q";
+import { buildPostponeReason, classifyGroup, countOwnerCards, parseMultiQuestion, parseVariants } from "./cc-owner-q";
 
 describe("parseVariants", () => {
   it("возвращает null если вариантов меньше двух", () => {
@@ -212,6 +212,59 @@ describe("countOwnerCards", () => {
     ];
     const cardCount = countOwnerCards(tasks);
     expect(cardCount).toBe(2); // бейдж = 2; заголовок YouQuestionsSection = 2; сумма групп = 2
+  });
+});
+
+describe("classifyGroup", () => {
+  it("вопрос с вариантами → variant (образец IN-40)", () => {
+    const text = "Какой вариант удобнее? А) Создам сейчас Б) Потом В) Другой канал";
+    expect(classifyGroup(text, true)).toBe("variant");
+  });
+
+  it("утвердить макет → approve, даже если есть слово «загрузить» (образец ADMIN-10)", () => {
+    const text = "Утвердите макет главной страницы. Ссылка: https://figma.com/…";
+    expect(classifyGroup(text, false)).toBe("approve");
+  });
+
+  it("загрузить ссылку на макет → approve (макет важнее загрузить)", () => {
+    const text = "Загрузите ссылку на готовый макет для утверждения дизайна.";
+    expect(classifyGroup(text, false)).toBe("approve");
+  });
+
+  it("создать категорию в админке → do (образец COMP-35)", () => {
+    const text = "Создайте категорию «Уборка дома» в разделе Каталог. Откройте Настройки → Каталог → добавьте категорию.";
+    expect(classifyGroup(text, false)).toBe("do");
+  });
+
+  it("добавить запись → do", () => {
+    const text = "Добавьте первую услугу в каталог: зайдите в раздел «Услуги» и нажмите «Создать».";
+    expect(classifyGroup(text, false)).toBe("do");
+  });
+
+  it("получить заключение юриста → other (образец LEGAL-9)", () => {
+    // Текст без ценовых слов, без создания, без вариантов
+    const text = "Нужно получить юридическое заключение по условиям оферты. Обратитесь к юристу по IT и e-commerce.";
+    expect(classifyGroup(text, false)).toBe("other");
+  });
+
+  it("цена → price", () => {
+    expect(classifyGroup("Какая стоимость выезда в пригород?", false)).toBe("price");
+  });
+
+  it("прислать логотип → data", () => {
+    expect(classifyGroup("Прислать логотип в SVG-формате.", false)).toBe("data");
+  });
+
+  it("войти в Google → auth", () => {
+    expect(classifyGroup("Войдите в Google Console и создайте OAuth-приложение.", false)).toBe("auth");
+  });
+
+  it("утвердить правило → approve (утвердить — выше, чем правило)", () => {
+    expect(classifyGroup("Утвердите правило расчёта комиссии.", false)).toBe("approve");
+  });
+
+  it("без известных ключевых слов → other", () => {
+    expect(classifyGroup("Ознакомьтесь с предложением партнёра.", false)).toBe("other");
   });
 });
 

@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { needsYou } from "@/server/services/ccBoard";
-import { parseMultiQuestion } from "@/lib/cc-owner-q";
+import { classifyGroup, parseMultiQuestion } from "@/lib/cc-owner-q";
 import { parseDuplicateOriginalKey } from "@/lib/cc-intake";
 import { BLOCKED_ON_LABELS, PRIORITIES } from "@/lib/backlog-labels";
 import { QuickMove } from "@/components/admin/cc/TaskControls";
@@ -17,22 +17,6 @@ type Href = (key: string) => string;
 type NeedsYouData = Awaited<ReturnType<typeof needsYou>>;
 type OwnerTask = NeedsYouData["owner"][number];
 
-function classifyGroup(reason: string, hasVariants: boolean): YouCard["groupType"] {
-  if (hasVariants) return "variant";
-  // Макет/дизайн: утвердить, согласовать — перед проверкой «прислать файл», чтобы «загрузить макет» не попало в data
-  if (/утвердить|согласовать|одобрить|макет|бренд|дизайн|палитр|шрифт/i.test(reason)) return "approve";
-  // «Сделать самому»: создать запись, добавить, зарегистрироваться — действие в интерфейсе или сервисе
-  if (/\b(?:создать|создайте|добавить|добавьте|зарегистрировать|зарегистрируйтесь|заполните|заполнить)\b/i.test(reason)) return "do";
-  // Цены и числа
-  if (/цена|прайс|стоимост|тариф|число|сколько|бюджет|лимит/i.test(reason)) return "price";
-  // Файлы и документы
-  if (/файл|документ|картинк|фото|загрузить|прислать|контент|логотип/i.test(reason)) return "data";
-  // Авторизация
-  if (/войти|логин|аккаунт|авторизац|ключ.*сервис|oauth|токен/i.test(reason)) return "auth";
-  // Правила и регламенты
-  if (/правило|политика|условия|регламент|настройк|решение|выбор/i.test(reason)) return "rule";
-  return "other";
-}
 
 /** Группирует задачи с одинаковым вопросом в одну карточку */
 function groupOwnerQuestions(tasks: OwnerTask[], taskHref: Href): YouCard[] {

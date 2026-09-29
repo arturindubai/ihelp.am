@@ -25,6 +25,7 @@ import {
 } from "@/server/actions/admin/cc";
 import { cn } from "@/lib/format";
 import { parseVariants } from "@/lib/cc-owner-q";
+import type { OwnerCardGroupType } from "@/lib/cc-owner-q";
 
 /** Кнопки и формы пульта Control Center: Intake, запуск и остановка воркеров, согласования, сообщения */
 
@@ -803,7 +804,7 @@ export type YouCardTask = { key: string; title: string; href: string; priority: 
 export type YouCard = {
   id: string;
   question: string;
-  groupType: "variant" | "price" | "data" | "auth" | "approve" | "rule" | "do" | "other";
+  groupType: OwnerCardGroupType;
   tasks: YouCardTask[];
   variants: { id: string; text: string }[] | null;
   multiQuestion: { question: string; variants: { id: string; text: string }[] | null }[] | null;
