@@ -17,6 +17,7 @@ export const taskContentSchema = z.object({
   depends: z.array(z.string().max(30)).max(20),
   docs: lines,
   epicKey: z.string().max(60).nullable().optional(),
+  parentKey: z.string().max(30).nullable().optional(),
   area: z.enum(Object.keys(AREAS) as [string, ...string[]]),
   layer: z.enum(Object.keys(LAYERS) as [string, ...string[]]),
   priority: z.enum(Object.keys(PRIORITIES) as [string, ...string[]]),
@@ -31,6 +32,7 @@ export const taskContentSchema = z.object({
     .refine((v) => !v || /^(https?:\/\/|\/uploads\/)/.test(v), { message: "mockupUrl must start with https?:// or /uploads/" })
     .nullable()
     .optional(),
+  needsDesign: z.boolean().nullable().optional(),
 });
 
 export type TaskContentInput = z.infer<typeof taskContentSchema>;

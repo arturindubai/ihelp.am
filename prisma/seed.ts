@@ -9,6 +9,7 @@ import path from "path";
 import { PrismaClient } from "@prisma/client";
 import { BACKLOG } from "../src/server/backlog";
 import { EPIC_SEED } from "../src/server/epics";
+import { computeEpicStatus } from "../src/lib/cc-flow";
 import { REPO_DOC_ROOTS, kindOfPath, titleOf } from "../src/lib/library";
 const db = new PrismaClient();
 
@@ -99,6 +100,12 @@ async function syncEpics() {
 async function syncBacklog() {
   // Задача не указала epicKey явно — находим эпик по совпадению старой текстовой метки epic с названием эпика
   const epicKeyByTitle = new Map((await db.epic.findMany({ select: { key: true, title: true } })).map((e) => [e.title, e.key]));
+  // Задачи, у которых triagedAt был сброшен при ретриаже: их поля всё равно нельзя перезаписывать из кода.
+  // Событие "retriage" создаётся ccWork.retriage() при сбросе triagedAt и никогда не удаляется.
+  const retriagedTaskIds = new Set(
+    (await db.taskEvent.findMany({ where: { field: "retriage" }, select: { taskId: true }, distinct: ["taskId"] }))
+      .map((e) => e.taskId)
+  );
   let created = 0;
   for (const [i, t] of BACKLOG.entries()) {
     const content = {
@@ -127,18 +134,18 @@ async function syncBacklog() {
     // Задачу, отредактированную в админке, деплой не перезаписывает
     if (existing) {
       if (existing.source === "code") {
-        // У уже разобранных задач (triagedAt != null) поля, которые правит команда, не сбрасываются:
-        // needs, owner, scope, depends, estimate — решения триажа и продакта, а не данные из кода
-        const triaged = !!existing.triagedAt;
+        // У разобранных задач (triagedAt != null) или возвращённых на повторный разбор (событие "retriage")
+        // поля команды не сбрасываются: needs, owner, scope, depends, estimate — решения триажа и продакта
+        const fieldsProtected = !!existing.triagedAt || retriagedTaskIds.has(existing.id);
         await db.task.update({
           where: { key: t.key },
           data: {
             ...content,
-            needs: triaged ? undefined : content.needs,
-            owner: triaged ? undefined : content.owner,
-            scope: triaged ? undefined : content.scope,
-            depends: triaged ? undefined : content.depends,
-            estimate: triaged ? undefined : content.estimate,
+            needs: fieldsProtected ? undefined : content.needs,
+            owner: fieldsProtected ? undefined : content.owner,
+            scope: fieldsProtected ? undefined : content.scope,
+            depends: fieldsProtected ? undefined : content.depends,
+            estimate: fieldsProtected ? undefined : content.estimate,
           },
         });
       }
@@ -155,6 +162,24 @@ async function syncBacklog() {
   }
   const extra = await db.task.findMany({ where: { key: { notIn: BACKLOG.map((t) => t.key) } }, select: { key: true } });
   console.log(`Backlog: ${BACKLOG.length} tasks (${created} new)${extra.length ? `, not in code: ${extra.map((e) => e.key).join(", ")}` : ""}`);
+}
+
+/**
+ * Пересчитывает статус всех code-эпиков по текущим задачам.
+ * Запускается после syncBacklog: деплой не перезаписывает вручную выставленный статус у ui-эпиков.
+ */
+async function refreshAllEpicStatuses() {
+  const epics = await db.epic.findMany({ where: { source: "code" }, select: { key: true } });
+  const counts = await db.task.groupBy({ by: ["epicKey", "status"], _count: true, where: { epicKey: { not: null } } });
+  let updated = 0;
+  for (const e of epics) {
+    const rows = counts.filter((c) => c.epicKey === e.key);
+    const statuses = rows.flatMap((r) => Array(r._count).fill(r.status) as string[]);
+    const newStatus = computeEpicStatus(statuses);
+    await db.epic.update({ where: { key: e.key }, data: { status: newStatus } });
+    updated++;
+  }
+  console.log(`Epics статусы: обновлено ${updated}`);
 }
 
 const t = (ru: string, en = "", am = "") => ({ ru, en, am });
@@ -182,6 +207,7 @@ async function main() {
   // удалённые в админке демо-мастера, баннер, категории и страницы возвращались бы после обновления.
   await syncEpics();
   await syncBacklog();
+  await refreshAllEpicStatuses();
   await syncLibrary().catch((e) => console.error("Library: снимок документов не удался —", (e as Error).message));
 
   const SEED_FLAG = "_seed";

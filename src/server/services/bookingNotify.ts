@@ -8,6 +8,7 @@ import { hm, ymd } from "@/lib/time";
 import { amd } from "@/lib/format";
 import { sendMail, mailTemplate } from "./mail";
 import { notifyTech, html } from "../notify";
+import { createReviewToken } from "./reviews";
 import defaultTemplates from "../../../messages/ru.json";
 
 type AddressSnapshot = { street?: string; building?: string; apartment?: string };
@@ -51,11 +52,14 @@ async function sendToClient(
   text: string,
   mailSubject: string,
   tag: string,
+  log?: { orderId: string; visitId?: string; event: string },
 ): Promise<"telegram" | "email" | "alert" | "none"> {
   const user = await db.user.findUnique({
     where: { id: userId },
     select: { telegramId: true, email: true, name: true },
   });
+
+  let channel: "telegram" | "email" | "alert" | "none" = "none";
 
   if (user?.telegramId) {
     try {
@@ -63,14 +67,14 @@ async function sendToClient(
       const token = s.notify.telegramBotToken;
       if (token) {
         await sendTelegramDirect(token, user.telegramId, text);
-        return "telegram";
+        channel = "telegram";
       }
     } catch (e) {
       console.error(`[bookingNotify:${tag}] telegram failed, trying email`, e);
     }
   }
 
-  if (user?.email) {
+  if (channel === "none" && user?.email) {
     try {
       const s = await getSettings();
       if (s.mail.enabled) {
@@ -84,20 +88,41 @@ async function sendToClient(
         const lines = plainText.split("\n").filter(Boolean);
         const htmlBody = mailTemplate({ title: mailSubject, lines, brand });
         const r = await sendMail({ to: user.email, subject: mailSubject, html: htmlBody, text: plainText });
-        if (r.ok) return "email";
+        if (r.ok) channel = "email";
       }
     } catch (e) {
       console.error(`[bookingNotify:${tag}] email failed`, e);
     }
   }
 
-  // Нет канала — алерт оператору (без персональных данных клиента)
-  try {
-    await notifyTech(html`⚠️ Нет канала доставки для уведомления: ${mailSubject}`);
-  } catch (e) {
-    console.error(`[bookingNotify:${tag}] alert failed`, e);
+  if (channel === "none") {
+    // Нет канала — алерт оператору (без персональных данных клиента)
+    try {
+      await notifyTech(html`⚠️ Нет канала доставки для уведомления: ${mailSubject}`);
+    } catch (e) {
+      console.error(`[bookingNotify:${tag}] alert failed`, e);
+    }
+    channel = "alert";
   }
-  return "alert";
+
+  if (log) {
+    try {
+      await db.clientMessage.create({
+        data: {
+          orderId: log.orderId,
+          visitId: log.visitId ?? null,
+          event: log.event,
+          subject: mailSubject,
+          channel,
+          delivered: channel === "telegram" || channel === "email",
+        },
+      });
+    } catch (e) {
+      console.error(`[bookingNotify:${tag}] log failed`, e);
+    }
+  }
+
+  return channel;
 }
 
 /** Проверить, что событие ещё не было отправлено для заказа, и добавить его в список. */
@@ -155,7 +180,10 @@ export async function notifyClientOrderCreated(orderId: string): Promise<void> {
       price: amd(order.firstVisitPrice),
     });
 
-    await sendToClient(order.userId, text, `Заказ №${order.number} принят`, "client:created");
+    await sendToClient(order.userId, text, `Заказ №${order.number} принят`, "client:created", {
+      orderId,
+      event: "created",
+    });
   } catch (e) {
     console.error("[bookingNotify:created] ошибка", e);
   }
@@ -174,6 +202,7 @@ export async function notifyClientMasterAssigned(visitId: string): Promise<void>
         master: { select: { name: true } },
         order: {
           select: {
+            id: true,
             number: true,
             userId: true,
             config: true,
@@ -196,7 +225,11 @@ export async function notifyClientMasterAssigned(visitId: string): Promise<void>
       masterName,
     });
 
-    await sendToClient(visit.order.userId, text, `Мастер назначен — заказ №${visit.order.number}`, "client:masterAssigned");
+    await sendToClient(visit.order.userId, text, `Мастер назначен — заказ №${visit.order.number}`, "client:masterAssigned", {
+      orderId: visit.order.id,
+      visitId,
+      event: `masterAssigned:${visit.masterId}`,
+    });
   } catch (e) {
     console.error("[bookingNotify:masterAssigned] ошибка", e);
   }
@@ -211,6 +244,7 @@ export async function notifyClientRescheduled(visitId: string): Promise<void> {
         scheduledAt: true,
         order: {
           select: {
+            id: true,
             number: true,
             userId: true,
             config: true,
@@ -234,7 +268,11 @@ export async function notifyClientRescheduled(visitId: string): Promise<void> {
       address: addrLine(visit.order.addressSnapshot),
     });
 
-    await sendToClient(visit.order.userId, text, `Визит перенесён — заказ №${visit.order.number}`, "client:rescheduled");
+    await sendToClient(visit.order.userId, text, `Визит перенесён — заказ №${visit.order.number}`, "client:rescheduled", {
+      orderId: visit.order.id,
+      visitId,
+      event: `rescheduled:${visit.scheduledAt.toISOString()}`,
+    });
   } catch (e) {
     console.error("[bookingNotify:rescheduled] ошибка", e);
   }
@@ -271,7 +309,10 @@ export async function notifyClientCancelled(orderId: string): Promise<void> {
       date: dateStr,
     });
 
-    await sendToClient(order.userId, text, `Заказ №${order.number} отменён`, "client:cancelled");
+    await sendToClient(order.userId, text, `Заказ №${order.number} отменён`, "client:cancelled", {
+      orderId,
+      event: "cancelled",
+    });
   } catch (e) {
     console.error("[bookingNotify:cancelled] ошибка", e);
   }
@@ -289,6 +330,7 @@ export async function notifyClientVisitCancelled(visitId: string): Promise<void>
         scheduledAt: true,
         order: {
           select: {
+            id: true,
             number: true,
             userId: true,
             config: true,
@@ -305,7 +347,11 @@ export async function notifyClientVisitCancelled(visitId: string): Promise<void>
       date: dateStr,
     });
 
-    await sendToClient(visit.order.userId, text, `Визит ${dateStr} отменён — заказ №${visit.order.number}`, "client:visitCancelled");
+    await sendToClient(visit.order.userId, text, `Визит ${dateStr} отменён — заказ №${visit.order.number}`, "client:visitCancelled", {
+      orderId: visit.order.id,
+      visitId,
+      event: "cancelled",
+    });
   } catch (e) {
     console.error("[bookingNotify:visitCancelled] ошибка", e);
   }
@@ -334,7 +380,8 @@ export async function notifyClientVisitCompleted(visitId: string): Promise<void>
 
     const masterName = visit.master ? tr(visit.master.name, "ru") : "—";
     const appUrl = process.env.APP_URL || "";
-    const reviewLink = `${appUrl}/ru/account/orders/${visit.order.id}`;
+    const token = await createReviewToken(visitId);
+    const reviewLink = `${appUrl}/ru/review/${token}`;
 
     const tmpl = await getOrderTemplates();
     const text = fill(tmpl.completed, {
@@ -342,7 +389,11 @@ export async function notifyClientVisitCompleted(visitId: string): Promise<void>
       reviewLink,
     });
 
-    await sendToClient(visit.order.userId, text, `Как прошёл визит? — заказ №${visit.order.number}`, "client:completed");
+    await sendToClient(visit.order.userId, text, `Как прошёл визит? — заказ №${visit.order.number}`, "client:completed", {
+      orderId: visit.order.id,
+      visitId,
+      event: "completed",
+    });
   } catch (e) {
     console.error("[bookingNotify:completed] ошибка", e);
   }
