@@ -10,6 +10,8 @@ import { sendMail, mailTemplate } from "./mail";
 import { notifyTech, html } from "../notify";
 import { alertTech } from "../alerts";
 import { createUnsubscribeToken } from "@/lib/emailToken";
+import { createReviewToken } from "./reviews";
+import { getEmailBannerHtml } from "./banners";
 import defaultTemplates from "../../../messages/ru.json";
 import enMessages from "../../../messages/en.json";
 
@@ -131,7 +133,8 @@ async function sendToClient(
           .replace(/&gt;/g, ">");
         const lines = plainText.split("\n").filter(Boolean);
         const footer = unsubscribeFooterHtml(userId, "ru");
-        const htmlBody = mailTemplate({ title: mailSubject, lines, brand, footer });
+        const bannerHtml = await getEmailBannerHtml("ru").catch(() => null);
+        const htmlBody = mailTemplate({ title: mailSubject, lines, brand, footer, ...(bannerHtml ? { bannerHtml } : {}) });
         const r = await sendMail({ to: user.email, subject: mailSubject, html: htmlBody, text: plainText });
         if (r.ok) channel = "email";
       }
@@ -587,7 +590,8 @@ export async function sendReviewRequests(now: Date): Promise<number> {
 
     const tmpl = clientTemplates(locale);
     const brand = (await getSettings()).brand.name || "iHelp";
-    const reviewUrl = `${APP_URL()}/${locale}/account/orders/${v.order.id}`;
+    const reviewToken = await createReviewToken(v.id);
+    const reviewUrl = `${APP_URL()}/${locale}/review/${reviewToken}`;
 
     try {
       let deliveryOk = false;

@@ -44,3 +44,12 @@ export function isQuietHour(now: Date, startH = 21, endH = 9): boolean {
   }
   return hour >= startH || hour < endH;
 }
+
+/** Диапазон суток по ереванскому времени через daysAhead дней от now */
+export function packageWarnWindow(now: Date, daysAhead: number): { from: Date; to: Date } {
+  const targetYmd = ymd(new Date(now.getTime() + daysAhead * 86400_000));
+  return {
+    from: new Date(`${targetYmd}T00:00:00${TZ_OFFSET}`),
+    to: new Date(`${targetYmd}T23:59:59.999${TZ_OFFSET}`),
+  };
+}

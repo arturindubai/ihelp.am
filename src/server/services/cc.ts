@@ -41,13 +41,16 @@ function where(f: TaskFilters): Prisma.TaskWhereInput {
   if (f.epicKey) w.epicKey = f.epicKey === "none" ? null : f.epicKey;
   if (f.claimedBy) w.claimedBy = f.claimedBy;
   if (f.q) {
-    const q = f.q.trim();
-    w.OR = [
-      { key: { contains: q, mode: "insensitive" } },
-      { title: { contains: q, mode: "insensitive" } },
-      { summary: { contains: q, mode: "insensitive" } },
-      { details: { contains: q, mode: "insensitive" } },
-    ];
+    // Каждое слово должно встречаться хотя бы в одном поле (AND по словам, OR по полям)
+    const words = f.q.trim().split(/\s+/).filter(Boolean);
+    w.AND = words.map((word) => ({
+      OR: [
+        { key: { contains: word, mode: "insensitive" } },
+        { title: { contains: word, mode: "insensitive" } },
+        { summary: { contains: word, mode: "insensitive" } },
+        { details: { contains: word, mode: "insensitive" } },
+      ],
+    }));
   }
   return w;
 }
@@ -218,6 +221,8 @@ export interface TaskContent {
   docs: string[];
   /** Ключ эпика (Epic.key) — пусто значит простая задача без эпика */
   epicKey?: string | null;
+  /** Ключ родительской задачи — часть разбитой крупной задачи */
+  parentKey?: string | null;
   area: string;
   layer: string;
   priority: string;
@@ -254,6 +259,13 @@ export async function saveTask(content: TaskContent, actor: string, isNew: boole
     if (!epic) throw new Error("unknown_epic");
     epicTitle = epic.title;
   }
+  // parentKey необязателен. Если задан, родительская задача должна существовать
+  const parentKey = content.parentKey?.trim().toUpperCase() || null;
+  if (parentKey) {
+    if (parentKey === key) throw new Error("parent_self_reference");
+    const parentExists = await db.task.findUnique({ where: { key: parentKey }, select: { key: true } });
+    if (!parentExists) throw new Error(`unknown_parent:${parentKey}`);
+  }
   const data = {
     title: content.title.trim().slice(0, 200),
     summary: content.summary.trim().slice(0, 2000),
@@ -267,6 +279,7 @@ export async function saveTask(content: TaskContent, actor: string, isNew: boole
     docs: content.docs.map((r) => r.trim()).filter(Boolean).slice(0, 20),
     epicKey,
     epic: epicTitle,
+    parentKey,
     area: content.area,
     layer: content.layer,
     priority: content.priority,
