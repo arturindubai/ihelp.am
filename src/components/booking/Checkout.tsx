@@ -538,36 +538,40 @@ export function Checkout(props: {
               {masterSheetChoice === null && <span className="size-2 rounded-full bg-on-action" />}
             </span>
           </button>
-          {(masterSheetSlot ? (slots?.find((s) => s.time === masterSheetSlot)?.masterIds ?? []) : []).map((mid) => {
-            const m = masterById.get(mid);
-            if (!m) return null;
-            const on = masterSheetChoice === mid;
+          {props.masters.map((m) => {
+            const slotMasterIds = masterSheetSlot ? (slots?.find((s) => s.time === masterSheetSlot)?.masterIds ?? null) : null;
+            const free = !slotMasterIds || slotMasterIds.includes(m.id);
+            const on = masterSheetChoice === m.id;
             return (
               <button
-                key={mid}
-                onClick={() => setMasterSheetChoice(mid)}
+                key={m.id}
+                disabled={!free}
+                onClick={() => setMasterSheetChoice(m.id)}
                 className={cn(
-                  "flex w-full flex-row items-center gap-3 rounded-xl border p-3 text-left transition",
-                  on ? "border-action bg-brand-50" : "border-line bg-paper"
+                  "flex w-full flex-row items-center gap-3 rounded-xl border p-3 text-left transition disabled:opacity-100",
+                  on ? "border-action bg-brand-50" : "border-line bg-paper",
+                  !free && "cursor-default"
                 )}
               >
                 {m.photo ? (
-                  <Img src={m.photo} width={44} className="size-11 shrink-0 rounded-full object-cover" />
+                  <Img src={m.photo} width={44} className={cn("size-11 shrink-0 rounded-full object-cover", !free && "grayscale")} />
                 ) : (
-                  <span className={cn("grid size-11 shrink-0 place-items-center rounded-full text-sm font-bold", masterAvatarBg(m.name))}>
+                  <span className={cn("grid size-11 shrink-0 place-items-center rounded-full text-sm font-bold", masterAvatarBg(m.name), !free && "grayscale")}>
                     {m.name.slice(0, 2).toUpperCase()}
                   </span>
                 )}
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-semibold">{m.name}</span>
                   <span className="block text-xs text-muted">
-                    {m.reviewsCount ? `★ ${m.rating.toFixed(1)} · ${tc("reviews", { count: m.reviewsCount })}` : tc("new")}
-                    {m.experienceYears > 0 && ` · ${tc("yearsExp", { count: m.experienceYears })}`}
+                    {!free ? t("masterBusy") : (m.reviewsCount ? `★ ${m.rating.toFixed(1)} · ${tc("reviews", { count: m.reviewsCount })}` : tc("new"))}
+                    {free && m.experienceYears > 0 && ` · ${tc("yearsExp", { count: m.experienceYears })}`}
                   </span>
                 </span>
-                <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition", on ? "border-action bg-action" : "border-line-strong")}>
-                  {on && <span className="size-2 rounded-full bg-on-action" />}
-                </span>
+                {free && (
+                  <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition", on ? "border-action bg-action" : "border-line-strong")}>
+                    {on && <span className="size-2 rounded-full bg-on-action" />}
+                  </span>
+                )}
               </button>
             );
           })}
