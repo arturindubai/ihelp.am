@@ -580,6 +580,10 @@ model Task {
   nextSteps     String[]  @default([]) @map("next_steps")
   /// Код-задача, по которой работа оказалась не нужна: сдана без коммита, уходит на подтверждение тестировщику
   noWork        Boolean   @default(false) @map("no_work")
+  /// Исходный текст владельца из Intake — сохраняется неизменным, не перезаписывается триажем
+  intakeText       String?
+  /// Карта просьб при закрытии intake: каждая просьба → ключ задачи или причина отказа. Обязательна для source=intake при закрытии
+  intakeClosingMap String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

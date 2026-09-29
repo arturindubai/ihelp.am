@@ -274,6 +274,8 @@ export async function intakeCreate(text: string, by: string) {
           title: intakeTitle(clean),
           summary: clean.slice(0, 2000),
           details: clean.length > 2000 ? clean : null,
+          // intakeText хранит исходник неизменным — триаж перезаписывает summary, но не intakeText
+          intakeText: clean,
           area: "product",
           layer: "none",
           priority: "p2",

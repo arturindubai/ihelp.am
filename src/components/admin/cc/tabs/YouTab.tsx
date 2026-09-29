@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { needsYou } from "@/server/services/ccBoard";
 import { parseVariants } from "@/lib/cc-owner-q";
+import { parseDuplicateOriginalKey } from "@/lib/cc-intake";
 import { BLOCKED_ON_LABELS, PRIORITIES } from "@/lib/backlog-labels";
 import { QuickMove } from "@/components/admin/cc/TaskControls";
 import { silentLabel } from "@/components/admin/cc/TaskBadges";
@@ -36,6 +37,7 @@ function groupOwnerQuestions(tasks: OwnerTask[], taskHref: Href): YouCard[] {
   return [...byQuestion.values()].map((group) => {
     const reason = group[0].fullReason ?? group[0].blockedReason ?? "";
     const parsed = reason ? parseVariants(reason) : null;
+    const origKey = parseDuplicateOriginalKey(reason);
     return {
       id: group[0].key,
       question: parsed?.question ?? reason,
@@ -43,6 +45,8 @@ function groupOwnerQuestions(tasks: OwnerTask[], taskHref: Href): YouCard[] {
       tasks: group.map((t) => ({ key: t.key, title: t.title, href: taskHref(t.key), priority: t.priority })),
       variants: parsed?.variants ?? null,
       isUrgent: group.some((t) => t.priority === "p0"),
+      origTaskKey: origKey ?? undefined,
+      origTaskHref: origKey ? taskHref(origKey) : undefined,
     };
   });
 }
