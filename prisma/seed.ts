@@ -207,7 +207,7 @@ async function main() {
   const SEED_FLAG = "_seed";
   if ((await db.setting.findUnique({ where: { key: SEED_FLAG } })) || (await db.service.count())) {
     await db.setting.upsert({ where: { key: SEED_FLAG }, create: { key: SEED_FLAG, value: { at: new Date().toISOString() } }, update: {} });
-    console.log("Seed: demo data already applied, skipped. Owner phone:", ownerPhone);
+    console.log("Seed: demo data already applied, skipped.");
     return;
   }
 
@@ -367,7 +367,7 @@ async function main() {
   }
   await db.setting.create({ data: { key: SEED_FLAG, value: { at: new Date().toISOString() } } });
 
-  console.log("Seed done. Owner phone:", ownerPhone);
+  console.log("Seed done.");
 }
 
 main().finally(() => db.$disconnect());
