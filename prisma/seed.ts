@@ -176,7 +176,7 @@ const HOURS = Object.fromEntries([1, 2, 3, 4, 5, 6].map((d) => [String(d), [["09
 async function main() {
   // Настройки: владелец
   const ownerPhone = process.env.ADMIN_PHONE || "+37400000000";
-  await db.user.upsert({ where: { phone: ownerPhone }, create: { phone: ownerPhone, role: "OWNER", name: "Owner" }, update: { role: "OWNER" } });
+  await db.user.upsert({ where: { phone: ownerPhone }, create: { phone: ownerPhone, role: "OWNER", name: "Owner" }, update: { role: "OWNER" } }); // seed-gate:owner-only
 
   // Демо-каталог заливается один раз. Seed выполняется при каждом деплое, и без флага
   // удалённые в админке демо-мастера, баннер, категории и страницы возвращались бы после обновления.
