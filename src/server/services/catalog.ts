@@ -3,6 +3,7 @@ import { db } from "../db";
 import { tr } from "@/i18n/locales";
 import type { PriceLine, PricePlan } from "@/lib/pricing";
 import { selectBanners } from "@/lib/banner-select";
+import { incrementCarouselViews } from "./banners";
 
 export type LText = string;
 
@@ -22,6 +23,7 @@ export async function getHome(locale: string, userId?: string | null) {
     isNew = completedCount === 0;
   }
   const filteredBanners = selectBanners(banners, { placement: "CAROUSEL_HOME", isLoggedIn, isNew, now: new Date() });
+  await incrementCarouselViews(filteredBanners.map((b) => b.id));
   return {
     categories: categories.map((c) => {
       const isComposite = !c.comingSoon && c.services.length > 1;

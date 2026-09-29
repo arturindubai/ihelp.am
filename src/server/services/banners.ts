@@ -65,6 +65,12 @@ export async function getBannerForSlot(
   return banner;
 }
 
+/** Инкрементирует счётчики показов для всех баннеров карусели (один показ за загрузку страницы) */
+export async function incrementCarouselViews(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await db.banner.updateMany({ where: { id: { in: ids } }, data: { views: { increment: 1 } } });
+}
+
 /** Инкрементирует кол-во кликов по баннеру */
 export async function incrementBannerClick(id: string): Promise<void> {
   await db.banner.update({ where: { id }, data: { clicks: { increment: 1 } } });
