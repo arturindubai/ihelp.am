@@ -7,12 +7,13 @@ import { requireSection } from "../../admin";
 import { audit } from "../../audit";
 import { recalcRatings } from "../../services/catalog";
 import { invalidateUiCache, saveSettingsSection, getSettings, SECRET_PATHS, type Settings } from "../../settings";
-import { notifyTeam, notifyTech } from "../../notify";
+import { html, notifyTeam, notifyTech } from "../../notify";
 import { envContacts } from "../../contacts";
 import { sendMail, mailTemplate } from "../../services/mail";
 import { registerTelegramWebhook } from "../../services/telegramBot";
 import { telegramWebhookSecret } from "@/lib/telegramAuth";
 import { normalizePhone } from "@/lib/phone";
+import { normalizeEmail } from "@/lib/email";
 
 const i18n = z.object({ ru: z.string().max(20000).optional(), en: z.string().max(20000).optional(), am: z.string().max(20000).optional() }).partial();
 const J = (v: unknown) => (v == null ? Prisma.DbNull : (v as Prisma.InputJsonValue));
@@ -306,10 +307,44 @@ export async function setRoleAction(phoneRaw: string, role: Role, name?: string)
   const u = await requireSection("staff");
   const phone = normalizePhone(phoneRaw);
   if (!phone) return { ok: false as const, error: "phone" };
-  if (phone === u.phone && role !== "OWNER") return { ok: false as const, error: "self" };
+
+  const target = await db.user.findUnique({ where: { phone }, select: { id: true, role: true } });
+  if (target?.role === "OWNER") {
+    // Вариант А: роль другого владельца менять нельзя
+    if (phone !== u.phone) return { ok: false as const, error: "cannotRemoveOwner" };
+    // Последнего владельца нельзя понизить ни при каком варианте
+    const ownerCount = await db.user.count({ where: { role: "OWNER" } });
+    if (ownerCount <= 1) return { ok: false as const, error: "lastOwner" };
+  } else {
+    if (phone === u.phone && role !== "OWNER") return { ok: false as const, error: "self" };
+  }
+
   const namePatch = name ? { name } : {};
   const r = await db.user.upsert({ where: { phone }, create: { phone, role, ...namePatch }, update: { role, ...namePatch } });
   if (role === "CLIENT") await db.session.deleteMany({ where: { userId: r.id } });
   await audit(u.id, "staff.role", "User", r.id, { role });
+  // Тех-алерт при изменении роли владельца (понижение или повышение)
+  if (target?.role === "OWNER" || role === "OWNER") {
+    await notifyTech(html`⚠️ Смена роли владельца: <b>${r.id}</b> → <code>${role}</code> (оператор: <b>${u.name || u.id}</b>)`);
+  }
   return { ok: true as const };
+}
+
+/** Владелец задаёт или меняет email сотрудника. Адрес, заданный администратором, считается подтверждённым. */
+export async function setStaffEmailAction(phoneRaw: string, emailRaw: string | null) {
+  const u = await requireSection("staff");
+  const phone = normalizePhone(phoneRaw);
+  if (!phone) return { ok: false as const, error: "phone" };
+  const email = emailRaw ? normalizeEmail(emailRaw) : null;
+  if (emailRaw && !email) return { ok: false as const, error: "email" };
+  const target = await db.user.findUnique({ where: { phone } });
+  if (!target) return { ok: false as const, error: "notfound" };
+  try {
+    await db.user.update({ where: { id: target.id }, data: { email, emailVerifiedAt: email ? new Date() : null } });
+    await audit(u.id, "staff.email", "User", target.id, { action: email ? "set" : "clear" });
+    return { ok: true as const };
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return { ok: false as const, error: "email_taken" };
+    throw e;
+  }
 }

@@ -46,6 +46,8 @@ model User {
   telegramUsername String?
   /// Согласие на рекламные рассылки (LEGAL-2): null — не давал, дата — дал; отзывается в профиле
   adsConsentAt     DateTime?
+  /// Поправка прав по конкретному человеку поверх роли: { added: string[], removed: string[] }
+  sectionDelta     Json?
 
   sessions    Session[]
   addresses   Address[]
@@ -110,6 +112,7 @@ model Category {
   sort        Int        @default(0)
   active      Boolean    @default(true)
   comingSoon  Boolean    @default(false)
+  archived    Boolean    @default(false)
   services    Service[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
@@ -128,7 +131,12 @@ model Service {
   badge         Json?
   /// Блоки страницы: howItWorks[], benefits[], faq[], policy, note — всё мультиязычно
   content       Json?
+  /// Что включено в услугу — мультиязычный текст, строки разделены \n
+  includesText  Json?
+  /// Что не входит в услугу — мультиязычный текст, строки разделены \n
+  excludesText  Json?
   active        Boolean       @default(true)
+  comingSoon    Boolean       @default(false)
   sort          Int           @default(0)
   rating        Float         @default(0)
   reviewsCount  Int           @default(0)
@@ -230,6 +238,10 @@ model Master {
   reviewsCount   Int       @default(0)
   jobsCount      Int       @default(0)
   sort           Int       @default(0)
+  /// Telegram chat ID в @ihelp_staff_bot — заполняется при первом /start мастера боту
+  staffChatId    String?
+  /// Получать уведомления о визитах и вечернее расписание — мастер может выключить в кабинете
+  notifyEnabled  Boolean   @default(true)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -305,11 +317,14 @@ model Order {
   source            String        @default("web")
   cancelReason      String?
   expiresAt         DateTime?
+  /// Ключи отправленных клиентских уведомлений на уровне заказа: ["created", "cancelled"]
+  clientNotifiedEvents String[] @default([])
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
   visits            Visit[]
   redemptions       PromoRedemption[]
+  clientMessages    ClientMessage[]
 
   @@index([userId])
   @@index([userId, createdAt])
@@ -347,12 +362,41 @@ model Visit {
   remindedAt      DateTime?
   reviewRequestedAt DateTime?
   masterNote      String?
+  /// Ключи отправленных клиентских уведомлений на уровне визита: ["masterAssigned", "rescheduled:2026-09-28T06:00", "cancelled", "completed"]
+  clientNotifiedEvents String[] @default([])
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   review          Review?
+  reviewToken     ReviewToken?
 
   @@index([scheduledAt])
   @@index([masterId, scheduledAt])
+}
+
+/// Одноразовая ссылка для отзыва без повторного входа (NOTIFY-3B)
+model ReviewToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  visitId   String    @unique
+  visit     Visit     @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  usedAt    DateTime?
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+}
+
+/// Лог клиентских сообщений с каналом и статусом доставки (NOTIFY-3B)
+model ClientMessage {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  visitId   String?
+  event     String
+  subject   String
+  channel   String
+  delivered Boolean  @default(false)
+  sentAt    DateTime @default(now())
+
+  @@index([orderId])
 }
 
 enum ReviewStatus {
@@ -496,6 +540,10 @@ model Task {
   /// Ключ эпика (Epic.key). Пусто — простая задача без эпика
   epicKey       String?
   epicRef       Epic?     @relation(fields: [epicKey], references: [key])
+  /// Ключ родительской задачи (если эта задача — часть разбитой крупной). Родитель с открытыми частями не уходит в работу
+  parentKey     String?
+  parentRef     Task?     @relation("TaskParts", fields: [parentKey], references: [key], onDelete: SetNull)
+  parts         Task[]    @relation("TaskParts")
   area          String
   /// back | front | fullstack | infra | none
   layer         String
@@ -562,10 +610,20 @@ model Task {
   mockupApprovedBy  String?
   /// Когда утвердили макет
   mockupApprovedAt  DateTime?
+  /// Нужно описание дизайна: ставит триаж при разборе; true — задача идёт к дизайнеру, false — разработчик возьмёт без ожидания
+  needsDesign       Boolean?
   /// «Что изменилось для людей» — 1–2 предложения простым языком для Release Notes
   releaseNote   String?
   /// Резюме для владельца: что сделано, что проверить, риск — до трёх строк
   ownerSummary  String?
+  /// Следующие шаги после приёмки: триаж заведёт карточки с зависимостью от этой. Пустой массив = «ничего дальше»
+  nextSteps     String[]  @default([]) @map("next_steps")
+  /// Код-задача, по которой работа оказалась не нужна: сдана без коммита, уходит на подтверждение тестировщику
+  noWork        Boolean   @default(false) @map("no_work")
+  /// Исходный текст владельца из Intake — сохраняется неизменным, не перезаписывается триажем
+  intakeText       String?
+  /// Карта просьб при закрытии intake: каждая просьба → ключ задачи или причина отказа. Обязательна для source=intake при закрытии
+  intakeClosingMap String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -577,6 +635,7 @@ model Task {
   @@index([stage])
   @@index([area])
   @@index([epicKey])
+  @@index([parentKey])
 }
 
 /// Эпик — крупная область работы с собственными требованиями, дизайном, статусом проверки и готовности к деплою.
@@ -636,15 +695,17 @@ model Attachment {
 
 /// Комментарий или отчёт по задаче
 model TaskComment {
-  id        String   @id @default(cuid())
-  taskId    String
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  id             String   @id @default(cuid())
+  taskId         String
+  task           Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
   /// note — заметка человека, progress — ход работы, report — отчёт о сдаче, handoff — передача задачи,
   /// review — замечания проверки, error — ошибка (тест, сборка, выкладка), system — запись сторожа или системы
-  kind      String   @default("note")
-  author    String
-  text      String
-  createdAt DateTime @default(now())
+  kind           String   @default("note")
+  author         String
+  text           String
+  /// slug записи Библиотеки, если текст превысил лимит и полный материал сохранён там
+  libraryNoteId  String?
+  createdAt      DateTime @default(now())
 
   @@index([taskId, createdAt])
 }

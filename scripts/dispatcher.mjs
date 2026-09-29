@@ -16,8 +16,11 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { formatDenials } from "../src/lib/worker-denials-format.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+/** Единая форма команды доски для воркеров: полный путь работает из любой папки и проходит правила прав (DEV-79) */
+const CC = "node /opt/ihelp.am/scripts/cc.mjs";
 const DATA = path.join(ROOT, "data", "workers");
 const DRY = process.argv.includes("--dry-run");
 fs.mkdirSync(DATA, { recursive: true });
@@ -104,15 +107,22 @@ function heads() {
 
 const isActive = (unit) => ["active", "activating", "deactivating", "reloading"].includes(sh("systemctl", ["is-active", unit]).stdout.trim());
 
+/** Есть ли хотя бы один активный юнит ihelp-w-<agent>-* (диспетчер мог запустить несколько за время аренды) */
+const hasActiveWorkerUnit = (agent) => {
+  const r = sh("systemctl", ["list-units", "--state=active,activating,deactivating,reloading", "--no-legend", "--plain", `ihelp-w-${agent}-*`]);
+  return r.stdout.trim().length > 0;
+};
+
 /** Итог запуска по JSON claude -p: закончен, ошибка, упёрлись в лимит или команда записи в карточку отклонена правами */
 function outcome(result, killed, err = "") {
   const text = `${result?.result ?? ""} ${result?.subtype ?? ""} ${err}`;
-  if (/usage limit|limit reached|rate.?limit|out of (extra )?usage|5-hour limit|weekly limit/i.test(text)) return "limit";
+  // Лимит подписки — только у запуска, завершившегося ошибкой: успешный отчёт может упоминать «rate limit» по делу (src/lib/workers.ts, isLimitOutcome)
+  if ((!result || result.is_error) && /usage limit|limit reached|rate.?limit|out of (extra )?usage|5-hour limit|weekly limit/i.test(text)) return "limit";
   if (!result) return killed ? "timeout" : "failed";
   if (result.subtype === "error_max_turns") return "failed";
   // Запись в карточку отклонена правилами прав: Bash(node scripts/cc.mjs …) с многострочным текстом не прошёл
-  if (/(cc\.mjs|scripts\/cc).*(note|block|review|triaged|unblock|msg)/i.test(text) &&
-      /(denied|not permitted|not allowed|отклонен|запрещен|недоступн|tool.*blocked|permission)/i.test(text)) {
+  if (/(cc\.mjs|scripts\/cc).*(note|block|review|done|triaged|unblock|msg)/i.test(text) &&
+      /(denied|not permitted|not allowed|отклонен|запрещен|заблокирован|недоступн|tool.*blocked|permission)/i.test(text)) {
     return "permission_blocked";
   }
   return result.is_error ? "failed" : "done";
@@ -159,7 +169,10 @@ async function reconcile(running, stopAll) {
     const minutes = (Date.now() - Date.parse(run.startedAt)) / 60000;
     const status = stopped ? "stopped" : outcome(result, minutes >= LIMIT_MIN[run.pool] - 1, err);
     const summary = ((result?.result ? String(result.result) : err) || "нет ответа").trim().slice(-1500);
-    const logText = [result?.result ? String(result.result) : "", err ? `--- stderr ---\n${err.slice(-8000)}` : ""].filter(Boolean).join("\n\n").slice(-20000);
+    // Отказы прав — в самый конец лога, после обрезки: по этому разделу «Здоровье» считает долю запусков с отказами (DEV-79).
+    // В раздел идёт только форма команды, без текста аргументов и ключей
+    const denials = formatDenials(result?.permission_denials);
+    const logText = [[result?.result ? String(result.result) : "", err ? `--- stderr ---\n${err.slice(-8000)}` : ""].filter(Boolean).join("\n\n").slice(-16000), denials].filter(Boolean).join("\n\n");
     const u = result?.usage ?? {};
     finished++;
     await api({
@@ -183,8 +196,9 @@ async function reconcile(running, stopAll) {
         await api({ action: "workers-pause", until: resetAt(result).toISOString(), text: summary.slice(0, 300) });
       }
     }
-    // Вход в подписку пропал или истёк — пауза, пока человек не войдёт заново
-    if (/not logged in|\/login|oauth|failed to authenticate|authentication_error|\b401\b/i.test(summary)) {
+    // Вход в подписку пропал или истёк — пауза, пока человек не войдёт заново.
+    // Только для ошибочного запуска: успешный может упоминать OAuth и /login по делу (src/lib/login-pause.ts)
+    if (["failed", "timeout"].includes(status) && /not logged in|\/login|oauth|failed to authenticate|authentication_error|\b401\b/i.test(summary)) {
       await api({ action: "workers-pause", until: new Date(Date.now() + 6 * 3600_000).toISOString(), text: "Воркеры не вошли в Claude. Войти: scripts/claude-login.sh на сервере, затем «Снять паузу» в Control Center → Воркеры." });
     }
     if (!run.taskKey) continue;
@@ -211,18 +225,20 @@ async function prompt(pool, agent, key, extra) {
     ? `\n\nСообщения для твоей роли от людей (учти их в этой работе, если они к ней относятся):\n${messages.map((m) => `- ${m.from}${m.key ? ` · ${m.key}` : ""}: ${m.text}`).join("\n")}`
     : "";
   const ask = key
-    ? `Всё, что требует решения человека, — запиши в ленту задачи и заблокируй её (node scripts/cc.mjs block ${key} "вопрос, варианты, предложение" --on owner|product|design|tech --agent ${agent}), затем заверши работу.`
-    : `Всё, что требует решения человека, — вопрос с вариантами в карточке (block … --on owner|product) или сообщение владельцу (node scripts/cc.mjs msg "…" --to owner --agent ${agent}).`;
+    ? `Всё, что требует решения человека, — запиши в ленту задачи и заблокируй её (${CC} block ${key} "вопрос, варианты, предложение" --on owner --agent ${agent}; адресат — owner, product, design или tech), затем заверши работу.`
+    : `Всё, что требует решения человека, — вопрос с вариантами в карточке (block … --on owner или --on product) или сообщение владельцу (${CC} msg "…" --to owner --agent ${agent}).`;
+  const tmp = `/opt/ihelp.am/data/tmp/${pool}`;
   const common = `Ты — автономный воркер iHelp, агент ${agent}, тебя запустил диспетчер. Людей рядом нет: вопросов в чат не задавай.
 ${ask}
 Сначала прочитай CLAUDE.md и docs/DEV_SYSTEM.md, затем действуй строго по брифингу ниже. Основную копию /opt/ihelp.am не переключай, секреты не выводи.
-Команды пиши просто: текущая папка уже нужная — scripts/check.sh, node scripts/cc.mjs … (без sudo, без docker, без чтения .env). Разрешено только то, что нужно твоей роли; отклонённую команду не обходи другими путями — запиши в ленту, чего не хватило. Субагентов не запускай.
+Команды пиши просто, по одной за вызов: без перехода в другую папку, без склейки (&&, ;), без передачи вывода (|), без перенаправлений. Команда доски — всегда в одной форме: ${CC} команда КЛЮЧ … --agent ${agent}. Текст длиннее одной фразы (или с переводом строки, знаком доллара, обратными кавычками) — файлом: инструмент Write, путь ${tmp}/имя.md, затем --text-file ${tmp}/имя.md; папка уже создана, не /tmp. Файлы вне текущей папки читай инструментами Read, Grep, Glob.
+Разрешено только то, что нужно твоей роли. Отказ прав относится к записи команды, а не ко всей командной строке: один отказ — не повод останавливаться, возьми разрешённую форму из инструкции роли и повтори. Запрещённое правилами проекта (sudo, docker, управление службами, чтение .env, папки вне проекта, принудительная отправка, отправка в main, выкладка руками) не обходи никакой формой. Остановка — только после трёх отказов подряд на трёх разных формах одного действия: заблокируй задачу на технике (block … --on tech --text-file ${tmp}/denied.md) с перечнем отклонённых команд. Субагентов не запускай.
 В самом конце ответь одной строкой: что сделано и в каком статусе задача.${notes}`;
 
   if (pool === "designer") {
     const role = readText(path.join(ROOT, "docs", "roles", "DESIGNER.md")) || "(нет docs/roles/DESIGNER.md)";
     const task = extra.keys?.length
-      ? `Сделай дизайн задач по порядку: ${extra.keys.join(", ")}. Для каждой: show → поле «дизайн» через update --data (экраны, состояния, элементы и токены, тексты, телефон и компьютер, крайние случаи) → если у задачи новый экран или стоит «нужен макет» — макет по разделу «Макет» роли: HTML в data/mockups/КЛЮЧ/, затем node scripts/mockup-shot.mjs data/mockups/КЛЮЧ/имя.html, затем node scripts/cc.mjs attach КЛЮЧ --file data/mockups/КЛЮЧ/имя-phone.png --mockup --agent designer и attach …-desktop.png → если задача была заблокирована на дизайне — unblock; вопрос бренда (цвета, логотип, стиль) — block --on owner с вариантами. Не успеваешь все — лучше меньше, но до конца.`
+      ? `Сделай дизайн задач по порядку: ${extra.keys.join(", ")}. Для каждой: show → поле «дизайн» через update --file (JSON в /opt/ihelp.am/data/tmp/designer/; экраны, состояния, элементы и токены, тексты, телефон и компьютер, крайние случаи) → если у задачи новый экран или стоит «нужен макет» — макет по разделу «Макет» роли: HTML в data/mockups/КЛЮЧ/, затем node scripts/mockup-shot.mjs data/mockups/КЛЮЧ/имя.html, затем ${CC} attach КЛЮЧ --file data/mockups/КЛЮЧ/имя-phone.png --mockup --agent designer и attach …-desktop.png → если задача была заблокирована на дизайне — unblock; вопрос бренда (цвета, логотип, стиль) — block --on owner с вариантами. Не успеваешь все — лучше меньше, но до конца.`
       : "Интерфейсных задач без дизайна нет — сделай обзор по разделу «Обзор дизайна (по расписанию)»: проверь свежие интерфейсные задачи и записи дизайн-канона в Библиотеке, отправь короткий итог владельцу одним сообщением (msg --to owner).";
     return `${common}\n\n${task}\n\n═══ РОЛЬ: ДИЗАЙНЕР (docs/roles/DESIGNER.md) ═══\n${role}`;
   }
@@ -230,7 +246,7 @@ ${ask}
   if (pool === "product") {
     const role = readText(path.join(ROOT, "docs", "roles", "PRODUCT.md")) || "(нет docs/roles/PRODUCT.md)";
     const task = extra.keys?.length
-      ? `Разбери задачи с вопросом к продукту по порядку: ${extra.keys.join(", ")}. Для каждой: show → ответ в ленте и дополненная карточка (update --data) → unblock; если решение за владельцем по правилам роли — block --on owner с вариантами и рекомендацией. Не успеваешь все — лучше меньше, но до конца.`
+      ? `Разбери задачи с вопросом к продукту по порядку: ${extra.keys.join(", ")}. Для каждой: show → ответ в ленте и дополненная карточка (update --file, JSON в /opt/ihelp.am/data/tmp/product/) → unblock; если решение за владельцем по правилам роли — block --on owner с вариантами и рекомендацией. Не успеваешь все — лучше меньше, но до конца.`
       : "Вопросов к продукту нет — сделай обзор бэклога по разделу «Обзор требований (по расписанию)»: дополни слабые карточки, обнови продуктовый канон в Библиотеке и отправь короткий итог владельцу одним сообщением (msg --to owner).";
     return `${common}\n\n${task}\n\n═══ РОЛЬ: ПРОДАКТ (docs/roles/PRODUCT.md) ═══\n${role}`;
   }
@@ -246,11 +262,13 @@ ${ask}
   const brief = cc(["brief", key, "--role", pool === "dev" ? (extra.role ?? "dev") : pool, "--agent", agent]);
   const role =
     pool === "nocode"
-      ? `Задача ${key} без кода уже взята за тобой. Работаешь из основной копии /opt/ihelp.am только на чтение: файлы не правишь, коммитов нет — результат целиком в карточке. Сделай то, что просит задача (исследование, расчёт, тексты, инструкции, проверка настроек), и сдай отчётом: node scripts/cc.mjs review ${key} "…" --agent ${agent} — он попадёт владельцу в «Согласования». Шаги, которые может сделать только человек (завести аккаунт, оплатить, ввести пароль, добавить записи DNS у регистратора), не делай и не обходи: блокируй задачу на владельце с пошаговой инструкцией (block ${key} "…" --on owner). После его ответа задача вернётся к тебе. Не успеваешь — handoff с тем, что уже готово.`
+      ? `Задача ${key} без кода уже взята за тобой. Работаешь из основной копии /opt/ihelp.am только на чтение: файлы не правишь, коммитов нет — результат целиком в карточке. Сделай то, что просит задача (исследование, расчёт, тексты, инструкции, проверка настроек), и сдай отчётом: ${CC} review ${key} --text-file /opt/ihelp.am/data/tmp/nocode/review-${key}.md --release "…" --summary "…" --agent ${agent} — он попадёт владельцу в «Согласования». Шаги, которые может сделать только человек (завести аккаунт, оплатить, ввести пароль, добавить записи DNS у регистратора), не делай и не обходи: блокируй задачу на владельце с пошаговой инструкцией (block ${key} "…" --on owner). После его ответа задача вернётся к тебе. Не успеваешь — handoff с тем, что уже готово.`
       : pool === "dev"
       ? `Задача ${key} уже взята за тобой. Текущая папка — её рабочая копия (ветка task/${key}). Доведи задачу до review: сделано, scripts/check.sh зелёный, интерфейс — на стенде со скриншотами, коммиты «${key}: …», git push -u origin task/${key}, честный отчёт. Не успеваешь — закоммить, отправь ветку и сделай handoff с состоянием.`
       : pool === "tester"
         ? `Задача ${key} на проверке и держится за тобой. Текущая папка — её код на коммите ${extra.sha}. Это копия ветки: скриптов и команд последней версии в ней может не быть, поэтому все инструменты бери из основной копии по полному пути и запускай из текущей папки: bash /opt/ihelp.am/scripts/check.sh · bash /opt/ihelp.am/scripts/stand.sh up|down · node /opt/ihelp.am/scripts/stand-shot.mjs /ru/… · node /opt/ihelp.am/scripts/cc.mjs pass|fail|block … --agent ${agent}. Проверь по брифингу и поставь вердикт: pass или fail — без вердикта проверка не засчитывается и запуск повторится. Код не правь.`
+        : extra.keys && extra.keys.length > 1
+        ? `Задачи ${extra.keys.join(", ")} протестированы и держатся за тобой на время пачковой выкладки. Текущая папка — основная копия /opt/ihelp.am: руками в ней ничего не меняй. Для каждой задачи: show → проверить ленту, отметку тестировщика и диф. Стоп-условие для отдельной задачи — ручные шаги в «Готовности к деплою», секреты в коде, изменение цен, оплаты или прав без явного решения владельца в ленте, пустой отчёт тестировщика: тогда return с причиной (задача выйдет из пачки). Задачи с миграцией базы или правками скриптов выкладки/диспетчера скрипт выложит отдельно сам. Иначе — одна команда: scripts/deploy-batch.sh ${extra.keys.join(" ")}. Она сама закроет задачи или вернёт их.`
         : `Задача ${key} протестирована и держится за тобой на время выкладки. Текущая папка — основная копия /opt/ihelp.am: руками в ней ничего не меняй. Проверь карточку, ленту, отметку тестировщика и диф. Стоп-условия — ручные шаги в «Готовности к деплою», удаляющая миграция, секреты в коде, изменение цен, оплаты или прав без явного решения владельца в ленте, пустой отчёт тестировщика: тогда block --on owner или return с причиной. Иначе — одна команда: scripts/deploy-task.sh ${key}. Она сама закроет задачу или вернёт её.`;
   return `${common}\n\n${role}\n\n${brief}`;
 }
@@ -306,6 +324,8 @@ async function main() {
   const pools = plan.config.pools;
   for (const a of plan.actions) {
     const extra = { requestedBy: a.requestedBy };
+    // takenTask — ключ задачи, взятой cc.mjs; нужен для возврата аренды при провале spawn
+    let takenTask = null;
     try {
       if (a.pool === "dev") {
         const out = JSON.parse(cc(a.key ? ["take", a.key, "--agent", a.agent, "--json"] : ["next", "--agent", a.agent, "--auto", "--json"]));
@@ -313,6 +333,7 @@ async function main() {
           log(`${a.agent}: подходящей задачи нет`);
           continue;
         }
+        takenTask = out.task;
         const isL = out.estimate === "L";
         let devModel = isL ? (pools.dev.modelForL ?? pools.dev.model) : pools.dev.model;
         if (devModel === "opus" && plan.config.opusLimitUntil && Date.parse(plan.config.opusLimitUntil) > Date.now()) {
@@ -328,17 +349,25 @@ async function main() {
           log(`${a.agent}: подходящей задачи без кода нет`);
           continue;
         }
+        takenTask = out.task;
         await spawn("nocode", a.agent, out.task, pools.nocode.model, { ...extra, dir: out.dir, role: "nocode" });
       } else if (a.pool === "tester") {
         const out = JSON.parse(cc(["test", a.key, "--agent", a.agent, "--json"]));
         await spawn("tester", a.agent, a.key, pools.tester.model, { ...extra, dir: out.dir, sha: out.sha });
       } else if (a.pool === "deployer") {
-        cc(["lock", a.key, "--agent", "deployer"]);
-        await spawn("deployer", "deployer", a.key, pools.deployer.model, extra);
+        if (a.keys && a.keys.length > 1) {
+          // Пачковая выкладка: заблокировать все задачи и передать деплоеру список
+          for (const k of a.keys) cc(["lock", k, "--agent", "deployer"]);
+          await spawn("deployer", "deployer", a.keys[0], pools.deployer.model, { ...extra, keys: a.keys });
+        } else {
+          const singleKey = a.key ?? a.keys?.[0];
+          cc(["lock", singleKey, "--agent", "deployer"]);
+          await spawn("deployer", "deployer", singleKey, pools.deployer.model, extra);
+        }
       } else if (a.pool === "product") {
-        await spawn("product", "product", null, pools.product.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
+        await spawn("product", a.agent, null, pools.product.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
       } else if (a.pool === "designer") {
-        await spawn("designer", "designer", null, pools.designer.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
+        await spawn("designer", a.agent, null, pools.designer.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
       } else if (a.pool === "triage") {
         await spawn("triage", "triage", null, pools.triage.model, { ...extra, keys: a.keys ?? [], sweep: !!a.sweep });
         if (a.keys?.length) {
@@ -348,7 +377,33 @@ async function main() {
         }
       }
     } catch (e) {
-      log(`! ${a.agent} ${a.key ?? ""}: ${String(e.message ?? e).slice(0, 300)}`);
+      const msg = String(e.message ?? e);
+      // agent_busy: DEV-XX — у имени агента есть задача в работе
+      const busyMatch = msg.match(/agent_busy[:\s]+([A-Z][A-Z0-9-]*)/i);
+      if (busyMatch) {
+        const heldKey = busyMatch[1];
+        const unitActive = hasActiveWorkerUnit(a.agent);
+        const claim = (plan.inProgressClaims ?? []).find((c) => c.key === heldKey && c.agent === a.agent);
+        // Пульс устарел? Порог 10 минут; запись не найдена — неизвестное состояние, аренду не снимаем
+        // Зеркало функции shouldReleaseAgentBusy из src/lib/dispatch-lease.ts
+        const STALE_MS = 10 * 60_000;
+        const staleHeartbeat = claim !== undefined && (!claim.heartbeatAt || Date.parse(claim.heartbeatAt) <= Date.now() - STALE_MS);
+        if (!unitActive && staleHeartbeat) {
+          log(`· ${a.agent}: занят ${heldKey} без запуска — снимаем аренду`);
+          const r = await asAgent(a.agent, { action: "handoff", key: heldKey, text: "Аренда снята диспетчером: агент занят, запуск не создан." });
+          if (r.error) log(`! не удалось снять аренду ${heldKey}: ${r.error}`);
+        } else {
+          const pulseState = !claim?.heartbeatAt ? "нет" : staleHeartbeat ? "устарел" : "свежий";
+          log(`· ${a.agent}: агент занят, работает — ${heldKey} (юнит${unitActive ? " активен" : " нет"}, пульс ${pulseState})`);
+        }
+      } else if (takenTask) {
+        // задачу взяли, но запуск не создался — возвращаем в очередь
+        log(`! ${a.agent} ${takenTask}: запуск не создан — ${msg.slice(0, 200)}`);
+        const r = await asAgent(a.agent, { action: "handoff", key: takenTask, text: `Запуск не создан: ${msg.slice(0, 200)}` });
+        if (r.error) log(`! не удалось вернуть ${takenTask}: ${r.error}`);
+      } else {
+        log(`! ${a.agent} ${a.key ?? ""}: ${msg.slice(0, 300)}`);
+      }
     }
   }
 }
