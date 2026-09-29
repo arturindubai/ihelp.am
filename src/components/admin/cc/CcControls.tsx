@@ -555,7 +555,17 @@ export function DesignReturnButton({ taskKey }: { taskKey: string }) {
   const { pending, error, done, run } = useAct();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
-  if (done) return <p className="text-xs text-warn">{t("returned")}</p>;
+  const [sentReason, setSentReason] = useState("");
+  if (done) return (
+    <div className="flex max-w-sm flex-col items-end gap-1">
+      <span className="chip bg-warn-50 text-warn">{t("returned")}</span>
+      {sentReason && (
+        <span className="line-clamp-1 text-xs text-muted" title={sentReason}>
+          {sentReason.length > 60 ? sentReason.slice(0, 60) + "…" : sentReason}
+        </span>
+      )}
+    </div>
+  );
   return (
     <div className="flex flex-col items-end gap-1">
       {!open ? (
@@ -567,6 +577,7 @@ export function DesignReturnButton({ taskKey }: { taskKey: string }) {
           className="flex w-full max-w-sm gap-1.5"
           onSubmit={(e) => {
             e.preventDefault();
+            setSentReason(reason);
             run(() => ccReturnDesignAction(taskKey, reason), () => setOpen(false));
           }}
         >
