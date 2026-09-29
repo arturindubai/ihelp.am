@@ -3,7 +3,7 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { ccSaveWorkersAction, ccWorkersControlAction } from "@/server/actions/admin/cc";
-import { EVERY_MIN, MODELS, MODES, SINGLE, workersState, type Pool, type PoolConfig, type WorkersCommand, type WorkersConfig, type WorkersState } from "@/lib/workers";
+import { DAILY_CAP_MAX, EVERY_MIN, MODELS, MODES, SINGLE, workersState, type Pool, type PoolConfig, type WorkersCommand, type WorkersConfig, type WorkersState } from "@/lib/workers";
 import { cn, dateLabel, timeLabel } from "@/lib/format";
 
 type Patch = Parameters<typeof ccSaveWorkersAction>[0];
@@ -177,10 +177,14 @@ export function WorkersMaster({ initial, running }: { initial: WorkersConfig; ru
           <input className="input h-9 w-20 py-1" type="number" min={1} max={15} value={c.triageBatch} onChange={(e) => set({ triageBatch: Number(e.target.value) }, false)} />
         </div>
         <div>
+          <label className="label">{t("deployBatch")}</label>
+          <input className="input h-9 w-20 py-1" type="number" min={1} max={5} value={c.deployBatch} onChange={(e) => set({ deployBatch: Number(e.target.value) }, false)} />
+        </div>
+        <div>
           <label className="label">{t("sweepEveryH")}</label>
           <input className="input h-9 w-20 py-1" type="number" min={0} max={168} value={c.sweepEveryH} onChange={(e) => set({ sweepEveryH: Number(e.target.value) }, false)} />
         </div>
-        <button className="btn-dark btn-sm" disabled={pending} onClick={() => save({ deployWindow: c.deployWindow, triageBatch: c.triageBatch, sweepEveryH: c.sweepEveryH })}>
+        <button className="btn-dark btn-sm" disabled={pending} onClick={() => save({ deployWindow: c.deployWindow, triageBatch: c.triageBatch, deployBatch: c.deployBatch, sweepEveryH: c.sweepEveryH })}>
           {saved ? t("saved") : t("save")}
         </button>
       </div>
@@ -260,7 +264,15 @@ export function PoolSettings({ pool, initial }: { pool: Pool; initial: PoolConfi
         </label>
         <label className="flex flex-col gap-0.5">
           <span className="text-muted">{t("dailyCap")}</span>
-          <input className="input h-8 w-16 py-0.5 text-xs" type="number" min={0} max={100} value={p.dailyCap} onChange={(e) => put({ dailyCap: Number(e.target.value) })} />
+          <input
+            className="input h-8 w-24 py-0.5 text-xs"
+            type="number"
+            min={0}
+            max={DAILY_CAP_MAX}
+            placeholder={t("dailyCapNone")}
+            value={p.dailyCap ?? ""}
+            onChange={(e) => put({ dailyCap: e.target.value.trim() === "" ? null : Number(e.target.value) })}
+          />
         </label>
         <button className="btn-outline btn-sm" disabled={pending} onClick={() => savePool({ model: p.model, modelForL: p.modelForL, max: p.max, dailyCap: p.dailyCap })}>
           {saved ? t("saved") : t("save")}

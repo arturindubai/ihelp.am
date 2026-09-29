@@ -29,6 +29,10 @@ const visitStore = new Map<
   }
 >();
 
+vi.mock("./reviews", () => ({
+  createReviewToken: vi.fn().mockResolvedValue("test-review-token"),
+}));
+
 const userStore = new Map<
   string,
   { telegramId: string | null; email: string | null; name: string | null; emailUnsubscribedAt?: Date | null }
@@ -68,6 +72,9 @@ vi.mock("../db", () => ({
       findUnique: vi.fn().mockImplementation(({ where }: { where: { id: string } }) =>
         Promise.resolve(userStore.get(where.id) ?? null),
       ),
+    },
+    clientMessage: {
+      create: vi.fn().mockResolvedValue({}),
     },
   },
 }));
