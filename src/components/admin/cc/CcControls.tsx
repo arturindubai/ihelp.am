@@ -15,6 +15,7 @@ import {
   ccOwnerAnswerManyAction,
   ccOwnerPostpone3DaysAction,
   ccOwnerPostponeAction,
+  ccReadAllMessagesAction,
   ccReadMessageAction,
   ccRejectManyAction,
   ccReturnManyAction,
@@ -704,6 +705,25 @@ export function OwnerQuestionCard({ taskKey, title, blockedReason, taskHref }: {
 
 /* ───────────── Сообщения ───────────── */
 
+/** Кнопка «Прочитать всё»: отмечает непрочитанными все уведомления владельца за один клик */
+export function MarkAllReadButton({ unreadCount }: { unreadCount: number }) {
+  const t = useTranslations("admin.cc.notify");
+  const { pending, error, done, run } = useAct();
+  return (
+    <div className="flex shrink-0 flex-col items-end gap-1">
+      <button
+        className="btn-outline btn-sm"
+        disabled={pending || unreadCount === 0}
+        onClick={() => run(() => ccReadAllMessagesAction())}
+      >
+        {pending && <span className="mr-1 inline-block size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />}
+        {done ? t("markAllReadDone") : t("markAllRead")}
+      </button>
+      {error && <p className="text-xs text-bad">{t("failed")}</p>}
+    </div>
+  );
+}
+
 export function MessageComposer({ roles, initialTo = "workers", taskKey }: { roles: readonly string[]; initialTo?: string; taskKey?: string }) {
   const t = useTranslations("admin.cc.notify");
   const [to, setTo] = useState(initialTo);
@@ -739,7 +759,11 @@ export function MessageComposer({ roles, initialTo = "workers", taskKey }: { rol
   );
 }
 
-export function MessageActions({ id, unread, replyTo }: { id: string; unread: boolean; replyTo: string | null }) {
+/**
+ * Кнопки под уведомлением. notifyOnly=true: показывает только «Прочитано» (без «Ответить» и «В бэклог»).
+ * Используется в NotifyTab, где уведомления не требуют действий кроме отметки прочитанным.
+ */
+export function MessageActions({ id, unread, replyTo, notifyOnly }: { id: string; unread: boolean; replyTo: string | null; notifyOnly?: boolean }) {
   const t = useTranslations("admin.cc.notify");
   const { pending, run } = useAct();
   const [reply, setReply] = useState(false);
@@ -753,26 +777,28 @@ export function MessageActions({ id, unread, replyTo }: { id: string; unread: bo
             {t("read")}
           </button>
         )}
-        <button
-          className="btn-outline btn-sm"
-          disabled={pending}
-          onClick={() =>
-            run(async () => {
-              const r = await ccMessageToIntakeAction(id);
-              if (r.ok) router.push(`/admin/control?task=${r.key}`);
-              return r;
-            })
-          }
-        >
-          {t("toBacklog")}
-        </button>
-        {replyTo && (
+        {!notifyOnly && (
+          <button
+            className="btn-outline btn-sm"
+            disabled={pending}
+            onClick={() =>
+              run(async () => {
+                const r = await ccMessageToIntakeAction(id);
+                if (r.ok) router.push(`/admin/control?task=${r.key}`);
+                return r;
+              })
+            }
+          >
+            {t("toBacklog")}
+          </button>
+        )}
+        {!notifyOnly && replyTo && (
           <button className="btn-ghost btn-sm" onClick={() => setReply(!reply)}>
             {t("reply")}
           </button>
         )}
       </div>
-      {reply && replyTo && (
+      {reply && replyTo && !notifyOnly && (
         <form
           className="mt-1.5 flex gap-1.5"
           onSubmit={(e) => {
@@ -813,6 +839,8 @@ export type YouCard = {
   origTaskHref?: string;
   /** Ключ задачи-оригинала для отображения в ссылке */
   origTaskKey?: string;
+  /** Сколько задач разблокирует ответ на этот вопрос */
+  unblocksCount?: number;
 };
 export type YouPostponedTask = {
   key: string;
@@ -953,6 +981,11 @@ function YouQuestionCard({ card, onDone }: { card: YouCard; onDone: (id: string)
             </Link>
           ))}
         </div>
+      )}
+      {(card.unblocksCount ?? 0) >= 1 && (
+        <p className="mb-2">
+          <span className="chip bg-brand-50 text-xs text-brand">{t("unblocks", { n: card.unblocksCount ?? 0 })}</span>
+        </p>
       )}
       <div className="space-y-4">
         {visibleBlocks.map((block) => {

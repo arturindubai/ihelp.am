@@ -10,6 +10,7 @@ import { flowOf, intakeTitle, laneOf, nextIntakeKey, sizeOf, weekStart } from "@
 import { CLOSED_STATUSES, LEASE_MIN, OPEN_STATUSES } from "@/lib/cc-flow";
 import { testedCurrent, workersState } from "@/lib/workers";
 import { countOwnerCards } from "@/lib/cc-owner-q";
+import { waitingDeps as waitingDepsLib, depChains as depChainsLib } from "@/lib/cc-chains";
 import { Prisma } from "@prisma/client";
 
 /**
@@ -130,7 +131,32 @@ export async function needsYou() {
     returnedRuns: returnedRuns.slice(0, 10),
     pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null,
     alertMissing: !hasAlertRecipient(settings),
+    /** Задачи, ждущие зависимостей с зависшим корнем */
+    waitingDeps: attn.waitingDeps,
+    /** Цепочки зависимостей: корень → ждущие задачи */
+    depChains: attn.depChains,
   };
+}
+
+/**
+ * Цепочки зависимостей для страницы Здоровья: только прямые зависимости с зависшим корнем.
+ * Лёгкий запрос, не тянет данные воркеров и блокировок.
+ */
+export async function depChainsStatus() {
+  const now = new Date();
+  const waiters = await db.task.findMany({
+    where: { status: { in: ["ready", "backlog", "blocked"] }, depends: { isEmpty: false } },
+    select: { key: true, title: true, status: true, depends: true },
+  });
+  if (!waiters.length) return [];
+  const depKeys = [...new Set(waiters.flatMap((t) => t.depends))];
+  const deps = await db.task.findMany({
+    where: { key: { in: depKeys } },
+    select: { key: true, title: true, status: true, blockedOn: true, blockedUntil: true, updatedAt: true },
+  });
+  const depMap = new Map(deps.map((d) => [d.key, d]));
+  const entries = waitingDepsLib(waiters, depMap, now);
+  return depChainsLib(entries, depMap);
 }
 
 /**
