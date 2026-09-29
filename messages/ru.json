@@ -526,7 +526,8 @@
       "title": "Название",
       "subtitle": "Подзаголовок",
       "description": "Описание",
-      "badge": "Бейдж"
+      "badge": "Бейдж",
+      "unsaved": "Не сохранено"
     },
     "dashboard": {
       "today": "Визиты сегодня",
@@ -718,7 +719,19 @@
       "excludesText": "Что не входит",
       "includesExcludesPlaceholder": "Каждая строка — отдельный пункт",
       "rating": "Рейтинг",
-      "bookings": "Заказов"
+      "bookings": "Заказов",
+      "unsavedTitle": "Изменения не сохранены. Уйти без сохранения?",
+      "unsavedStay": "Остаться",
+      "unsavedLeave": "Уйти",
+      "noMasters": "Нет привязанных мастеров",
+      "noVariants": "Нет ни одного варианта — клиент не сможет выбрать",
+      "addCategory": "Добавить категорию",
+      "masterSearch": "Поиск мастера…",
+      "mastersSelected": "{n, plural, one {# выбран} few {# выбрано} other {# выбрано}}",
+      "visitsNextWeek": "{n} виз. на нед.",
+      "slugFromTitle": "Из названия",
+      "previewOptions": "{groups} {groups, plural, one {группа} few {группы} other {групп}}, {variants} {variants, plural, one {вариант} few {варианта} other {вариантов}}",
+      "previewStep": "Шаг {n}"
     },
     "masters": {
       "title": "Мастера",

@@ -505,7 +505,8 @@
       "title": "",
       "subtitle": "",
       "description": "",
-      "badge": ""
+      "badge": "",
+      "unsaved": ""
     },
     "dashboard": {
       "today": "",
@@ -687,7 +688,19 @@
       "excludesText": "",
       "includesExcludesPlaceholder": "",
       "rating": "",
-      "bookings": ""
+      "bookings": "",
+      "unsavedTitle": "",
+      "unsavedStay": "",
+      "unsavedLeave": "",
+      "noMasters": "",
+      "noVariants": "",
+      "addCategory": "",
+      "masterSearch": "",
+      "mastersSelected": "{n} ընտրված",
+      "visitsNextWeek": "",
+      "slugFromTitle": "",
+      "previewOptions": "",
+      "previewStep": ""
     },
     "masters": {
       "title": "",

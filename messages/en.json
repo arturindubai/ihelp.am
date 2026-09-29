@@ -524,7 +524,8 @@
       "title": "Title",
       "subtitle": "Subtitle",
       "description": "Description",
-      "badge": "Badge"
+      "badge": "Badge",
+      "unsaved": "Unsaved"
     },
     "dashboard": {
       "today": "Visits today",
@@ -706,7 +707,19 @@
       "excludesText": "What's not included",
       "includesExcludesPlaceholder": "Each line is a separate item",
       "rating": "Rating",
-      "bookings": "Bookings"
+      "bookings": "Bookings",
+      "unsavedTitle": "Changes not saved. Leave without saving?",
+      "unsavedStay": "Stay",
+      "unsavedLeave": "Leave",
+      "noMasters": "No assigned masters",
+      "noVariants": "No variants — clients won't be able to choose",
+      "addCategory": "Add category",
+      "masterSearch": "Search masters…",
+      "mastersSelected": "{n, plural, one {# selected} other {# selected}}",
+      "visitsNextWeek": "{n} vis./week",
+      "slugFromTitle": "From title",
+      "previewOptions": "{groups} {groups, plural, one {group} other {groups}}, {variants} {variants, plural, one {variant} other {variants}}",
+      "previewStep": "Step {n}"
     },
     "masters": {
       "title": "Pros",
