@@ -17,7 +17,6 @@ function v(
     masterId: "m-1",
     masterName: "Анна",
     paymentMethod: "CASH",
-    orderCancelled: false,
     ...overrides,
   };
 }
@@ -36,14 +35,25 @@ describe("calcPeriodStats", () => {
     expect(s.byChannel.package).toBe(0);
   });
 
-  it("отменённый заказ не входит в выручку", () => {
+  it("выполненный визит входит в выручку, даже если заказ отменён", () => {
     const visits: FinanceVisit[] = [
-      v({ date: "2026-09-15", price: 10000, orderCancelled: true }),
-      v({ date: "2026-09-15", price: 5000, orderId: "ord-2", orderCancelled: false }),
+      v({ date: "2026-09-15", price: 10000, orderId: "ord-1" }),
+      v({ date: "2026-09-15", price: 5000, orderId: "ord-2" }),
     ];
     const s = calcPeriodStats(visits, null);
-    expect(s.revenue).toBe(5000);
-    expect(s.ordersCount).toBe(1);
+    expect(s.revenue).toBe(15000);
+    expect(s.ordersCount).toBe(2);
+  });
+
+  it("заказ отменён после двух выполненных визитов — оба в выручке", () => {
+    const visits: FinanceVisit[] = [
+      v({ date: "2026-09-10", price: 8000, orderId: "ord-cancel" }),
+      v({ date: "2026-09-17", price: 8000, orderId: "ord-cancel" }),
+      v({ date: "2026-09-20", price: 5000, orderId: "ord-active" }),
+    ];
+    const s = calcPeriodStats(visits, null);
+    expect(s.revenue).toBe(21000);
+    expect(s.ordersCount).toBe(2);
   });
 
   it("правильно считает выручку и число уникальных заказов", () => {
@@ -127,13 +137,13 @@ describe("calcDailyRevenue", () => {
     expect(rows[1].total).toBe(7000);
   });
 
-  it("отменённый заказ не в графике", () => {
+  it("выполненные визиты в графике, включая визиты отменённых заказов", () => {
     const visits = [
-      v({ date: "2026-09-01", price: 10000, orderCancelled: true }),
-      v({ date: "2026-09-01", price: 5000, orderId: "ord-2", orderCancelled: false }),
+      v({ date: "2026-09-01", price: 10000, orderId: "ord-1" }),
+      v({ date: "2026-09-01", price: 5000, orderId: "ord-2" }),
     ];
     const rows = calcDailyRevenue(visits, "2026-09-01", "2026-09-01");
-    expect(rows[0].total).toBe(5000);
+    expect(rows[0].total).toBe(15000);
   });
 
   it("разбивка по каналам верна", () => {
@@ -170,12 +180,12 @@ describe("calcCashByMaster", () => {
     expect(s.totalVisits).toBe(1);
   });
 
-  it("отменённые заказы не считаются", () => {
+  it("наличные из выполненного визита учитываются, даже если заказ отменён", () => {
     const visits = [
-      v({ date: "2026-09-01", price: 9000, orderCancelled: true }),
+      v({ date: "2026-09-01", price: 9000, paymentMethod: "CASH", orderId: "ord-1" }),
     ];
     const s = calcCashByMaster(visits);
-    expect(s.totalAmount).toBe(0);
+    expect(s.totalAmount).toBe(9000);
   });
 
   it("итог по мастерам верен", () => {
@@ -214,9 +224,9 @@ describe("calcMasterRanking", () => {
     expect(calcMasterRanking(visits)).toHaveLength(0);
   });
 
-  it("отменённые заказы не в рейтинге", () => {
-    const visits = [v({ date: "2026-09-01", price: 9000, orderCancelled: true })];
-    expect(calcMasterRanking(visits)).toHaveLength(0);
+  it("выполненный визит участвует в рейтинге, даже если заказ отменён", () => {
+    const visits = [v({ date: "2026-09-01", price: 9000, orderId: "ord-1" })];
+    expect(calcMasterRanking(visits)).toHaveLength(1);
   });
 
   it("рейтинг сортируется по выручке", () => {

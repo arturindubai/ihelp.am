@@ -3,7 +3,7 @@ import { addDays } from "./time";
 export type PaymentMethod = "CASH" | "CARD";
 export type PlanKind = "ONE_TIME" | "SUBSCRIPTION" | "PACKAGE";
 
-/** Один выполненный визит, передаётся из сервиса (сервис фильтрует отменённые заказы) */
+/** Один выполненный визит (Visit.status = DONE), передаётся из сервиса */
 export interface FinanceVisit {
   /** YYYY-MM-DD по ереванскому времени (из visit.finishedAt) */
   date: string;
@@ -19,8 +19,6 @@ export interface FinanceVisit {
   masterName: string | null;
   /** Способ оплаты заказа */
   paymentMethod: PaymentMethod;
-  /** Заказ был отменён — такие визиты исключаются из выручки */
-  orderCancelled: boolean;
 }
 
 /** Статистика за период */
@@ -49,7 +47,7 @@ export interface DailyChannelRow {
   total: number;
 }
 
-/** Наличные по одному мастеру */
+/** Полученные наличными по одному мастеру */
 export interface MasterCashRow {
   masterId: string;
   masterName: string;
@@ -57,7 +55,7 @@ export interface MasterCashRow {
   amount: number;
 }
 
-/** Итог наличных к сдаче */
+/** Итого получено наличными за период */
 export interface CashSummary {
   masters: MasterCashRow[];
   totalAmount: number;
@@ -79,13 +77,10 @@ export interface ConversionInfo {
   value: number | null;
 }
 
-/** Фильтрует только визиты, которые входят в выручку (заказ не отменён) */
-function revenueVisits(visits: FinanceVisit[]): FinanceVisit[] {
-  return visits.filter((v) => !v.orderCancelled);
-}
-
 /**
  * Считает статистику за период.
+ * Все выполненные визиты (Visit.status=DONE) входят в выручку — включая визиты
+ * из отменённых заказов (возвраты пока не учитываются, PAY-3).
  * @param visits       — выполненные визиты периода (из сервиса)
  * @param prevRevenue  — выручка за предыдущий период той же длины; null если нет данных
  */
@@ -93,7 +88,7 @@ export function calcPeriodStats(
   visits: FinanceVisit[],
   prevRevenue: number | null,
 ): PeriodStats {
-  const rv = revenueVisits(visits);
+  const rv = visits;
 
   let revenue = 0;
   let oneTime = 0;
@@ -135,7 +130,7 @@ export function calcDailyRevenue(
   from: string,
   to: string,
 ): DailyChannelRow[] {
-  const rv = revenueVisits(visits);
+  const rv = visits;
 
   const byDate: Record<string, { oneTime: number; subscription: number; package: number }> = {};
 
@@ -163,11 +158,12 @@ export function calcDailyRevenue(
 }
 
 /**
- * Считает наличные к сдаче по мастерам.
- * Учитываются только визиты с paymentMethod=CASH из невытых заказов.
+ * Считает получено наличными по мастерам за период.
+ * Учитываются все визиты с paymentMethod=CASH.
+ * Сколько из этого уже сдано — не учитывается (появится вместе с регламентом наличных, PAY-3).
  */
 export function calcCashByMaster(visits: FinanceVisit[]): CashSummary {
-  const rv = revenueVisits(visits).filter((v) => v.paymentMethod === "CASH");
+  const rv = visits.filter((v) => v.paymentMethod === "CASH");
 
   const byMaster: Record<string, { name: string; visitsCount: number; amount: number }> = {};
 
@@ -196,13 +192,13 @@ export function calcCashByMaster(visits: FinanceVisit[]): CashSummary {
 
 /**
  * Считает рейтинг мастеров по выручке (топ-10 по умолчанию).
- * Выручка и число заказов — по всем выполненным визитам невытых заказов.
+ * Визиты без мастера (masterId=null) не учитываются.
  */
 export function calcMasterRanking(
   visits: FinanceVisit[],
   limit = 10,
 ): MasterRankRow[] {
-  const rv = revenueVisits(visits).filter((v) => v.masterId !== null);
+  const rv = visits.filter((v) => v.masterId !== null);
 
   const byMaster: Record<
     string,

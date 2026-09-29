@@ -36,7 +36,6 @@ async function loadVisits(from: string, to: string): Promise<FinanceVisit[]> {
         select: {
           id: true,
           kind: true,
-          status: true,
           paymentMethod: true,
         },
       },
@@ -48,7 +47,6 @@ async function loadVisits(from: string, to: string): Promise<FinanceVisit[]> {
     price: r.price,
     kind: r.order.kind as FinanceVisit["kind"],
     orderId: r.order.id,
-    orderCancelled: r.order.status === "CANCELLED",
     masterId: r.masterId,
     masterName: r.master ? extractName(r.master.name) : null,
     paymentMethod: r.order.paymentMethod as FinanceVisit["paymentMethod"],
@@ -86,9 +84,7 @@ export async function getFinanceStats(from: string, to: string): Promise<{
     loadVisits(prevFrom, prevTo),
   ]);
 
-  const prevRevenue = prevVisits
-    .filter((v) => !v.orderCancelled)
-    .reduce((s, v) => s + v.price, 0);
+  const prevRevenue = prevVisits.reduce((s, v) => s + v.price, 0);
 
   return {
     stats: calcPeriodStats(visits, prevRevenue),
