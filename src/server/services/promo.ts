@@ -10,6 +10,9 @@ export async function checkPromo(opts: { code: string; userId?: string | null; p
   if (!code) return { ok: false, error: "not_found" };
   const p = await db.promoCode.findUnique({ where: { code } });
   if (!p || !p.active) return { ok: false, error: "not_found" };
+  // Персональный промокод: проверяем сразу после active, чтобы не раскрывать факт существования кода чужим клиентам
+  if (p.forPhone && opts.phone !== p.forPhone) return { ok: false, error: "not_found" };
+  if (p.forEmail && opts.email?.toLowerCase() !== p.forEmail) return { ok: false, error: "not_found" };
   const now = new Date();
   if ((p.validFrom && p.validFrom > now) || (p.validTo && p.validTo < now)) return { ok: false, error: "expired" };
   if (p.usageLimit != null && p.usedCount >= p.usageLimit) return { ok: false, error: "limit" };
@@ -17,9 +20,6 @@ export async function checkPromo(opts: { code: string; userId?: string | null; p
   if (p.planKinds.length && !p.planKinds.includes(opts.planKind)) return { ok: false, error: "service" };
   if (p.firstOrderOnly && !opts.isFirstOrder) return { ok: false, error: "first_only" };
   if (p.minOrder && opts.amount < p.minOrder) return { ok: false, error: "min_order", amount: p.minOrder };
-  // Персональный промокод: проверяем совпадение телефона или email
-  if (p.forPhone && opts.phone !== p.forPhone) return { ok: false, error: "not_found" };
-  if (p.forEmail && opts.email?.toLowerCase() !== p.forEmail) return { ok: false, error: "not_found" };
   if (opts.userId || opts.phone) {
     const used = await db.promoRedemption.count({ where: { promoId: p.id, OR: [opts.userId ? { userId: opts.userId } : {}, opts.phone ? { phone: opts.phone } : {}].filter((x) => Object.keys(x).length) } });
     if (used >= p.perUserLimit) return { ok: false, error: "used" };

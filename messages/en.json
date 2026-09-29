@@ -741,7 +741,8 @@
       "forPhoneHint": "If set, this promo code is only valid for the client with this phone number",
       "forEmailHint": "If set, this promo code is only valid for the client with this email address",
       "personal": "Personal",
-      "forClient": "Client"
+      "forClient": "Client",
+      "forBothNote": "If both fields are set, the promo code requires both phone and email to match"
     },
     "banners": {
       "title": "Home page banners",

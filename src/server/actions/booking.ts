@@ -62,7 +62,7 @@ export async function promoAction(slug: string, optionIds: string[], planId: str
   if (!sel.ok) return { ok: false as const, error: "not_found" };
   const first = await isFirstOrder(u?.id);
   const base = calculatePrice({ lines: sel.lines, plan: sel.pricePlan, isFirstOrder: first, rules: settings.pricing });
-  const r = await checkPromo({ code, userId: u?.id, phone: u?.phone, email: u?.email, serviceId: raw.id, planKind: sel.plan?.kind || "ONE_TIME", amount: base.first.base, isFirstOrder: first });
+  const r = await checkPromo({ code, userId: u?.id, phone: u?.phone, email: u?.emailVerifiedAt ? u?.email : null, serviceId: raw.id, planKind: sel.plan?.kind || "ONE_TIME", amount: base.first.base, isFirstOrder: first });
   if (!r.ok) return r;
   const { id: _id, ...promo } = r.promo;
   return { ok: true as const, promo };

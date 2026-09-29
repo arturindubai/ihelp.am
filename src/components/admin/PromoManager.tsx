@@ -31,7 +31,7 @@ export function PromoManager({ promos, services }: { promos: { id: string; usedC
               <span className="block text-xs text-muted">{p.data.validTo ? `→ ${p.data.validTo}` : ""} {p.data.firstOrderOnly ? `· ${t("promos.firstOrderOnly")}` : ""}</span>
             </span>
             {(p.data.forPhone || p.data.forEmail) && (
-              <span className="shrink-0 text-xs text-brand font-medium">{t("promos.personal")}: {p.data.forPhone || p.data.forEmail}</span>
+              <span className="shrink-0 text-xs text-brand font-medium">{t("promos.forClient")}: {[p.data.forPhone, p.data.forEmail].filter(Boolean).join(", ")}</span>
             )}
             <span className="text-xs text-muted">{t("promos.used")}: {p.usedCount}{p.data.usageLimit ? `/${p.data.usageLimit}` : ""}</span>
           </button>
@@ -65,6 +65,7 @@ export function PromoManager({ promos, services }: { promos: { id: string; usedC
             </div>
             <TextInput className="col-span-2" label={t("promos.forPhone")} value={d.forPhone ?? ""} hint={t("promos.forPhoneHint")} onChange={(v) => up({ forPhone: v || null })} />
             <TextInput className="col-span-2" label={t("promos.forEmail")} value={d.forEmail ?? ""} hint={t("promos.forEmailHint")} onChange={(v) => up({ forEmail: v || null })} />
+            {(d.forPhone && d.forEmail) && <p className="col-span-2 text-xs text-muted">{t("promos.forBothNote")}</p>}
             <div className="col-span-2">
               <label className="label">{t("promos.services")}</label>
               <p className="mb-1 text-xs text-muted">{t("promos.anyService")}</p>

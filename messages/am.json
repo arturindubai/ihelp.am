@@ -741,7 +741,8 @@
       "forPhoneHint": "",
       "forEmailHint": "",
       "personal": "",
-      "forClient": ""
+      "forClient": "",
+      "forBothNote": ""
     },
     "banners": {
       "title": "",
