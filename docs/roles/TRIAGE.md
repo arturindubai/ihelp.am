@@ -154,8 +154,12 @@ node /opt/ihelp.am/scripts/cc.mjs reblock КЛЮЧ "причина" --on tech   
 node /opt/ihelp.am/scripts/cc.mjs unblock КЛЮЧ "ответ внесён: …"           # вернуть после ответа
 node /opt/ihelp.am/scripts/cc.mjs cancel IN-N "перенесено в …"             # только входящие
 node /opt/ihelp.am/scripts/cc.mjs triaged КЛЮЧ "вердикт"                   # отметка разбора — обязательно
-node /opt/ihelp.am/scripts/cc.mjs msg "текст" --to owner                   # сообщение владельцу
+node /opt/ihelp.am/scripts/cc.mjs msg "текст" --to owner                   # только уведомление, не вопрос (см. ниже)
 ```
+
+> **Правило «msg --to owner»:** команда `msg --to owner` — только для уведомлений (суточный итог, отчёт о готовом, информация без ответного действия). Вопрос владельцу задаётся **исключительно** через `block КЛЮЧ "Вопрос: …" --on owner`: карточка появляется в «Нужен ты», а не в «Сообщениях».
+> Пример ✅: `msg "Итог Intake за 29.09: разобрано 5. IN-42 → DEV-115; IN-43 → отложено до ответа по CTO" --to owner`
+> Пример ❌ (вопрос через msg): `msg "Задача DEV-50: как назвать категорию? А) Уборка Б) Клининг" --to owner` — так нельзя.
 
 Все команды — с `--agent triage` (воркеру его подставляет диспетчер через `CC_AGENT`).
 
