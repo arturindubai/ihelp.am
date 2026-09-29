@@ -228,7 +228,7 @@ export function PricesManager({ rows }: Props) {
                   </button>
                   <button
                     type="button"
-                    className="btn-sm min-h-9 rounded-lg bg-warn px-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                    className="btn-sm min-h-9 rounded-lg bg-warn px-3 text-sm font-semibold text-inverse hover:opacity-90 disabled:opacity-50"
                     onClick={handleBulkConfirm}
                     disabled={bulkPending}
                   >
