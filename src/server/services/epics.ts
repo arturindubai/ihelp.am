@@ -1,7 +1,16 @@
 import "server-only";
 import { db } from "../db";
-import { CLOSED_STATUSES } from "@/lib/cc-flow";
+import { CLOSED_STATUSES, computeEpicStatus } from "@/lib/cc-flow";
 import type { Prisma } from "@prisma/client";
+
+/** Пересчитывает и сохраняет статус эпика по текущим задачам. Только для code-эпиков без ручных правок */
+export async function refreshEpicStatus(epicKey: string) {
+  const epic = await db.epic.findUnique({ where: { key: epicKey }, select: { id: true, source: true } });
+  if (!epic || epic.source === "ui") return;
+  const tasks = await db.task.findMany({ where: { epicKey }, select: { status: true } });
+  const newStatus = computeEpicStatus(tasks.map((t) => t.status));
+  await db.epic.update({ where: { key: epicKey }, data: { status: newStatus } });
+}
 
 export type EpicFilters = { status?: string; q?: string };
 

@@ -9,6 +9,7 @@ import { isAgentAuthor, findBlockingError } from "@/lib/cc-triage";
 import { nextIntakeKey, intakeTitle } from "@/lib/cc-lanes";
 import { intakeClosingMapValid, parseDuplicateOriginalKey } from "@/lib/cc-intake";
 import { needsLibrary, buildSummaryText, buildLibraryTitle } from "@/lib/cc-overflow";
+import { refreshEpicStatus } from "./epics";
 import type { Prisma, Task } from "@prisma/client";
 
 /**
@@ -200,12 +201,15 @@ export async function transition(key: string, input: TransitionInput, actor: Act
     : commentBody;
   await say(task.id, actor.name, kindFor(from, to, actor, task.claimedBy), commentText, key);
   if (to === "done" || to === "cancelled") await releaseDependents(key);
+  if (to === "done" || to === "cancelled") await maybeCloseParent(key, to).catch(() => null);
   // После приёмки не-код задачи с указанными следующими шагами — карточка в очередь триажа
   if (to === "done" && task.layer === "none" && task.nextSteps.length > 0) {
     await createNextStepsIntake(key, task.title, task.nextSteps, actor.name).catch(async (err) => {
       await say(task.id, "system", "note", `⚠️ Не удалось завести карточку следующих шагов: ${String(err).slice(0, 200)}`, key).catch(() => null);
     });
   }
+  // Обновляем статус эпика по итогу изменения задачи
+  if (task.epicKey) await refreshEpicStatus(task.epicKey).catch(() => null);
   // Уведомление владельцу: входящая закрыта как дубль — сообщаем, где оригинал
   if (task.source === "intake" && to === "cancelled" && input.intakeClosingMap) {
     const origKey = parseDuplicateOriginalKey(input.intakeClosingMap);
@@ -327,6 +331,9 @@ export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Tas
         if (actor.role === "designer" && !isDesignerTask({ ...t, hasAttachments: t._count.attachments > 0 })) throw new CcError("forbidden_role", "designer: not a designer task");
         // Продакт берёт только задачи с открытыми вопросами к нему
         if (actor.role === "product" && !isProductTask(t)) throw new CcError("forbidden_role", "product: no open needs");
+        // Родитель с открытыми частями не берётся в работу: части делаются отдельно
+        const openParts = await tx.task.count({ where: { parentKey: t.key, status: { notIn: CLOSED_STATUSES } } });
+        if (openParts > 0 && !takeover) throw new CcError("parent_has_open_parts", `${openParts}`);
         const missing = t.depends.filter((d) => !closed.has(d));
         if (missing.length && !takeover) throw new CcError("deps_open", missing.join(","));
         const clash = busy.filter((b) => b.key !== t.key && scopeOverlap(t.scope, b.scope).length > 0);
@@ -339,7 +346,11 @@ export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Tas
         return { task: await tx.task.findUniqueOrThrow({ where: { id: t.id } }), event: takeover ? ("takeover" as const) : ("claim" as const), prev: t };
       }
 
-      const filter: Prisma.TaskWhereInput = { status: "ready" };
+      const filter: Prisma.TaskWhereInput = {
+        status: "ready",
+        // Родитель с открытыми частями не уходит в работу: части делаются отдельно
+        NOT: { parts: { some: { status: { notIn: CLOSED_STATUSES } } } },
+      };
       if (opts.area) filter.area = opts.area;
       if (opts.layer) filter.layer = opts.layer;
       if (opts.priority) filter.priority = opts.priority;
@@ -801,6 +812,41 @@ export async function returnDesign(key: string, actor: Actor, reason: string) {
   await log(t.id, actor.name, "blockedOn", prevBlockedOn, "design");
   await say(t.id, actor.name, "note", `Дизайн возвращён: ${reason.trim()}`, key);
   return db.task.findUniqueOrThrow({ where: { key } });
+}
+
+/**
+ * Если закрытая задача — часть родителя, проверяем: если все части закрыты,
+ * родитель закрываем автоматически (done), снимая его из очереди.
+ * Обходим transition() напрямую: пути ready→done нет в TRANSITIONS ни для одной роли.
+ */
+async function maybeCloseParent(partKey: string, _closedTo: "done" | "cancelled") {
+  const part = await db.task.findUnique({ where: { key: partKey }, select: { parentKey: true } });
+  if (!part?.parentKey) return;
+  const parentKey = part.parentKey;
+  const parent = await db.task.findUnique({ where: { key: parentKey }, select: { id: true, status: true, epicKey: true } });
+  if (!parent) return;
+  if ((CLOSED_STATUSES as readonly string[]).includes(parent.status)) return;
+  const openParts = await db.task.count({ where: { parentKey, status: { notIn: CLOSED_STATUSES } } });
+  if (openParts > 0) return;
+  const from = parent.status as TaskStatusKey;
+  const text = `Все части закрыты (последней — ${partKey}). Родительская задача закрыта автоматически.`;
+  const data: Prisma.TaskUpdateManyMutationInput = {
+    status: "done",
+    doneAt: new Date(),
+    proof: text.slice(0, 2000),
+    blockedOn: null,
+    blockedReason: null,
+    blockedUntil: null,
+    blockedFrom: null,
+  };
+  if (from === "in_progress") Object.assign(data, { claimedBy: null, claimUntil: null, staleAt: null, session: null });
+  if (from === "review") Object.assign(data, { claimedBy: null, claimUntil: null });
+  const r = await db.task.updateMany({ where: { id: parent.id, status: from }, data });
+  if (!r.count) return;
+  await log(parent.id, "watchdog", "status", from, "done");
+  await say(parent.id, "watchdog", "system", text, parentKey);
+  await releaseDependents(parentKey).catch(() => null);
+  if (parent.epicKey) await refreshEpicStatus(parent.epicKey).catch(() => null);
 }
 
 /**

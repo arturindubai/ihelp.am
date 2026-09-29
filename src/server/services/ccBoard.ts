@@ -415,7 +415,7 @@ export async function boardAudit() {
   const [tasks, tick] = await Promise.all([
     db.task.findMany({
       select: {
-        key: true, status: true, layer: true, source: true, depends: true, branch: true, blockedOn: true, blockedReason: true, claimedBy: true, heartbeatAt: true, triagedAt: true,
+        key: true, status: true, layer: true, source: true, depends: true, branch: true, blockedOn: true, blockedReason: true, claimedBy: true, heartbeatAt: true, triagedAt: true, epicKey: true,
         comments: { orderBy: { createdAt: "desc" }, take: 1, select: { author: true, createdAt: true } },
         events: { where: { field: "status" }, orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
       },
@@ -449,6 +449,8 @@ export async function boardAudit() {
       else if (!t.heartbeatAt || t.heartbeatAt.getTime() < hourAgo) add("in_progress_stale", t.key);
     }
     if (t.key.startsWith("IN-") && !(CLOSED_STATUSES as readonly string[]).includes(t.status) && t.status !== "blocked") add("intake_open", t.key);
+    // Открытая задача без эпика: не входящая (IN-*) и не в бэклоге — уже разобрана, но эпик не назначен
+    if (!t.key.startsWith("IN-") && t.source !== "intake" && !(CLOSED_STATUSES as readonly string[]).includes(t.status) && !t.epicKey) add("no_epic_key", t.key);
   }
   const checks = Object.entries(found).map(([id, keys]) => ({ id, keys })).sort((a, b) => b.keys.length - a.keys.length);
   return { total: tasks.length, byStatus: Object.fromEntries(Object.entries(tasks.reduce<Record<string, number>>((m, t) => ((m[t.status] = (m[t.status] ?? 0) + 1), m), {}))), checks, at: new Date().toISOString() };
