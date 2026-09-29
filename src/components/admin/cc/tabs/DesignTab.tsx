@@ -27,6 +27,7 @@ export async function DesignTab({ locale, taskHref }: { locale: string; taskHref
     workersOverview(),
   ]);
   const queue = w.queues.designer;
+  const queueSet = new Set(queue.map((q) => q.key));
   const when = (d: Date) => `${dateLabel(d, locale, { day: "numeric", month: "short" })}, ${timeLabel(d)}`;
 
   return (
@@ -79,7 +80,7 @@ export async function DesignTab({ locale, taskHref }: { locale: string; taskHref
         ) : (
           <ul className="divide-y divide-line">
             {waiting.map((x) => {
-              const hold: MockupHold = mockupHold(x);
+              const hold: MockupHold = mockupHold(x, queueSet.has(x.key));
               const holdTone =
                 hold === "owner" ? "bg-warn-50 text-warn" :
                 hold === "product" ? "bg-warn-50 text-warn" :
@@ -94,9 +95,11 @@ export async function DesignTab({ locale, taskHref }: { locale: string; taskHref
                   <span className={cn("chip shrink-0 text-[10px]", PRIORITY_TONE[x.priority])} title={PRIORITIES[x.priority]}>
                     {x.priority.toUpperCase()}
                   </span>
-                  <span className={cn("chip shrink-0 text-[10px]", holdTone)}>
-                    {t(`waitingHold.${hold}` as "waitingHold.queue")}
-                  </span>
+                  {hold !== "none" && (
+                    <span className={cn("chip shrink-0 text-[10px]", holdTone)}>
+                      {t(`waitingHold.${hold}` as "waitingHold.queue")}
+                    </span>
+                  )}
                 </li>
               );
             })}
