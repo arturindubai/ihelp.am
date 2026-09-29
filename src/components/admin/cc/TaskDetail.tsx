@@ -136,6 +136,17 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
         )}
       </div>
 
+      {task.source === "intake" && task.intakeText && (
+        <div className="mb-4">
+          <Collapsible title={t("intake.originalTitle")}>
+            <div className="overflow-x-auto rounded-[var(--radius-card)] bg-surface p-4">
+              <p className="mb-2 text-sm font-medium text-muted">{t("intake.originalSubtitle")}</p>
+              <p className="whitespace-pre-line text-sm">{task.intakeText}</p>
+            </div>
+          </Collapsible>
+        </div>
+      )}
+
       <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-4 md:col-span-2">
           <Card title={task.summary}>
@@ -309,7 +320,7 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
                 {task.blockedReason}
               </p>
             )}
-            <TransitionPanel taskKey={task.key} status={task.status} layer={task.layer} moves={moves} />
+            <TransitionPanel taskKey={task.key} status={task.status} source={task.source} layer={task.layer} moves={moves} />
             {(health.stale || health.phantom) && (
               <div className="mt-3">
                 <QuickMove taskKey={task.key} to={health.phantom ? "backlog" : "ready"} text={health.phantom ? t("attention.phantomReason") : t("attention.returnReason")} label={t("attention.returnToQueue")} />
