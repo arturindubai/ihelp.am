@@ -1,28 +1,26 @@
-import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { createSession } from "@/server/auth";
 import { audit } from "@/server/audit";
 import { alertTech } from "@/server/alerts";
 import { html } from "@/server/notify";
+import { linkLoginDecision } from "@/lib/authLink";
 
 /**
- * Вход владельца по секретной ссылке — запасной способ, пока не подключены каналы кода (задача AUTH-1).
+ * Вход владельца по секретной ссылке — запасной способ на случай отказа каналов OTP.
  *   http://<сайт>/api/auth/link?token=<ADMIN_LOGIN_TOKEN из .env>
- * Работает только для номера ADMIN_PHONE, каждое использование — запись в журнал и тех-алерт.
- * Пустой ADMIN_LOGIN_TOKEN полностью выключает вход по ссылке.
+ * Пустой ADMIN_LOGIN_TOKEN → 410 (ссылка отключена, вход по коду).
+ * Каждое использование — запись в журнал и тех-алерт.
  */
-function equal(a: string, b: string) {
-  const x = Buffer.from(a);
-  const y = Buffer.from(b);
-  return x.length === y.length && crypto.timingSafeEqual(x, y);
-}
-
 export async function GET(req: Request) {
   const expected = process.env.ADMIN_LOGIN_TOKEN;
   const token = new URL(req.url).searchParams.get("token") ?? "";
   const base = process.env.APP_URL || new URL(req.url).origin;
-  if (!expected || !token || !equal(token, expected)) {
+  const decision = linkLoginDecision(token, expected);
+  if (decision === 410) {
+    return NextResponse.json({ error: "disabled" }, { status: 410 });
+  }
+  if (decision === 403) {
     await alertTech("admin-link-denied", "⚠️ <b>Неудачная попытка входа по ссылке владельца</b>", 30);
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }

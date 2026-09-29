@@ -204,6 +204,8 @@ export interface TaskContent {
   mockupRequired?: boolean;
   /** Ссылка на макет (Figma, стенд, картинка) */
   mockupUrl?: string | null;
+  /** Нужно описание дизайна: ставит триаж */
+  needsDesign?: boolean | null;
 }
 
 /**
@@ -256,6 +258,7 @@ export async function saveTask(content: TaskContent, actor: string, isNew: boole
     scope: [...new Set((content.scope ?? []).map((p) => p.trim().replace(/^\.\//, "")).filter(Boolean))].slice(0, 30),
     mockupRequired: content.mockupRequired ?? false,
     mockupUrl: content.mockupUrl?.trim().slice(0, 500) || null,
+    needsDesign: content.needsDesign ?? null,
     source,
   };
   const existing = await db.task.findUnique({ where: { key } });

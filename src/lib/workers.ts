@@ -45,6 +45,8 @@ export type WorkersConfig = {
   deployWindow: [number, number];
   /** Сколько карточек триаж разбирает за один запуск */
   triageBatch: number;
+  /** Размер пачки выкладки: сколько протестированных задач деплоер сливает и собирает за один раз; 1 — по одной (старое поведение), максимум 5 */
+  deployBatch: number;
   /** Раз в столько часов триаж пересматривает весь бэклог и готовые задачи; 0 — не пересматривать */
   sweepEveryH: number;
   /** Пауза после исчерпанного лимита подписки или отказа входа: до этого момента никого не запускаем */
@@ -81,6 +83,7 @@ export const DEFAULT_WORKERS: WorkersConfig = {
   },
   deployWindow: [10, 20],
   triageBatch: 6,
+  deployBatch: 1,
   sweepEveryH: 24,
   pausedUntil: null,
   pausedReason: null,
@@ -136,6 +139,7 @@ export function normalizeWorkers(raw: unknown): WorkersConfig {
     pools,
     deployWindow: [from, to],
     triageBatch: clamp(r.triageBatch ?? DEFAULT_WORKERS.triageBatch, 1, 15, DEFAULT_WORKERS.triageBatch),
+    deployBatch: clamp(r.deployBatch ?? DEFAULT_WORKERS.deployBatch, 1, 5, DEFAULT_WORKERS.deployBatch),
     sweepEveryH: clamp(r.sweepEveryH ?? DEFAULT_WORKERS.sweepEveryH, 0, 168, DEFAULT_WORKERS.sweepEveryH),
     pausedUntil: typeof r.pausedUntil === "string" ? r.pausedUntil : null,
     pausedReason: typeof r.pausedReason === "string" ? r.pausedReason.slice(0, 300) : null,
@@ -366,8 +370,23 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
 
   const hour = yerevanHour(now);
   if (due("deployer") && hour >= config.deployWindow[0] && hour < config.deployWindow[1]) {
-    const t = nextDeploy();
-    if (t) actions.push({ pool: "deployer", agent: "deployer", key: t.key });
+    const batchSize = config.deployBatch ?? 1;
+    if (batchSize <= 1) {
+      const t = nextDeploy();
+      if (t) actions.push({ pool: "deployer", agent: "deployer", key: t.key });
+    } else {
+      const batchKeys: string[] = [];
+      for (let i = 0; i < batchSize; i++) {
+        const t = q.deploy.find((x) => !taken().has(x.key) && !batchKeys.includes(x.key));
+        if (!t) break;
+        batchKeys.push(t.key);
+      }
+      if (batchKeys.length === 1) {
+        actions.push({ pool: "deployer", agent: "deployer", key: batchKeys[0] });
+      } else if (batchKeys.length > 1) {
+        actions.push({ pool: "deployer", agent: "deployer", keys: batchKeys });
+      }
+    }
   }
 
   if (due("tester")) {
@@ -426,10 +445,22 @@ export function freeName(base: string, taken: string[]): string {
   return `${base}-x`;
 }
 
+/** Слова, которыми Claude сообщает об исчерпанном лимите подписки */
+export const LIMIT_PATTERN = /usage limit|limit reached|rate.?limit|out of (extra )?usage|5-hour limit|weekly limit/i;
+
+/**
+ * Упёрлись ли в лимит подписки. Только для запуска, завершившегося ошибкой: успешный отчёт может
+ * упоминать «rate limit» по делу (задача про ограничение частоты запросов) — это не лимит подписки.
+ * errText — вывод ошибок процесса, когда результата нет вовсе
+ */
+export function isLimitOutcome(result: { is_error?: boolean; result?: string; subtype?: string } | null, errText = ""): boolean {
+  if (result && !result.is_error) return false;
+  return LIMIT_PATTERN.test(`${result?.result ?? ""} ${result?.subtype ?? ""} ${errText}`);
+}
+
 /** Итог запуска по ответу claude -p: закончен, ошибка или упёрлись в лимит подписки */
-export function runOutcome(result: { is_error?: boolean; result?: string; subtype?: string } | null, exitCode: number | null): "done" | "failed" | "limit" | "timeout" {
-  const text = `${result?.result ?? ""} ${result?.subtype ?? ""}`;
-  if (/usage limit|limit reached|rate.?limit|out of (extra )?usage|5-hour limit|weekly limit/i.test(text)) return "limit";
+export function runOutcome(result: { is_error?: boolean; result?: string; subtype?: string } | null, exitCode: number | null, errText = ""): "done" | "failed" | "limit" | "timeout" {
+  if (isLimitOutcome(result, errText)) return "limit";
   if (!result) return exitCode === null ? "timeout" : "failed";
   if (result.subtype === "error_max_turns") return "failed";
   return result.is_error ? "failed" : "done";
@@ -474,15 +505,16 @@ export function inDesignerQueue(t: {
   layer: string;
   hasImageAttachments: boolean;
   hasAnyAttachments: boolean;
+  /** Нужно описание дизайна: ставит триаж при разборе. true — задача идёт к дизайнеру */
+  needsDesign?: boolean | null;
 }): boolean {
   // Заблокирована на дизайне, но макет ещё не подан (нет mockupUrl)
   if (t.status === "blocked" && t.blockedOn === "design" && !t.mockupUrl) return true;
   // Нужен макет, не утверждён и не подан: бэклог, очередь или в работе
   const open = ["backlog", "ready", "in_progress"];
   if (open.includes(t.status) && t.mockupRequired && !t.mockupApprovedBy && !t.mockupUrl && !t.hasImageAttachments) return true;
-  // Интерфейсная задача (фронт или бэк+фронт) без описания дизайна, без файлов, без ссылки на макет и без утверждения
-  const isUi = t.layer === "front" || t.layer === "fullstack";
-  if (["backlog", "ready"].includes(t.status) && isUi && !t.design?.trim() && !t.hasAnyAttachments && !t.mockupApprovedBy && !t.mockupUrl) return true;
+  // Задача с флагом «нужно описание дизайна» без описания, без файлов и без утверждённого макета
+  if (["backlog", "ready"].includes(t.status) && t.needsDesign === true && !t.design?.trim() && !t.hasAnyAttachments && !t.mockupApprovedBy && !t.mockupUrl) return true;
   return false;
 }
 
