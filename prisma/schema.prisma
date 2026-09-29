@@ -46,6 +46,8 @@ model User {
   telegramUsername String?
   /// Согласие на рекламные рассылки (LEGAL-2): null — не давал, дата — дал; отзывается в профиле
   adsConsentAt     DateTime?
+  /// Когда клиент отписался от транзакционных писем (ссылка в подвале письма): дата отписки или null
+  emailUnsubscribedAt DateTime?
   /// Поправка прав по конкретному человеку поверх роли: { added: string[], removed: string[] }
   sectionDelta     Json?
 
@@ -465,15 +467,30 @@ model PromoRedemption {
 }
 
 model Banner {
-  id        String   @id @default(cuid())
-  title     Json
-  subtitle  Json?
-  image     String?
-  link      String?
-  promoCode String?
-  bg        String?
-  active    Boolean  @default(true)
-  sort      Int      @default(0)
+  id          String    @id @default(cuid())
+  title       Json
+  subtitle    Json?
+  image       String?
+  link        String?
+  promoCode   String?
+  bg          String?
+  active      Boolean   @default(true)
+  sort        Int       @default(0)
+  /// Место размещения: CAROUSEL_HOME | HERO_HOME | CATALOG | SERVICE | CHECKOUT | SUCCESS | EMAIL | CLIENT_CABINET | MASTER_CABINET
+  placement   String    @default("CAROUSEL_HOME")
+  /// Тип: PROMO | ANNOUNCEMENT | UPSELL | CROSS_SELL
+  bannerType  String    @default("PROMO")
+  /// Начало периода показа (включительно); null — без ограничения
+  startsAt    DateTime?
+  /// Конец периода показа (включительно); null — без ограничения
+  endsAt      DateTime?
+  /// Аудитория: ALL | LOGGED_IN | GUESTS
+  audience    String    @default("ALL")
+  /// Сегмент: ALL | NEW | RETURNING
+  segment     String    @default("ALL")
+  /// Счётчики показов и кликов (инкрементируются в ADMIN-6)
+  views       Int       @default(0)
+  clicks      Int       @default(0)
 }
 
 /// Карточки «Обещания» на главной (управляются в AdminKit → Контент)

@@ -66,7 +66,8 @@
     "whatsappSub": "",
     "writeUs": "",
     "reviewsTitle": "",
-    "stickyOrder": ""
+    "stickyOrder": "",
+    "subCatClose": ""
   },
   "service": {
     "startsAt": "",
@@ -104,6 +105,7 @@
     "address": "",
     "addAddress": "",
     "dateTime": "",
+    "dateAndMaster": "",
     "availableTime": "",
     "startDate": "",
     "noSlots": "",
@@ -115,6 +117,7 @@
     "anyMasterSub": "",
     "masterBusy": "",
     "chooseTimeFirst": "",
+    "whoComes": "",
     "serviceLabel": "",
     "wishes": "",
     "noCallLabel": "",
@@ -778,7 +781,55 @@
       "newBanner": "",
       "link": "",
       "promoCode": "",
-      "bg": ""
+      "bg": "",
+      "empty": "",
+      "placement": "",
+      "type": "",
+      "audience": "",
+      "segment": "",
+      "startsAt": "",
+      "endsAt": "",
+      "views": "",
+      "clicks": "",
+      "ctr": "",
+      "generate": "",
+      "stats": "",
+      "placements": {
+        "CAROUSEL_HOME": "",
+        "HERO_HOME": "",
+        "CATALOG": "",
+        "SERVICE": "",
+        "CHECKOUT": "",
+        "SUCCESS": "",
+        "EMAIL": "",
+        "CLIENT_CABINET": "",
+        "MASTER_CABINET": ""
+      },
+      "types": {
+        "PROMO": "",
+        "ANNOUNCEMENT": "",
+        "UPSELL": "",
+        "CROSS_SELL": ""
+      },
+      "audiences": {
+        "ALL": "",
+        "LOGGED_IN": "",
+        "GUESTS": ""
+      },
+      "segments": {
+        "ALL": "",
+        "NEW": "",
+        "RETURNING": ""
+      },
+      "tabs": {
+        "all": ""
+      },
+      "status": {
+        "active": "",
+        "paused": "",
+        "scheduled": "",
+        "expired": ""
+      }
     },
     "pages": {
       "title": "",
@@ -1142,10 +1193,11 @@
         "postponeConfirm": "Հետաձգել",
         "groups": {
           "variant": "",
+          "approve": "",
+          "do": "",
           "price": "",
           "data": "",
           "auth": "",
-          "approve": "",
           "rule": "",
           "other": ""
         },
@@ -1204,5 +1256,10 @@
       "cancelled": "",
       "completed": ""
     }
+  },
+  "cart": {
+    "itemsCount": "{count, plural, one {# ծառայություն} other {# ծառայություն}}",
+    "total": "{amount} ֏",
+    "checkout": "Ձևակերպել"
   }
 }
