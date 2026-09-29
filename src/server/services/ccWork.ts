@@ -10,6 +10,7 @@ import { nextIntakeKey, intakeTitle } from "@/lib/cc-lanes";
 import { intakeClosingMapValid, parseDuplicateOriginalKey } from "@/lib/cc-intake";
 import { needsLibrary, buildSummaryText, buildLibraryTitle } from "@/lib/cc-overflow";
 import { refreshEpicStatus } from "./epics";
+import { markReadForClosedTask } from "./ccMessages";
 import type { Prisma, Task } from "@prisma/client";
 
 /**
@@ -207,6 +208,7 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   await say(task.id, actor.name, kindFor(from, to, actor, task.claimedBy), commentText, key);
   if (to === "done" || to === "cancelled") await releaseDependents(key);
   if (to === "done" || to === "cancelled") await maybeCloseParent(key, to).catch(() => null);
+  if (to === "done" || to === "cancelled") await markReadForClosedTask(key, actor.name).catch(() => null);
   // После приёмки не-код задачи с указанными следующими шагами — карточка в очередь триажа
   if (to === "done" && task.layer === "none" && task.nextSteps.length > 0) {
     await createNextStepsIntake(key, task.title, task.nextSteps, actor.name).catch(async (err) => {
