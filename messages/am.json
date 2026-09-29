@@ -1090,7 +1090,22 @@
       "you": {
         "postpone": "Հետաձգել",
         "postponePh": "",
-        "postponeConfirm": "Հետաձգել"
+        "postponeConfirm": "Հետաձգել",
+        "groups": {
+          "variant": "",
+          "price": "",
+          "data": "",
+          "auth": "",
+          "approve": "",
+          "rule": "",
+          "other": ""
+        },
+        "headerWithReview": "",
+        "headerReviewOnly": "",
+        "devOnly": "",
+        "textMayCut": "",
+        "returnedRuns": "",
+        "returnedRunsHint": ""
       },
       "gate": {
         "needs_open": "Կան բաց հարցեր արտադրանքի վերաբերյալ — նախ ստացեք պատասխան"

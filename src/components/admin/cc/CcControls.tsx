@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { renderOwnerText } from "@/lib/cc-owner-q-render";
 import { useTranslations } from "next-intl";
 import { Mic, MicOff, Paperclip, Play, Sparkles, Square, X } from "lucide-react";
 import { Link, useRouter } from "@/i18n/navigation";
@@ -788,10 +789,12 @@ export type YouCardTask = { key: string; title: string; href: string; priority: 
 export type YouCard = {
   id: string;
   question: string;
-  groupType: "variant" | "data" | "auth" | "rule";
+  groupType: "variant" | "price" | "data" | "auth" | "approve" | "rule" | "other";
   tasks: YouCardTask[];
   variants: { id: string; text: string }[] | null;
+  multiQuestion: { question: string; variants: { id: string; text: string }[] | null }[] | null;
   isUrgent: boolean;
+  textMayCut: boolean;
   /** Ссылка на задачу-оригинал при уведомлении о дубле */
   origTaskHref?: string;
   /** Ключ задачи-оригинала для отображения в ссылке */
@@ -808,22 +811,94 @@ export type YouPostponedTask = {
 
 const GROUP_ICONS: Record<YouCard["groupType"], string> = {
   variant: "🗳️",
+  price: "💰",
   data: "📎",
   auth: "🔑",
-  rule: "✅",
+  approve: "✅",
+  rule: "📋",
+  other: "💬",
 };
+
+/** Один блок вопроса с вариантами или текстовым вводом */
+function QuestionBlock({
+  block,
+  blockIdx,
+  blockCount,
+  pending,
+  onAnswer,
+}: {
+  block: { question: string; variants: { id: string; text: string }[] | null };
+  blockIdx: number;
+  blockCount: number;
+  pending: boolean;
+  onAnswer: (text: string) => void;
+}) {
+  const t = useTranslations("admin.cc.you");
+  const [replyText, setReplyText] = useState("");
+
+  return (
+    <div>
+      {block.question && (
+        <div className="mb-2 text-sm font-medium">
+          {blockCount > 1 && <span className="mr-1 text-muted">{blockIdx + 1}.</span>}
+          {renderOwnerText(block.question, t("devOnly"))}
+        </div>
+      )}
+      {block.variants ? (
+        <div className="flex flex-wrap gap-2">
+          {block.variants.map((v) => (
+            <button
+              key={v.id}
+              disabled={pending}
+              className="rounded-lg border border-brand px-3 py-1.5 text-sm text-brand transition-colors hover:bg-brand hover:text-inverse disabled:opacity-50"
+              onClick={() => onAnswer(blockCount > 1 ? `[Вопрос ${blockIdx + 1}] ${t("answerVariant", { id: v.id })}` : t("answerVariant", { id: v.id }))}
+            >
+              {v.id}) {v.text}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <form
+          className="flex gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onAnswer(replyText);
+          }}
+        >
+          <input
+            className="input h-9 flex-1 py-1 text-sm"
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            placeholder={t("replyPh")}
+          />
+          <button className="btn-primary btn-sm" disabled={pending || replyText.trim().length < 2}>
+            {t("replySend")}
+          </button>
+        </form>
+      )}
+    </div>
+  );
+}
 
 /** Карточка одного вопроса: полный текст, чипы задач, кнопки вариантов или ввод текста, «Отложить на 3 дня» */
 function YouQuestionCard({ card, onDone }: { card: YouCard; onDone: (id: string) => void }) {
   const t = useTranslations("admin.cc.you");
   const { pending, error, run } = useAct();
-  const [replyText, setReplyText] = useState("");
   const [visible, setVisible] = useState(true);
+  const [hiddenBlocks, setHiddenBlocks] = useState<Set<number>>(new Set());
 
-  const answer = (text: string) =>
+  const answer = (text: string, blockIdx?: number) =>
     run(() => ccOwnerAnswerManyAction(card.tasks.map((x) => x.key), text), () => {
-      setVisible(false);
-      setTimeout(() => onDone(card.id), 300);
+      if (blockIdx !== undefined && card.multiQuestion && card.multiQuestion.length > 1) {
+        setHiddenBlocks((prev) => new Set([...prev, blockIdx]));
+        if (hiddenBlocks.size + 1 >= card.multiQuestion.length) {
+          setVisible(false);
+          setTimeout(() => onDone(card.id), 300);
+        }
+      } else {
+        setVisible(false);
+        setTimeout(() => onDone(card.id), 300);
+      }
     });
 
   const postpone = () =>
@@ -831,6 +906,9 @@ function YouQuestionCard({ card, onDone }: { card: YouCard; onDone: (id: string)
       setVisible(false);
       setTimeout(() => onDone(card.id), 300);
     });
+
+  const blocks = card.multiQuestion ?? [{ question: card.question, variants: card.variants }];
+  const visibleBlocks = blocks.filter((_, idx) => !hiddenBlocks.has(idx));
 
   return (
     <div
@@ -843,7 +921,9 @@ function YouQuestionCard({ card, onDone }: { card: YouCard; onDone: (id: string)
       {card.isUrgent && (
         <span className="chip mb-2 inline-block bg-bad-50 text-[10px] text-bad">{t("urgent")}</span>
       )}
-      {card.question && <p className="mb-2 whitespace-pre-wrap text-sm font-medium">{card.question}</p>}
+      {card.textMayCut && (
+        <p className="mb-2 text-xs text-warn">{t("textMayCut")}</p>
+      )}
       {card.origTaskHref && card.origTaskKey && (
         <p className="mb-2 text-sm">
           <Link href={card.origTaskHref} scroll={false} className="font-mono text-brand hover:underline">
@@ -860,38 +940,21 @@ function YouQuestionCard({ card, onDone }: { card: YouCard; onDone: (id: string)
           ))}
         </div>
       )}
-      {card.variants ? (
-        <div className="flex flex-wrap gap-2">
-          {card.variants.map((v) => (
-            <button
-              key={v.id}
-              disabled={pending}
-              className="rounded-lg border border-brand px-3 py-1.5 text-sm text-brand transition-colors hover:bg-brand hover:text-inverse disabled:opacity-50"
-              onClick={() => answer(t("answerVariant", { id: v.id }))}
-            >
-              {v.id}) {v.text}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <form
-          className="flex gap-1.5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            answer(replyText);
-          }}
-        >
-          <input
-            className="input h-9 flex-1 py-1 text-sm"
-            value={replyText}
-            onChange={(e) => setReplyText(e.target.value)}
-            placeholder={t("replyPh")}
-          />
-          <button className="btn-primary btn-sm" disabled={pending || replyText.trim().length < 2}>
-            {t("replySend")}
-          </button>
-        </form>
-      )}
+      <div className="space-y-4">
+        {visibleBlocks.map((block) => {
+          const blockIdx = blocks.indexOf(block);
+          return (
+            <QuestionBlock
+              key={blockIdx}
+              block={block}
+              blockIdx={blockIdx}
+              blockCount={blocks.length}
+              pending={pending}
+              onAnswer={(text) => answer(text, blockIdx)}
+            />
+          );
+        })}
+      </div>
       <div className="mt-2 flex justify-end">
         <button className="btn-ghost btn-sm text-muted" disabled={pending} onClick={postpone}>
           {t("postpone3days")}
@@ -909,9 +972,11 @@ function YouQuestionCard({ card, onDone }: { card: YouCard; onDone: (id: string)
 export function YouQuestionsSection({
   cards,
   postponed,
+  nocodeReviewCount = 0,
 }: {
   cards: YouCard[];
   postponed: YouPostponedTask[];
+  nocodeReviewCount?: number;
 }) {
   const t = useTranslations("admin.cc.you");
   const [filter, setFilter] = useState<"all" | "urgent" | "postponed">("all");
@@ -929,19 +994,29 @@ export function YouQuestionsSection({
   const byGroup = (
     [
       ["variant", displayCards.filter((c) => c.groupType === "variant")],
+      ["price", displayCards.filter((c) => c.groupType === "price")],
       ["data", displayCards.filter((c) => c.groupType === "data")],
       ["auth", displayCards.filter((c) => c.groupType === "auth")],
+      ["approve", displayCards.filter((c) => c.groupType === "approve")],
       ["rule", displayCards.filter((c) => c.groupType === "rule")],
+      ["other", displayCards.filter((c) => c.groupType === "other")],
     ] as [YouCard["groupType"], YouCard[]][]
   ).filter(([, g]) => g.length > 0);
 
   const allEmpty = activeCount === 0 && postponedCount === 0;
 
+  const headerText = (() => {
+    if (allEmpty && nocodeReviewCount === 0) return t("allDone");
+    if (nocodeReviewCount > 0 && activeCount > 0) return t("headerWithReview", { q: activeCount, m: nocodeReviewCount });
+    if (nocodeReviewCount > 0) return t("headerReviewOnly", { m: nocodeReviewCount });
+    return t("headerCount", { n: activeCount });
+  })();
+
   return (
     <div className="space-y-4">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-base font-semibold">
-          {allEmpty ? t("allDone") : t("headerCount", { n: activeCount })}
+          {headerText}
         </h2>
       </div>
 

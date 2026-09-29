@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { needsYou } from "@/server/services/ccBoard";
-import { parseVariants } from "@/lib/cc-owner-q";
+import { parseMultiQuestion } from "@/lib/cc-owner-q";
 import { parseDuplicateOriginalKey } from "@/lib/cc-intake";
 import { BLOCKED_ON_LABELS, PRIORITIES } from "@/lib/backlog-labels";
 import { QuickMove } from "@/components/admin/cc/TaskControls";
@@ -17,11 +17,14 @@ type Href = (key: string) => string;
 type NeedsYouData = Awaited<ReturnType<typeof needsYou>>;
 type OwnerTask = NeedsYouData["owner"][number];
 
-function classifyGroup(reason: string, parsed: ReturnType<typeof parseVariants>): YouCard["groupType"] {
-  if (parsed) return "variant";
-  if (/войти|логин|аккаунт|авторизац|ключ.*сервис|oauth/i.test(reason)) return "auth";
-  if (/файл|документ|картинк|изображен|фото|загрузить|прислать|контент|логотип/i.test(reason)) return "data";
-  return "rule";
+function classifyGroup(reason: string, hasVariants: boolean): YouCard["groupType"] {
+  if (hasVariants) return "variant";
+  if (/цена|прайс|стоимост|тариф|число|сколько|бюджет|лимит/i.test(reason)) return "price";
+  if (/файл|документ|картинк|фото|загрузить|прислать|контент|логотип/i.test(reason)) return "data";
+  if (/войти|логин|аккаунт|авторизац|ключ.*сервис|oauth|токен/i.test(reason)) return "auth";
+  if (/утвердить|согласовать|одобрить|макет|бренд|дизайн|палитр|шрифт/i.test(reason)) return "approve";
+  if (/правило|политика|условия|регламент|настройк|решение|выбор/i.test(reason)) return "rule";
+  return "other";
 }
 
 /** Группирует задачи с одинаковым вопросом в одну карточку */
@@ -36,15 +39,18 @@ function groupOwnerQuestions(tasks: OwnerTask[], taskHref: Href): YouCard[] {
 
   return [...byQuestion.values()].map((group) => {
     const reason = group[0].fullReason ?? group[0].blockedReason ?? "";
-    const parsed = reason ? parseVariants(reason) : null;
+    const multiQuestion = reason ? parseMultiQuestion(reason) : [{ question: reason, variants: null }];
+    const hasVariants = multiQuestion.some((b) => b.variants !== null);
     const origKey = parseDuplicateOriginalKey(reason);
     return {
       id: group[0].key,
-      question: parsed?.question ?? reason,
-      groupType: classifyGroup(reason, parsed),
+      question: multiQuestion[0].question,
+      groupType: classifyGroup(reason, hasVariants),
       tasks: group.map((t) => ({ key: t.key, title: t.title, href: taskHref(t.key), priority: t.priority })),
-      variants: parsed?.variants ?? null,
+      variants: multiQuestion.length === 1 ? (multiQuestion[0].variants ?? null) : null,
+      multiQuestion: multiQuestion.length > 1 ? multiQuestion : null,
       isUrgent: group.some((t) => t.priority === "p0"),
+      textMayCut: group.some((t) => t.textMayCut),
       origTaskKey: origKey ?? undefined,
       origTaskHref: origKey ? taskHref(origKey) : undefined,
     };
@@ -75,6 +81,7 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
     !data.stuckReview.length &&
     !data.nocodeReview.length &&
     !data.failedRuns.length &&
+    !data.returnedRuns.length &&
     !data.pausedUntil &&
     !data.techBlocked.length &&
     !data.alertMissing &&
@@ -109,7 +116,7 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
       {/* Интерактивные вопросы: фильтры, группы, карточки */}
       {(cards.length > 0 || postponed.length > 0) && (
         <Card>
-          <YouQuestionsSection cards={cards} postponed={postponed} />
+          <YouQuestionsSection cards={cards} postponed={postponed} nocodeReviewCount={data.nocodeReview.length} />
         </Card>
       )}
 
@@ -194,6 +201,29 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
               </li>
             ))}
           </ul>
+        </Card>
+      )}
+
+      {data.returnedRuns.length > 0 && (
+        <Card title={`↩ ${ty("returnedRuns")} · ${data.returnedRuns.length}`}>
+          <p className="mb-2 text-xs text-muted">{ty("returnedRunsHint")}</p>
+          <ul className="divide-y divide-line text-sm">
+            {data.returnedRuns.map((r) => (
+              <li key={r.id} className="py-2">
+                <span className="font-mono text-xs">{r.agent}</span>{" "}
+                {r.taskKey && (
+                  <Link href={taskHref(r.taskKey)} scroll={false} className="font-mono text-xs text-brand hover:underline">
+                    {r.taskKey}
+                  </Link>
+                )}{" "}
+                <span className="text-xs text-muted">{ago(t, r.startedAt)}</span>
+                {r.summary && <p className="line-clamp-2 text-xs text-muted">{r.summary}</p>}
+              </li>
+            ))}
+          </ul>
+          <Link href="/admin/control?tab=workers" className="mt-2 inline-block text-xs text-brand hover:underline">
+            {ty("toWorkers")}
+          </Link>
         </Card>
       )}
 
