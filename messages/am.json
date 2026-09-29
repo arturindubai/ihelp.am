@@ -94,7 +94,9 @@
       "PACKAGE": "Պակետ"
     },
     "firstOffer": "",
-    "notFound": ""
+    "notFound": "",
+    "includes": "",
+    "excludes": ""
   },
   "booking": {
     "title": "",
@@ -381,7 +383,16 @@
     "note": "",
     "client": "",
     "stats": "",
-    "schedule": ""
+    "schedule": "",
+    "settingsTab": "Կարգավորումներ",
+    "settings": {
+      "notifyTitle": "Ծանուցումներ",
+      "receiveNotify": "Ստանալ ծանուցումներ այցի մասին",
+      "notifyOff": "Դուք չեք ստանա ծանուցումներ այցերի մասին",
+      "notConnected": "Telegram-ը կապված չէ:",
+      "writeBot": "Գրել բոտին",
+      "saveError": "Չհաջողվեց պահել: Կրկին փորձեք:"
+    }
   },
   "operator": {
     "title": "",
@@ -565,6 +576,21 @@
         "promo": "",
         "plan+promo": "",
         "first+promo": ""
+      },
+      "messages": "",
+      "noMessages": "",
+      "msgDelivered": "",
+      "msgNotDelivered": "",
+      "msgChannels": {
+        "telegram": "",
+        "email": "",
+        "alert": "",
+        "none": ""
+      },
+      "msgEvents": {
+        "created": "",
+        "cancelled": "",
+        "completed": ""
       }
     },
     "schedule": {
@@ -641,6 +667,9 @@
       "deleteCategory": "",
       "categoryHasServices": "",
       "openOnSite": "",
+      "includesText": "",
+      "excludesText": "",
+      "includesExcludesPlaceholder": "",
       "rating": "",
       "bookings": ""
     },
@@ -896,6 +925,7 @@
     },
     "staff": {
       "title": "",
+      "manageSub": "",
       "hint": "",
       "phone": "",
       "role": "",
@@ -915,9 +945,52 @@
       "emailTaken": "",
       "emailInvalid": "",
       "revokeAccess": "",
+      "cannotRemoveOwner": "",
+      "lastOwner": "",
       "revokeConfirm": "",
       "lastLogin": "",
-      "lastLoginNever": ""
+      "lastLoginNever": "",
+      "empty": "",
+      "loginMethods": "",
+      "permissions": "",
+      "fieldPhone": "",
+      "fieldEmail": "",
+      "fieldTelegram": "",
+      "notLinked": "",
+      "editField": "",
+      "saveField": "",
+      "cancelField": "",
+      "fromRole": "",
+      "savePermissions": "",
+      "confirmPermissions": "",
+      "confirmYes": "",
+      "confirmNo": "",
+      "settingsStaffOwnerOnly": "",
+      "saveError": "",
+      "phoneInvalid": "",
+      "phoneTaken": "",
+      "phoneRequired": "",
+      "telegramInvalid": "",
+      "telegramTaken": "",
+      "savedMsg": "",
+      "ownerFullAccess": "",
+      "sections": {
+        "control": "",
+        "dashboard": "",
+        "orders": "",
+        "schedule": "",
+        "clients": "",
+        "reviews": "",
+        "services": "",
+        "masters": "",
+        "promos": "",
+        "banners": "",
+        "pages": "",
+        "content": "",
+        "translations": "",
+        "analytics": "",
+        "log": ""
+      }
     },
     "log": {
       "title": "",
@@ -1086,12 +1159,48 @@
       "you": {
         "postpone": "Հետաձգել",
         "postponePh": "",
-        "postponeConfirm": "Հետաձգել"
+        "postponeConfirm": "Հետաձգել",
+        "groups": {
+          "variant": "",
+          "price": "",
+          "data": "",
+          "auth": "",
+          "approve": "",
+          "rule": "",
+          "other": ""
+        },
+        "headerWithReview": "",
+        "headerReviewOnly": "",
+        "devOnly": "",
+        "textMayCut": "",
+        "returnedRuns": "",
+        "returnedRunsHint": ""
       },
       "gate": {
         "needs_open": "Կան բաց հարցեր արտադրանքի վերաբերյալ — նախ ստացեք պատասխան"
+      },
+      "healthPage": {
+        "denials": {
+          "title": "",
+          "share": "",
+          "shareHint": "",
+          "noData": "",
+          "none": "",
+          "top": "",
+          "times": "",
+          "skipped": "",
+          "hint": ""
+        }
       }
     }
+  },
+  "review": {
+    "title": "",
+    "placeholder": "",
+    "send": "",
+    "thanks": "",
+    "invalid": "",
+    "alreadyLeft": ""
   },
   "cookies": {
     "title": "",
@@ -1105,6 +1214,15 @@
       "label": "",
       "hint": "",
       "notifications": ""
+    }
+  },
+  "notify": {
+    "order": {
+      "created": "",
+      "masterAssigned": "",
+      "rescheduled": "",
+      "cancelled": "",
+      "completed": ""
     }
   }
 }

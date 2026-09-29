@@ -1,3 +1,5 @@
+export const BANNER_DEFAULT_BG = "#1c1917";
+
 export type BannerPlacement = "CAROUSEL_HOME" | "HERO_HOME" | "CATALOG" | "SERVICE" | "CHECKOUT" | "SUCCESS" | "EMAIL" | "MASTER_CABINET";
 export type BannerAudience = "ALL" | "LOGGED_IN" | "GUESTS";
 export type BannerSegment = "ALL" | "NEW" | "RETURNING";

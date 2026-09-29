@@ -11,19 +11,23 @@
  * KEEP=1 — не удалять созданные данные.
  */
 import { execSync } from "child_process";
+import { resolve } from "path";
 
 const BASE = process.env.BASE || "http://37.60.236.202:8080";
 const PHONE = process.env.PHONE || "+37477000099";
 const CODE = "424242";
 const SERVICE = process.env.SERVICE || "regular-cleaning";
-const { chromium } = await import(process.env.PW || "playwright");
+const { chromium } = await import(process.env.PW || "@playwright/test");
+
+// Корень проекта: один уровень выше папки e2e/
+const PROJECT_DIR = resolve(import.meta.dirname, "..");
 
 const results = [];
 const check = (name, ok, extra = "") => {
   results.push(ok);
   console.log(ok ? "PASS" : "FAIL", name, extra);
 };
-const sh = (c) => execSync(c, { shell: "/bin/bash", cwd: "/opt/ihelp.am" }).toString().trim();
+const sh = (c) => execSync(c, { shell: "/bin/bash", cwd: PROJECT_DIR }).toString().trim();
 const sql = (q) => sh(`docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -F"|" -c ${JSON.stringify(q).replace(/'/g, "'\\''")}'`);
 
 /** Подставляет известный код входа: хэш считает сам контейнер приложения */

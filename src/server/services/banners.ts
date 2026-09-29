@@ -43,7 +43,8 @@ export async function getBannerForSlot(
   const isLoggedIn = !!userId;
   let isNew = false;
   if (isLoggedIn && userId) {
-    const count = await db.order.count({ where: { userId } });
+    // новый клиент — у которого нет завершённых заказов
+    const count = await db.order.count({ where: { userId, status: { in: ["DONE", "APPROVED"] } } });
     isNew = count === 0;
   }
 

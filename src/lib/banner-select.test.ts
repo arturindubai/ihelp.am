@@ -100,6 +100,27 @@ describe("selectBanners — сортировка", () => {
   });
 });
 
+describe("selectBanners — карусель на главной (CAROUSEL_HOME)", () => {
+  const carouselCtx: SelectContext = { placement: "CAROUSEL_HOME", isLoggedIn: false, isNew: false, now };
+  const carouselBanner: SelectableBanner = { ...base, placement: "CAROUSEL_HOME" };
+
+  it("баннер с истёкшим сроком не показывается в карусели", () => {
+    expect(selectBanners([{ ...carouselBanner, endsAt: past(1) }], carouselCtx)).toHaveLength(0);
+  });
+
+  it("активный баннер карусели без ограничений — показывается", () => {
+    expect(selectBanners([carouselBanner], carouselCtx)).toHaveLength(1);
+  });
+
+  it("баннер карусели для залогиненных не показывается гостям", () => {
+    expect(selectBanners([{ ...carouselBanner, audience: "LOGGED_IN" }], carouselCtx)).toHaveLength(0);
+  });
+
+  it("баннер карусели для залогиненных показывается вошедшим", () => {
+    expect(selectBanners([{ ...carouselBanner, audience: "LOGGED_IN" }], { ...carouselCtx, isLoggedIn: true })).toHaveLength(1);
+  });
+});
+
 describe("bannerStatus", () => {
   it("неактивный → paused", () => {
     expect(bannerStatus({ active: false, startsAt: null, endsAt: null }, now)).toBe("paused");

@@ -94,7 +94,9 @@
       "PACKAGE": "Package"
     },
     "firstOffer": "−{percent}% off the first visit for new customers",
-    "notFound": "Service not found"
+    "notFound": "Service not found",
+    "includes": "Included",
+    "excludes": "Not included"
   },
   "booking": {
     "title": "Checkout",
@@ -381,7 +383,16 @@
     "note": "Note",
     "client": "Client",
     "stats": "My stats",
-    "schedule": "My schedule"
+    "schedule": "My schedule",
+    "settingsTab": "Settings",
+    "settings": {
+      "notifyTitle": "Notifications",
+      "receiveNotify": "Receive visit notifications",
+      "notifyOff": "You will not receive visit notifications",
+      "notConnected": "Telegram is not connected.",
+      "writeBot": "Message the bot",
+      "saveError": "Failed to save. Please try again."
+    }
   },
   "operator": {
     "title": "Operator panel",
@@ -565,6 +576,21 @@
         "promo": "promo code",
         "plan+promo": "plan + promo",
         "first+promo": "first order + promo"
+      },
+      "messages": "Client messages",
+      "noMessages": "No messages",
+      "msgDelivered": "delivered",
+      "msgNotDelivered": "not delivered",
+      "msgChannels": {
+        "telegram": "Telegram",
+        "email": "email",
+        "alert": "operator alert",
+        "none": "not sent"
+      },
+      "msgEvents": {
+        "created": "Order accepted",
+        "cancelled": "Cancellation",
+        "completed": "Visit completed"
       }
     },
     "schedule": {
@@ -641,6 +667,9 @@
       "deleteCategory": "Delete category",
       "categoryHasServices": "Category has services — move or delete them first",
       "openOnSite": "Open on website",
+      "includesText": "What's included",
+      "excludesText": "What's not included",
+      "includesExcludesPlaceholder": "Each line is a separate item",
       "rating": "Rating",
       "bookings": "Bookings"
     },
@@ -899,6 +928,7 @@
     },
     "staff": {
       "title": "Staff",
+      "manageSub": "Manage access and login methods",
       "hint": "Role is assigned by phone number. Staff signs in with a code and sees the admin panel.",
       "phone": "Phone",
       "role": "Role",
@@ -918,9 +948,52 @@
       "emailTaken": "This email is already linked to another account",
       "emailInvalid": "Invalid email format",
       "revokeAccess": "Revoke access",
+      "cannotRemoveOwner": "Cannot change the role of another owner",
+      "lastOwner": "Last owner",
       "revokeConfirm": "Revoke access for {label}? Role will change to Client and all sessions will be terminated.",
       "lastLogin": "Last login:",
-      "lastLoginNever": "never logged in"
+      "lastLoginNever": "never logged in",
+      "empty": "No staff members",
+      "loginMethods": "Login methods",
+      "permissions": "Access rights",
+      "fieldPhone": "Phone",
+      "fieldEmail": "Email",
+      "fieldTelegram": "Telegram ID",
+      "notLinked": "Not linked",
+      "editField": "Edit",
+      "saveField": "Save",
+      "cancelField": "Cancel",
+      "fromRole": "from role",
+      "savePermissions": "Save changes",
+      "confirmPermissions": "Changing permissions will terminate all open sessions for this staff member. Continue?",
+      "confirmYes": "Continue",
+      "confirmNo": "Cancel",
+      "settingsStaffOwnerOnly": "Sections settings and staff are owner-only",
+      "saveError": "Failed to save",
+      "phoneInvalid": "Invalid phone format",
+      "phoneTaken": "This phone is already linked to another account",
+      "phoneRequired": "Phone is required",
+      "telegramInvalid": "Telegram ID must be digits only",
+      "telegramTaken": "This Telegram ID is already linked to another account",
+      "savedMsg": "Permissions updated, sessions terminated",
+      "ownerFullAccess": "Owner has full access, permissions cannot be configured",
+      "sections": {
+        "control": "Control Center",
+        "dashboard": "Dashboard",
+        "orders": "Orders",
+        "schedule": "Schedule",
+        "clients": "Clients",
+        "reviews": "Reviews",
+        "services": "Services",
+        "masters": "Masters",
+        "promos": "Promo codes",
+        "banners": "Banners",
+        "pages": "Pages",
+        "content": "Content",
+        "translations": "Translations",
+        "analytics": "Analytics",
+        "log": "Activity log"
+      }
     },
     "log": {
       "title": "Activity log",
@@ -1179,6 +1252,7 @@
         "max": "Concurrent",
         "model": "Model",
         "dailyCap": "Runs per day",
+        "dailyCapNone": "no limit",
         "window": "Deploy window — Yerevan hours, from and to",
         "windowHint": "Deployer deploys only tested commits, one task at a time, in the deploy window; 'Run now' — any time. Failed smoke test — rollback and task returned, each deploy notified to tech chat.",
         "save": "Save",
@@ -1222,6 +1296,7 @@
         "stopDone": "Remove stop",
         "stopping": "Stopping…",
         "triageBatch": "Triage: cards per run",
+        "deployBatch": "Deploy batch size (1–5)",
         "sweepEveryH": "Backlog sweep every N hours (0 — off)",
         "modes": {
           "auto": "Auto",
@@ -1248,6 +1323,7 @@
         "poolCapOut": "daily limit reached ({n} of {cap})",
         "runNow": "Run now",
         "todayOf": "Today {n} of {cap}",
+        "todayNoCap": "Today {n}, no limit",
         "lastStart": "last run {ago}",
         "windowOpen": "Deploy window open",
         "windowClosed": "Deploy window {from}:00–{to}:00 Yerevan, currently closed",
@@ -1278,6 +1354,7 @@
           "holding": "no verdict, retry in {detail}",
           "question": "question: {detail}",
           "nodesign": "no design description",
+          "returned": "Returned",
           "deploy": "tested"
         },
         "more": "and {n} more — in Backlog tab",
@@ -1362,8 +1439,7 @@
         "scopeHint": "File or folder paths, one per line, e.g. src/server/services/booking.ts — parallel assignees won't conflict",
         "sourceIntake": "from Intake",
         "mockupRequired": "Mockup required",
-        "mockupUrl": "Mockup link",
-        "delete": "Delete"
+        "mockupUrl": "Mockup link"
       },
       "searchAll": "Search tasks",
       "pages": {
@@ -1410,8 +1486,8 @@
         "link": "View mockup",
         "canon": "Library record",
         "return": "Return to designer",
-        "returnPh": "What to fix",
-        "returned": "Returned to designer",
+        "returnPh": "Remark (required)",
+        "returned": "Sent to designer",
         "failed": "Error: {error}"
       },
       "imageViewer": {
@@ -1492,20 +1568,62 @@
       },
       "you": {
         "empty": "Nothing needs your decision right now ✓",
+        "allDone": "All done — thank you!",
+        "headerCount": "{n, plural, one {# card waiting for answer} other {# cards waiting for answer}}",
+        "headerWithReview": "{q, plural, one {# question} other {# questions}} + {m} in review",
+        "headerReviewOnly": "{m, plural, one {# task in review} other {# tasks in review}}",
+        "filterAll": "All ({n})",
+        "filterUrgent": "Urgent ({n})",
+        "filterPostponed": "Postponed ({n})",
+        "noPostponed": "No postponed questions",
+        "postponedSectionHint": "Tasks with external blocks: postponed by owner and waiting for external events.",
+        "urgent": "Urgent",
+        "groups": {
+          "variant": "Choose an option",
+          "price": "Name a price or number",
+          "data": "Send data or document",
+          "auth": "Sign in to a service",
+          "approve": "Approve or agree",
+          "rule": "Approve a system rule",
+          "other": "Other"
+        },
+        "postpone3days": "Postpone for 3 days",
         "paused": "Workers paused until {until}.",
         "toWorkers": "Open 'Workers'",
         "owner": "Awaiting owner or product decision",
+        "ownerNeedAnswer": "Needs answer",
+        "ownerAnswered": "Answered — awaiting triage",
         "ownerHint": "Reply in the task feed — triage will pick up the answer, update the card and return the task to queue.",
         "since": "waiting {ago}",
         "answer": "reply",
+        "waitingTriage": "awaiting triage",
+        "answerVariant": "Selected option {id}",
+        "expand": "expand",
+        "collapse": "collapse",
+        "replyPh": "Your answer…",
+        "replySend": "Reply",
         "postpone": "Postpone",
         "postponePh": "Reason (optional)…",
+        "postponeDatePh": "Until date",
         "postponeConfirm": "Postpone",
         "stale": "Stale or without assignee",
         "stuckReview": "Review stuck",
+        "nocodeReview": "Awaiting your approval",
+        "nocodeReviewHint": "No-code in review: documents, decisions, content. Accept or return with feedback.",
+        "devOnly": "for assignee",
+        "textMayCut": "⚠ text may be truncated — open task for full text",
+        "returnedRuns": "Returned for revision",
+        "returnedRunsHint": "Deployer returned the task due to merge conflict or feedback — production not affected, task back in queue.",
         "failedRuns": "Failed worker runs in the last 24 hours",
+        "techBlocked": "Blocked on tech/external reasons",
+        "techBlockedHint": "These tasks are waiting for a technical solution or external service response. Unblock with cc.mjs unblock KEY.",
+        "techBlockedUntil": "until {date}",
         "alertMissing": "⚠️ Tech alerts are not delivered: no recipient configured.",
-        "alertMissingLink": "Configure notifications"
+        "alertMissingLink": "Configure notifications",
+        "waitingDeps": "Waiting for dependencies",
+        "waitingDepsHint": "Tasks that cannot start: their dependencies are open and have no one to act on them",
+        "waitingDepsMore": "{n} more",
+        "unblocks": "{n, plural, one {Unblocks: # task} other {Unblocks: # tasks}}"
       },
       "devTab": {
         "empty": "Nothing is being worked on now",
@@ -1559,18 +1677,23 @@
         "noCode": "no code"
       },
       "notify": {
-        "inbox": "Owner inbox",
-        "inboxEmpty": "No messages",
-        "compose": "Write",
-        "outbox": "Sent to roles",
-        "outboxEmpty": "Nothing sent yet",
+        "inbox": "Notifications",
+        "inboxEmpty": "No new notifications",
+        "markAllRead": "Mark all read",
+        "markAllReadDone": "All read",
+        "compose": "Write to workers",
+        "outbox": "Sent",
+        "outboxEmpty": "Nothing yet",
         "to": "To:",
         "roles": {
           "owner": "Owner",
           "cto": "CTO",
           "workers": "All workers",
           "triage": "Triage",
+          "product": "Product",
+          "designer": "Designer",
           "dev": "Developers",
+          "nocode": "No-code",
           "tester": "Tester",
           "deployer": "Deployer"
         },
@@ -1675,11 +1798,25 @@
             "in_progress_stale": "In progress without pulse for over an hour"
           }
         },
+        "depChains": "Chains with blocked root",
+        "depChainsBacklog": "in backlog",
+        "depChainsWaiting": "waiting",
         "tips": {
           "dispatcher": "Dispatcher silent for more than 3 minutes — on server: systemctl status ihelp-dispatcher.timer; install — deploy/systemd/install.sh.",
           "login": "Workers say 'Not logged in' — sign in to subscription: scripts/claude-login.sh, then 'Resume' in Workers tab.",
           "stop": "Stop everything immediately: 'Stop all' in Workers tab or on server systemctl stop 'ihelp-w-*' ihelp-dispatcher.timer.",
           "logs": "App errors — Logs page; full log — docker compose logs app."
+        },
+        "denials": {
+          "title": "Worker permission denials in 24 hours",
+          "share": "{pct}%",
+          "shareHint": "runs with a denied command: {denied} of {total}. Target — below {target}%",
+          "noData": "No data yet: the dispatcher writes denials to the run log, the first numbers will appear after the next worker runs.",
+          "none": "No denied commands in 24 hours.",
+          "top": "Most frequent denied commands",
+          "times": "×{n}",
+          "skipped": "Runs without denial data: {n} — not counted in the share.",
+          "hint": "A denial is a command blocked by the role rules (scripts/worker-run.sh). Only the command form is shown, without text or keys. To check instructions against the rules: node scripts/check-role-commands.mjs."
         }
       },
       "logs": {
@@ -1852,6 +1989,14 @@
       }
     }
   },
+  "review": {
+    "title": "Your review of the visit",
+    "placeholder": "What did you like, what could be improved?",
+    "send": "Submit review",
+    "thanks": "Thank you! Your review has been received.",
+    "invalid": "This link is invalid or has already been used.",
+    "alreadyLeft": "You have already left a review for this visit."
+  },
   "cookies": {
     "title": "We use cookies",
     "text": "We use cookies for site functionality and analytics. Learn more in our {policyLink}.",
@@ -1864,6 +2009,15 @@
       "label": "Receive promotional offers",
       "hint": "Email and SMS",
       "notifications": "Notifications"
+    }
+  },
+  "notify": {
+    "order": {
+      "created": "✅ Order confirmed\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}\nTotal: {price}\nThank you for choosing iHelp! We will assign a master soon.",
+      "masterAssigned": "👷 Master assigned\nService: {serviceName}, {date} at {time}\nMaster: {masterName}\nFeel free to contact us with any questions.",
+      "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}",
+      "cancelled": "❌ Visit cancelled\nService: {serviceName}, {date}\nWant to reschedule? Place a new order on the website.",
+      "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}"
     }
   }
 }

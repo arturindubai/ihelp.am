@@ -31,6 +31,7 @@ export const taskContentSchema = z.object({
     .refine((v) => !v || /^(https?:\/\/|\/uploads\/)/.test(v), { message: "mockupUrl must start with https?:// or /uploads/" })
     .nullable()
     .optional(),
+  needsDesign: z.boolean().nullable().optional(),
 });
 
 export type TaskContentInput = z.infer<typeof taskContentSchema>;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
-import { POOLS, controlPatch, DEFAULT_WORKERS, executorOf, filterDesignerCooldown, freeName, inDesignerQueue, normalizeWorkers, planDispatch, poolForTask, reviewQueues, runOutcome, testedCurrent, workersState, type DispatchState, type ReviewTask, type WorkersConfig } from "./workers";
+import { POOLS, DAILY_CAP_MAX, capLeft, normalizeDailyCap, controlPatch, DEFAULT_WORKERS, executorOf, filterDesignerCooldown, freeName, inDesignerQueue, normalizeWorkers, planDispatch, poolForTask, reviewQueues, runOutcome, testedCurrent, workersState, type DispatchState, type ReviewTask, type WorkersConfig } from "./workers";
+import { poolPatchSchema, workersPatchSchema } from "./workers-schema";
 import { unblockTarget } from "./cc-flow";
 
 // 12:00 по Еревану — внутри окна выкладки 10–20
@@ -51,7 +51,7 @@ describe("настройки воркеров", () => {
     expect(normalizeWorkers({ enabled: true, plannedStart: "да", pausedUntil: "2026-09-24T10:00:00Z" }).plannedStart).toBe(false);
   });
   it("старые настройки без триажа и режимов получают значения по умолчанию", () => {
-    const c = normalizeWorkers({ enabled: true, pools: { dev: { enabled: true, max: 2, model: "opus", dailyCap: 5 } } });
+    const c = normalizeWorkers({ enabled: true, capsOptional: true, pools: { dev: { enabled: true, max: 2, model: "opus", dailyCap: 5 } } });
     expect(c.pools.dev).toEqual({ enabled: true, max: 2, model: "opus", modelForL: "sonnet", dailyCap: 5, mode: "auto", everyMin: 30 });
     expect(c.pools.triage.enabled).toBe(true);
     expect(c.triageBatch).toBe(6);
@@ -77,8 +77,11 @@ describe("план диспетчера", () => {
     expect(planDispatch(state({ readyForDev: 5, running: [{ pool: "dev", agent: "dev-1" }] }), noon)).toEqual([{ pool: "dev", agent: "dev-2" }]);
     expect(planDispatch(state({ readyForDev: 1 }), noon)).toEqual([{ pool: "dev", agent: "dev-1" }]);
   });
-  it("дневной лимит пула останавливает запуски", () => {
-    expect(planDispatch(state({ readyForDev: 5, today: { triage: 0, product: 0, designer: 0, dev: 16, nocode: 0, tester: 0, deployer: 0 } }), noon)).toEqual([]);
+  it("дневной лимит пула, если он задан, останавливает запуски; без лимита пул работает", () => {
+    const today = { triage: 0, product: 0, designer: 0, dev: 16, nocode: 0, tester: 0, deployer: 0 };
+    const capped = { ...on, pools: { ...on.pools, dev: { ...on.pools.dev, dailyCap: 16 } } };
+    expect(planDispatch(state({ config: capped, readyForDev: 5, today }), noon)).toEqual([]);
+    expect(planDispatch(state({ readyForDev: 5, today }), noon).filter((a) => a.pool === "dev").length).toBeGreaterThan(0);
   });
   it("тестировщик берёт непроверенную задачу, деплоер — проверенную на текущем коммите", () => {
     const heads = { "task/A": "aaa111", "task/B": "bbb222" };
@@ -104,6 +107,34 @@ describe("план диспетчера", () => {
   });
   it("задачу без отправленной ветки не тестируем и не выкладываем", () => {
     expect(planDispatch(state({ heads: {}, review: [review("A")] }), noon)).toEqual([]);
+  });
+  it("deployBatch=1 — прежнее поведение: одна задача с key", () => {
+    const heads = { "task/A": "aaa", "task/B": "bbb" };
+    const s = state({ config: { ...on, deployBatch: 1 }, heads, review: [review("A", { testedSha: "aaa" }), review("B", { testedSha: "bbb" })] });
+    const plan = planDispatch(s, noon).filter((a) => a.pool === "deployer");
+    expect(plan).toHaveLength(1);
+    expect(plan[0].key).toBeDefined();
+    expect(plan[0].keys).toBeUndefined();
+  });
+  it("deployBatch=3 — деплоер получает пачку из трёх задач через keys", () => {
+    const heads = { "task/A": "aaa", "task/B": "bbb", "task/C": "ccc", "task/D": "ddd" };
+    const s = state({
+      config: { ...on, deployBatch: 3 },
+      heads,
+      review: [review("A", { testedSha: "aaa" }), review("B", { testedSha: "bbb" }), review("C", { testedSha: "ccc" }), review("D", { testedSha: "ddd" })],
+    });
+    const plan = planDispatch(s, noon).filter((a) => a.pool === "deployer");
+    expect(plan).toHaveLength(1);
+    expect(plan[0].keys).toHaveLength(3);
+    expect(plan[0].key).toBeUndefined();
+  });
+  it("deployBatch=3 с одной задачей — используется key, а не keys", () => {
+    const heads = { "task/A": "aaa" };
+    const s = state({ config: { ...on, deployBatch: 3 }, heads, review: [review("A", { testedSha: "aaa" })] });
+    const plan = planDispatch(s, noon).filter((a) => a.pool === "deployer");
+    expect(plan).toHaveLength(1);
+    expect(plan[0].key).toBe("A");
+    expect(plan[0].keys).toBeUndefined();
   });
 });
 
@@ -267,7 +298,8 @@ describe("«Продукт и не-код»", () => {
   it("выключенный пул и дневной лимит соблюдаются, «Запустить сейчас» на задачу — работает", () => {
     const off = { ...on, pools: { ...on.pools, nocode: { ...on.pools.nocode, enabled: false } } };
     expect(planDispatch(state({ config: off, readyForNocode: 3 }), noon)).toEqual([]);
-    expect(planDispatch(state({ readyForNocode: 3, today: { triage: 0, product: 0, designer: 0, dev: 0, nocode: 8, tester: 0, deployer: 0 } }), noon)).toEqual([]);
+    const cappedNocode = { ...on, pools: { ...on.pools, nocode: { ...on.pools.nocode, dailyCap: 8 } } };
+    expect(planDispatch(state({ config: cappedNocode, readyForNocode: 3, today: { triage: 0, product: 0, designer: 0, dev: 0, nocode: 8, tester: 0, deployer: 0 } }), noon)).toEqual([]);
     const at = "2026-09-24T07:59:00Z";
     expect(planDispatch(state({ config: DEFAULT_WORKERS, requests: [{ pool: "nocode", key: "TEAM-9", at, by: "owner" }] }), noon)).toEqual([
       { pool: "nocode", agent: "nocode-1", key: "TEAM-9", requestAt: at },
@@ -414,7 +446,7 @@ describe("кнопки владельца: Пауза, Стоп, Старт, П�
 });
 
 describe("отбор очереди дизайнера", () => {
-  const base = { mockupRequired: false, mockupApprovedBy: null, mockupUrl: null, design: null, layer: "front", blockedOn: null, hasImageAttachments: false, hasAnyAttachments: false };
+  const base = { mockupRequired: false, mockupApprovedBy: null, mockupUrl: null, design: null, layer: "front", blockedOn: null, hasImageAttachments: false, hasAnyAttachments: false, needsDesign: null as boolean | null };
 
   it("задача заблокирована на дизайне без поданного макета — в очереди", () => {
     expect(inDesignerQueue({ ...base, status: "blocked", blockedOn: "design" })).toBe(true);
@@ -436,23 +468,25 @@ describe("отбор очереди дизайнера", () => {
     expect(inDesignerQueue({ ...base, status: "ready", mockupRequired: true, mockupApprovedBy: "owner" })).toBe(false);
     expect(inDesignerQueue({ ...base, status: "ready", layer: "front", design: null, mockupApprovedBy: "cto" })).toBe(false);
   });
-  it("задача фронта без описания дизайна и без файлов — в очереди", () => {
-    expect(inDesignerQueue({ ...base, status: "backlog", layer: "front" })).toBe(true);
-    expect(inDesignerQueue({ ...base, status: "ready", layer: "front" })).toBe(true);
+  it("задача с флагом needsDesign без описания дизайна и без файлов — в очереди", () => {
+    expect(inDesignerQueue({ ...base, status: "backlog", layer: "front", needsDesign: true })).toBe(true);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "front", needsDesign: true })).toBe(true);
+    // любой слой с флагом — к дизайнеру
+    expect(inDesignerQueue({ ...base, status: "backlog", layer: "back", needsDesign: true })).toBe(true);
+    expect(inDesignerQueue({ ...base, status: "backlog", layer: "fullstack", needsDesign: true })).toBe(true);
   });
-  it("задача бэк+фронт без описания дизайна и без файлов — в очереди", () => {
-    expect(inDesignerQueue({ ...base, status: "backlog", layer: "fullstack" })).toBe(true);
-    expect(inDesignerQueue({ ...base, status: "ready", layer: "fullstack" })).toBe(true);
-    expect(inDesignerQueue({ ...base, status: "ready", layer: "fullstack", design: "Экран..." })).toBe(false);
-    expect(inDesignerQueue({ ...base, status: "ready", layer: "fullstack", hasAnyAttachments: true })).toBe(false);
-  });
-  it("задача фронта с описанием дизайна или файлами — не в очереди", () => {
-    expect(inDesignerQueue({ ...base, status: "ready", layer: "front", design: "Экран списка..." })).toBe(false);
-    expect(inDesignerQueue({ ...base, status: "ready", layer: "front", hasAnyAttachments: true })).toBe(false);
-  });
-  it("бэк-задача без дизайна не в очереди дизайнера — только front и fullstack", () => {
+  it("задача без флага needsDesign не идёт к дизайнеру независимо от слоя", () => {
+    expect(inDesignerQueue({ ...base, status: "backlog", layer: "front" })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "front" })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "backlog", layer: "fullstack" })).toBe(false);
     expect(inDesignerQueue({ ...base, status: "backlog", layer: "back" })).toBe(false);
     expect(inDesignerQueue({ ...base, status: "backlog", layer: "none" })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "backlog", layer: "front", needsDesign: false })).toBe(false);
+  });
+  it("задача с флагом needsDesign, но описание или файлы уже есть — не в очереди", () => {
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "front", needsDesign: true, design: "Экран списка..." })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "fullstack", needsDesign: true, hasAnyAttachments: true })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "ready", layer: "front", needsDesign: true, mockupApprovedBy: "owner" })).toBe(false);
   });
   it("заблокирована не на дизайне — не в очереди дизайнера", () => {
     expect(inDesignerQueue({ ...base, status: "blocked", blockedOn: "product" })).toBe(false);
@@ -487,15 +521,65 @@ describe("60-минутное остывание очереди дизайнер
   });
 });
 
-describe("схема настроек пулов (зеркало workersSchema в cc.ts)", () => {
+describe("пулы product и designer при лимите > 1", () => {
+  it("второй запуск получает имя с суффиксом и не берёт задачи первого запуска", () => {
+    const config2 = { ...on, pools: { ...on.pools, designer: { ...on.pools.designer, max: 2 } } };
+    const s = state({
+      config: config2,
+      running: [{ pool: "designer" as const, agent: "designer", keys: ["DSN-1", "DSN-2", "DSN-3"] }],
+      designerQueue: ["DSN-1", "DSN-4", "DSN-5"],
+    });
+    const actions = planDispatch(s, noon).filter((a) => a.pool === "designer");
+    expect(actions).toHaveLength(1);
+    expect(actions[0].agent).toBe("designer-2");
+    expect((actions[0].keys ?? []).includes("DSN-1")).toBe(false);
+    expect(actions[0].keys).toContain("DSN-4");
+  });
+  it("два запуска идут — третий не создаётся", () => {
+    const config2 = { ...on, pools: { ...on.pools, designer: { ...on.pools.designer, max: 2 } } };
+    const s = state({
+      config: config2,
+      running: [
+        { pool: "designer" as const, agent: "designer", keys: ["DSN-1"] },
+        { pool: "designer" as const, agent: "designer-2", keys: ["DSN-2"] },
+      ],
+      designerQueue: ["DSN-3", "DSN-4"],
+    });
+    expect(planDispatch(s, noon).filter((a) => a.pool === "designer")).toHaveLength(0);
+  });
+  it("два запуска с одинаковым именем (legacy) — третий не создаётся (считаем экземпляры, не уникальные имена)", () => {
+    const config2 = { ...on, pools: { ...on.pools, designer: { ...on.pools.designer, max: 2 } } };
+    const s = state({
+      config: config2,
+      running: [
+        { pool: "designer" as const, agent: "designer", keys: ["DSN-1"] },
+        { pool: "designer" as const, agent: "designer", keys: ["DSN-2"] },
+      ],
+      designerQueue: ["DSN-3", "DSN-4"],
+    });
+    expect(planDispatch(s, noon).filter((a) => a.pool === "designer")).toHaveLength(0);
+  });
+  it("то же для пула product: второй запуск — product-2, без дублей задач", () => {
+    const config2 = { ...on, pools: { ...on.pools, product: { ...on.pools.product, max: 2 } } };
+    const s = state({
+      config: config2,
+      running: [{ pool: "product" as const, agent: "product", keys: ["AUD-4"] }],
+      productQueue: ["AUD-4", "DSN-2", "X-1"],
+    });
+    const actions = planDispatch(s, noon).filter((a) => a.pool === "product");
+    expect(actions).toHaveLength(1);
+    expect(actions[0].agent).toBe("product-2");
+    expect((actions[0].keys ?? []).includes("AUD-4")).toBe(false);
+  });
+});
+
+describe("схема настроек пулов (workersPatchSchema)", () => {
   it("принимает все семь пулов из POOLS, неизвестный ключ — ошибка", () => {
-    const poolSchema = z.object({ enabled: z.boolean(), max: z.number() }).partial();
-    const schema = z.object(Object.fromEntries(POOLS.map((p) => [p, poolSchema]))).strict().partial();
     expect(POOLS.length).toBe(7);
     for (const p of POOLS) {
-      expect(schema.safeParse({ [p]: { enabled: true } }).success, `пул ${p} должен приниматься`).toBe(true);
+      expect(workersPatchSchema.safeParse({ pools: { [p]: { enabled: true } } }).success, `пул ${p} должен приниматься`).toBe(true);
     }
-    expect(schema.safeParse({ unknown_pool: { enabled: true } }).success).toBe(false);
+    expect(workersPatchSchema.safeParse({ pools: { unknown_pool: { enabled: true } } }).success).toBe(false);
   });
 });
 
@@ -518,5 +602,52 @@ describe("цель разблокировки при утверждении ди
   it("blockedFrom не задан — возвращается в очередь", () => {
     expect(unblockTarget(null, "owner")).toBe("ready");
     expect(unblockTarget(undefined, "dev")).toBe("ready");
+  });
+});
+
+describe("суточный лимит пула необязателен (DEV-110)", () => {
+  it("по умолчанию лимита нет ни у одного пула", () => {
+    const c = normalizeWorkers({});
+    for (const p of POOLS) expect(c.pools[p].dailyCap).toBeNull();
+    expect(c.capsOptional).toBe(true);
+  });
+
+  it("настройки, сохранённые при обязательном лимите, читаются без ошибки и без лимитов", () => {
+    const c = normalizeWorkers({ enabled: true, pools: { dev: { max: 4, dailyCap: 90 }, tester: { max: 4, dailyCap: 90 }, designer: { max: 2, dailyCap: 20 } } });
+    expect(c.pools.dev.dailyCap).toBeNull();
+    expect(c.pools.tester.dailyCap).toBeNull();
+    expect(c.pools.designer.dailyCap).toBeNull();
+    expect(c.pools.dev.max).toBe(4);
+  });
+
+  it("лимит, заданный после снятия, сохраняется; пустое значение — без лимита", () => {
+    const c = normalizeWorkers({ capsOptional: true, pools: { dev: { dailyCap: 120 }, tester: { dailyCap: null }, designer: { dailyCap: 5000 } } });
+    expect(c.pools.dev.dailyCap).toBe(120);
+    expect(c.pools.tester.dailyCap).toBeNull();
+    expect(c.pools.designer.dailyCap).toBe(DAILY_CAP_MAX);
+  });
+
+  it("normalizeDailyCap: пусто, null и мусор — без лимита; ноль остаётся нулём", () => {
+    expect(normalizeDailyCap(null)).toBeNull();
+    expect(normalizeDailyCap(undefined)).toBeNull();
+    expect(normalizeDailyCap("")).toBeNull();
+    expect(normalizeDailyCap("abc")).toBeNull();
+    expect(normalizeDailyCap(0)).toBe(0);
+    expect(normalizeDailyCap(-3)).toBe(0);
+    expect(normalizeDailyCap(16)).toBe(16);
+  });
+
+  it("capLeft: без лимита остаток бесконечен при любом числе запусков; с лимитом — останавливается на нём", () => {
+    expect(capLeft(null, 0)).toBe(Infinity);
+    expect(capLeft(null, 500)).toBe(Infinity);
+    expect(capLeft(90, 89)).toBe(1);
+    expect(capLeft(90, 90)).toBe(0);
+    expect(capLeft(90, 120)).toBe(0);
+  });
+
+  it("схема настроек принимает пустой лимит и отклоняет значение выше границы", () => {
+    expect(poolPatchSchema.safeParse({ dailyCap: null }).success).toBe(true);
+    expect(poolPatchSchema.safeParse({ dailyCap: 250 }).success).toBe(true);
+    expect(poolPatchSchema.safeParse({ dailyCap: DAILY_CAP_MAX + 1 }).success).toBe(false);
   });
 });

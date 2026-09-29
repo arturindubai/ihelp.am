@@ -4,20 +4,17 @@ import { useLocale, useTranslations } from "next-intl";
 import { Plus, Pencil } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { deleteBannerAction, saveBannerAction, type BannerPayload } from "@/server/actions/admin/misc";
-import { bannerStatus } from "@/lib/banner-select";
+import { bannerStatus, BANNER_DEFAULT_BG } from "@/lib/banner-select";
 import { tr } from "@/i18n/locales";
 import { Sheet } from "@/components/ui/Sheet";
 import { I18nInput, ImageInput, NumInput, TextInput, Toggle } from "./fields";
 
+/** Только места, подключённые в интерфейсе; остальные скрыты до реализации */
 const PLACEMENTS = [
   "CAROUSEL_HOME",
   "HERO_HOME",
   "CATALOG",
   "SERVICE",
-  "CHECKOUT",
-  "SUCCESS",
-  "EMAIL",
-  "MASTER_CABINET",
 ] as const;
 
 const BANNER_TYPES = ["PROMO", "ANNOUNCEMENT", "UPSELL", "CROSS_SELL"] as const;
@@ -42,7 +39,7 @@ const empty: BannerPayload = {
   image: null,
   link: "",
   promoCode: "",
-  bg: "#1c1917",
+  bg: BANNER_DEFAULT_BG,
   active: true,
   sort: 0,
   placement: "CAROUSEL_HOME",
@@ -79,6 +76,7 @@ export function BannerManager({ banners }: Props) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<string>("ALL");
   const [edit, setEdit] = useState<{ id: string | null; data: BannerPayload } | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   const d = edit?.data;
@@ -101,8 +99,10 @@ export function BannerManager({ banners }: Props) {
 
   const visible = activeTab === "ALL" ? banners : banners.filter((b) => b.data.placement === activeTab);
 
-  const openNew = () =>
+  const openNew = () => {
+    setSaveError(null);
     setEdit({ id: null, data: { ...empty, sort: banners.length, placement: activeTab !== "ALL" ? (activeTab as BannerPayload["placement"]) : "CAROUSEL_HOME" } });
+  };
 
   return (
     <div>
@@ -155,7 +155,7 @@ export function BannerManager({ banners }: Props) {
                 {/* превью */}
                 <div
                   className="relative h-[100px] w-20 shrink-0 md:w-[100px]"
-                  style={{ background: b.data.bg || "#1c1917" }}
+                  style={{ background: b.data.bg || BANNER_DEFAULT_BG }}
                 >
                   <div className="flex h-full flex-col justify-end p-2">
                     <div className="truncate text-[11px] font-bold leading-tight text-inverse">{tr(b.data.title, locale) || "…"}</div>
@@ -189,7 +189,7 @@ export function BannerManager({ banners }: Props) {
                 {/* карандаш */}
                 <button
                   className="mr-2 shrink-0 grid h-8 w-8 place-items-center rounded-lg border border-line bg-paper text-muted hover:text-ink"
-                  onClick={() => setEdit({ id: b.id, data: b.data })}
+                  onClick={() => { setSaveError(null); setEdit({ id: b.id, data: b.data }); }}
                 >
                   <Pencil size={15} />
                 </button>
@@ -228,7 +228,9 @@ export function BannerManager({ banners }: Props) {
               disabled={pending}
               onClick={() =>
                 start(async () => {
-                  await saveBannerAction(edit!.id, edit!.data);
+                  setSaveError(null);
+                  const res = await saveBannerAction(edit!.id, edit!.data);
+                  if (!res.ok) { setSaveError(t("common.error")); return; }
                   setEdit(null);
                   router.refresh();
                 })
@@ -244,7 +246,7 @@ export function BannerManager({ banners }: Props) {
             {/* живой предпросмотр */}
             <div
               className="relative flex h-[100px] flex-col justify-end overflow-hidden rounded-[14px] p-3 text-inverse"
-              style={{ background: d.bg || "#1c1917" }}
+              style={{ background: d.bg || BANNER_DEFAULT_BG }}
             >
               <div className="relative">
                 <div className="text-sm font-bold leading-snug">{tr(d.title, locale) || "…"}</div>
@@ -293,14 +295,14 @@ export function BannerManager({ banners }: Props) {
                   <input
                     type="color"
                     className="h-10 w-10 shrink-0 cursor-pointer rounded-lg border border-line"
-                    value={d.bg || "#1c1917"}
+                    value={d.bg || BANNER_DEFAULT_BG}
                     onChange={(e) => up({ bg: e.target.value })}
                   />
                   <input
                     type="text"
                     className="input font-mono uppercase"
                     value={d.bg || ""}
-                    placeholder="#1c1917"
+                    placeholder={BANNER_DEFAULT_BG}
                     maxLength={7}
                     onChange={(e) => up({ bg: e.target.value })}
                   />
@@ -346,6 +348,10 @@ export function BannerManager({ banners }: Props) {
               </div>
               <NumInput label={t("common.sort")} value={d.sort} onChange={(v) => up({ sort: v ?? 0 })} className="max-w-[120px]" />
             </div>
+
+            {saveError && (
+              <p className="rounded-xl bg-bad-50 px-3 py-2 text-sm text-bad">{saveError}</p>
+            )}
 
             {/* секция: Статистика (только для существующих баннеров) */}
             {edit?.id && (
