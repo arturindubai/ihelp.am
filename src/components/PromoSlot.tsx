@@ -1,9 +1,9 @@
 import "server-only";
-import { Link } from "@/i18n/navigation";
 import { Img } from "@/components/Img";
 import { tr } from "@/i18n/locales";
 import { getBannerForSlot } from "@/server/services/banners";
 import { getCurrentUser } from "@/server/auth";
+import { BannerLink } from "@/components/BannerLink";
 import type { BannerPlacement } from "@/lib/banner-select";
 
 type Props = {
@@ -41,7 +41,7 @@ export async function PromoSlot({ placement, locale }: Props) {
 
   return (
     <div className="mt-4">
-      {banner.link ? <Link href={banner.link}>{inner}</Link> : inner}
+      {banner.link ? <BannerLink bannerId={banner.id} href={banner.link}>{inner}</BannerLink> : inner}
     </div>
   );
 }
