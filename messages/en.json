@@ -1122,6 +1122,7 @@
         "claimHint": "Task is claimed by the assignee: node scripts/cc.mjs take {key} --agent dev-1",
         "criteriaLabel": "Criteria met",
         "criteriaSpawnedCard": "↗ spawned card",
+        "criteriaWillCreate": "↗ create card",
         "criteriaCardPlaceholder": "IN-7",
         "incompleteGate": "Check each criterion or specify a card key",
         "whatChangedLabel": "What changed for people",
@@ -1162,7 +1163,8 @@
         "mockup_not_required": "Task does not have 'mockup required' flag",
         "already_approved": "Mockup already approved",
         "needs_open": "There are open product questions — get an answer first or remove them from the card",
-        "criteria_incomplete": "Check each criterion or specify a card key"
+        "criteria_incomplete": "Check each criterion or specify a card key",
+        "followup_not_found": "Card not found or already closed"
       },
       "attrs": "Task parameters",
       "workers": {

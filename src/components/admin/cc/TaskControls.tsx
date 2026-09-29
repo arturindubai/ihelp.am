@@ -1,5 +1,5 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { ccCommentAction, ccTransitionAction, ccUpdateTaskAction } from "@/server/actions/admin/cc";
@@ -59,6 +59,12 @@ export function TransitionPanel({
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
+  // Сброс состояния чек-листа при изменении списка критериев (без перезагрузки страницы)
+  useEffect(() => {
+    setCriteriaChecked(requirements.map(() => false));
+    setCriteriaCards(requirements.map(() => ""));
+  }, [requirements.length]);
+
   const needsClosingMap = source === "intake" && (to === "done" || to === "cancelled");
   const isCode = isCodeTask(layer);
 
@@ -68,11 +74,10 @@ export function TransitionPanel({
   const setCritCheck = (i: number, v: boolean) => setCriteriaChecked((prev) => prev.map((c, idx) => (idx === i ? v : c)));
   const setCritCard = (i: number, v: string) => setCriteriaCards((prev) => prev.map((c, idx) => (idx === i ? v : c)));
 
-  // Все критерии закрыты: каждый либо отмечен, либо имеет корректный ключ карточки
   const CARD_KEY_RE = /^[A-Z]+-\d+$/;
-  const allCriteriaClosed = requirements.length === 0 || requirements.every((_, i) => criteriaChecked[i] || CARD_KEY_RE.test(criteriaCards[i] ?? ""));
-  // Кнопка «→ Сделано»: заблокирована если критерии не закрыты (force снимает) или нет whatChanged для код-задачи
-  const doneBlocked = to === "done" && (!allCriteriaClosed && !force || (isCode && !whatChanged.trim()));
+  // Кнопка «→ Сделано»: заблокирована только если нет «Что изменилось» для код-задачи.
+  // Незакрытые критерии без ключа = follow-up карточки создаст сервер автоматически.
+  const doneBlocked = to === "done" && isCode && !whatChanged.trim() && !force;
 
   const submit = (target: TaskStatusKey) =>
     start(async () => {
@@ -137,7 +142,8 @@ export function TransitionPanel({
             <div className="space-y-1.5 rounded-lg bg-surface p-2.5">
               <label className="label">{t("move.criteriaLabel")}</label>
               {requirements.map((req, i) => {
-                const spawned = !criteriaChecked[i] && CARD_KEY_RE.test(criteriaCards[i] ?? "");
+                const hasValidKey = !criteriaChecked[i] && CARD_KEY_RE.test(criteriaCards[i] ?? "");
+                const willCreate = !criteriaChecked[i] && !hasValidKey;
                 return (
                   <div key={i} className="flex items-start gap-2 text-sm">
                     <input
@@ -149,7 +155,8 @@ export function TransitionPanel({
                     <span className={cn("flex-1 break-words", criteriaChecked[i] ? "text-muted line-through" : "text-ink")}>{req}</span>
                     {!criteriaChecked[i] && (
                       <div className="flex shrink-0 items-center gap-1">
-                        {spawned && <span className="text-xs text-muted">{t("move.criteriaSpawnedCard")}</span>}
+                        {hasValidKey && <span className="text-xs text-muted">{t("move.criteriaSpawnedCard")}</span>}
+                        {willCreate && <span className="text-xs text-muted">{t("move.criteriaWillCreate")}</span>}
                         <input
                           type="text"
                           className="input w-24 py-0.5 px-1.5 text-xs font-mono"
@@ -162,9 +169,6 @@ export function TransitionPanel({
                   </div>
                 );
               })}
-              {!allCriteriaClosed && !force && (
-                <p className="text-xs text-bad">{t("move.incompleteGate")}</p>
-              )}
             </div>
           )}
           {/* «Что изменилось для людей» — для review (опционально) и done (обязательно для код-задач) */}

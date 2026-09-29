@@ -155,8 +155,8 @@ export const isCodeTask = (layer: string) => layer !== "none";
 
 /**
  * Гейт «На проверке»: у код-задачи есть ветка, у любой — отчёт.
- * Поля releaseNote и ownerSummary проверяются только если переданы явно (не undefined):
- * cc.mjs всегда передаёт оба, UI может передать только releaseNote — тогда ownerSummary не проверяется.
+ * Если opts переданы — оба поля (releaseNote и ownerSummary) обязательны.
+ * cc.mjs всегда передаёт оба; UI передаёт только releaseNote через отдельное поле — тогда opts не передаётся.
  */
 export function reviewGate(
   t: { layer: string; branch?: string | null },
@@ -166,8 +166,8 @@ export function reviewGate(
   if (!opts?.noWork && isCodeTask(t.layer) && !t.branch?.trim()) return "branch_required";
   if (report.trim().length < 40) return "report_required";
   if (opts !== undefined) {
-    if (opts.releaseNote !== undefined && !opts.releaseNote.trim()) return "release_note_required";
-    if (opts.ownerSummary !== undefined && !opts.ownerSummary.trim()) return "owner_summary_required";
+    if (!opts.releaseNote?.trim()) return "release_note_required";
+    if (!opts.ownerSummary?.trim()) return "owner_summary_required";
     // Для не-код задачи исполнитель обязан явно указать следующие шаги (или что их нет)
     if (!isCodeTask(t.layer) && opts.nextSteps === undefined) return "next_steps_required";
   }
@@ -184,10 +184,13 @@ const CARD_KEY_RE = /^[A-Z]+-\d+$/;
 /**
  * Гейт критериев при переходе в «Сделано»: каждый критерий должен быть либо отмечен ✓,
  * либо вынесен в карточку с ключом вида IN-7. Без force — блокирует; с force — пропускает.
+ * Если result не передан и есть требования — блокирует (путь через API/деплоер без тестировщика).
+ * Проверяет все требования по длине массива: короткий result не проходит.
  */
 export function criteriaGate(requirements: string[], result?: CriterionResult[]): string | null {
-  if (!requirements.length || !result) return null;
-  const incomplete = result.some((r, i) => i < requirements.length && !r.done && !CARD_KEY_RE.test(r.cardKey?.trim() ?? ""));
+  if (!requirements.length) return null;
+  if (!result || result.length < requirements.length) return "criteria_incomplete";
+  const incomplete = requirements.some((_, i) => !result[i]?.done && !CARD_KEY_RE.test(result[i]?.cardKey?.trim() ?? ""));
   return incomplete ? "criteria_incomplete" : null;
 }
 

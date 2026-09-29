@@ -261,17 +261,19 @@ describe("гейты сдачи", () => {
     expect(reviewGate({ layer: "back", branch: "task/AUTH-1" }, report)).toBeNull();
     expect(reviewGate({ layer: "none", branch: null }, report)).toBeNull();
   });
-  it("если opts переданы — поля проверяются только если переданы явно (не undefined)", () => {
+  it("если opts переданы — оба поля (releaseNote и ownerSummary) обязательны", () => {
     const report = "Сделано: вход через бота. Проверено: tsc, vitest, стенд 8082.";
     const note = "Теперь клиент видит статус заказа в кабинете";
     const summary = "Сделано: статус заказа; Проверить: кабинет → мои заказы; Риск: нет";
-    // {} — поля не переданы, проверка не идёт
-    expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, {})).toBeNull();
-    // releaseNote передан пустым — ошибка; если не передан — пропускается
+    // {} — opts переданы, оба поля пусты — ошибка
+    expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, {})).toBe("release_note_required");
+    // releaseNote передан пустым — ошибка
     expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: "" })).toBe("release_note_required");
-    expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note })).toBeNull();
-    // ownerSummary передан пустым — ошибка; если не передан — пропускается
+    // releaseNote есть, ownerSummary нет — ошибка
+    expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note })).toBe("owner_summary_required");
+    // ownerSummary передан пустым — ошибка
     expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note, ownerSummary: "" })).toBe("owner_summary_required");
+    // оба переданы — ОК
     expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note, ownerSummary: summary })).toBeNull();
     // Для не-код задачи с opts обязательны nextSteps (даже пустой массив = «ничего дальше»)
     expect(reviewGate({ layer: "none", branch: null }, report, { releaseNote: note, ownerSummary: summary })).toBe("next_steps_required");
@@ -280,9 +282,13 @@ describe("гейты сдачи", () => {
   });
   it("criteriaGate блокирует закрытие при невыполненных и не вынесенных критериях", () => {
     const reqs = ["Форма показывает чек-лист", "Поле обязательно при Сделано"];
-    // Без результата — пропускается
-    expect(criteriaGate(reqs, undefined)).toBeNull();
+    // Без результата при наличии требований — блокирует
+    expect(criteriaGate(reqs, undefined)).toBe("criteria_incomplete");
+    // Короткий массив — блокирует (не все критерии охвачены)
+    expect(criteriaGate(reqs, [{ done: true }])).toBe("criteria_incomplete");
+    // Без требований — пропускается всегда
     expect(criteriaGate([], [{ done: false }])).toBeNull();
+    expect(criteriaGate([], undefined)).toBeNull();
     // Все выполнены — ОК
     expect(criteriaGate(reqs, [{ done: true }, { done: true }])).toBeNull();
     // Один не выполнен, но вынесен в карточку — ОК

@@ -1175,6 +1175,7 @@
         "claimHint": "В работу задачу берёт исполнитель: node scripts/cc.mjs take {key} --agent dev-1",
         "criteriaLabel": "Критерии выполнены",
         "criteriaSpawnedCard": "↗ вынесен в карточку",
+        "criteriaWillCreate": "↗ создать карточку",
         "criteriaCardPlaceholder": "IN-7",
         "incompleteGate": "Отметьте каждый критерий или укажите карточку",
         "whatChangedLabel": "Что изменилось для людей",
@@ -1216,7 +1217,8 @@
         "already_approved": "Макет уже утверждён",
         "needs_open": "Есть открытые вопросы к продукту — сначала получите ответ или снимите их из карточки",
         "intake_closing_map_required": "Укажите, куда ушла каждая просьба (ключ задачи или причина отклонения)",
-        "criteria_incomplete": "Отметьте каждый критерий или укажите карточку"
+        "criteria_incomplete": "Отметьте каждый критерий или укажите карточку",
+        "followup_not_found": "Карточка не найдена или уже закрыта"
       },
       "attrs": "Параметры задачи",
       "workers": {

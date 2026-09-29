@@ -135,8 +135,10 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   }
   if (to === "review") {
     const branch = input.branch?.trim() || task.branch;
+    // opts передаём в reviewGate только если оба поля определены — тогда оба обязательны.
+    // Если UI передаёт только releaseNote, opts не передаётся; поле сохраняется отдельно.
     const extra =
-      input.releaseNote !== undefined || input.ownerSummary !== undefined
+      input.releaseNote !== undefined && input.ownerSummary !== undefined
         ? { releaseNote: input.releaseNote, ownerSummary: input.ownerSummary, nextSteps: input.nextSteps, noWork: input.noWork }
         : undefined;
     // Возврат на проверку после блокировки: отчёт уже в ленте, нужна только ветка
@@ -153,17 +155,49 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   if (to === "done") {
     const gate = doneGate({ layer: task.layer, noWork: task.noWork }, { sha: input.sha, text, attachments: task._count.attachments });
     if (gate && !force) throw new CcError(gate);
-    // Критерии: нельзя закрыть с невыполненным и не вынесенным критерием (без force)
-    const cGate = criteriaGate(task.requirements, input.criteriaResult);
-    if (cGate && !force) throw new CcError(cGate);
+    // «Что изменилось для людей» обязательно для код-задач — проверяем на сервере, а не только в браузере
+    const effectiveReleaseNote = input.releaseNote?.trim() || task.releaseNote?.trim();
+    if (isCodeTask(task.layer) && !task.noWork && !effectiveReleaseNote && !force) throw new CcError("release_note_required");
     data.deployedSha = input.sha?.trim() || null;
-    data.proof = text.slice(0, 2000) || null;
     data.doneAt = new Date();
-    // Обновить releaseNote если передан новый
     if (input.releaseNote?.trim()) data.releaseNote = input.releaseNote.trim().slice(0, 500);
-    // Ключи follow-up карточек из чек-листа критериев
-    const spawned = extractFollowUpKeys(task.requirements, input.criteriaResult);
-    if (spawned.length > 0) data.followUps = spawned;
+    // Критерии: если задача протестирована — доверяем тестировщику; иначе требуем явный чек-лист
+    const hasTesterReview = !!task.testedAt;
+    let criteriaResult = input.criteriaResult ? [...input.criteriaResult] : undefined;
+    if (task.requirements.length > 0 && !criteriaResult && !hasTesterReview && !force) throw new CcError("criteria_incomplete");
+    if (criteriaResult && task.requirements.length > 0) {
+      // Валидация явно введённых ключей: карточка должна существовать и быть открытой
+      const CARD_KEY_RE = /^[A-Z]+-\d+$/;
+      const explicitKeys = criteriaResult
+        .filter((r, i) => i < task.requirements.length && !r.done && CARD_KEY_RE.test(r.cardKey?.trim() ?? ""))
+        .map((r) => r.cardKey!.trim());
+      if (explicitKeys.length > 0) {
+        const found = await db.task.findMany({ where: { key: { in: explicitKeys }, status: { notIn: ["done", "cancelled"] } }, select: { key: true } });
+        const foundSet = new Set(found.map((f) => f.key));
+        const invalid = explicitKeys.filter((k) => !foundSet.has(k));
+        if (invalid.length && !force) throw new CcError("followup_not_found", invalid[0]);
+      }
+      // Для незакрытых критериев без явного ключа — автоматически создаём follow-up карточку
+      for (let i = 0; i < Math.min(criteriaResult.length, task.requirements.length); i++) {
+        const r = criteriaResult[i];
+        if (!r.done && !CARD_KEY_RE.test(r.cardKey?.trim() ?? "")) {
+          const newCard = await createFollowUpCard(task.key, task.title, task.requirements[i], actor.name).catch(() => null);
+          if (newCard) criteriaResult[i] = { ...r, cardKey: newCard.key };
+        }
+      }
+      // Доказательство включает отметки по каждому критерию
+      const criteriaLines = task.requirements.map((req, i) => {
+        const r = criteriaResult![i];
+        if (!r || r.done) return `✓ ${req}`;
+        return `↗ ${req} (${r.cardKey ?? "карточка создана"})`;
+      });
+      const proofParts = [...criteriaLines, ...(text.trim() ? ["", text.trim()] : [])];
+      data.proof = proofParts.join("\n").slice(0, 2000) || null;
+      data.followUps = extractFollowUpKeys(task.requirements, criteriaResult);
+    } else {
+      data.proof = text.slice(0, 2000) || null;
+      data.followUps = [];
+    }
   }
   if (to === "blocked") {
     const on = input.blockedOn || "tech";
@@ -183,7 +217,7 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   if (from === "review" && to === "ready") data.rework = { increment: 1 };
   // Проверка относится к конкретному коммиту: возврат на доработку и новая сдача её обнуляют
   if (to === "review" || (from === "review" && to === "ready")) Object.assign(data, { testedSha: null, testedBy: null, testedAt: null });
-  if (from === "done") Object.assign(data, { doneAt: null, deployedSha: null, proof: null });
+  if (from === "done") Object.assign(data, { doneAt: null, deployedSha: null, proof: null, followUps: [] });
   // Гейт: закрытие входящей без карты просьб не разрешается
   if (task.source === "intake" && (to === "done" || to === "cancelled") && !force) {
     const map = input.intakeClosingMap?.trim() ?? "";
@@ -844,6 +878,26 @@ async function createDuplicateNotice(intakeKey: string, origKey: string, by: str
       existing.push(key);
     }
   }
+}
+
+/** Follow-up карточка для ручного шага: intake IN-N с текстом критерия и ссылкой на исходную задачу */
+async function createFollowUpCard(doneKey: string, doneTitle: string, criterionText: string, by: string) {
+  const existing = (await db.task.findMany({ where: { key: { startsWith: "IN-" } }, select: { key: true } })).map((t) => t.key);
+  const sort = ((await db.task.aggregate({ _max: { sort: true } }))._max.sort ?? 0) + 1;
+  const text = `Ручной шаг из ${doneKey} «${doneTitle}»:\n${criterionText}`;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const key = nextIntakeKey(existing);
+    try {
+      const task = await db.task.create({
+        data: { key, title: intakeTitle(text), summary: text.slice(0, 2000), area: "product", layer: "none", priority: "p2", stage: "later", owner: "owner", source: "intake", createdBy: by, status: "backlog", sort },
+      });
+      await db.taskEvent.create({ data: { taskId: task.id, actor: by, field: "created", from: null, to: key } });
+      return task;
+    } catch {
+      existing.push(key);
+    }
+  }
+  return null;
 }
 
 async function createNextStepsIntake(doneKey: string, doneTitle: string, steps: string[], by: string) {
