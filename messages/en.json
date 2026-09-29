@@ -1710,6 +1710,7 @@
         "placeholder": "What needs to be done and why. Multiple tasks at once — triage will split them.",
         "voice": "Voice",
         "voiceStop": "Stop recording",
+        "voiceUnsupported": "Voice — Chrome only",
         "listening": "listening…",
         "stale": "Site was updated while the window was open. Refresh — draft is saved and will return.",
         "voiceErrors": {
