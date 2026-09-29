@@ -20,6 +20,7 @@ const root = path.resolve(__dirname, '..');
 const schemaPath = path.join(root, 'prisma/schema.prisma');
 const migrationsDir = path.join(root, 'prisma/migrations');
 const dbMode = process.argv.includes('--db');
+const DB_CONTAINER = process.env.HOMECARE_DB_CONTAINER || 'homecare-db-1';
 
 // ── Парсинг schema.prisma ──────────────────────────────────────────────────
 
@@ -83,7 +84,7 @@ function checkDb(models) {
 
     const result = spawnSync(
       'docker',
-      ['exec', 'homecare-db-1', 'psql', '-U', 'app', '-d', 'homeservices',
+      ['exec', DB_CONTAINER, 'psql', '-U', 'app', '-d', 'homeservices',
        '-v', 'ON_ERROR_STOP=1', '-q', '-c', sql],
       { encoding: 'utf8' },
     );
@@ -103,6 +104,43 @@ function checkDb(models) {
 }
 
 // ── Режим статический: имена столбцов в миграциях vs схема ────────────────
+
+/**
+ * Извлекает ключи "table:column" удалённых/переименованных колонок.
+ * DROP TABLE или RENAME TO таблицы → "table:*" (все колонки).
+ */
+function extractDropOps(sql) {
+  const keys = new Set();
+  const clean = sql.replace(/--[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+
+  const alterParts = clean.split(/\bALTER\s+TABLE\b/i).slice(1);
+  for (const part of alterParts) {
+    const tm = part.match(/^\s*"([^"]+)"/);
+    if (!tm) continue;
+    const table = tm[1];
+    const end = part.indexOf(';');
+    const stmt = end >= 0 ? part.slice(0, end) : part;
+
+    // DROP COLUMN "col" / DROP COLUMN IF EXISTS "col"
+    const reDropCol = /\bDROP\s+COLUMN\s+(?:IF\s+EXISTS\s+)?"([^"]+)"/gi;
+    let m;
+    while ((m = reDropCol.exec(stmt))) keys.add(`${table}:${m[1]}`);
+
+    // RENAME COLUMN "old" TO "new"
+    const reRename = /\bRENAME\s+COLUMN\s+"([^"]+)"\s+TO\b/gi;
+    while ((m = reRename.exec(stmt))) keys.add(`${table}:${m[1]}`);
+
+    // ALTER TABLE "old" RENAME TO "new" → вся таблица переименована
+    if (/\bRENAME\s+TO\s+"/i.test(stmt)) keys.add(`${table}:*`);
+  }
+
+  // DROP TABLE "Model" / DROP TABLE IF EXISTS "Model"
+  const reDropTable = /\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?"([^"]+)"/gi;
+  let m;
+  while ((m = reDropTable.exec(clean))) keys.add(`${m[1]}:*`);
+
+  return keys;
+}
 
 function getMigrationFiles() {
   // В Docker-контейнере (check.sh) git недоступен — проверяем все миграции.
@@ -186,18 +224,39 @@ function checkMigrations(models) {
     return 0;
   }
 
-  let fail = 0;
+  // Вычисляем «чистое» множество ADD-операций: каждый ADD попадает в Map,
+  // каждый DROP/RENAME удаляет запись. Остаток — столбцы, реально существующие
+  // после всех миграций. Так ADD из старой миграции не даёт ложного провала,
+  // если этот столбец удалён более поздней миграцией.
+  const netAdds = new Map(); // "table:column" → { file, table, column }
+
   for (const file of files) {
     const sql = readFileSync(file, 'utf8');
-    const ops = extractColOps(sql);
-    const rel = path.relative(root, file);
-    for (const { table, column } of ops) {
-      if (table.startsWith('_')) continue; // Implicit m2m-таблицы Prisma
-      if (!models[table]) continue; // Таблица не в схеме (внешняя)
-      if (!models[table].includes(column)) {
-        process.stderr.write(`  ✗ ${rel}: таблица "${table}", столбец "${column}" — нет в schema.prisma\n`);
-        fail = 1;
+
+    for (const { table, column } of extractColOps(sql)) {
+      netAdds.set(`${table}:${column}`, { file, table, column });
+    }
+    for (const key of extractDropOps(sql)) {
+      if (key.endsWith(':*')) {
+        // DROP TABLE или RENAME TO — убираем все столбцы таблицы
+        const table = key.slice(0, -2);
+        for (const k of netAdds.keys()) {
+          if (k.startsWith(`${table}:`)) netAdds.delete(k);
+        }
+      } else {
+        netAdds.delete(key);
       }
+    }
+  }
+
+  let fail = 0;
+  for (const [, { file, table, column }] of netAdds) {
+    if (table.startsWith('_')) continue; // Implicit m2m-таблицы Prisma
+    if (!models[table]) continue; // Таблица не в схеме (внешняя)
+    if (!models[table].includes(column)) {
+      const rel = path.relative(root, file);
+      process.stderr.write(`  ✗ ${rel}: таблица "${table}", столбец "${column}" — нет в schema.prisma\n`);
+      fail = 1;
     }
   }
 

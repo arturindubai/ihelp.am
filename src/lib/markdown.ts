@@ -158,3 +158,22 @@ export function parseInline(src: string): Inline[] {
 export function outline(blocks: Block[]) {
   return blocks.filter((b): b is Extract<Block, { type: "h" }> => b.type === "h" && (b.level === 2 || b.level === 3)).map((b) => ({ level: b.level, text: b.text.replace(/[*_`]/g, "") }));
 }
+
+function inlineText(nodes: Inline[]): string {
+  return nodes.map((n) => {
+    if (n.t === "text" || n.t === "code") return n.v;
+    if (n.t === "b" || n.t === "i") return inlineText(n.c);
+    if (n.t === "a") return inlineText(n.c);
+    return "";
+  }).join("");
+}
+
+/** Убрать разметку: вернуть только текст без маркеров (для компактных строк в списках) */
+export function stripMd(text: string): string {
+  return text
+    .split(/\r?\n/)
+    .map((line) => inlineText(parseInline(line.replace(/^#{1,6}\s+/, "").replace(/^\s*[-*+]\s+/, ""))))
+    .join(" ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}

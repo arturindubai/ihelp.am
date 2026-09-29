@@ -29,10 +29,17 @@ const visitStore = new Map<
   }
 >();
 
+vi.mock("./reviews", () => ({
+  createReviewToken: vi.fn().mockResolvedValue("test-review-token"),
+}));
+
 const userStore = new Map<
   string,
-  { telegramId: string | null; email: string | null; name: string | null }
+  { telegramId: string | null; email: string | null; name: string | null; emailUnsubscribedAt?: Date | null }
 >();
+
+// Контролируемый результат db.visit.findMany для тестов cron-функций
+let visitFindManyResult: unknown[] = [];
 
 vi.mock("../db", () => ({
   db: {
@@ -49,6 +56,7 @@ vi.mock("../db", () => ({
       ),
     },
     visit: {
+      findMany: vi.fn().mockImplementation(() => Promise.resolve(visitFindManyResult)),
       findUnique: vi.fn().mockImplementation(({ where }: { where: { id: string } }) =>
         Promise.resolve(visitStore.get(where.id) ?? null),
       ),
@@ -64,6 +72,9 @@ vi.mock("../db", () => ({
       findUnique: vi.fn().mockImplementation(({ where }: { where: { id: string } }) =>
         Promise.resolve(userStore.get(where.id) ?? null),
       ),
+    },
+    clientMessage: {
+      create: vi.fn().mockResolvedValue({}),
     },
   },
 }));
@@ -85,9 +96,9 @@ vi.mock("../notify", () => ({
 
 vi.mock("../settings", () => ({
   getSettings: vi.fn().mockResolvedValue({
-    notify: { telegramBotToken: "tg-token-client" },
+    notify: { telegramBotToken: "tg-token-client", quietHourStart: 21, quietHourEnd: 9 },
     brand: { name: "iHelp" },
-    mail: { enabled: true },
+    mail: { enabled: true, apiKey: "test-key", from: "noreply@ihelp.am" },
   }),
   getUiOverrides: vi.fn().mockResolvedValue([]),
 }));
@@ -104,6 +115,8 @@ import {
   notifyClientCancelled,
   notifyClientVisitCompleted,
   notifyClientVisitCancelled,
+  sendVisitReminders,
+  sendReviewRequests,
 } from "./bookingNotify";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -163,6 +176,7 @@ beforeEach(() => {
   orderStore.clear();
   visitStore.clear();
   userStore.clear();
+  visitFindManyResult = [];
   vi.mocked(sendTelegramDirect).mockClear().mockResolvedValue(undefined);
   vi.mocked(sendMail).mockClear().mockResolvedValue({ ok: true });
   vi.mocked(notifyTech).mockClear();
@@ -311,12 +325,86 @@ describe("подстановка переменных", () => {
     expect(text).toContain("2026-09-28");
   });
 
-  it("completed — текст содержит имя мастера и ссылку на заказ по id", async () => {
+  it("completed — текст содержит имя мастера (ссылка на отзыв — отдельно через sendReviewRequests)", async () => {
     makeVisit("v1");
     makeUser("u1", "telegram");
     await notifyClientVisitCompleted("v1");
     const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
     expect(text).toContain("Иван Петров");
-    expect(text).toContain("/account/orders/order-id-1");
+    expect(text).not.toContain("/account/orders");
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Тихий период (21:00–09:00 Ереван)
+
+// 23:00 Ереван = 19:00 UTC
+const QUIET_TIME = new Date("2026-09-28T19:00:00Z");
+// 12:00 Ереван = 08:00 UTC
+const ACTIVE_TIME = new Date("2026-09-28T08:00:00Z");
+
+function makeReminderVisit(id: string) {
+  makeVisit(id, { id });
+  userStore.set("u1", { telegramId: "tg-123", email: null, name: "Тест" });
+  const v = {
+    id,
+    scheduledAt: new Date(ACTIVE_TIME.getTime() + 24 * 3600_000),
+    order: {
+      number: 100,
+      config: { service: { title: "Уборка" } },
+      addressSnapshot: { street: "Пушкина", building: "10" },
+      locale: "ru",
+      userId: "u1",
+      user: { id: "u1", telegramId: "tg-123", email: null, emailUnsubscribedAt: null },
+    },
+    master: { name: "Мастер Тест" },
+  };
+  visitFindManyResult = [v];
+  return v;
+}
+
+function makeReviewVisit(id: string) {
+  makeVisit(id, { id });
+  userStore.set("u1", { telegramId: "tg-123", email: null, name: "Тест" });
+  const v = {
+    id,
+    order: {
+      id: "order-id-1",
+      locale: "ru",
+      userId: "u1",
+      user: { id: "u1", telegramId: "tg-123", email: null, emailUnsubscribedAt: null },
+    },
+  };
+  visitFindManyResult = [v];
+  return v;
+}
+
+describe("тихий период", () => {
+  it("sendVisitReminders: в тихий период не отправляет, возвращает 0", async () => {
+    makeReminderVisit("v-remind");
+    const count = await sendVisitReminders(QUIET_TIME);
+    expect(count).toBe(0);
+    expect(vi.mocked(sendTelegramDirect)).not.toHaveBeenCalled();
+  });
+
+  it("sendVisitReminders: вне тихого периода отправляет напоминание", async () => {
+    makeReminderVisit("v-remind2");
+    const count = await sendVisitReminders(ACTIVE_TIME);
+    expect(count).toBe(1);
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+  });
+
+  it("sendReviewRequests: в тихий период не отправляет, возвращает 0", async () => {
+    makeReviewVisit("v-review");
+    const count = await sendReviewRequests(QUIET_TIME);
+    expect(count).toBe(0);
+    expect(vi.mocked(sendTelegramDirect)).not.toHaveBeenCalled();
+  });
+
+  it("sendReviewRequests: вне тихого периода отправляет запрос отзыва", async () => {
+    makeReviewVisit("v-review2");
+    const count = await sendReviewRequests(ACTIVE_TIME);
+    expect(count).toBe(1);
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
   });
 });

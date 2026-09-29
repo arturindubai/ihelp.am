@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { needsYou } from "@/server/services/ccBoard";
-import { parseMultiQuestion } from "@/lib/cc-owner-q";
+import { classifyGroup, parseMultiQuestion } from "@/lib/cc-owner-q";
 import { parseDuplicateOriginalKey } from "@/lib/cc-intake";
 import { BLOCKED_ON_LABELS, PRIORITIES } from "@/lib/backlog-labels";
 import { QuickMove } from "@/components/admin/cc/TaskControls";
@@ -11,24 +11,16 @@ import type { YouCard, YouPostponedTask } from "@/components/admin/cc/CcControls
 import { Card } from "@/components/admin/fields";
 import { Empty, PRIORITY_TONE, RUN_TONE, TaskLine, ago } from "./shared";
 import { cn } from "@/lib/format";
+import type { WaitingDepEntry } from "@/lib/cc-chains";
 
 type Href = (key: string) => string;
 
 type NeedsYouData = Awaited<ReturnType<typeof needsYou>>;
 type OwnerTask = NeedsYouData["owner"][number];
 
-function classifyGroup(reason: string, hasVariants: boolean): YouCard["groupType"] {
-  if (hasVariants) return "variant";
-  if (/цена|прайс|стоимост|тариф|число|сколько|бюджет|лимит/i.test(reason)) return "price";
-  if (/файл|документ|картинк|фото|загрузить|прислать|контент|логотип/i.test(reason)) return "data";
-  if (/войти|логин|аккаунт|авторизац|ключ.*сервис|oauth|токен/i.test(reason)) return "auth";
-  if (/утвердить|согласовать|одобрить|макет|бренд|дизайн|палитр|шрифт/i.test(reason)) return "approve";
-  if (/правило|политика|условия|регламент|настройк|решение|выбор/i.test(reason)) return "rule";
-  return "other";
-}
 
 /** Группирует задачи с одинаковым вопросом в одну карточку */
-function groupOwnerQuestions(tasks: OwnerTask[], taskHref: Href): YouCard[] {
+function groupOwnerQuestions(tasks: OwnerTask[], taskHref: Href, waitingDeps: WaitingDepEntry[]): YouCard[] {
   const byQuestion = new Map<string, OwnerTask[]>();
   for (const task of tasks) {
     const key = (task.fullReason ?? task.blockedReason ?? "").trim();
@@ -42,6 +34,8 @@ function groupOwnerQuestions(tasks: OwnerTask[], taskHref: Href): YouCard[] {
     const multiQuestion = reason ? parseMultiQuestion(reason) : [{ question: reason, variants: null }];
     const hasVariants = multiQuestion.some((b) => b.variants !== null);
     const origKey = parseDuplicateOriginalKey(reason);
+    const groupKeys = new Set(group.map((t) => t.key));
+    const unblocksCount = waitingDeps.filter((w) => w.openDeps.some((d) => groupKeys.has(d.key))).length;
     return {
       id: group[0].key,
       question: multiQuestion[0].question,
@@ -53,6 +47,7 @@ function groupOwnerQuestions(tasks: OwnerTask[], taskHref: Href): YouCard[] {
       textMayCut: group.some((t) => t.textMayCut),
       origTaskKey: origKey ?? undefined,
       origTaskHref: origKey ? taskHref(origKey) : undefined,
+      unblocksCount: unblocksCount > 0 ? unblocksCount : undefined,
     };
   });
 }
@@ -64,7 +59,7 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
   const needsAnswer = data.owner.filter((x) => !x.ownerAnswered);
   const ownerAnswered = data.owner.filter((x) => x.ownerAnswered);
 
-  const cards = groupOwnerQuestions(needsAnswer, taskHref);
+  const cards = groupOwnerQuestions(needsAnswer, taskHref, data.waitingDeps);
   const postponed: YouPostponedTask[] = data.ownerPostponed.map((p) => ({
     key: p.key,
     title: p.title,
@@ -72,6 +67,7 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
     priority: p.priority,
     reason: p.blockedReason,
     updatedAt: p.updatedAt.toISOString(),
+    blockedUntil: p.blockedUntil?.toISOString() ?? null,
   }));
 
   const nothing =
@@ -85,7 +81,8 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
     !data.pausedUntil &&
     !data.techBlocked.length &&
     !data.alertMissing &&
-    !ownerAnswered.length;
+    !ownerAnswered.length &&
+    !data.waitingDeps.length;
 
   return (
     <div className="space-y-4">
@@ -147,6 +144,46 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
                     </>
                   }
                   right={<span className="text-xs text-muted">{ty("waitingTriage")}</span>}
+                />
+              );
+            })}
+          </ul>
+        </Card>
+      )}
+
+      {data.waitingDeps.length > 0 && (
+        <Card title={`⏳ ${ty("waitingDeps")} · ${data.waitingDeps.length}`}>
+          <p className="mb-2 text-xs text-muted">{ty("waitingDepsHint")}</p>
+          <ul className="divide-y divide-line">
+            {data.waitingDeps.map((w) => {
+              const visibleDeps = w.openDeps.slice(0, 3);
+              const hiddenCount = w.openDeps.length - visibleDeps.length;
+              return (
+                <TaskLine
+                  key={w.key}
+                  k={w.key}
+                  title={w.title}
+                  href={taskHref(w.key)}
+                  sub={
+                    <ul className="mt-0.5 space-y-0.5">
+                      {visibleDeps.map((d) => (
+                        <li key={d.key}>
+                          <span className="text-bad">●</span>{" "}
+                          <span className="font-mono">{d.key}</span>{" "}
+                          {d.title}
+                          {" · "}
+                          {BLOCKED_ON_LABELS[d.blockedOn ?? ""] ?? d.status}
+                        </li>
+                      ))}
+                      {hiddenCount > 0 && (
+                        <li>
+                          <Link href={taskHref(w.key)} scroll={false} className="text-brand hover:underline">
+                            {ty("waitingDepsMore", { n: hiddenCount })}
+                          </Link>
+                        </li>
+                      )}
+                    </ul>
+                  }
                 />
               );
             })}
