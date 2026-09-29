@@ -249,22 +249,24 @@ ${tail_txt:-(см. лог /opt/ihelp.am/${log})}" >> "$log" 2>&1 || true
   echo "▶ Делим пополам, пробуем первые $half задач" | tee -a "$log"
 
   if find_deployable "${merged[@]:0:$half}"; then
-    # Первая половина нашла рабочий поднабор — пробуем добавить вторую половину одной пачкой
+    # Первая половина нашла рабочий поднабор — добавляем вторую половину по одной задаче
     local second=("${merged[@]:$half}")
-    if [ ${#second[@]} -gt 0 ]; then
-      echo "▶ Расширяем пачку [${BATCH_RESULT[*]}] + вторые ${#second[@]} задач [${second[*]}]" | tee -a "$log"
+    local add_key
+    for add_key in "${second[@]}"; do
+      echo "▶ Расширяем пачку [${BATCH_RESULT[*]}] + $add_key" | tee -a "$log"
       local saved_result=("${BATCH_RESULT[@]}")
-      do_merges "${BATCH_RESULT[@]}" "${second[@]}"
+      do_merges "${BATCH_RESULT[@]}" "$add_key"
       if [ ${#BATCH_MERGED[@]} -gt 0 ] && scripts/check.sh >> "$log" 2>&1; then
-        echo "CHECK OK для расширенной пачки [${BATCH_MERGED[*]}]" | tee -a "$log"
+        echo "CHECK OK с $add_key в пачке [${BATCH_MERGED[*]}]" | tee -a "$log"
         BATCH_RESULT=("${BATCH_MERGED[@]}")
       else
         git reset -q --hard "$prev"
-        echo "▶ Расширенная пачка не прошла, восстанавливаем [${saved_result[*]}]" | tee -a "$log"
+        echo "▶ $add_key не прошёл check.sh — пропускаем, восстанавливаем [${saved_result[*]}]" | tee -a "$log"
         BATCH_RESULT=("${saved_result[@]}")
         do_merges "${BATCH_RESULT[@]}"
+        DRY_CHECK_FAILED+=("$add_key")
       fi
-    fi
+    done
     return 0
   fi
 
