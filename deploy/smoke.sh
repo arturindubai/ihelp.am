@@ -66,7 +66,8 @@ check "API воркеров: список задач (200, не пуст)" cc_ap
 db_schema_ok() {
   # Проверяет, что все поля Task, Epic, WorkerRun из schema.prisma реально есть в базе.
   # Если миграция добавила столбец с неверным именем, запрос упадёт с ERROR: column "..." does not exist.
-  node scripts/check-migrations.mjs --db >/dev/null 2>&1
+  # stdout (✓-строки) скрыт; stderr (имя отсутствующей таблицы/колонки) виден в логе smoke.
+  node scripts/check-migrations.mjs --db >/dev/null
 }
 check "схема Prisma и база согласованы (Task, Epic, WorkerRun)" db_schema_ok
 
