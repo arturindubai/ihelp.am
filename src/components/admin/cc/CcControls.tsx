@@ -9,7 +9,6 @@ import {
   ccApproveMockupAction,
   ccCommentAction,
   ccReturnDesignAction,
-  ccIntakeAction,
   ccMessageToIntakeAction,
   ccOwnerAnswerAction,
   ccOwnerAnswerManyAction,
@@ -103,16 +102,32 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
   // Черновик живёт в браузере: выкладка, случайное закрытие окна или ошибка не стирают набранное
   const wantStop = useRef(false);
   const [pending, start] = useTransition();
+  const [retryAttempt, setRetryAttempt] = useState(0);
   const rec = useRef<SpeechRec | null>(null);
   const router = useRouter();
   const [speech, setSpeech] = useState(false);
+  // true когда при загрузке страницы в localStorage был черновик — показываем индикатор на кнопке
+  const [hasDraft, setHasDraft] = useState(false);
 
   useEffect(() => {
     const w = window as unknown as { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec };
     setSpeech(!!(w.SpeechRecognition || w.webkitSpeechRecognition));
     const draft = readDraft();
-    if (draft) setText(draft);
+    if (draft) {
+      setText(draft);
+      setHasDraft(true);
+    }
   }, []);
+
+  // Предупреждаем браузером перед закрытием/обновлением страницы, если в форме есть текст или идёт отправка
+  useEffect(() => {
+    const needsWarn = (open && text.trim().length > 0) || pending;
+    if (!needsWarn) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [open, text, pending]);
+
   const edit = (v: string) => {
     setText(v);
     writeDraft(v);
@@ -180,9 +195,32 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
   const send = () =>
     start(async () => {
       setError(null);
-      // Действие может не найтись после выкладки — окно и текст остаются, показываем причину
-      const r = await ccIntakeAction(text).catch((e: unknown) => ({ ok: false as const, error: staleOrError(e) }));
-      if (!r.ok) return setError(t(r.error === "too_short" ? "tooShort" : r.error === "stale" ? "stale" : "error"));
+      setRetryAttempt(0);
+      // Постоянный маршрут /api/cc/intake работает из старой вкладки после выкладки,
+      // в отличие от Server Action. При 5xx сервер ещё перезапускается — повторяем до 3 раз.
+      type IntakeResult = { ok: true; key: string } | { ok: false; error: string };
+      let r: IntakeResult = { ok: false, error: "stale" };
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        if (attempt > 1) {
+          setRetryAttempt(attempt);
+          await new Promise<void>((res) => setTimeout(res, 3000 * (attempt - 1)));
+        }
+        try {
+          const resp = await fetch("/api/cc/intake", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text }),
+          });
+          const data = (await resp.json()) as IntakeResult;
+          if (resp.ok || resp.status < 500) { r = data; break; }
+          // 5xx — сервер перезапускается: пробуем ещё раз
+          r = data;
+        } catch {
+          // Сеть недоступна — пробуем ещё раз
+        }
+      }
+      setRetryAttempt(0);
+      if (!r.ok) return setError(t(r.error === "too_short" ? "tooShort" : "error"));
       for (const f of files) {
         const form = new FormData();
         form.set("file", f);
@@ -194,6 +232,7 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
       setText("");
       writeDraft("");
       setFiles([]);
+      setHasDraft(false);
       setSent(r.key);
       router.refresh();
     });
@@ -202,8 +241,9 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
 
   return (
     <>
-      <button className="btn-primary btn-sm gap-1.5" onClick={() => (setOpen(true), setSent(null))}>
+      <button className="btn-primary btn-sm relative gap-1.5" onClick={() => (setOpen(true), setSent(null))}>
         <Sparkles size={15} /> {t("button")}
+        {hasDraft && <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-warn" aria-label={t("draftBadge")} />}
       </button>
       {open && (
         <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
@@ -219,6 +259,7 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
               </button>
             </div>
             <textarea className="input min-h-40 w-full" value={text} onChange={(e) => edit(e.target.value)} placeholder={t("placeholder")} autoFocus />
+            {hasDraft && !sent && <p className="mt-1 rounded-lg bg-warn-50 px-3 py-1.5 text-xs text-warn">{t("draftRestored")}</p>}
             {listening && <p className="mt-1 text-xs text-muted">🎙 {interim || t("listening")}</p>}
             {voiceError && <p className="mt-1 rounded-lg bg-warn-50 px-3 py-1.5 text-xs text-warn">{voiceError}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -241,7 +282,7 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
               ))}
               <span className="flex-1" />
               <button className="btn-primary btn-sm" disabled={pending || text.trim().length < 10} onClick={send}>
-                {pending ? t("sending") : t("send")}
+                {pending ? (retryAttempt > 1 ? t("retrying", { n: retryAttempt }) : t("sending")) : t("send")}
               </button>
             </div>
             {error && <p className="mt-2 rounded-lg bg-bad-50 px-3 py-2 text-xs text-bad">{error}</p>}
