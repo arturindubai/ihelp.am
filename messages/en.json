@@ -1570,7 +1570,11 @@
         "techBlockedHint": "These tasks are waiting for a technical solution or external service response. Unblock with cc.mjs unblock KEY.",
         "techBlockedUntil": "until {date}",
         "alertMissing": "⚠️ Tech alerts are not delivered: no recipient configured.",
-        "alertMissingLink": "Configure notifications"
+        "alertMissingLink": "Configure notifications",
+        "waitingDeps": "Waiting for dependencies",
+        "waitingDepsHint": "Tasks that cannot start: their dependencies are open and have no one to act on them",
+        "waitingDepsMore": "{n} more",
+        "unblocks": "{n, plural, one {Unblocks: # task} other {Unblocks: # tasks}}"
       },
       "devTab": {
         "empty": "Nothing is being worked on now",
@@ -1740,6 +1744,9 @@
             "in_progress_stale": "In progress without pulse for over an hour"
           }
         },
+        "depChains": "Chains with blocked root",
+        "depChainsBacklog": "in backlog",
+        "depChainsWaiting": "waiting",
         "tips": {
           "dispatcher": "Dispatcher silent for more than 3 minutes — on server: systemctl status ihelp-dispatcher.timer; install — deploy/systemd/install.sh.",
           "login": "Workers say 'Not logged in' — sign in to subscription: scripts/claude-login.sh, then 'Resume' in Workers tab.",
