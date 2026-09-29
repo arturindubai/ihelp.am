@@ -7,10 +7,12 @@ import { contactLink } from "@/lib/contacts";
 import { ServiceCard } from "@/components/ServiceCard";
 import { Link } from "@/i18n/navigation";
 import { cn } from "@/lib/format";
+import { PromoSlot } from "@/components/PromoSlot";
 
 export default async function CategoryPage({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
+
   const [c, cats, s, t] = await Promise.all([getCategory(slug, locale), getCategories(locale), getSettings(), getTranslations("catalog")]);
   if (!c) notFound();
 
@@ -51,10 +53,13 @@ export default async function CategoryPage({ params }: { params: Promise<{ local
           )}
         </div>
       ) : (
-        <div className="mt-4 space-y-3">
-          {c.services.map((svc) => (
-            <ServiceCard key={svc.slug} s={svc} />
-          ))}
+        <div className="mt-4">
+          <PromoSlot placement="CATALOG" locale={locale} />
+          <div className="mt-4 space-y-3">
+            {c.services.map((svc) => (
+              <ServiceCard key={svc.slug} s={svc} />
+            ))}
+          </div>
         </div>
       )}
     </div>

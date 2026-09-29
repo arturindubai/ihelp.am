@@ -12,9 +12,12 @@ export function isPendingApproval(task: {
   mockupApprovedBy?: string | null;
   mockupUrl?: string | null;
   imageAttachments?: unknown[];
+  blockedOn?: string | null;
 }): boolean {
   if (task.status === "done" || task.status === "cancelled") return false;
   if (task.mockupApprovedBy) return false;
+  // Возвращена дизайнеру и ещё не прислал новый макет — ждёт у дизайнера, не у владельца
+  if (task.status === "blocked" && task.blockedOn === "design" && !hasMockup(task)) return false;
   return hasMockup(task);
 }
 
