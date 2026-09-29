@@ -105,13 +105,28 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
   const rec = useRef<SpeechRec | null>(null);
   const router = useRouter();
   const [speech, setSpeech] = useState(false);
+  // true когда при загрузке страницы в localStorage был черновик — показываем индикатор на кнопке
+  const [hasDraft, setHasDraft] = useState(false);
 
   useEffect(() => {
     const w = window as unknown as { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec };
     setSpeech(!!(w.SpeechRecognition || w.webkitSpeechRecognition));
     const draft = readDraft();
-    if (draft) setText(draft);
+    if (draft) {
+      setText(draft);
+      setHasDraft(true);
+    }
   }, []);
+
+  // Предупреждаем браузером перед закрытием/обновлением страницы, если в форме есть текст или идёт отправка
+  useEffect(() => {
+    const needsWarn = (open && text.trim().length > 0) || pending;
+    if (!needsWarn) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [open, text, pending]);
+
   const edit = (v: string) => {
     setText(v);
     writeDraft(v);
@@ -193,6 +208,7 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
       setText("");
       writeDraft("");
       setFiles([]);
+      setHasDraft(false);
       setSent(r.key);
       router.refresh();
     });
@@ -201,8 +217,9 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
 
   return (
     <>
-      <button className="btn-primary btn-sm gap-1.5" onClick={() => (setOpen(true), setSent(null))}>
+      <button className="btn-primary btn-sm relative gap-1.5" onClick={() => (setOpen(true), setSent(null))}>
         <Sparkles size={15} /> {t("button")}
+        {hasDraft && <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-warn" aria-label={t("draftBadge")} />}
       </button>
       {open && (
         <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
@@ -218,6 +235,7 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
               </button>
             </div>
             <textarea className="input min-h-40 w-full" value={text} onChange={(e) => edit(e.target.value)} placeholder={t("placeholder")} autoFocus />
+            {hasDraft && !sent && <p className="mt-1 rounded-lg bg-warn-50 px-3 py-1.5 text-xs text-warn">{t("draftRestored")}</p>}
             {listening && <p className="mt-1 text-xs text-muted">🎙 {interim || t("listening")}</p>}
             {voiceError && <p className="mt-1 rounded-lg bg-warn-50 px-3 py-1.5 text-xs text-warn">{voiceError}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-2">
