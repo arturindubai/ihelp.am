@@ -13,6 +13,7 @@ import { Icon } from "@/components/Icon";
 import { Rating, StarRow } from "@/components/Stars";
 import { ServiceConfigurator } from "@/components/service/ServiceConfigurator";
 import { Img } from "@/components/Img";
+import { PromoSlot } from "@/components/PromoSlot";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;
@@ -54,6 +55,8 @@ export default async function ServicePage({ params }: { params: Promise<{ locale
       )}
       {Number.isFinite(minPrice) && <p className="mt-1 text-sm font-medium">{t("startsAt", { price: amd(minPrice) })}</p>}
       {s.description && <p className="mt-2 text-[15px] text-muted">{s.description}</p>}
+
+      <PromoSlot placement="SERVICE" locale={locale} />
 
       {(s.includesItems.length > 0 || s.excludesItems.length > 0) && (
         <section className="mt-4 card overflow-hidden">

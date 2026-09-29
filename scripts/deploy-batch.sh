@@ -39,6 +39,10 @@ done
 [ ${#KEYS[@]} -gt 0 ] || { echo "Использование: scripts/deploy-batch.sh KEY1 [KEY2 ...] [--no-test] [--dry-run]"; exit 2; }
 [ ${#KEYS[@]} -eq 1 ] && [ -z "$DRY_RUN" ] && { echo "▶ Одна задача — используем deploy-task.sh"; exec scripts/deploy-task.sh "${KEYS[0]}" ${NOTEST:+--no-test}; }
 
+# Выкладка идёт в собственном юните systemd и не гибнет вместе с вызвавшим её воркером (scripts/deploy-unit.sh).
+# Пробный прогон (--dry-run) остаётся в вызвавшем процессе.
+[ -f scripts/deploy-unit.sh ] && . scripts/deploy-unit.sh && deploy_in_unit "$0" "$@"
+
 AGENT="${CC_AGENT:-deployer}"
 cc() { node scripts/cc.mjs "$@" --agent "$AGENT"; }
 stop() { echo "✗ $1"; exit 2; }
@@ -90,6 +94,7 @@ else
   [ "$(git branch --show-current)" = main ] || stop "Основная копия не на main — выкладку не начинаю"
   [ -z "$(git status --porcelain)" ] || stop "В основной копии незакоммиченные изменения — выкладку не начинаю"
   git fetch -q origin || stop "Нет связи с GitHub"
+  declare -F deploy_recover_main > /dev/null && deploy_recover_main
   git merge --ff-only -q origin/main || stop "Локальный main разошёлся с origin/main — нужен человек"
 
   prod_marker=$(< src/lib/deploy-marker.txt)
@@ -142,7 +147,7 @@ for KEY in "${KEYS[@]}"; do
   # В dry-run используем уже разрешённый $head (SHA, работает и для локальных веток)
   if [ -n "$DRY_RUN" ]; then local_diff_ref="$head"; else local_diff_ref="origin/$branch"; fi
   risky_files=$(git diff --name-only "origin/main...$local_diff_ref" 2>/dev/null \
-    | grep -E '^(prisma/migrations/|scripts/deploy-task\.sh|scripts/deploy-batch\.sh|scripts/dispatcher\.mjs|scripts/cc\.mjs|scripts/worker-run\.sh|scripts/check\.sh|deploy/update\.sh|deploy/rollback\.sh|deploy/smoke\.sh|deploy/gate\.sh|deploy/Caddyfile|docker-compose\.yml|package\.json|package-lock\.json)' \
+    | grep -E '^(prisma/migrations/|scripts/deploy-task\.sh|scripts/deploy-batch\.sh|scripts/deploy-unit\.sh|scripts/dispatcher\.mjs|scripts/cc\.mjs|scripts/worker-run\.sh|scripts/check\.sh|deploy/update\.sh|deploy/rollback\.sh|deploy/smoke\.sh|deploy/gate\.sh|deploy/Caddyfile|docker-compose\.yml|package\.json|package-lock\.json)' \
     || true)
 
   if [ -n "$risky_files" ]; then
@@ -253,22 +258,24 @@ ${tail_txt:-(см. лог /opt/ihelp.am/${log})}" >> "$log" 2>&1 || true
   echo "▶ Делим пополам, пробуем первые $half задач" | tee -a "$log"
 
   if find_deployable "${merged[@]:0:$half}"; then
-    # Первая половина нашла рабочий поднабор — пробуем добавить вторую половину одной пачкой
+    # Первая половина нашла рабочий поднабор — добавляем вторую половину по одной задаче
     local second=("${merged[@]:$half}")
-    if [ ${#second[@]} -gt 0 ]; then
-      echo "▶ Расширяем пачку [${BATCH_RESULT[*]}] + вторые ${#second[@]} задач [${second[*]}]" | tee -a "$log"
+    local add_key
+    for add_key in "${second[@]}"; do
+      echo "▶ Расширяем пачку [${BATCH_RESULT[*]}] + $add_key" | tee -a "$log"
       local saved_result=("${BATCH_RESULT[@]}")
-      do_merges "${BATCH_RESULT[@]}" "${second[@]}"
+      do_merges "${BATCH_RESULT[@]}" "$add_key"
       if [ ${#BATCH_MERGED[@]} -gt 0 ] && scripts/check.sh >> "$log" 2>&1; then
-        echo "CHECK OK для расширенной пачки [${BATCH_MERGED[*]}]" | tee -a "$log"
+        echo "CHECK OK с $add_key в пачке [${BATCH_MERGED[*]}]" | tee -a "$log"
         BATCH_RESULT=("${BATCH_MERGED[@]}")
       else
         git reset -q --hard "$prev"
-        echo "▶ Расширенная пачка не прошла, восстанавливаем [${saved_result[*]}]" | tee -a "$log"
+        echo "▶ $add_key не прошёл check.sh — пропускаем, восстанавливаем [${saved_result[*]}]" | tee -a "$log"
         BATCH_RESULT=("${saved_result[@]}")
         do_merges "${BATCH_RESULT[@]}"
+        DRY_CHECK_FAILED+=("$add_key")
       fi
-    fi
+    done
     return 0
   fi
 

@@ -8,6 +8,8 @@
 # Код возврата: 0 — выложено, 1 — выкладка не прошла, 2 — задача возвращена (конфликт, не тот коммит), 3 — нельзя начать.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 3
+# Выкладка идёт в собственном юните systemd и не гибнет вместе с вызвавшим её воркером (scripts/deploy-unit.sh)
+[ -f scripts/deploy-unit.sh ] && . scripts/deploy-unit.sh && deploy_in_unit "$0" "$@"
 KEY="${1:-}"
 [ -n "$KEY" ] || { echo "Использование: scripts/deploy-task.sh <КЛЮЧ> [--no-test [причина]] [--force-own причина]"; exit 3; }
 shift
@@ -38,7 +40,8 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-AGENT="${CC_AGENT:-deployer}"
+[ -n "${CC_AGENT:-}" ] || { echo "✗ CC_AGENT не задан — укажите имя агента (например, CC_AGENT=deployer-1)"; exit 1; }
+AGENT="$CC_AGENT"
 cc() { node scripts/cc.mjs "$@" --agent "$AGENT"; }
 stop() { echo "✗ $1"; exit "${2:-3}"; }
 
@@ -51,6 +54,7 @@ flock -n 9 || stop "Уже идёт другая выкладка — жду с�
 [ "$(git branch --show-current)" = main ] || stop "Основная копия не на main — выкладку не начинаю"
 [ -z "$(git status --porcelain)" ] || stop "В основной копии незакоммиченные изменения (чужая работа?) — выкладку не начинаю"
 git fetch -q origin || stop "Нет связи с GitHub"
+declare -F deploy_recover_main > /dev/null && deploy_recover_main
 git merge --ff-only -q origin/main || stop "Локальный main разошёлся с origin/main — нужен человек"
 
 # Настройка git merge driver для автоматического слияния файлов переводов (идемпотентно)
