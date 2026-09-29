@@ -1509,6 +1509,7 @@
         "backlog": "Backlog",
         "you": "Needs you",
         "design": "Design",
+        "product": "Product",
         "dev": "In development",
         "deployer": "Deployer",
         "plans": "Plans",
@@ -1549,6 +1550,26 @@
         "prev": "Previous",
         "next": "Next",
         "openNew": "Open in new tab"
+      },
+      "productTab": {
+        "subtitle": "Product lane tasks: what the worker is working on, what awaits your decision",
+        "queue": "Worker queue · {n}",
+        "queueHint": "Tasks the product worker will do next",
+        "queueEmpty": "Product worker has nothing queued",
+        "workersLink": "Configure pool",
+        "pending": "Awaiting approval · {n}",
+        "pendingHint": "Non-code product lane tasks awaiting your review",
+        "pendingEmpty": "No tasks awaiting approval",
+        "allByStatus": "All lane tasks · {n}",
+        "allEmpty": "No product lane tasks",
+        "doneLink": "Showing last {n} · view all",
+        "groups": {
+          "backlog": "Backlog",
+          "ready": "Queued",
+          "in_progress": "In progress",
+          "review": "In review",
+          "done": "Done"
+        }
       },
       "designTab": {
         "subtitle": "Design of UI tasks: designer queue, what awaits your approval, what's approved. Approved design goes to Library — that's the canon developers build from.",
@@ -2070,12 +2091,43 @@
       "staffBotNotMaster": "This bot is for iHelp pros only.",
       "sharePhone": "📱 Share phone number"
     },
+    "client": {
+      "confirmation": {
+        "subject": "Order #{number} confirmed",
+        "title": "Your order is confirmed!",
+        "service": "Service: {service}",
+        "date": "Date and time: {date} at {time}",
+        "address": "Address: {address}",
+        "total": "Total: {total}",
+        "button": "My bookings"
+      },
+      "reminder": {
+        "subject": "Reminder: visit tomorrow",
+        "title": "Your visit is tomorrow",
+        "service": "Service: {service}",
+        "date": "Date and time: {date} at {time}",
+        "master": "Pro: {master}",
+        "address": "Address: {address}",
+        "button": "View booking"
+      },
+      "review": {
+        "subject": "How did your visit go?",
+        "title": "How was the visit?",
+        "line1": "We hope you're satisfied! Leave a review — it takes just a minute.",
+        "line2": "Your feedback helps us improve.",
+        "button": "Leave a review"
+      },
+      "unsubscribeText": "To stop receiving emails — {link}.",
+      "unsubscribeLink": "unsubscribe here",
+      "unsubscribedTitle": "You have unsubscribed",
+      "unsubscribedBody": "You will no longer receive emails from iHelp."
+    },
     "order": {
       "created": "✅ Order confirmed\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}\nTotal: {price}\nThank you for choosing iHelp! We will assign a master soon.",
       "masterAssigned": "👷 Master assigned\nService: {serviceName}, {date} at {time}\nMaster: {masterName}\nFeel free to contact us with any questions.",
       "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}",
       "cancelled": "❌ Visit cancelled\nService: {serviceName}, {date}\nWant to reschedule? Place a new order on the website.",
-      "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}"
+      "completed": "⭐ Visit complete\n{masterName} has finished the work. Thank you for choosing iHelp!"
     }
   },
   "review": {
