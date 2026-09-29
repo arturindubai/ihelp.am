@@ -51,6 +51,8 @@ const transitionSchema = z.object({
   force: z.boolean().optional(),
   blockedOn: z.enum(BLOCKED_ON).optional(),
   sha: z.string().max(40).optional(),
+  /** Карта просьб при закрытии входящей (source=intake) */
+  intakeClosingMap: z.string().max(4000).optional(),
 });
 
 /**
@@ -105,19 +107,27 @@ export async function ccCommentAction(key: string, text: string) {
 }
 
 /**
- * Отложить вопрос из «Нужен ты»: blockedOn меняется с owner/product на external,
- * карточка исчезает из секции вопросов, воркеры её не тронут до разблокировки владельцем
+ * Отложить вопрос из «Нужен ты»: blockedOn меняется с owner/product на external.
+ * Требует дату авторазблокировки (YYYY-MM-DD) — блокировка без срока запрещена.
+ * Смена адресата записывается в историю через reblockOn().
  */
-export async function ccOwnerPostponeAction(key: string, reason?: string) {
+export async function ccOwnerPostponeAction(key: string, until: string, reason?: string) {
   const u = await requireSection("control");
-  const text = (reason?.trim() || "Отложено владельцем").slice(0, 500);
+  if (!until || !/^\d{4}-\d{2}-\d{2}$/.test(until)) return { ok: false as const, error: "until_required" };
+  // Парсим дату в зоне Asia/Yerevan (UTC+4); блокировка в прошлом не разрешена
+  const untilDate = new Date(`${until}T00:00:00+04:00`);
+  if (isNaN(untilDate.getTime()) || untilDate.getTime() <= Date.now()) return { ok: false as const, error: "until_required" };
   const task = await db.task.findUnique({ where: { key }, select: { key: true, status: true, blockedOn: true } });
   if (!task) return { ok: false as const, error: "not_found" };
   if (task.status !== "blocked" || !["owner", "product"].includes(task.blockedOn ?? "")) {
     return { ok: false as const, error: "invalid_state" };
   }
-  await db.task.update({ where: { key }, data: { blockedOn: "external", blockedReason: text, updatedAt: new Date() } });
-  await addComment(key, `Отложено: ${text}`, who(u));
+  const text = `Отложено до ${until}${reason?.trim() ? `: ${reason.trim()}` : ""}`;
+  try {
+    await reblockOn(key, "external", text, { name: who(u), role: "owner", via: "ui" }, untilDate);
+  } catch (e) {
+    return { ok: false as const, error: e instanceof CcError ? e.code : (e as Error).message };
+  }
   await audit(u.id, "cc.owner.postpone", "Task", key);
   rAll();
   return { ok: true as const };

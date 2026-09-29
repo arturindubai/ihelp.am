@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Выкладка одной протестированной задачи — единственный путь в прод и для воркера-деплоера, и для чата-деплоера.
-#   scripts/deploy-task.sh <КЛЮЧ>
+#   scripts/deploy-task.sh <КЛЮЧ> [--no-test [причина]] [--force-own причина]
 # Порядок: одна выкладка за раз (замок) → основная копия чистая и на main → протестирован именно текущий коммит
 # ветки → слияние → бэкап, если есть миграция → deploy/update.sh (сборка, запуск, smoke) → push и «Сделано» с доказательством.
 # Провал: сборка упала — прод не тронут; smoke упал — deploy/rollback.sh. В обоих случаях локальный main
@@ -9,10 +9,35 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 3
 KEY="${1:-}"
-[ -n "$KEY" ] || { echo "Использование: scripts/deploy-task.sh <КЛЮЧ> [--no-test]"; exit 3; }
+[ -n "$KEY" ] || { echo "Использование: scripts/deploy-task.sh <КЛЮЧ> [--no-test [причина]] [--force-own причина]"; exit 3; }
+shift
+
 # --no-test — только для человека или чата-деплоера, который проверил сам; воркеру (CC_WORKER=1) недоступен
+# --no-test причина — при включённом пуле тестировщика причина обязательна и записывается в ленту
+# --force-own причина — обход проверки «автор не выкладывает свою задачу»; только владелец (agentname=owner*)
 NOTEST=""
-[ "${2:-}" = "--no-test" ] && [ -z "${CC_WORKER:-}" ] && NOTEST=1
+NOTEST_REASON=""
+FORCE_OWN=""
+FORCE_OWN_REASON=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --no-test)
+      [ -z "${CC_WORKER:-}" ] && NOTEST=1
+      if [ $# -ge 2 ] && [ -n "${2:-}" ] && [[ "${2:-}" != --* ]]; then
+        NOTEST_REASON="${2:-}"; shift
+      fi
+      ;;
+    --force-own)
+      if [ $# -ge 2 ] && [ -n "${2:-}" ] && [[ "${2:-}" != --* ]]; then
+        FORCE_OWN=1; FORCE_OWN_REASON="${2:-}"; shift
+      else
+        echo "✗ --force-own требует причину: --force-own \"причина\""; exit 3
+      fi
+      ;;
+  esac
+  shift
+done
+
 AGENT="${CC_AGENT:-deployer}"
 cc() { node scripts/cc.mjs "$@" --agent "$AGENT"; }
 stop() { echo "✗ $1"; exit "${2:-3}"; }
@@ -34,12 +59,45 @@ status=$(jq -r '.task.status' <<< "$card")
 tested=$(jq -r '.task.testedSha // ""' <<< "$card")
 title=$(jq -r '.task.title' <<< "$card")
 [ "$status" = review ] || stop "Задача $KEY не на проверке (статус $status)"
+
+# Кто сдал задачу на проверку — автор последнего report-комментария
+review_author=$(jq -r '[.comments[] | select(.kind == "report")] | last | .author // ""' <<< "$card")
+
+# Автор задачи не выкладывает свою задачу: правило 4 из DEV_SYSTEM.md
+if [ -n "$review_author" ] && [ "$AGENT" = "$review_author" ]; then
+  if [ -z "$FORCE_OWN" ]; then
+    stop "Автор задачи «$review_author» не может выкладывать свою же задачу $KEY — нарушение правила «кто пишет, тот не выкладывает». Обход — только владелец: --force-own \"причина\"" 3
+  fi
+  # Проверяем, что обход делает именно владелец (имя агента начинается с owner)
+  agent_prefix="${AGENT%%[-_.]*}"
+  if [ "${agent_prefix,,}" != "owner" ]; then
+    stop "--force-own доступен только владельцу (CC_AGENT=owner…), текущий агент: $AGENT. Попросите владельца выложить вручную." 3
+  fi
+  cc note "$KEY" "⚠ Выкладку делает автор задачи ($AGENT). Обход правила «кто пишет, тот не выкладывает» — причина: $FORCE_OWN_REASON"
+fi
+
 head=$(git rev-parse --verify -q "origin/$branch") || stop "Ветки $branch нет в репозитории"
-if [ -z "$NOTEST" ] && { [ -z "$tested" ] || [[ "$head" != "$tested"* ]]; }; then
+
+# Проверка тестировщика; если пул тестировщика включён — --no-test требует явной причины
+if [ -n "$NOTEST" ]; then
+  tester_pool_active=""
+  node scripts/cc.mjs pool tester >/dev/null 2>&1 && tester_pool_active=1 || true
+  if [ -n "$tester_pool_active" ] && [ -z "$NOTEST_REASON" ]; then
+    stop "Пул тестировщика включён — --no-test требует причины: --no-test \"причина\"" 3
+  fi
+elif { [ -z "$tested" ] || [[ "$head" != "$tested"* ]]; }; then
   stop "Проверен коммит «${tested:-никакой}», а в ветке $head — сначала тестировщик" 2
 fi
+
 tested_label="Протестирован коммит ${tested:0:10}."
-[ -n "$NOTEST" ] && tested_label="Без отметки тестировщика (--no-test): проверял деплоер."
+if [ -n "$NOTEST" ]; then
+  if [ -n "$NOTEST_REASON" ]; then
+    tested_label="Без отметки тестировщика (--no-test). Причина: $NOTEST_REASON"
+    cc note "$KEY" "--no-test: пропущена проверка тестировщика. Причина: $NOTEST_REASON. Деплоер: $AGENT."
+  else
+    tested_label="Без отметки тестировщика (--no-test): проверял деплоер."
+  fi
+fi
 
 prev=$(git rev-parse HEAD)
 # Регистрируем merge driver для messages/*.json: объединяет ключи обеих сторон без конфликта,
@@ -130,7 +188,7 @@ if grep -q '^prisma/migrations/' <<< "$changed"; then
     migr=" Миграция применена, бэкап снят (см. лог)."
   fi
 fi
-done_text="Автовыкладка ${merge:0:10}: SMOKE OK (${checks} проверок, соседних сайтов отвечают: ${neighbors}).${migr} ${tested_label} Слияние ${pushed}. Лог: /opt/ihelp.am/${log}"
+done_text="Деплоер: $AGENT. Автовыкладка ${merge:0:10}: SMOKE OK (${checks} проверок, соседних сайтов отвечают: ${neighbors}).${migr} ${tested_label} Слияние ${pushed}. Лог: /opt/ihelp.am/${log}"
 if ! cc done "$KEY" --sha "$merge" "$done_text"; then
   # Прод уже выложен, но закрыть задачу не удалось — записываем ошибку и уходим с ненулевым кодом.
   # cc note --error с агентом deployer автоматически отправляет тех-алерт (ccWork.ts).
