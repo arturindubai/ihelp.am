@@ -3,24 +3,22 @@ import { db } from "../db";
 import { tr } from "@/i18n/locales";
 import type { PriceLine, PricePlan } from "@/lib/pricing";
 import { selectBanners } from "@/lib/banner-select";
-import { getCurrentUser } from "@/server/auth";
 
 export type LText = string;
 
-export async function getHome(locale: string) {
-  const [categories, banners, services, features, faq, reviews, user] = await Promise.all([
+export async function getHome(locale: string, userId?: string | null) {
+  const [categories, banners, services, features, faq, reviews] = await Promise.all([
     db.category.findMany({ where: { active: true }, orderBy: { sort: "asc" }, include: { services: { where: { active: true }, orderBy: { sort: "asc" }, select: { slug: true } } } }),
     db.banner.findMany({ where: { placement: "CAROUSEL_HOME" }, orderBy: { sort: "asc" } }),
     db.service.findMany({ where: { active: true, category: { active: true } }, orderBy: { sort: "asc" }, include: { groups: { where: { active: true, isDuration: true }, include: { options: { where: { active: true } } } }, plans: { where: { active: true } } } }),
     db.siteFeature.findMany({ where: { active: true }, orderBy: { sort: "asc" } }),
     db.siteFaq.findMany({ where: { active: true }, orderBy: { sort: "asc" } }),
     db.review.findMany({ where: { status: "APPROVED" }, orderBy: { createdAt: "desc" }, take: 10, include: { service: { select: { title: true } } } }),
-    getCurrentUser(),
   ]);
-  const isLoggedIn = !!user;
+  const isLoggedIn = !!userId;
   let isNew = false;
-  if (isLoggedIn && user) {
-    const completedCount = await db.order.count({ where: { userId: user.id, status: { in: ["DONE", "APPROVED"] } } });
+  if (isLoggedIn && userId) {
+    const completedCount = await db.order.count({ where: { userId, status: "COMPLETED" } });
     isNew = completedCount === 0;
   }
   const filteredBanners = selectBanners(banners, { placement: "CAROUSEL_HOME", isLoggedIn, isNew, now: new Date() });

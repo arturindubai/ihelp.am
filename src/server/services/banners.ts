@@ -44,7 +44,7 @@ export async function getBannerForSlot(
   let isNew = false;
   if (isLoggedIn && userId) {
     // новый клиент — у которого нет завершённых заказов
-    const count = await db.order.count({ where: { userId, status: { in: ["DONE", "APPROVED"] } } });
+    const count = await db.order.count({ where: { userId, status: "COMPLETED" } });
     isNew = count === 0;
   }
 

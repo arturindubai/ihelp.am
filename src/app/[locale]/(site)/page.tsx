@@ -18,7 +18,8 @@ import { StickyOrderButton } from "@/components/home/StickyOrderButton";
 export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   setRequestLocale(locale);
-  const [data, s, user, t, tc] = await Promise.all([getHome(locale), getSettings(), getCurrentUser(), getTranslations("home"), getTranslations("common")]);
+  const [user, s, t, tc] = await Promise.all([getCurrentUser(), getSettings(), getTranslations("home"), getTranslations("common")]);
+  const data = await getHome(locale, user?.id);
   const wa = contactLink(s.brand, "whatsapp");
   return (
     <div className="container-w pt-4">
