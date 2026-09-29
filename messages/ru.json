@@ -828,11 +828,58 @@
       "answer": "Ответ"
     },
     "banners": {
-      "title": "Баннеры на главной",
-      "newBanner": "Новый баннер",
+      "title": "Баннеры",
+      "newBanner": "+ Новый баннер",
       "link": "Ссылка",
-      "promoCode": "Промокод на баннере",
-      "bg": "Цвет фона"
+      "promoCode": "Промокод",
+      "bg": "Цвет фона",
+      "empty": "Нет баннеров для этого места",
+      "placement": "Место размещения",
+      "type": "Тип",
+      "audience": "Аудитория",
+      "segment": "Сегмент",
+      "startsAt": "Начало показа",
+      "endsAt": "Конец показа",
+      "views": "Показов",
+      "clicks": "Кликов",
+      "ctr": "CTR",
+      "generate": "Сгенерировать",
+      "stats": "Статистика",
+      "placements": {
+        "CAROUSEL_HOME": "Главная — карусель",
+        "HERO_HOME": "Главная — hero",
+        "CATALOG": "Каталог",
+        "SERVICE": "Страница услуги",
+        "CHECKOUT": "Оформление",
+        "SUCCESS": "Успех",
+        "EMAIL": "Email",
+        "MASTER_CABINET": "Кабинет мастера"
+      },
+      "types": {
+        "PROMO": "Промо",
+        "ANNOUNCEMENT": "Объявление",
+        "UPSELL": "Upsell",
+        "CROSS_SELL": "Cross-sell"
+      },
+      "audiences": {
+        "ALL": "Все",
+        "LOGGED_IN": "Только залогиненные",
+        "GUESTS": "Только гости"
+      },
+      "segments": {
+        "ALL": "Все",
+        "NEW": "Новые",
+        "RETURNING": "Вернувшиеся"
+      },
+      "tabs": {
+        "all": "Все"
+      },
+      "status": {
+        "active": "Активен",
+        "paused": "Пауза",
+        "scheduled": "Запланирован",
+        "expired": "Истёк"
+      }
     },
     "pages": {
       "title": "Страницы",
