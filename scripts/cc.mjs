@@ -32,7 +32,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
   handoff КЛЮЧ "что сделано и что осталось"     передать задачу — вернуть в очередь с веткой
   block КЛЮЧ "причина" --on owner|product|design|tech|external|deps [--until YYYY-MM-DD]
   unblock КЛЮЧ "что изменилось"
-  reblock КЛЮЧ "причина" --on новый_адресат   сменить адресата блокировки с записью в историю
+  reblock КЛЮЧ "причина" --on новый_адресат [--until YYYY-MM-DD]   сменить адресата (external требует --until)
 
   Длинный текст (многострочный отчёт, вердикт, блокировка):
     --text-file /path/file   читать текст из файла (Write /opt/ihelp.am/data/tmp/<роль>/имя.md)
@@ -751,6 +751,7 @@ async function main() {
       if (!flags.on) die("укажите, кто разблокирует: --on owner|product|design|tech|external|deps");
       const until = typeof flags.until === "string" ? flags.until : undefined;
       if (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) die("--until ожидает дату в формате YYYY-MM-DD, например --until 2026-10-10");
+      if (flags.on === "external" && !until) die("блокировка на внешнем требует даты: --until YYYY-MM-DD");
       warnIfLong(text());
       await api("POST", null, { action: "block", agent: agentFor(k), key: k, text: text(), on: flags.on, ...(until ? { blockedUntil: until } : {}) });
       dropState(k);
@@ -761,8 +762,11 @@ async function main() {
       const k = needKey();
       if (!flags.on) die("укажите нового адресата: --on owner|product|design|tech|external|deps");
       if (!text()) die("нужна причина смены адресата");
-      await api("POST", null, { action: "reblock", agent: agentFor(k), key: k, text: text(), on: flags.on });
-      console.log(`✓ ${k}: адресат блокировки изменён на ${flags.on}`);
+      const until = typeof flags.until === "string" ? flags.until : undefined;
+      if (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) die("--until ожидает дату в формате YYYY-MM-DD");
+      if (flags.on === "external" && !until) die("блокировка на внешнем требует даты: --until YYYY-MM-DD");
+      await api("POST", null, { action: "reblock", agent: agentFor(k), key: k, text: text(), on: flags.on, ...(until ? { blockedUntil: until } : {}) });
+      console.log(`✓ ${k}: адресат блокировки изменён на ${flags.on}${until ? `, авторазблокировка ${until}` : ""}`);
       return;
     }
     case "unblock":

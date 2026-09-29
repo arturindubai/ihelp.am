@@ -333,7 +333,9 @@ export async function POST(req: Request) {
         if (!key) return json({ error: "key_required" }, 400);
         const newOn = str(body.on);
         if (!newOn) return json({ error: "on_required" }, 400);
-        const task = await reblockOn(key, newOn, text, actor);
+        const reblockUntilRaw = str(body.blockedUntil);
+        const reblockUntil = reblockUntilRaw ? (() => { const d = new Date(reblockUntilRaw); return isNaN(d.getTime()) ? undefined : d; })() : undefined;
+        const task = await reblockOn(key, newOn, text, actor, reblockUntil);
         return json({ ok: true, task: brief(task) });
       }
       case "report": {
