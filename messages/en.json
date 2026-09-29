@@ -72,7 +72,8 @@
     "whatsappSub": "Write to us — we'll reply quickly",
     "writeUs": "Contact us",
     "reviewsTitle": "Client reviews",
-    "stickyOrder": "Book a service"
+    "stickyOrder": "Book a service",
+    "subCatClose": "Close"
   },
   "service": {
     "startsAt": "from {price} per visit",

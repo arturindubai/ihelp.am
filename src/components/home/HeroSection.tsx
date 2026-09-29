@@ -1,9 +1,24 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter, Link } from "@/i18n/navigation";
 import { Img } from "@/components/Img";
 import { Search } from "lucide-react";
 import { useRef } from "react";
+import { SubcategoriesSheet } from "./SubcategoriesSheet";
+
+type SubcategoryItem = {
+  slug: string;
+  title: string;
+  subtitle: string | null;
+  image: string | null;
+  href: string;
+};
+
+type SubcategoryGroup = {
+  section: string | null;
+  items: SubcategoryItem[];
+};
 
 type Category = {
   slug: string;
@@ -11,6 +26,7 @@ type Category = {
   image: string | null;
   comingSoon: boolean;
   href: string | null;
+  subcategories: SubcategoryGroup[];
 };
 
 type Props = {
@@ -24,12 +40,15 @@ type Props = {
 export function HeroSection({ heroTitle, searchPlaceholder, comingSoonLabel, categories, slogan }: Props) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [openSlug, setOpenSlug] = useState<string | null>(null);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     const q = inputRef.current?.value.trim();
     router.push(q ? `/services` : `/services`);
   }
+
+  const openCategory = categories.find((c) => c.slug === openSlug);
 
   return (
     <section className="lg:grid lg:grid-cols-12 lg:items-start lg:gap-8">
@@ -50,6 +69,7 @@ export function HeroSection({ heroTitle, searchPlaceholder, comingSoonLabel, cat
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:col-span-7 lg:mt-0 lg:gap-2">
         {categories.map((c, i) => {
           const isFirst = i === 0;
+          const wrapperClass = isFirst ? "lg:col-span-2 lg:row-span-2" : undefined;
           const tile = (
             <div
               className={`relative overflow-hidden rounded-2xl${c.comingSoon ? " opacity-60" : ""}${
@@ -75,21 +95,43 @@ export function HeroSection({ heroTitle, searchPlaceholder, comingSoonLabel, cat
               </div>
             </div>
           );
+
+          if (c.subcategories.length > 0) {
+            return (
+              <button
+                key={c.slug}
+                type="button"
+                onClick={() => setOpenSlug(c.slug)}
+                className={wrapperClass}
+              >
+                {tile}
+              </button>
+            );
+          }
           return c.href ? (
             <Link
               key={c.slug}
               href={c.href}
-              className={isFirst ? "block lg:col-span-2 lg:row-span-2" : undefined}
+              className={wrapperClass}
             >
               {tile}
             </Link>
           ) : (
-            <div key={c.slug} className={isFirst ? "lg:col-span-2 lg:row-span-2" : undefined}>
+            <div key={c.slug} className={wrapperClass}>
               {tile}
             </div>
           );
         })}
       </div>
+
+      {openCategory && openCategory.subcategories.length > 0 && (
+        <SubcategoriesSheet
+          open={true}
+          onClose={() => setOpenSlug(null)}
+          title={openCategory.title}
+          groups={openCategory.subcategories}
+        />
+      )}
     </section>
   );
 }
