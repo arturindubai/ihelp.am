@@ -1,8 +1,12 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "fs";
+import { join } from "path";
 import {
   checkSeedContent,
   checkMigrationContent,
   findSeedFlagGuardLine,
+  PROTECTED_MODELS,
+  PROTECTED_METHODS,
 } from "./check-seed";
 
 const withGuard = (before: string, after: string) => `
@@ -157,6 +161,57 @@ async function main() {
     const v = checkSeedContent(content);
     expect(v).toHaveLength(1);
     expect(v[0].reason).toMatch(/без защиты SEED_FLAG/);
+  });
+});
+
+describe("checkSeedContent — исключение seed-gate:owner-only", () => {
+  it("db.user.upsert с маркером seed-gate:owner-only вне блока — проход", () => {
+    const content = withGuard(
+      "  await db.user.upsert({ where: { phone: ownerPhone }, create: {}, update: { role: 'OWNER' } }); // seed-gate:owner-only",
+      ""
+    );
+    expect(checkSeedContent(content)).toHaveLength(0);
+  });
+
+  it("db.user.update без маркера вне блока — нарушение (исключение не распространяется на другие строки)", () => {
+    const content = withGuard(
+      "  await db.user.update({ where: { phone: 'x' }, data: { role: 'OWNER' } }); // не владелец",
+      ""
+    );
+    expect(checkSeedContent(content)).toHaveLength(1);
+  });
+
+  it("db.user.upsert без маркера вне блока — нарушение", () => {
+    const content = withGuard(
+      "  await db.user.upsert({ where: { phone: 'x' }, create: {}, update: {} });",
+      ""
+    );
+    expect(checkSeedContent(content)).toHaveLength(1);
+  });
+});
+
+describe("синхронизация констант .ts и .mjs", () => {
+  const mjsPath = join(process.cwd(), "scripts/check-seed.mjs");
+  const mjsContent = readFileSync(mjsPath, "utf8");
+
+  it("PROTECTED_MODELS в .mjs и .ts совпадают", () => {
+    const match = mjsContent.match(/const PROTECTED_MODELS\s*=\s*\[([^\]]+)\]/);
+    expect(match).toBeTruthy();
+    const mjsModels = match![1]
+      .split(",")
+      .map((s) => s.trim().replace(/['"]/g, "").trim())
+      .filter(Boolean);
+    expect(mjsModels).toEqual([...PROTECTED_MODELS]);
+  });
+
+  it("PROTECTED_METHODS в .mjs и .ts совпадают", () => {
+    const match = mjsContent.match(/const PROTECTED_METHODS\s*=\s*\[([^\]]+)\]/);
+    expect(match).toBeTruthy();
+    const mjsMethods = match![1]
+      .split(",")
+      .map((s) => s.trim().replace(/['"]/g, "").trim())
+      .filter(Boolean);
+    expect(mjsMethods).toEqual([...PROTECTED_METHODS]);
   });
 });
 

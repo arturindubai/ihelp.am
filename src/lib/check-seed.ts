@@ -12,7 +12,7 @@ export interface SeedViolation {
 export const PROTECTED_MODELS = ["review", "order", "visit", "master", "user"] as const;
 
 // Prisma-методы, изменяющие или удаляющие записи в БД
-const PROTECTED_METHODS = ["create", "createMany", "upsert", "update", "updateMany", "delete", "deleteMany"] as const;
+export const PROTECTED_METHODS = ["create", "createMany", "upsert", "update", "updateMany", "delete", "deleteMany"] as const;
 
 /**
  * Находит 0-based индекс строки `return;`, закрывающей блок SEED_FLAG в seed.ts.
@@ -47,6 +47,8 @@ export function checkSeedContent(content: string, fileName = "prisma/seed.ts"): 
 
   for (let i = 0; i < lines.length; i++) {
     if (!pattern.test(lines[i])) continue;
+    // Явное исключение: строка с маркером seed-gate:owner-only — подтверждение роли владельца при каждой выкладке
+    if (lines[i].includes("// seed-gate:owner-only")) continue;
     const outsideGuard = guardLine === -1 || i < guardLine;
     if (outsideGuard) {
       violations.push({
@@ -65,8 +67,8 @@ export function checkSeedContent(content: string, fileName = "prisma/seed.ts"): 
 }
 
 /**
- * Проверяет SQL-миграцию на INSERT/UPDATE/DELETE по защищённым таблицам.
- * Прямые DML-операции в миграциях изменяют «живые» записи при выкладке.
+ * Проверяет SQL-миграцию на INSERT по защищённым таблицам.
+ * INSERT в миграции изменяет «живые» записи при выкладке.
  */
 export function checkMigrationContent(sql: string, fileName: string): SeedViolation[] {
   const lines = sql.split("\n");

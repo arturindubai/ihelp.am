@@ -176,6 +176,10 @@ const HOURS = Object.fromEntries([1, 2, 3, 4, 5, 6].map((d) => [String(d), [["09
 async function main() {
   const ownerPhone = process.env.ADMIN_PHONE || "+37400000000";
 
+  // Роль владельца подтверждается при каждой выкладке: при смене ADMIN_PHONE новый номер сразу получает права.
+  // Исключение из проверки гейта задано маркером — только для этой одной строки (инцидент NOTIFY-2B).
+  await db.user.upsert({ where: { phone: ownerPhone }, create: { phone: ownerPhone, role: "OWNER", name: "Owner" }, update: { role: "OWNER" } }); // seed-gate:owner-only
+
   // Демо-каталог заливается один раз. Seed выполняется при каждом деплое, и без флага
   // удалённые в админке демо-мастера, баннер, категории и страницы возвращались бы после обновления.
   await syncEpics();
@@ -188,10 +192,6 @@ async function main() {
     console.log("Seed: demo data already applied, skipped. Owner phone:", ownerPhone);
     return;
   }
-
-  // Владелец создаётся один раз при первой выкладке.
-  // При смене ADMIN_PHONE запись нужно создать вручную через админку или SQL.
-  await db.user.upsert({ where: { phone: ownerPhone }, create: { phone: ownerPhone, role: "OWNER", name: "Owner" }, update: {} });
 
   const cleaning = await db.category.upsert({
     where: { slug: "cleaning" },

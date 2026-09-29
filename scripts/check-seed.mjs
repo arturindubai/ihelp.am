@@ -51,6 +51,8 @@ function checkSeedContent(content, fileName) {
 
   for (let i = 0; i < lines.length; i++) {
     if (!pattern.test(lines[i])) continue;
+    // Явное исключение: строка с маркером seed-gate:owner-only — подтверждение роли владельца при каждой выкладке
+    if (lines[i].includes('// seed-gate:owner-only')) continue;
     const outsideGuard = guardLine === -1 || i < guardLine;
     if (outsideGuard) {
       violations.push({

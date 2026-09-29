@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
 import { alertTech } from "@/server/alerts";
+import { html } from "@/lib/html";
 
 // Защищённый маршрут: smoke.sh вызывает сюда POST при расхождении счётчиков.
 // Токен — CC_AGENT_KEY (тот же, что у API воркеров). Бот-токен в командной строке не используется.
@@ -19,6 +20,6 @@ export async function POST(req: NextRequest) {
   if (!message) {
     return new Response("Bad Request", { status: 400 });
   }
-  await alertTech("smoke:counter-mismatch", message, 60, "smoke");
+  await alertTech("smoke:counter-mismatch", html`${message}`, 60, "smoke");
   return Response.json({ ok: true });
 }
