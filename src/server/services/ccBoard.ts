@@ -10,6 +10,7 @@ import { flowOf, intakeTitle, laneOf, nextIntakeKey, sizeOf, weekStart } from "@
 import { CLOSED_STATUSES, LEASE_MIN, OPEN_STATUSES } from "@/lib/cc-flow";
 import { testedCurrent, workersState } from "@/lib/workers";
 import { countOwnerCards } from "@/lib/cc-owner-q";
+import { waitingDeps as waitingDepsLib, depChains as depChainsLib } from "@/lib/cc-chains";
 import { Prisma } from "@prisma/client";
 
 /**
@@ -130,7 +131,32 @@ export async function needsYou() {
     returnedRuns: returnedRuns.slice(0, 10),
     pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null,
     alertMissing: !hasAlertRecipient(settings),
+    /** Задачи, ждущие зависимостей с зависшим корнем */
+    waitingDeps: attn.waitingDeps,
+    /** Цепочки зависимостей: корень → ждущие задачи */
+    depChains: attn.depChains,
   };
+}
+
+/**
+ * Цепочки зависимостей для страницы Здоровья: только прямые зависимости с зависшим корнем.
+ * Лёгкий запрос, не тянет данные воркеров и блокировок.
+ */
+export async function depChainsStatus() {
+  const now = new Date();
+  const waiters = await db.task.findMany({
+    where: { status: { in: ["ready", "backlog", "blocked"] }, depends: { isEmpty: false } },
+    select: { key: true, title: true, status: true, depends: true },
+  });
+  if (!waiters.length) return [];
+  const depKeys = [...new Set(waiters.flatMap((t) => t.depends))];
+  const deps = await db.task.findMany({
+    where: { key: { in: depKeys } },
+    select: { key: true, title: true, status: true, blockedOn: true, blockedUntil: true, updatedAt: true },
+  });
+  const depMap = new Map(deps.map((d) => [d.key, d]));
+  const entries = waitingDepsLib(waiters, depMap, now);
+  return depChainsLib(entries, depMap);
 }
 
 /**
@@ -389,7 +415,7 @@ export async function boardAudit() {
   const [tasks, tick] = await Promise.all([
     db.task.findMany({
       select: {
-        key: true, status: true, layer: true, source: true, depends: true, branch: true, blockedOn: true, blockedReason: true, claimedBy: true, heartbeatAt: true, triagedAt: true,
+        key: true, status: true, layer: true, source: true, depends: true, branch: true, blockedOn: true, blockedReason: true, claimedBy: true, heartbeatAt: true, triagedAt: true, epicKey: true,
         comments: { orderBy: { createdAt: "desc" }, take: 1, select: { author: true, createdAt: true } },
         events: { where: { field: "status" }, orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
       },
@@ -423,6 +449,8 @@ export async function boardAudit() {
       else if (!t.heartbeatAt || t.heartbeatAt.getTime() < hourAgo) add("in_progress_stale", t.key);
     }
     if (t.key.startsWith("IN-") && !(CLOSED_STATUSES as readonly string[]).includes(t.status) && t.status !== "blocked") add("intake_open", t.key);
+    // Открытая задача без эпика: не входящая (IN-*) и не в бэклоге — уже разобрана, но эпик не назначен
+    if (!t.key.startsWith("IN-") && t.source !== "intake" && !(CLOSED_STATUSES as readonly string[]).includes(t.status) && !t.epicKey) add("no_epic_key", t.key);
   }
   const checks = Object.entries(found).map(([id, keys]) => ({ id, keys })).sort((a, b) => b.keys.length - a.keys.length);
   return { total: tasks.length, byStatus: Object.fromEntries(Object.entries(tasks.reduce<Record<string, number>>((m, t) => ((m[t.status] = (m[t.status] ?? 0) + 1), m), {}))), checks, at: new Date().toISOString() };

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { ccSaveTaskAction } from "@/server/actions/admin/cc";
@@ -64,6 +64,15 @@ export function TaskEditorForm({ initial, isNew, epics }: { initial: TaskFormVal
   const [pending, start] = useTransition();
   const router = useRouter();
   const set = (patch: Partial<TaskFormValue>) => setV((x) => ({ ...x, ...patch }));
+
+  // Предупреждаем перед обновлением страницы, если форма изменена или идёт сохранение
+  const isDirty = (Object.keys(v) as (keyof TaskFormValue)[]).some((k) => v[k] !== initial[k]);
+  useEffect(() => {
+    if (!isDirty && !pending) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty, pending]);
 
   type StringField = { [K in keyof TaskFormValue]: TaskFormValue[K] extends string ? K : never }[keyof TaskFormValue];
   const select = (field: StringField, options: Record<string, string> | readonly string[], label: string) => (
