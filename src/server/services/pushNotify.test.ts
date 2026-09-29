@@ -2,10 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-// VAPID ключи для тестов устанавливаем до импорта модуля
-process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = "test-public-key";
-process.env.VAPID_PRIVATE_KEY = "test-private-key";
-
 // Хранилище подписок в памяти
 const subStore = new Map<
   string,
@@ -18,14 +14,23 @@ vi.mock("../db", () => ({
       findMany: vi.fn().mockImplementation(({ where }: { where: { userId: string } }) =>
         Promise.resolve([...subStore.values()].filter((s) => s.userId === where.userId)),
       ),
-      deleteMany: vi.fn().mockImplementation(({ where }: { where: { userId: string; endpoint: string } }) => {
+      deleteMany: vi.fn().mockImplementation(({ where }: { where: { endpoint: string } }) => {
         for (const [k, v] of subStore.entries()) {
-          if (v.userId === where.userId && v.endpoint === where.endpoint) subStore.delete(k);
+          if (v.endpoint === where.endpoint) subStore.delete(k);
         }
         return Promise.resolve({ count: 1 });
       }),
     },
   },
+}));
+
+// Мок сервиса vapidKeys: возвращает тестовые ключи без обращения к БД
+vi.mock("./vapidKeys", () => ({
+  getOrCreateVapidKeys: vi.fn().mockResolvedValue({
+    publicKey: "test-public-key",
+    privateKey: "test-private-key",
+    createdAt: "",
+  }),
 }));
 
 const mockSendNotification = vi.fn();
@@ -37,7 +42,7 @@ vi.mock("web-push", () => ({
   },
 }));
 
-import { pushNotify, vapidEnabled } from "./pushNotify";
+import { pushNotify } from "./pushNotify";
 import { db } from "../db";
 
 beforeEach(() => {
@@ -52,12 +57,6 @@ function makeSub(userId: string, endpoint: string) {
   const id = `sub-${endpoint}`;
   subStore.set(id, { id, userId, endpoint, p256dh: "p256dh-val", auth: "auth-val" });
 }
-
-describe("vapidEnabled", () => {
-  it("возвращает true когда ключи заданы через env", () => {
-    expect(vapidEnabled()).toBe(true);
-  });
-});
 
 describe("pushNotify — отправка уведомлений", () => {
   it("отправляет push всем подпискам пользователя", async () => {

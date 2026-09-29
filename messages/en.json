@@ -1792,6 +1792,13 @@
         "save": "Save",
         "saving": "Saving…",
         "cancel": "Cancel",
+        "push": {
+          "title": "Push notifications",
+          "purpose": "VAPID keys for push notifications on mobile without an open site. Created automatically on first request.",
+          "ready": "keys created",
+          "notReady": "not created yet",
+          "createdAt": "Created {when}"
+        },
         "errors": {
           "bad_value": "Key seems incomplete: too short.",
           "bad_format": "This doesn't look like a Telegram bot token (format 123456789:AA…).",

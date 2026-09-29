@@ -8,12 +8,14 @@ vi.mock("next/headers", () => ({
 
 const mockUpsert = vi.fn();
 const mockDeleteMany = vi.fn();
+const mockCount = vi.fn();
 
 vi.mock("@/server/db", () => ({
   db: {
     pushSubscription: {
       upsert: (...args: unknown[]) => mockUpsert(...args),
       deleteMany: (...args: unknown[]) => mockDeleteMany(...args),
+      count: (...args: unknown[]) => mockCount(...args),
     },
   },
 }));
@@ -38,7 +40,7 @@ function makeRequest(body: unknown, method = "POST") {
 }
 
 const validSub = {
-  endpoint: "https://push.example.com/sub/123",
+  endpoint: "https://fcm.googleapis.com/fcm/send/abc123",
   keys: { p256dh: "p256dh-value", auth: "auth-value" },
 };
 
@@ -46,6 +48,7 @@ beforeEach(() => {
   mockGetCurrentUser.mockReset();
   mockUpsert.mockReset().mockResolvedValue({});
   mockDeleteMany.mockReset().mockResolvedValue({ count: 1 });
+  mockCount.mockReset().mockResolvedValue(0);
 });
 
 describe("POST /api/push/subscribe — сохранение подписки", () => {
@@ -61,17 +64,24 @@ describe("POST /api/push/subscribe — сохранение подписки", (
     expect(res.status).toBe(400);
   });
 
-  it("сохраняет подписку через upsert и возвращает ok", async () => {
+  it("возвращает 400 для непрошедшего хоста push-сервиса", async () => {
+    mockGetCurrentUser.mockResolvedValue(makeUser());
+    const res = await POST(makeRequest({ ...validSub, endpoint: "https://attacker.example.com/push" }));
+    expect(res.status).toBe(400);
+  });
+
+  it("сохраняет подписку через upsert по endpoint и возвращает ok", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser("user-42"));
     const res = await POST(makeRequest(validSub));
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.ok).toBe(true);
     expect(mockUpsert).toHaveBeenCalledOnce();
+    // upsert по endpoint (а не по userId_endpoint): подписка переходит к вошедшему
     expect(mockUpsert.mock.calls[0][0]).toMatchObject({
-      where: { userId_endpoint: { userId: "user-42", endpoint: validSub.endpoint } },
+      where: { endpoint: validSub.endpoint },
       create: { userId: "user-42", endpoint: validSub.endpoint, p256dh: validSub.keys.p256dh, auth: validSub.keys.auth },
-      update: { p256dh: validSub.keys.p256dh, auth: validSub.keys.auth },
+      update: { userId: "user-42", p256dh: validSub.keys.p256dh, auth: validSub.keys.auth },
     });
   });
 
@@ -84,6 +94,14 @@ describe("POST /api/push/subscribe — сохранение подписки", (
     const [first, second] = mockUpsert.mock.calls;
     expect(first[0].where).toEqual(second[0].where);
   });
+
+  it("возвращает 429 при превышении лимита подписок на пользователя", async () => {
+    mockGetCurrentUser.mockResolvedValue(makeUser("user-99"));
+    mockCount.mockResolvedValue(10); // уже 10 подписок
+    const res = await POST(makeRequest(validSub));
+    expect(res.status).toBe(429);
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
 });
 
 describe("DELETE /api/push/subscribe — отзыв подписки", () => {
@@ -93,9 +111,15 @@ describe("DELETE /api/push/subscribe — отзыв подписки", () => {
     expect(res.status).toBe(401);
   });
 
-  it("возвращает 400 если endpoint не передан", async () => {
+  it("возвращает 400 если endpoint не передан или не является URL", async () => {
     mockGetCurrentUser.mockResolvedValue(makeUser());
     const res = await DELETE(makeRequest({}, "DELETE"));
+    expect(res.status).toBe(400);
+  });
+
+  it("возвращает 400 для невалидного endpoint в DELETE", async () => {
+    mockGetCurrentUser.mockResolvedValue(makeUser());
+    const res = await DELETE(makeRequest({ endpoint: "not-a-url" }, "DELETE"));
     expect(res.status).toBe(400);
   });
 

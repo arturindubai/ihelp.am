@@ -38,7 +38,12 @@ export async function getCurrentUser(): Promise<User | null> {
 export async function logout() {
   const c = await cookies();
   const token = c.get(COOKIE)?.value;
-  if (token) await db.session.deleteMany({ where: { tokenHash: hash(token) } });
+  if (token) {
+    // Удаляем push-подписки пользователя: при выходе уведомления больше не нужны на этом устройстве
+    const session = await db.session.findUnique({ where: { tokenHash: hash(token) }, select: { userId: true } });
+    if (session) await db.pushSubscription.deleteMany({ where: { userId: session.userId } });
+    await db.session.deleteMany({ where: { tokenHash: hash(token) } });
+  }
   c.delete(COOKIE);
 }
 

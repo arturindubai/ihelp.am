@@ -62,19 +62,17 @@ self.addEventListener("fetch", (event) => {
 
 // Push-уведомления: показать системное уведомление при получении push от сервера
 self.addEventListener("push", (event) => {
-  if (!event.data) return;
-  let data;
-  try {
-    data = event.data.json();
-  } catch {
-    return;
+  // Всегда вызываем waitUntil: браузер требует видимого уведомления для каждого push-события
+  let data = { title: "iHelp", body: "", url: "/" };
+  if (event.data) {
+    try { Object.assign(data, event.data.json()); } catch { /* не JSON — показываем заглушку */ }
   }
   event.waitUntil(
-    self.registration.showNotification(data.title || "iHelp", {
-      body: data.body || "",
+    self.registration.showNotification(data.title, {
+      body: data.body,
       icon: "/icon-192.png",
       badge: "/icon-192.png",
-      data: { url: data.url || "/" },
+      data: { url: data.url },
     }),
   );
 });
@@ -82,13 +80,15 @@ self.addEventListener("push", (event) => {
 // Клик по уведомлению — открыть нужную страницу
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || "/";
+  const relUrl = event.notification.data?.url || "/";
+  // client.url — полный адрес; преобразуем относительный url к абсолютному для сравнения
+  const absUrl = new URL(relUrl, self.location.origin).href;
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       for (const client of list) {
-        if (client.url === url && "focus" in client) return client.focus();
+        if (client.url === absUrl && "focus" in client) return client.focus();
       }
-      return clients.openWindow(url);
+      return clients.openWindow(relUrl);
     }),
   );
 });

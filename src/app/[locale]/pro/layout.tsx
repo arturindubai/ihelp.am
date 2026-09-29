@@ -3,10 +3,15 @@ import { Link } from "@/i18n/navigation";
 import { Logo } from "@/components/Logo";
 import { getCurrentUser } from "@/server/auth";
 import { PushPermissionBanner } from "@/components/pwa/PushPermissionBanner";
+import { getOrCreateVapidKeys } from "@/server/services/vapidKeys";
 
 export default async function ProLayout({ children }: { children: React.ReactNode }) {
-  const [t, user] = await Promise.all([getTranslations("pro"), getCurrentUser()]);
-  const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+  const [t, user, vapidKeys] = await Promise.all([
+    getTranslations("pro"),
+    getCurrentUser(),
+    getOrCreateVapidKeys().catch(() => null),
+  ]);
+  const vapidPublicKey = vapidKeys?.publicKey ?? "";
   return (
     <div className="min-h-dvh bg-surface">
       <header className="sticky top-0 z-30 border-b border-line bg-paper">
@@ -16,7 +21,7 @@ export default async function ProLayout({ children }: { children: React.ReactNod
         </div>
       </header>
       {children}
-      {user && vapidKey && <PushPermissionBanner vapidPublicKey={vapidKey} />}
+      {user && vapidPublicKey && <PushPermissionBanner vapidPublicKey={vapidPublicKey} />}
     </div>
   );
 }

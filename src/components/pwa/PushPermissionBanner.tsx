@@ -14,7 +14,7 @@ function isPushSupported() {
   );
 }
 
-/** Баннер запроса push-разрешения: slide-up на мобильном, toast снизу-справа на десктопе */
+/** Баннер запроса push-разрешения: slide-up над нижним меню на мобильном, toast снизу-справа на десктопе */
 export function PushPermissionBanner({ vapidPublicKey }: { vapidPublicKey: string }) {
   const t = useTranslations("push");
   const [visible, setVisible] = useState(false);
@@ -23,8 +23,9 @@ export function PushPermissionBanner({ vapidPublicKey }: { vapidPublicKey: strin
   useEffect(() => {
     if (!isPushSupported()) return;
     if (Notification.permission !== "default") return;
-    if (sessionStorage.getItem(DISMISSED_KEY)) return;
-    // Показываем с задержкой, чтобы не перегружать первый рендер
+    try {
+      if (sessionStorage.getItem(DISMISSED_KEY)) return;
+    } catch { return; }
     const timer = setTimeout(() => setVisible(true), 1000);
     return () => clearTimeout(timer);
   }, []);
@@ -37,34 +38,42 @@ export function PushPermissionBanner({ vapidPublicKey }: { vapidPublicKey: strin
   }
 
   async function handleAllow() {
-    close();
     const permission = await Notification.requestPermission();
-    if (permission !== "granted") return;
-
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-    });
-
-    const json = sub.toJSON();
-    await fetch("/api/push/subscribe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
-    }).catch(() => {});
+    if (permission !== "granted") {
+      close();
+      return;
+    }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+      });
+      const json = sub.toJSON();
+      const res = await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
+      });
+      if (!res.ok) throw new Error("server");
+      close();
+    } catch {
+      // Подписка не удалась — скрываем без sessionStorage, чтобы при следующем входе попробовать снова
+      setHiding(true);
+      setTimeout(() => setVisible(false), 220);
+    }
   }
 
   function handleDismiss() {
-    sessionStorage.setItem(DISMISSED_KEY, "1");
+    try { sessionStorage.setItem(DISMISSED_KEY, "1"); } catch { /* приватный режим */ }
     close();
   }
 
   return (
     <>
-      {/* Мобильный: полоска снизу во всю ширину */}
+      {/* Мобильный: полоска снизу, позиционируется над нижним меню (bottom-20 = h-20 спейсер BottomNav) */}
       <div
-        className="fixed bottom-0 left-0 right-0 z-50 transition-transform duration-200 sm:hidden"
+        className="fixed bottom-20 left-0 right-0 z-50 transition-transform duration-200 sm:hidden"
         style={{ transform: hiding ? "translateY(100%)" : "translateY(0)" }}
       >
         <div className="border-t border-line bg-paper shadow-lg">

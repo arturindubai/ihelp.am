@@ -1,10 +1,7 @@
 import "server-only";
 import webpush from "web-push";
 import { db } from "@/server/db";
-
-export function vapidEnabled() {
-  return !!(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
-}
+import { getOrCreateVapidKeys } from "./vapidKeys";
 
 export type PushPayload = {
   title: string;
@@ -14,11 +11,11 @@ export type PushPayload = {
 
 /** Отправить push-уведомление всем активным подпискам пользователя */
 export async function pushNotify(userId: string, payload: PushPayload) {
-  const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  const priv = process.env.VAPID_PRIVATE_KEY;
-  if (!pub || !priv) return;
+  let keys;
+  try { keys = await getOrCreateVapidKeys(); } catch { return; }
+  if (!keys.publicKey || !keys.privateKey) return;
 
-  webpush.setVapidDetails(process.env.VAPID_EMAIL ?? "mailto:hello@ihelp.am", pub, priv);
+  webpush.setVapidDetails("mailto:hello@ihelp.am", keys.publicKey, keys.privateKey);
 
   const subscriptions = await db.pushSubscription.findMany({ where: { userId } });
   if (!subscriptions.length) return;
@@ -33,7 +30,7 @@ export async function pushNotify(userId: string, payload: PushPayload) {
         const status = (err as { statusCode?: number }).statusCode;
         // Истёкшая или отозванная подписка — удалить
         if (status === 410 || status === 404) {
-          await db.pushSubscription.deleteMany({ where: { userId, endpoint: sub.endpoint } });
+          await db.pushSubscription.deleteMany({ where: { endpoint: sub.endpoint } });
         }
       }
     }),
