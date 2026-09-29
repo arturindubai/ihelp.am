@@ -1253,5 +1253,10 @@
       "cancelled": "",
       "completed": ""
     }
+  },
+  "cart": {
+    "itemsCount": "{count, plural, one {# ծառայություն} other {# ծառայություն}}",
+    "total": "{amount} ֏",
+    "checkout": "Ձևակերպել"
   }
 }

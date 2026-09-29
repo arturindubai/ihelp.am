@@ -2169,5 +2169,10 @@
       "hint": "Email и SMS",
       "notifications": "Уведомления"
     }
+  },
+  "cart": {
+    "itemsCount": "{count, plural, one {# позиция} few {# позиции} other {# позиций}}",
+    "total": "{amount} ֏",
+    "checkout": "Оформить"
   }
 }

@@ -2084,5 +2084,10 @@
       "hint": "Email and SMS",
       "notifications": "Notifications"
     }
+  },
+  "cart": {
+    "itemsCount": "{count, plural, one {# item} other {# items}}",
+    "total": "{amount} ֏",
+    "checkout": "Book now"
   }
 }
