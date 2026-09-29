@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseVariants } from "./cc-owner-q";
+import { buildPostponeReason, countOwnerCards, parseMultiQuestion, parseVariants } from "./cc-owner-q";
 
 describe("parseVariants", () => {
   it("возвращает null если вариантов меньше двух", () => {
@@ -44,5 +44,138 @@ describe("parseVariants", () => {
   it("возвращает null для текста без формата вариантов", () => {
     expect(parseVariants("Нужно уточнить детали реализации")).toBeNull();
     expect(parseVariants("1) Первое 2) Второе")).toBeNull();
+  });
+
+  it("парсит кириллические варианты А/Б/В", () => {
+    const r = parseVariants("Какой подход? А) Быстрый Б) Надёжный В) Оба");
+    expect(r).not.toBeNull();
+    expect(r!.question).toBe("Какой подход?");
+    expect(r!.variants).toHaveLength(3);
+    expect(r!.variants[0]).toEqual({ id: "А", text: "Быстрый" });
+    expect(r!.variants[1]).toEqual({ id: "Б", text: "Надёжный" });
+    expect(r!.variants[2]).toEqual({ id: "В", text: "Оба" });
+  });
+
+  it("парсит строчные кириллические варианты и нормализует к верхнему регистру", () => {
+    const r = parseVariants("Выбрать? а) вариант 1 б) вариант 2");
+    expect(r).not.toBeNull();
+    expect(r!.variants[0]).toEqual({ id: "А", text: "вариант 1" });
+    expect(r!.variants[1]).toEqual({ id: "Б", text: "вариант 2" });
+  });
+
+  it("парсит строчные латинские варианты и нормализует к верхнему регистру", () => {
+    const r = parseVariants("Делаем? a) да b) нет");
+    expect(r).not.toBeNull();
+    expect(r!.variants[0]).toEqual({ id: "A", text: "да" });
+    expect(r!.variants[1]).toEqual({ id: "B", text: "нет" });
+  });
+});
+
+describe("parseMultiQuestion", () => {
+  it("одиночный вопрос без вариантов — один блок", () => {
+    const r = parseMultiQuestion("Прислать логотип");
+    expect(r).toHaveLength(1);
+    expect(r[0].question).toBe("Прислать логотип");
+    expect(r[0].variants).toBeNull();
+  });
+
+  it("одиночный вопрос с вариантами — один блок с вариантами", () => {
+    const r = parseMultiQuestion("Выбрать канал? А) Telegram Б) Email");
+    expect(r).toHaveLength(1);
+    expect(r[0].variants).toHaveLength(2);
+  });
+
+  it("два вопроса разделены пустой строкой", () => {
+    const text = "Какой цвет? А) Синий Б) Красный\n\nКакой шрифт? А) Bold Б) Regular";
+    const r = parseMultiQuestion(text);
+    expect(r).toHaveLength(2);
+    expect(r[0].variants).toHaveLength(2);
+    expect(r[1].variants).toHaveLength(2);
+    expect(r[0].question).toBe("Какой цвет?");
+    expect(r[1].question).toBe("Какой шрифт?");
+  });
+
+  it("два вопроса разделены нумерацией", () => {
+    const text = "1. Войти в сервис\n2. Прислать логотип";
+    const r = parseMultiQuestion(text);
+    expect(r).toHaveLength(2);
+    expect(r[0].variants).toBeNull();
+    expect(r[1].variants).toBeNull();
+  });
+
+  it("один из блоков без вариантов, другой с вариантами", () => {
+    const text = "Прислать логотип\n\nКакой срок? А) Неделя Б) Месяц";
+    const r = parseMultiQuestion(text);
+    expect(r).toHaveLength(2);
+    expect(r[0].variants).toBeNull();
+    expect(r[1].variants).toHaveLength(2);
+  });
+});
+
+describe("countOwnerCards", () => {
+  it("три задачи с одним вопросом и одна с другим — 2 карточки", () => {
+    const tasks = [
+      { blockedReason: "Какой вариант? А) Да Б) Нет" },
+      { blockedReason: "Какой вариант? А) Да Б) Нет" },
+      { blockedReason: "Какой вариант? А) Да Б) Нет" },
+      { blockedReason: "Прислать логотип" },
+    ];
+    expect(countOwnerCards(tasks)).toBe(2);
+  });
+
+  it("одна задача — одна карточка", () => {
+    expect(countOwnerCards([{ blockedReason: "Прислать файл" }])).toBe(1);
+  });
+
+  it("пустой список — ноль карточек", () => {
+    expect(countOwnerCards([])).toBe(0);
+  });
+
+  it("null причины группируются в одну карточку", () => {
+    const tasks = [{ blockedReason: null }, { blockedReason: null }];
+    expect(countOwnerCards(tasks)).toBe(1);
+  });
+
+  it("пробелы не влияют на группировку", () => {
+    const tasks = [{ blockedReason: "Вопрос " }, { blockedReason: "Вопрос" }, { blockedReason: " Вопрос" }];
+    expect(countOwnerCards(tasks)).toBe(1);
+  });
+
+  it("разные вопросы — разные карточки", () => {
+    const tasks = [
+      { blockedReason: "Войти в Google" },
+      { blockedReason: "Прислать логотип" },
+      { blockedReason: "Утвердить цены" },
+    ];
+    expect(countOwnerCards(tasks)).toBe(3);
+  });
+
+  it("бейдж совпадает с числом групп: 2 карточки, сумма групп 2", () => {
+    // Имитирует реальный сценарий: DEV-49/50/51 — один вопрос, ещё одна задача — другой
+    const tasks = [
+      { blockedReason: "Выбрать канал входа? А) Telegram Б) Email" },
+      { blockedReason: "Выбрать канал входа? А) Telegram Б) Email" },
+      { blockedReason: "Выбрать канал входа? А) Telegram Б) Email" },
+      { blockedReason: "Прислать логотип" },
+    ];
+    const cardCount = countOwnerCards(tasks);
+    expect(cardCount).toBe(2); // бейдж = 2; заголовок YouQuestionsSection = 2; сумма групп = 2
+  });
+});
+
+describe("buildPostponeReason", () => {
+  it("включает исходный вопрос после даты", () => {
+    const result = buildPostponeReason("1 октября", "Выбрать вариант? А) Да Б) Нет");
+    expect(result).toBe("Отложено до 1 октября. Выбрать вариант? А) Да Б) Нет");
+  });
+
+  it("возвращает только дату если вопрос пустой", () => {
+    const result = buildPostponeReason("1 октября", "");
+    expect(result).toBe("Отложено до 1 октября");
+  });
+
+  it("обрезает пробелы исходного вопроса", () => {
+    const result = buildPostponeReason("5 ноября", "  Прислать логотип  ");
+    expect(result).toBe("Отложено до 5 ноября. Прислать логотип");
   });
 });

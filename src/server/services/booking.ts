@@ -4,6 +4,7 @@ import { db } from "../db";
 import { getSettings } from "../settings";
 import { html, notifyTeam } from "../notify";
 import { notifyMasterAssigned } from "./workerNotify";
+import { notifyClientOrderCreated } from "./bookingNotify";
 import { calculatePrice } from "@/lib/pricing";
 import { firstOrderUsedBy } from "@/lib/firstOrder";
 import { computeAllSlots, isMasterFree, type MasterAvailability } from "@/lib/slots";
@@ -221,6 +222,8 @@ export async function createOrder(user: User, input: CreateOrderInput) {
   // Уведомить мастера о новом визите
   const firstVisit = await db.visit.findFirst({ where: { orderId: order.id, masterId: { not: null } }, select: { id: true } });
   if (firstVisit) await notifyMasterAssigned(firstVisit.id).catch(() => {});
+  // Уведомить клиента о подтверждении заказа
+  await notifyClientOrderCreated(order.id).catch(() => {});
   return order;
 }
 

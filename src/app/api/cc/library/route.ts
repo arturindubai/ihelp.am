@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/server/auth";
-import { sectionsFor } from "@/server/admin";
+import { sectionsForUser } from "@/lib/adminAccess";
 import { createNote, getLibraryDoc, listLibrary, LibraryError, updateNote } from "@/server/services/library";
 
 /**
@@ -45,7 +45,7 @@ export async function GET(req: Request) {
   const p = new URL(req.url).searchParams;
   const agent = !!process.env.CC_AGENT_KEY && req.headers.get("x-cc-key") === process.env.CC_AGENT_KEY;
   const u = agent ? null : await getCurrentUser();
-  if (!agent && (!u || !sectionsFor(u.role).includes("control"))) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!agent && (!u || !sectionsForUser(u).includes("control"))) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const slug = p.get("slug");
   if (!slug) {

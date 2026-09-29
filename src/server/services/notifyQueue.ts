@@ -26,6 +26,14 @@ function resolveToken(s: Settings, tokenPath: string): string {
 }
 
 /**
+ * Прямая отправка клиентского сообщения без очереди — для канального fallback Telegram→email.
+ * Бросает ошибку при сбое: вызывающий код переключается на следующий канал.
+ */
+export async function sendTelegramDirect(token: string, chatId: string, text: string): Promise<void> {
+  await sendTelegramRaw(token, chatId, text);
+}
+
+/**
  * Поставить сообщение в очередь и сразу попробовать отправить.
  * При сбое запись остаётся в статусе pending — её заберёт cron на следующем проходе.
  * tokenPath: путь к токену в настройках, например «team.botToken» или «notify.telegramBotToken»

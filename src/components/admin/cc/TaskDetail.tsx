@@ -64,6 +64,10 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
     ...task.comments.map((c) => ({ at: c.createdAt, id: c.id, comment: c, event: null })),
     ...task.events.map((e) => ({ at: e.createdAt, id: e.id, comment: null, event: e })),
   ].sort((a, b) => a.at.getTime() - b.at.getTime());
+  // Последний отчёт о сдаче с полным текстом в Библиотеке — для ссылки в блоке согласования
+  const reviewNote = task.status === "review"
+    ? [...task.comments].reverse().find((c) => c.kind === "report" && c.libraryNoteId)
+    : null;
   const errors = task.comments.filter((c) => c.kind === "error").length;
   const moves = nextStatuses(task.status, "owner");
   const pool = poolForTask(task);
@@ -97,6 +101,16 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
         <div className="mb-4 rounded-xl border border-brand/30 bg-brand-50/40 px-4 py-3">
           <div className="mb-1 text-xs font-medium text-brand">{t("ownerSummary")}</div>
           <p className="whitespace-pre-line text-sm">{task.ownerSummary}</p>
+          {reviewNote?.libraryNoteId && (
+            <a
+              href={`/admin/control/library?doc=${reviewNote.libraryNoteId}`}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 block text-sm text-brand underline"
+            >
+              {t("readFullInLibrary")}
+            </a>
+          )}
         </div>
       )}
       <div className="mb-4">
@@ -121,6 +135,17 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
           </div>
         )}
       </div>
+
+      {task.source === "intake" && task.intakeText && (
+        <div className="mb-4">
+          <Collapsible title={t("intake.originalTitle")}>
+            <div className="overflow-x-auto rounded-[var(--radius-card)] bg-surface p-4">
+              <p className="mb-2 text-sm font-medium text-muted">{t("intake.originalSubtitle")}</p>
+              <p className="whitespace-pre-line text-sm">{task.intakeText}</p>
+            </div>
+          </Collapsible>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-4 md:col-span-2">
@@ -228,6 +253,16 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
                       {actor(f.comment.author)} · {when(f.at)} · {t.has(`feed.kinds.${f.comment.kind}`) ? t(`feed.kinds.${f.comment.kind}` as "feed.kinds.note") : f.comment.kind}
                     </div>
                     <p className="whitespace-pre-line">{f.comment.text}</p>
+                    {f.comment.libraryNoteId && (
+                      <a
+                        href={`/admin/control/library?doc=${f.comment.libraryNoteId}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 block text-sm text-brand underline"
+                      >
+                        {t("readFullInLibrary")}
+                      </a>
+                    )}
                   </li>
                 ) : (
                   <li key={f.id} className="px-3 text-xs text-muted">
@@ -285,7 +320,7 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
                 {task.blockedReason}
               </p>
             )}
-            <TransitionPanel taskKey={task.key} status={task.status} layer={task.layer} moves={moves} />
+            <TransitionPanel taskKey={task.key} status={task.status} source={task.source} layer={task.layer} moves={moves} />
             {(health.stale || health.phantom) && (
               <div className="mt-3">
                 <QuickMove taskKey={task.key} to={health.phantom ? "backlog" : "ready"} text={health.phantom ? t("attention.phantomReason") : t("attention.returnReason")} label={t("attention.returnToQueue")} />

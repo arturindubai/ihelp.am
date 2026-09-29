@@ -7,6 +7,8 @@ import { BACKLOG } from "../backlog";
 import { PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { OPEN_STATUSES, isReady, needsAttention, readiness, taskHealth } from "@/lib/cc-flow";
 import { closedKeys } from "./ccWork";
+import { createNote } from "./library";
+import { needsLibrary, buildSummaryText, buildLibraryTitle } from "@/lib/cc-overflow";
 import type { Prisma, Task } from "@prisma/client";
 
 export type TaskFilters = {
@@ -200,6 +202,8 @@ export interface TaskContent {
   mockupRequired?: boolean;
   /** Ссылка на макет (Figma, стенд, картинка) */
   mockupUrl?: string | null;
+  /** Нужно описание дизайна: ставит триаж */
+  needsDesign?: boolean | null;
 }
 
 /**
@@ -244,6 +248,7 @@ export async function saveTask(content: TaskContent, actor: string, isNew: boole
     scope: [...new Set((content.scope ?? []).map((p) => p.trim().replace(/^\.\//, "")).filter(Boolean))].slice(0, 30),
     mockupRequired: content.mockupRequired ?? false,
     mockupUrl: content.mockupUrl?.trim().slice(0, 500) || null,
+    needsDesign: content.needsDesign ?? null,
     source,
   };
   const existing = await db.task.findUnique({ where: { key } });
@@ -261,7 +266,18 @@ export async function saveTask(content: TaskContent, actor: string, isNew: boole
 export async function addComment(key: string, text: string, author: string, kind: "note" | "report" = "note") {
   const task = await db.task.findUnique({ where: { key }, select: { id: true } });
   if (!task) throw new Error("not_found");
-  return db.taskComment.create({ data: { taskId: task.id, text: text.trim().slice(0, 5000), author, kind } });
+  const trimmed = text.trim();
+  if (!needsLibrary(trimmed)) {
+    return db.taskComment.create({ data: { taskId: task.id, text: trimmed, author, kind } });
+  }
+  let libraryNoteId: string | null = null;
+  try {
+    const doc = await createNote({ title: buildLibraryTitle(key, author, kind), kind: "knowledge", content: trimmed }, author);
+    libraryNoteId = doc.slug;
+  } catch {
+    return db.taskComment.create({ data: { taskId: task.id, text: trimmed.slice(0, 4900) + "\n\n⚠️ Текст обрезан — не удалось сохранить в Библиотеку.", author, kind } });
+  }
+  return db.taskComment.create({ data: { taskId: task.id, text: buildSummaryText(trimmed, libraryNoteId), libraryNoteId, author, kind } });
 }
 
 /* ───────────── Журнал ошибок ───────────── */

@@ -240,7 +240,7 @@ export async function designerQueue() {
         // Заблокирована на дизайне, но макет ещё не подан (mockupUrl не задан)
         { status: "blocked", blockedOn: "design", mockupUrl: null },
         { status: open, mockupRequired: true, mockupApprovedBy: null, mockupUrl: null, attachments: { none: { mime: { startsWith: "image/" } } } },
-        { status: { in: ["backlog", "ready"] }, layer: { in: ["front", "fullstack"] }, mockupApprovedBy: null, mockupUrl: null, OR: [{ design: null }, { design: "" }], attachments: { none: {} } },
+        { status: { in: ["backlog", "ready"] }, needsDesign: true, mockupApprovedBy: null, mockupUrl: null, OR: [{ design: null }, { design: "" }], attachments: { none: {} } },
       ],
     },
     select: { key: true, title: true, priority: true, stage: true, status: true, sort: true, source: true, blockedOn: true, blockedReason: true, mockupRequired: true, updatedAt: true },
@@ -336,7 +336,7 @@ export async function dispatchState(heads: Record<string, string>): Promise<Disp
     productHoldKeys(),
     designerQueue(),
     sweepDue(config, "designer"),
-    db.task.findMany({ where: { status: "in_progress", claimedBy: { not: null } }, select: { claimedBy: true, layer: true, claimUntil: true, key: true } }),
+    db.task.findMany({ where: { status: "in_progress", claimedBy: { not: null } }, select: { claimedBy: true, layer: true, claimUntil: true, heartbeatAt: true, key: true } }),
   ]);
   return {
     config,
@@ -356,7 +356,7 @@ export async function dispatchState(heads: Record<string, string>): Promise<Disp
     designerSweepDue: designerSweep,
     lastStart,
     requests: requests.filter((r) => Date.now() - Date.parse(r.at) < 30 * 60_000),
-    inProgressClaims: inProgress.map((t) => ({ key: t.key, agent: t.claimedBy!, claimUntil: t.claimUntil?.toISOString() ?? null })),
+    inProgressClaims: inProgress.map((t) => ({ key: t.key, agent: t.claimedBy!, claimUntil: t.claimUntil?.toISOString() ?? null, heartbeatAt: t.heartbeatAt?.toISOString() ?? null })),
   };
 }
 
@@ -535,7 +535,7 @@ export async function workersOverview() {
         reason: t.status === "blocked" ? "question" : "needs",
         detail: t.status === "blocked" ? (t.blockedReason ?? "").slice(0, 80) : (t.needs?.[0] ?? "").slice(0, 80),
       })),
-      designer: designer.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, reason: t.status === "blocked" ? "question" : t.mockupRequired ? "mockup" : "nodesign", detail: (t.blockedReason ?? "").slice(0, 80) })),
+      designer: designer.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, reason: t.status === "blocked" && t.blockedOn === "design" ? "returned" : t.status === "blocked" ? "question" : t.mockupRequired ? "mockup" : "nodesign", detail: (t.blockedReason ?? "").slice(0, 80) })),
       dev,
       nocode,
       tester: [
