@@ -813,6 +813,8 @@ export type YouCard = {
   origTaskHref?: string;
   /** Ключ задачи-оригинала для отображения в ссылке */
   origTaskKey?: string;
+  /** Сколько задач разблокирует ответ на этот вопрос */
+  unblocksCount?: number;
 };
 export type YouPostponedTask = {
   key: string;
@@ -953,6 +955,11 @@ function YouQuestionCard({ card, onDone }: { card: YouCard; onDone: (id: string)
             </Link>
           ))}
         </div>
+      )}
+      {(card.unblocksCount ?? 0) >= 1 && (
+        <p className="mb-2">
+          <span className="chip bg-brand-50 text-xs text-brand">{t("unblocks", { n: card.unblocksCount ?? 0 })}</span>
+        </p>
       )}
       <div className="space-y-4">
         {visibleBlocks.map((block) => {
