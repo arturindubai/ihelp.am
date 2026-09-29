@@ -15,8 +15,11 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 
-// Модели, создание записей которых допустимо только внутри блока SEED_FLAG
-const PROTECTED_MODELS = ['review', 'order', 'visit', 'master'];
+// Модели, изменение записей которых допустимо только внутри блока SEED_FLAG
+const PROTECTED_MODELS = ['review', 'order', 'visit', 'master', 'user'];
+
+// Prisma-методы, изменяющие или удаляющие записи в БД
+const PROTECTED_METHODS = ['create', 'createMany', 'upsert', 'update', 'updateMany', 'delete', 'deleteMany'];
 
 /**
  * Находит 0-based индекс строки `return;`, закрывающей блок SEED_FLAG.
@@ -34,7 +37,7 @@ function findSeedFlagGuardLine(lines) {
 }
 
 /**
- * Проверяет содержимое seed.ts на создание защищённых моделей вне блока SEED_FLAG.
+ * Проверяет содержимое seed.ts на изменение защищённых моделей вне блока SEED_FLAG.
  */
 function checkSeedContent(content, fileName) {
   const lines = content.split('\n');
@@ -42,12 +45,14 @@ function checkSeedContent(content, fileName) {
   const violations = [];
 
   const pattern = new RegExp(
-    `\\bdb\\.(${PROTECTED_MODELS.join('|')})\\.(create|createMany|upsert)\\b`,
+    `\\bdb\\.(${PROTECTED_MODELS.join('|')})\\.(${PROTECTED_METHODS.join('|')})\\b`,
     'i'
   );
 
   for (let i = 0; i < lines.length; i++) {
     if (!pattern.test(lines[i])) continue;
+    // Явное исключение: строка с маркером seed-gate:owner-only — подтверждение роли владельца при каждой выкладке
+    if (lines[i].includes('// seed-gate:owner-only')) continue;
     const outsideGuard = guardLine === -1 || i < guardLine;
     if (outsideGuard) {
       violations.push({
@@ -56,8 +61,8 @@ function checkSeedContent(content, fileName) {
         text: lines[i].trim(),
         reason:
           guardLine === -1
-            ? 'создание записей без защиты SEED_FLAG'
-            : `создание записей до блока SEED_FLAG (строка ${guardLine + 1})`,
+            ? 'изменение защищённых данных без защиты SEED_FLAG'
+            : `изменение защищённых данных до блока SEED_FLAG (строка ${guardLine + 1})`,
       });
     }
   }
@@ -141,7 +146,7 @@ for (const f of migFiles) {
 }
 
 if (allViolations.length === 0) {
-  process.stdout.write('  ✓ демо-данные не создаются вне блока SEED_FLAG\n');
+  process.stdout.write('  ✓ защищённые данные не изменяются вне блока SEED_FLAG\n');
 } else {
   fail = 1;
   for (const v of allViolations) {

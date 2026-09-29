@@ -98,11 +98,14 @@ export async function needsYou() {
       : [];
   const taskStatusMap = new Map(failedTaskStatuses.map((t) => [t.key, t.status]));
 
+  // «Упавшие запуски»: только сироты — нет ключа задачи или задача не найдена в базе.
+  // Запуски по выложенным (done/cancelled) задачам — не показываем: владельцу с ними делать нечего.
   const failedRuns = allFailedRuns.filter((r) => {
     if (!r.taskKey) return true;
     const s = taskStatusMap.get(r.taskKey);
-    return !s || CLOSED_STATUSES.includes(s as (typeof CLOSED_STATUSES)[number]);
+    return !s; // задача не найдена → сирота
   });
+  // «Возвращено на доработку»: задача жива (не выложена и не отменена) — деплоер вернул из-за конфликта.
   const returnedRuns = allFailedRuns.filter((r) => {
     if (!r.taskKey) return false;
     const s = taskStatusMap.get(r.taskKey);
@@ -273,6 +276,39 @@ export async function approvals() {
   return tasks.map((t) => ({ ...t, lane: laneOf({ key: t.key, layer: "none" }) }));
 }
 
+/** Согласования продакта: некод-задачи дорожки product на проверке. Аналог approvals(), но только product-дорожка */
+export async function productApprovals() {
+  const tasks = await db.task.findMany({
+    where: { status: "review", layer: "none" },
+    orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
+    select: { key: true, title: true, priority: true, layer: true, updatedAt: true, ownerSummary: true, source: true, _count: { select: { attachments: true } }, comments: { where: { kind: "report" }, orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, createdAt: true } } },
+  });
+  return tasks.filter((t) => laneOf(t) === "product");
+}
+
+/** Все задачи дорожки product, сгруппированные по статусу. Группа «Сделано» — последние 10 */
+export async function productTasksByStatus() {
+  const tasks = await db.task.findMany({
+    where: { layer: "none" },
+    orderBy: [{ priority: "asc" }, { sort: "asc" }],
+    select: { key: true, title: true, priority: true, status: true, layer: true, source: true, doneAt: true },
+  });
+  const product = tasks.filter((t) => laneOf(t) === "product");
+  const by = (statuses: string[]) => product.filter((t) => statuses.includes(t.status));
+  const done = by(["done"]).sort((a, b) => (b.doneAt?.getTime() ?? 0) - (a.doneAt?.getTime() ?? 0));
+  return {
+    total: product.length,
+    doneTotal: done.length,
+    groups: [
+      { id: "backlog", tasks: by(["backlog"]) },
+      { id: "ready", tasks: by(["ready"]) },
+      { id: "in_progress", tasks: by(["in_progress", "blocked"]) },
+      { id: "review", tasks: by(["review"]) },
+      { id: "done", tasks: done.slice(0, 10) },
+    ].filter((g) => g.tasks.length > 0),
+  };
+}
+
 export type FeedItem = { id: string; at: Date; actor: string; key: string; title: string; kind: string; field?: string; from?: string | null; to?: string | null; text?: string };
 
 /** Активность: изменения задач, записи в лентах и запуски воркеров — одной лентой, новое сверху */
@@ -415,7 +451,7 @@ export async function boardAudit() {
   const [tasks, tick] = await Promise.all([
     db.task.findMany({
       select: {
-        key: true, status: true, layer: true, source: true, depends: true, branch: true, blockedOn: true, blockedReason: true, claimedBy: true, heartbeatAt: true, triagedAt: true,
+        key: true, status: true, layer: true, source: true, depends: true, branch: true, blockedOn: true, blockedReason: true, claimedBy: true, heartbeatAt: true, triagedAt: true, epicKey: true,
         comments: { orderBy: { createdAt: "desc" }, take: 1, select: { author: true, createdAt: true } },
         events: { where: { field: "status" }, orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
       },
@@ -449,6 +485,8 @@ export async function boardAudit() {
       else if (!t.heartbeatAt || t.heartbeatAt.getTime() < hourAgo) add("in_progress_stale", t.key);
     }
     if (t.key.startsWith("IN-") && !(CLOSED_STATUSES as readonly string[]).includes(t.status) && t.status !== "blocked") add("intake_open", t.key);
+    // Открытая задача без эпика: не входящая (IN-*) и не в бэклоге — уже разобрана, но эпик не назначен
+    if (!t.key.startsWith("IN-") && t.source !== "intake" && !(CLOSED_STATUSES as readonly string[]).includes(t.status) && !t.epicKey) add("no_epic_key", t.key);
   }
   const checks = Object.entries(found).map(([id, keys]) => ({ id, keys })).sort((a, b) => b.keys.length - a.keys.length);
   return { total: tasks.length, byStatus: Object.fromEntries(Object.entries(tasks.reduce<Record<string, number>>((m, t) => ((m[t.status] = (m[t.status] ?? 0) + 1), m), {}))), checks, at: new Date().toISOString() };

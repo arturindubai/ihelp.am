@@ -95,7 +95,7 @@ export async function WorkersTab({ locale, taskHref }: { locale: string; taskHre
                 {pc.dailyCap === null ? tw("todayNoCap", { n: data.today[p] }) : tw("todayOf", { n: data.today[p], cap: pc.dailyCap })}
                 {data.lastStart[p] && ` · ${tw("lastStart", { ago: ago(t, data.lastStart[p]) })}`}
                 {p === "triage" && lastTriageBatch !== null && ` · ${tw("lastBatch", { n: lastTriageBatch })}`}
-                {p === "deployer" && ` · ${data.deployWindowOpen ? tw("windowOpen") : tw("windowClosed", { from: data.config.deployWindow[0], to: data.config.deployWindow[1] })}`}
+                {p === "deployer" && ` · ${data.config.deployWindow === null ? tw("windowAny") : data.deployWindowOpen ? tw("windowOpen") : tw("windowClosed", { from: data.config.deployWindow[0], to: data.config.deployWindow[1] })}`}
               </div>
               {p === "designer" && capOut && queue.length > 0 && (
                 <div key="capWaiting" className="mt-1 rounded-lg bg-warn-50 px-3 py-2 text-xs text-warn">

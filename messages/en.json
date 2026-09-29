@@ -62,6 +62,12 @@
     "why1": "Verified pros with ratings and reviews",
     "why2": "Transparent pricing with no hidden fees",
     "why3": "Reschedule or cancel in just a few clicks",
+    "heroTitle": "What service do you need?",
+    "heroSearch": "Find a service…",
+    "promisesTitle": "Promises we keep",
+    "faqTitle": "Frequently asked questions",
+    "ctaTitle": "Have questions?",
+    "ctaSubtitle": "We're available on WhatsApp",
     "whatsapp": "Have questions?",
     "whatsappSub": "Write to us — we'll reply quickly",
     "writeUs": "Contact us",
@@ -95,6 +101,12 @@
     },
     "firstOffer": "−{percent}% off the first visit for new customers",
     "notFound": "Service not found",
+    "guarantee1": "Guarantee of result",
+    "guarantee2": "Cancellation 24 h in advance",
+    "guarantee3": "Verified pros",
+    "perVisitSaving": "−{amount} per visit",
+    "firstVisitBannerTitle": "New client discount",
+    "firstVisitBannerText": "−{percent}% off the first visit",
     "includes": "Included",
     "excludes": "Not included"
   },
@@ -104,6 +116,7 @@
     "address": "Address",
     "addAddress": "New address",
     "dateTime": "Date and time",
+    "dateAndMaster": "Date & pro",
     "availableTime": "Available times",
     "startDate": "First visit date",
     "noSlots": "No available times for this day",
@@ -115,6 +128,7 @@
     "anyMasterSub": "We'll assign the best available",
     "masterBusy": "Busy at this time",
     "chooseTimeFirst": "Please select a date and time first",
+    "whoComes": "Who's coming",
     "serviceLabel": "Service",
     "wishes": "Preferences",
     "noCallLabel": "No call needed before arrival",
@@ -349,7 +363,14 @@
       "REFUNDED": "Refunded"
     },
     "card": "Card online",
-    "everyWeeks": "every {n} wks."
+    "everyWeeks": "every {n} wks.",
+    "visitTiming": {
+      "scheduled": "Scheduled",
+      "started": "Started",
+      "lateMin": "late {n} min",
+      "earlyMin": "{n} min early",
+      "onTime": "on time"
+    }
   },
   "master": {
     "about": "About the pro",
@@ -602,12 +623,28 @@
     },
     "services": {
       "title": "Services & categories",
+      "catalogTitle": "Service catalog",
       "categories": "Categories",
       "services": "Services",
-      "newCategory": "New category",
-      "newService": "New service",
+      "newCategory": "+ Category",
+      "newService": "+ Service",
       "category": "Category",
       "comingSoon": "Show as 'Coming soon'",
+      "comingSoonLabel": "Soon",
+      "archived": "Archived",
+      "archiveCategory": "Archive",
+      "restoreCategory": "Restore",
+      "categoryHiddenBanner": "Category is hidden — {n, plural, one {# service is not shown} other {# services are not shown}} on the site",
+      "categoryArchivedBanner": "Category is archived — services are hidden",
+      "filterAll": "All",
+      "filterActive": "Active",
+      "filterHidden": "Hidden",
+      "filterSoon": "Soon",
+      "searchPlaceholder": "Search services and categories…",
+      "draft": "Draft",
+      "minPrice": "from {price} ֏",
+      "noServicesInCategory": "No services in category",
+      "addFirstService": "+ Add service",
       "tabs": {
         "main": "Main",
         "options": "Options & pricing",
@@ -758,11 +795,59 @@
       "rulesHint": "The promo code applies to the first paid visit. Without the 'stackable' flag the client gets the best discount."
     },
     "banners": {
-      "title": "Home page banners",
-      "newBanner": "New banner",
+      "title": "Banners",
+      "newBanner": "+ New banner",
       "link": "Link",
-      "promoCode": "Promo code on banner",
-      "bg": "Background color"
+      "promoCode": "Promo code",
+      "bg": "Background color",
+      "empty": "No banners for this placement",
+      "placement": "Placement",
+      "type": "Type",
+      "audience": "Audience",
+      "segment": "Segment",
+      "startsAt": "Show from",
+      "endsAt": "Show until",
+      "views": "Views",
+      "clicks": "Clicks",
+      "ctr": "CTR",
+      "generate": "Generate",
+      "stats": "Statistics",
+      "placements": {
+        "CAROUSEL_HOME": "Home — carousel",
+        "HERO_HOME": "Home — hero",
+        "CATALOG": "Catalog",
+        "SERVICE": "Service page",
+        "CHECKOUT": "Checkout",
+        "SUCCESS": "Success",
+        "EMAIL": "Email",
+        "CLIENT_CABINET": "Client cabinet",
+        "MASTER_CABINET": "Master cabinet"
+      },
+      "types": {
+        "PROMO": "Promo",
+        "ANNOUNCEMENT": "Announcement",
+        "UPSELL": "Upsell",
+        "CROSS_SELL": "Cross-sell"
+      },
+      "audiences": {
+        "ALL": "Everyone",
+        "LOGGED_IN": "Logged in only",
+        "GUESTS": "Guests only"
+      },
+      "segments": {
+        "ALL": "All",
+        "NEW": "New",
+        "RETURNING": "Returning"
+      },
+      "tabs": {
+        "all": "All"
+      },
+      "status": {
+        "active": "Active",
+        "paused": "Paused",
+        "scheduled": "Scheduled",
+        "expired": "Expired"
+      }
     },
     "pages": {
       "title": "Pages",
@@ -1126,7 +1211,8 @@
           "design": "For UI: design described in text or file",
           "mockup": "Mockup approved by owner",
           "size": "Estimated S or M (L should be split)",
-          "scope": "Affected files listed"
+          "scope": "Affected files listed",
+          "scope_messages_folder": "Task scope lists files, not the entire messages folder"
         }
       },
       "move": {
@@ -1207,7 +1293,8 @@
         "dailyCap": "Runs per day",
         "dailyCapNone": "no limit",
         "window": "Deploy window — Yerevan hours, from and to",
-        "windowHint": "Deployer deploys only tested commits, one task at a time, in the deploy window; 'Run now' — any time. Failed smoke test — rollback and task returned, each deploy notified to tech chat.",
+        "windowEnabled": "deploy only during hours (Yerevan time)",
+        "windowHint": "Deployer deploys only tested commits, up to {deployBatch} tasks per batch; 'Run now' — any time. Failed smoke test — rollback and task returned, each deploy notified to tech chat.",
         "save": "Save",
         "saved": "Saved",
         "invalid": "Check the values",
@@ -1279,6 +1366,7 @@
         "todayNoCap": "Today {n}, no limit",
         "lastStart": "last run {ago}",
         "windowOpen": "Deploy window open",
+        "windowAny": "Deploying any time",
         "windowClosed": "Deploy window {from}:00–{to}:00 Yerevan, currently closed",
         "sweep": "backlog sweep",
         "queue": "Queue · {n}",
@@ -1408,6 +1496,7 @@
         "backlog": "Backlog",
         "you": "Needs you",
         "design": "Design",
+        "product": "Product",
         "dev": "In development",
         "deployer": "Deployer",
         "plans": "Plans",
@@ -1448,6 +1537,26 @@
         "prev": "Previous",
         "next": "Next",
         "openNew": "Open in new tab"
+      },
+      "productTab": {
+        "subtitle": "Product lane tasks: what the worker is working on, what awaits your decision",
+        "queue": "Worker queue · {n}",
+        "queueHint": "Tasks the product worker will do next",
+        "queueEmpty": "Product worker has nothing queued",
+        "workersLink": "Configure pool",
+        "pending": "Awaiting approval · {n}",
+        "pendingHint": "Non-code product lane tasks awaiting your review",
+        "pendingEmpty": "No tasks awaiting approval",
+        "allByStatus": "All lane tasks · {n}",
+        "allEmpty": "No product lane tasks",
+        "doneLink": "Showing last {n} · view all",
+        "groups": {
+          "backlog": "Backlog",
+          "ready": "Queued",
+          "in_progress": "In progress",
+          "review": "In review",
+          "done": "Done"
+        }
       },
       "designTab": {
         "subtitle": "Design of UI tasks: designer queue, what awaits your approval, what's approved. Approved design goes to Library — that's the canon developers build from.",
@@ -1533,13 +1642,15 @@
         "urgent": "Urgent",
         "groups": {
           "variant": "Choose an option",
+          "approve": "Approve or agree",
+          "do": "Do it yourself",
           "price": "Name a price or number",
           "data": "Send data or document",
           "auth": "Sign in to a service",
-          "approve": "Approve or agree",
           "rule": "Approve a system rule",
           "other": "Other"
         },
+        "postponedUntil": "returns {date}",
         "postpone3days": "Postpone for 3 days",
         "paused": "Workers paused until {until}.",
         "toWorkers": "Open 'Workers'",
@@ -1569,7 +1680,7 @@
         "returnedRunsHint": "Deployer returned the task due to merge conflict or feedback — production not affected, task back in queue.",
         "failedRuns": "Failed worker runs in the last 24 hours",
         "techBlocked": "Blocked on tech/external reasons",
-        "techBlockedHint": "These tasks are waiting for a technical solution or external service response. Unblock with cc.mjs unblock KEY.",
+        "techBlockedHint": "These tasks are waiting for a technical solution or external service response. When resolved, write in the task feed.",
         "techBlockedUntil": "until {date}",
         "alertMissing": "⚠️ Tech alerts are not delivered: no recipient configured.",
         "alertMissingLink": "Configure notifications",
@@ -1669,6 +1780,7 @@
         "placeholder": "What needs to be done and why. Multiple tasks at once — triage will split them.",
         "voice": "Voice",
         "voiceStop": "Stop recording",
+        "voiceUnsupported": "Voice — Chrome only",
         "listening": "listening…",
         "stale": "Site was updated while the window was open. Refresh — draft is saved and will return.",
         "voiceErrors": {
@@ -1679,13 +1791,21 @@
         },
         "attach": "Files",
         "remove": "remove",
+        "dropActive": "Release to attach",
+        "pasteHint": "Files can be dragged here or pasted from clipboard (Cmd+V)",
+        "dropTypeError": "This file type is not supported — images and PDF only",
+        "dropSizeError": "File is too large — maximum 20 MB",
+        "dropLimitError": "Up to 6 files can be attached — {n} added",
         "send": "Send to triage",
         "sending": "Sending…",
+        "retrying": "Retrying {n}/3…",
         "sent": "Card {key} is in the triage queue.",
         "open": "Open",
         "tooShort": "Please describe in at least a few words — 10 characters minimum",
         "error": "Failed to send",
         "close": "Close",
+        "draftRestored": "Draft restored after page refresh",
+        "draftBadge": "Unsaved draft",
         "history": "Queue & history",
         "empty": "No intake yet",
         "states": {
@@ -1944,6 +2064,61 @@
       }
     }
   },
+  "notFound": {
+    "title": "404",
+    "back": "Go home"
+  },
+  "notify": {
+    "master": {
+      "assigned": "📋 New visit\nClient: {clientName}\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}",
+      "rescheduled": "🔄 Visit rescheduled\n{serviceName}\nNew date: {date}, {time}",
+      "cancelled": "❌ Visit cancelled\n{serviceName}, {date}",
+      "tomorrow": "📅 Tomorrow's visits ({date}):\n{list}",
+      "tomorrowItem": "• {time} — {serviceName} · {clientName} · {address}",
+      "staffBotConnect": "Hello! I'm iHelp Staff Bot. Tap the button below to link your pro profile and receive visit notifications.",
+      "staffBotConnected": "✓ Done! You'll now receive visit notifications here.",
+      "staffBotNotMaster": "This bot is for iHelp pros only.",
+      "sharePhone": "📱 Share phone number"
+    },
+    "client": {
+      "confirmation": {
+        "subject": "Order #{number} confirmed",
+        "title": "Your order is confirmed!",
+        "service": "Service: {service}",
+        "date": "Date and time: {date} at {time}",
+        "address": "Address: {address}",
+        "total": "Total: {total}",
+        "button": "My bookings"
+      },
+      "reminder": {
+        "subject": "Reminder: visit tomorrow",
+        "title": "Your visit is tomorrow",
+        "service": "Service: {service}",
+        "date": "Date and time: {date} at {time}",
+        "master": "Pro: {master}",
+        "address": "Address: {address}",
+        "button": "View booking"
+      },
+      "review": {
+        "subject": "How did your visit go?",
+        "title": "How was the visit?",
+        "line1": "We hope you're satisfied! Leave a review — it takes just a minute.",
+        "line2": "Your feedback helps us improve.",
+        "button": "Leave a review"
+      },
+      "unsubscribeText": "To stop receiving emails — {link}.",
+      "unsubscribeLink": "unsubscribe here",
+      "unsubscribedTitle": "You have unsubscribed",
+      "unsubscribedBody": "You will no longer receive emails from iHelp."
+    },
+    "order": {
+      "created": "✅ Order confirmed\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}\nTotal: {price}\nThank you for choosing iHelp! We will assign a master soon.",
+      "masterAssigned": "👷 Master assigned\nService: {serviceName}, {date} at {time}\nMaster: {masterName}\nFeel free to contact us with any questions.",
+      "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}",
+      "cancelled": "❌ Visit cancelled\nService: {serviceName}, {date}\nWant to reschedule? Place a new order on the website.",
+      "completed": "⭐ Visit complete\n{masterName} has finished the work. Thank you for choosing iHelp!"
+    }
+  },
   "review": {
     "title": "Your review of the visit",
     "placeholder": "What did you like, what could be improved?",
@@ -1966,13 +2141,9 @@
       "notifications": "Notifications"
     }
   },
-  "notify": {
-    "order": {
-      "created": "✅ Order confirmed\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}\nTotal: {price}\nThank you for choosing iHelp! We will assign a master soon.",
-      "masterAssigned": "👷 Master assigned\nService: {serviceName}, {date} at {time}\nMaster: {masterName}\nFeel free to contact us with any questions.",
-      "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}",
-      "cancelled": "❌ Visit cancelled\nService: {serviceName}, {date}\nWant to reschedule? Place a new order on the website.",
-      "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}"
-    }
+  "cart": {
+    "itemsCount": "{count, plural, one {# item} other {# items}}",
+    "total": "{amount} ֏",
+    "checkout": "Book now"
   }
 }

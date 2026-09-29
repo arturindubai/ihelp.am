@@ -46,7 +46,7 @@ function fail(e: unknown) {
   }
   const msg = (e as Error)?.message ?? "error";
   // Ошибки проверки содержимого из saveTask — это ошибки запроса, а не сервера
-  if (/^(bad_key|key_exists|not_found|unknown_depends|unknown_epic)/.test(msg)) return json({ error: msg.split(":")[0], detail: msg.split(":")[1] ?? null }, 400);
+  if (/^(bad_key|key_exists|not_found|unknown_depends|unknown_epic|unknown_parent|parent_self_reference)/.test(msg)) return json({ error: msg.split(":")[0], detail: msg.split(":")[1] ?? null }, 400);
   console.error("[cc api]", e);
   return json({ error: "server_error" }, 500);
 }
@@ -156,7 +156,7 @@ export async function GET(req: Request) {
         claimedBy: p.get("agent") ?? undefined,
         epicKey: p.get("epicKey") ?? undefined,
         q: p.get("q") ?? undefined,
-        open: !p.get("status"),
+        open: !p.get("q") && !p.get("status"),
       }),
     );
     return json({ tasks: tasks.map((t) => ({ ...brief(t), health: t.health, dorOk: t.dorOk })) });

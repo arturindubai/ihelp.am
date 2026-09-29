@@ -8,6 +8,8 @@
 # Код возврата: 0 — выложено, 1 — выкладка не прошла, 2 — задача возвращена (конфликт, не тот коммит), 3 — нельзя начать.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 3
+# Выкладка идёт в собственном юните systemd и не гибнет вместе с вызвавшим её воркером (scripts/deploy-unit.sh)
+[ -f scripts/deploy-unit.sh ] && . scripts/deploy-unit.sh && deploy_in_unit "$0" "$@"
 KEY="${1:-}"
 [ -n "$KEY" ] || { echo "Использование: scripts/deploy-task.sh <КЛЮЧ> [--no-test [причина]] [--force-own причина]"; exit 3; }
 shift
@@ -38,7 +40,8 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-AGENT="${CC_AGENT:-deployer}"
+[ -n "${CC_AGENT:-}" ] || { echo "✗ CC_AGENT не задан — укажите имя агента (например, CC_AGENT=deployer-1)"; exit 1; }
+AGENT="$CC_AGENT"
 cc() { node scripts/cc.mjs "$@" --agent "$AGENT"; }
 stop() { echo "✗ $1"; exit "${2:-3}"; }
 
@@ -51,7 +54,12 @@ flock -n 9 || stop "Уже идёт другая выкладка — жду с�
 [ "$(git branch --show-current)" = main ] || stop "Основная копия не на main — выкладку не начинаю"
 [ -z "$(git status --porcelain)" ] || stop "В основной копии незакоммиченные изменения (чужая работа?) — выкладку не начинаю"
 git fetch -q origin || stop "Нет связи с GitHub"
+declare -F deploy_recover_main > /dev/null && deploy_recover_main
 git merge --ff-only -q origin/main || stop "Локальный main разошёлся с origin/main — нужен человек"
+
+# Настройка git merge driver для автоматического слияния файлов переводов (идемпотентно)
+git config merge.translations.name "Слияние файлов переводов JSON"
+git config merge.translations.driver "node scripts/merge-translations.mjs %O %A %B"
 
 branch="task/$KEY"
 card=$(node scripts/cc.mjs show "$KEY" --json) || stop "Задача $KEY не найдена"
@@ -76,7 +84,43 @@ if [ -n "$review_author" ] && [ "$AGENT" = "$review_author" ]; then
   cc note "$KEY" "⚠ Выкладку делает автор задачи ($AGENT). Обход правила «кто пишет, тот не выкладывает» — причина: $FORCE_OWN_REASON"
 fi
 
-head=$(git rev-parse --verify -q "origin/$branch") || stop "Ветки $branch нет в репозитории"
+head=$(git rev-parse --verify -q "origin/$branch") || true
+
+# Если ветки нет или её голова уже влита в origin/main — ищем существующий коммит слияния
+# (задача выложена раньше в составе пачки, но не была закрыта)
+if [ -z "$head" ] || git merge-base --is-ancestor "$head" "origin/main" 2>/dev/null; then
+  found_merge_sha=$(git log --merges --first-parent --format="%H %s" origin/main \
+    | grep -m1 -E " Слияние (пачки )?task/${KEY}:" | awk '{print $1}')
+  if [ -n "${found_merge_sha:-}" ]; then
+    batch_subj=$(git log -1 --format="%s" "$found_merge_sha" 2>/dev/null || echo "?")
+    echo "▶ $KEY уже влита в origin/main: коммит ${found_merge_sha:0:10} ($batch_subj)"
+    mkdir -p data/deploys data/tmp
+    premerged_log="data/deploys/$KEY-$(date +%Y%m%d-%H%M%S)-premerged.log"
+    echo "▶ Проверяем smoke перед закрытием задачи..." | tee -a "$premerged_log"
+    if ! deploy/smoke.sh >> "$premerged_log" 2>&1; then
+      cc note "$KEY" "Задача уже влита в main (${found_merge_sha:0:10}), но smoke-тест не прошёл — нужна проверка. Лог: /opt/ihelp.am/${premerged_log}" --error 2>/dev/null || true
+      echo "✗ Smoke не прошёл для уже влитой задачи — нужен человек"
+      exec 9>&-
+      exit 1
+    fi
+    tested_label_pre="Протестирован коммит ${tested:0:10}."
+    [ -n "$NOTEST" ] && tested_label_pre="Без отметки тестировщика (--no-test)."
+    pm_done_text="Деплоер: $AGENT. Выложена ранее в составе: ${batch_subj}. Коммит слияния: ${found_merge_sha:0:10}. SMOKE OK. Лог: /opt/ihelp.am/${premerged_log}"
+    if ! cc done "$KEY" --sha "$found_merge_sha" "$pm_done_text" >> "$premerged_log" 2>&1; then
+      cc note "$KEY" "cc done не прошла для уже влитой задачи ${found_merge_sha:0:10}. Лог: /opt/ihelp.am/${premerged_log}" --error 2>/dev/null || true
+      printf 'Задача %s уже влита в main (%s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --agent deployer\n' \
+        "$KEY" "${found_merge_sha:0:10}" "$KEY" "$found_merge_sha" > "data/tmp/block-done-$KEY.md"
+      cc block "$KEY" --on tech --text-file "data/tmp/block-done-$KEY.md" 2>/dev/null || true
+      echo "✗ cc done не прошла — задача заблокирована на технике"
+      exec 9>&-
+      exit 1
+    fi
+    exec 9>&-
+    echo "DEPLOY OK $found_merge_sha (ранее влита)"
+    exit 0
+  fi
+fi
+[ -n "$head" ] || stop "Ветки $branch нет в репозитории и слияния не найдено"
 
 # Проверка тестировщика; если пул тестировщика включён — --no-test требует явной причины
 if [ -n "$NOTEST" ]; then
@@ -211,11 +255,13 @@ if grep -q '^prisma/migrations/' <<< "$changed"; then
 fi
 done_text="Деплоер: $AGENT. Автовыкладка ${merge:0:10}: SMOKE OK (${checks} проверок, соседних сайтов отвечают: ${neighbors}).${migr} ${tested_label} Слияние ${pushed}. Лог: /opt/ihelp.am/${log}"
 if ! cc done "$KEY" --sha "$merge" "$done_text"; then
-  # Прод уже выложен, но закрыть задачу не удалось — записываем ошибку и уходим с ненулевым кодом.
-  # cc note --error с агентом deployer автоматически отправляет тех-алерт (ccWork.ts).
-  cc note "$KEY" "cc done не прошла после выкладки коммита ${merge:0:10}: задача не закрыта, нужен человек. Лог: /opt/ihelp.am/${log}" --error 2>/dev/null || true
-  echo "✗ cc done не прошла — задача выложена, но не закрыта в Control Center. Нужна ручная команда:"
-  echo "  cc done $KEY --sha $merge \"$done_text\""
+  # Прод уже выложен, но закрыть задачу не удалось — блокируем на технике с готовой командой.
+  # Задача уходит из очереди деплоера, повторной выкладки того же кода не будет.
+  cc note "$KEY" "cc done не прошла после выкладки коммита ${merge:0:10}: задача выложена, но не закрыта. Лог: /opt/ihelp.am/${log}" --error 2>/dev/null || true
+  printf 'Задача %s выложена (коммит %s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --agent %s "%s"\n' \
+    "$KEY" "${merge:0:10}" "$KEY" "$merge" "$AGENT" "$done_text" > "data/tmp/block-done-$KEY.md"
+  cc block "$KEY" --on tech --text-file "data/tmp/block-done-$KEY.md" 2>/dev/null || true
+  echo "✗ cc done не прошла — задача заблокирована на технике с готовой командой закрытия"
   exit 1
 fi
 [ "$pushed" = "отправлено в origin/main" ] || cc note "$KEY" "$pushed" --error

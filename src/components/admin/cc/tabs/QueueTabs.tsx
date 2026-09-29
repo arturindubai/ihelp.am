@@ -71,7 +71,7 @@ export async function DeployerTab({ taskHref }: { taskHref: Href }) {
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted">
-        {data.deployWindowOpen ? tw("windowOpen") : tw("windowClosed", { from: data.config.deployWindow[0], to: data.config.deployWindow[1] })} · {td("hint")}
+        {data.config.deployWindow === null ? tw("windowAny") : data.deployWindowOpen ? tw("windowOpen") : tw("windowClosed", { from: data.config.deployWindow[0], to: data.config.deployWindow[1] })} · {td("hint")}
       </p>
       {sections.map((s) => (
         <Card key={s.id} title={`${s.title} · ${s.items.length}`} actions={s.items.length ? <RunWorkerButton pool={s.pool} label={tw("runNow")} small /> : undefined}>

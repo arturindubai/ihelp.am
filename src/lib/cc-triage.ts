@@ -1,6 +1,7 @@
 /**
  * Вспомогательные функции триажа и тестирования: отличить человека от агента,
- * найти блокирующую ошибку. Чистые функции без доступа к базе.
+ * найти блокирующую ошибку, вычислить базовую точку отсчёта для отметки «разобрано».
+ * Чистые функции без доступа к базе.
  */
 import { ROLES } from "./cc-flow";
 
@@ -16,6 +17,17 @@ const AGENT_ROLES = ROLES.filter((r) => r !== "owner");
 export function isAgentAuthor(author: string): boolean {
   const head = author.trim().toLowerCase().split(/[-_.:\s]/)[0];
   return (AGENT_ROLES as readonly string[]).includes(head);
+}
+
+/**
+ * Базовая точка отсчёта для markTriaged(): наиболее позднее из двух событий —
+ * последнего retriage или последнего triaged_refused. Запись человека, сделанная
+ * до этой точки, уже учтена — не блокирует следующую попытку отметить «разобрано».
+ */
+export function baselineFor(retriageAt: Date | null, refusalAt: Date | null): Date | null {
+  if (!retriageAt) return refusalAt;
+  if (!refusalAt) return retriageAt;
+  return retriageAt > refusalAt ? retriageAt : refusalAt;
 }
 
 export type ErrorComment = { kind: string; createdAt: Date; text: string };
