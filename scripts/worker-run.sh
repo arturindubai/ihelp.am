@@ -46,7 +46,9 @@ case "$role" in
     allow=(Read Glob Grep TodoWrite "${common[@]}" "Bash(git log *)" "Bash(git diff *)" "Bash(git show *)" "Bash(git status)" "Bash(git fetch *)" "Bash(git rev-parse *)"
       "Bash(scripts/deploy-task.sh *)" "Bash(bash scripts/deploy-task.sh *)" "Bash(/opt/ihelp.am/scripts/deploy-task.sh *)" "Bash(bash /opt/ihelp.am/scripts/deploy-task.sh *)"
       "Bash(scripts/deploy-batch.sh *)" "Bash(bash scripts/deploy-batch.sh *)" "Bash(/opt/ihelp.am/scripts/deploy-batch.sh *)" "Bash(bash /opt/ihelp.am/scripts/deploy-batch.sh *)"
-      "Bash(deploy/smoke.sh*)" "Bash(bash deploy/smoke.sh*)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(ls *)"
+      "Bash(deploy/smoke.sh*)" "Bash(bash deploy/smoke.sh*)"
+      "Bash(deploy/staging.sh *)" "Bash(bash deploy/staging.sh *)"
+      "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(ls *)"
       "Write(//opt/ihelp.am/data/tmp/deployer/**)" "Edit(//opt/ihelp.am/data/tmp/deployer/**)")
     deny+=("Bash(git merge *)" "Bash(git checkout *)" "Bash(git reset *)" "Bash(git commit *)" "Bash(git push *)")
     ;;
