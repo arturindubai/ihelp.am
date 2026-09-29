@@ -52,6 +52,45 @@ describe("deploy-marker", () => {
     ).toMatch(/grep\s+-qF\s+"\$prod_marker"\s+"\$log"/);
   });
 
+  it("cc.mjs done проверяет тему коммита перед проверкой scope — чужой коммит без нужной темы не пройдёт", () => {
+    const src = tryRead("../../scripts/cc.mjs");
+    if (!src) return;
+    // Первичная проверка — тема «Слияние task/KEY:» или «Слияние пачки task/KEY:»
+    expect(src, "cc.mjs done должна проверять тему коммита для идентификации слияния задачи")
+      .toMatch(/Слияние task\//);
+    expect(src, "cc.mjs done должна проверять тему коммита для пачковых слияний")
+      .toMatch(/Слияние пачки task\//);
+    // Ошибка при чужом коммите должна говорить, что это не слияние ветки задачи
+    expect(src, "cc.mjs done должна отклонять чужой коммит с понятным сообщением")
+      .toMatch(/не является слиянием ветки/);
+  });
+
+  it("deploy-batch.sh закрывает каждую задачу пачки её собственным коммитом (BATCH_MERGE_SHAS)", () => {
+    const src = tryRead("../../scripts/deploy-batch.sh");
+    if (!src) return;
+    expect(src, "deploy-batch.sh должна хранить SHA для каждой задачи отдельно")
+      .toMatch(/BATCH_MERGE_SHAS/);
+    expect(src, "deploy-batch.sh должна записывать SHA после каждого слияния")
+      .toMatch(/BATCH_MERGE_SHAS\[/);
+    expect(src, "deploy-batch.sh должна закрывать задачи с per-task SHA")
+      .toMatch(/BATCH_MERGE_SHAS\[.*\]:-/);
+  });
+
+  it("deploy-task.sh и deploy-batch.sh обнаруживают задачи, уже влитые в origin/main", () => {
+    const bsrc = tryRead("../../scripts/deploy-batch.sh");
+    const tsrc = tryRead("../../scripts/deploy-task.sh");
+    const mergeLogPattern = /git log.*--merges.*--first-parent/;
+    if (bsrc) expect(bsrc, "deploy-batch.sh должна искать уже влитые задачи через git log --merges").toMatch(mergeLogPattern);
+    if (tsrc) expect(tsrc, "deploy-task.sh должна искать уже влитые задачи через git log --merges").toMatch(mergeLogPattern);
+  });
+
+  it("deploy-task.sh блокирует задачу на технике при сбое cc done (не оставляет в очереди деплоера)", () => {
+    const src = tryRead("../../scripts/deploy-task.sh");
+    if (!src) return;
+    expect(src, "deploy-task.sh должна вызывать cc block при сбое cc done")
+      .toMatch(/cc block.*--on tech/);
+  });
+
   it("test-rollback.sh отказывает при имени проекта homecare (защита образов прода)", () => {
     const src = tryRead("../../scripts/test-rollback.sh");
     if (!src) return; // scripts/ не смонтирован — пропускаем

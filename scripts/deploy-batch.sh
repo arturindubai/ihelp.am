@@ -115,7 +115,29 @@ for KEY in "${KEYS[@]}"; do
     # В dry-run: ветка обязательна (origin или локальная), CC статус — предупреждение
     head=$(git rev-parse --verify -q "origin/$branch" 2>/dev/null) \
       || head=$(git rev-parse --verify -q "$branch" 2>/dev/null) \
-      || { echo "▶ [DRY-RUN] $KEY: ветки $branch нет ни на origin, ни локально — пропускаем"; SKIP_KEYS+=("$KEY"); continue; }
+      || {
+        # Ветки нет — ищем существующее слияние в origin/main (задача выложена в другой пачке)
+        found_sha=$(git log --merges --first-parent --format="%H %s" origin/main \
+          | grep -m1 -E " Слияние (пачки )?task/${KEY}:" | awk '{print $1}')
+        if [ -n "${found_sha:-}" ]; then
+          echo "▶ [DRY-RUN] $KEY уже влита в origin/main (${found_sha:0:10}) — будет закрыта без сборки"
+          PREMERGED_KEYS+=("$KEY:$found_sha")
+        else
+          echo "▶ [DRY-RUN] $KEY: ветки $branch нет ни на origin, ни локально — пропускаем"
+          SKIP_KEYS+=("$KEY")
+        fi
+        continue
+      }
+    # Ветка есть — проверяем, не влита ли она уже в main
+    if git merge-base --is-ancestor "$head" "$(git rev-parse HEAD)" 2>/dev/null; then
+      found_sha=$(git log --merges --first-parent --format="%H %s" origin/main \
+        | grep -m1 -E " Слияние (пачки )?task/${KEY}:" | awk '{print $1}')
+      if [ -n "${found_sha:-}" ]; then
+        echo "▶ [DRY-RUN] $KEY уже влита в HEAD (${found_sha:0:10}) — будет закрыта без сборки"
+        PREMERGED_KEYS+=("$KEY:$found_sha")
+        continue
+      fi
+    fi
     card=$(node scripts/cc.mjs show "$KEY" --json 2>/dev/null) || true
     if [ -n "${card:-}" ]; then
       task_status=$(jq -r '.task.status // ""' <<< "$card")
@@ -134,7 +156,18 @@ for KEY in "${KEYS[@]}"; do
 
     [ "$task_status" = review ] || { echo "! $KEY не на проверке (статус $task_status) — пропускаем"; SKIP_KEYS+=("$KEY"); continue; }
 
-    head=$(git rev-parse --verify -q "origin/$branch" 2>/dev/null) || { echo "! $KEY: ветки $branch нет в репозитории — пропускаем"; SKIP_KEYS+=("$KEY"); continue; }
+    head=$(git rev-parse --verify -q "origin/$branch" 2>/dev/null) || true
+    # Если ветки нет или её голова уже влита в origin/main — ищем коммит слияния в истории
+    if [ -z "$head" ] || git merge-base --is-ancestor "$head" "origin/main" 2>/dev/null; then
+      found_sha=$(git log --merges --first-parent --format="%H %s" origin/main \
+        | grep -m1 -E " Слияние (пачки )?task/${KEY}:" | awk '{print $1}')
+      if [ -n "${found_sha:-}" ]; then
+        echo "▶ $KEY уже влита в origin/main (${found_sha:0:10}) — закроем без сборки" | tee -a "$log"
+        PREMERGED_KEYS+=("$KEY:$found_sha")
+        continue
+      fi
+    fi
+    [ -n "$head" ] || { echo "! $KEY: ветки $branch нет в репозитории и слияния не найдено — пропускаем"; SKIP_KEYS+=("$KEY"); continue; }
 
     if [ -z "$NOTEST" ] && { [ -z "$tested" ] || [[ "$head" != "$tested"* ]]; }; then
       echo "! $KEY: проверен «${tested:-никакой}», в ветке $head — нужна проверка тестировщиком, пропускаем"
@@ -158,21 +191,49 @@ for KEY in "${KEYS[@]}"; do
   fi
 done
 
-echo "▶ Безопасных: ${#VALID_KEYS[@]}, рискованных: ${#RISKY_KEYS[@]}, пропущено: ${#SKIP_KEYS[@]}" | tee -a "$log"
+echo "▶ Безопасных: ${#VALID_KEYS[@]}, рискованных: ${#RISKY_KEYS[@]}, пропущено: ${#SKIP_KEYS[@]}, уже влитых: ${#PREMERGED_KEYS[@]}" | tee -a "$log"
 
-# ─── Если безопасных нет — только рискованные поштучно ────────────────────────
+# ─── Если безопасных нет — только рискованные поштучно (+ уже влитые без сборки) ────────────────────────
 if [ ${#VALID_KEYS[@]} -eq 0 ]; then
-  echo "▶ Безопасных задач нет — все выкладываем по одной" | tee -a "$log"
+  echo "▶ Безопасных задач нет — выкладываем рискованные по одной$([ ${#PREMERGED_KEYS[@]} -gt 0 ] && echo ", уже влитые закрываем")" | tee -a "$log"
   if [ -n "$DRY_RUN" ]; then
     echo ""
     echo "▶ [DRY-RUN] ══════════════════════ ПЛАН ПАЧКИ ══════════════════════"
     echo "▶ [DRY-RUN] Запрошено: [${KEYS[*]}]"
-    echo "▶ [DRY-RUN] Безопасных: 0, рискованных: ${#RISKY_KEYS[@]}, пропущено: ${#SKIP_KEYS[@]}"
-    echo "▶ [DRY-RUN] Вошли бы в пачку: (нет — все задачи рискованные или пропущены)"
+    echo "▶ [DRY-RUN] Безопасных: 0, рискованных: ${#RISKY_KEYS[@]}, пропущено: ${#SKIP_KEYS[@]}, уже влитых: ${#PREMERGED_KEYS[@]}"
+    echo "▶ [DRY-RUN] Вошли бы в пачку: (нет — все задачи рискованные, пропущены или уже влиты)"
     [ ${#RISKY_KEYS[@]} -gt 0 ] && echo "▶ [DRY-RUN] Рискованные (выложить отдельно): [${RISKY_KEYS[*]}]"
     [ ${#SKIP_KEYS[@]} -gt 0 ] && echo "▶ [DRY-RUN] Пропущено: [${SKIP_KEYS[*]}]"
+    if [ ${#PREMERGED_KEYS[@]} -gt 0 ]; then
+      echo "▶ [DRY-RUN] Уже влитые (закрыть без сборки):"
+      for entry in "${PREMERGED_KEYS[@]}"; do
+        _pm_sha="${entry##*:}"
+        echo "▶ [DRY-RUN]   ${entry%%:*} → ${_pm_sha:0:10} (уже влита)"
+      done
+    fi
     echo "▶ [DRY-RUN] ═══════════════════════════════════════════════════════"
     exit 0
+  fi
+  # Закрыть задачи, уже влитые в origin/main (без сборки — smoke подтверждает текущее состояние)
+  if [ ${#PREMERGED_KEYS[@]} -gt 0 ]; then
+    if deploy/smoke.sh >> "$log" 2>&1; then
+      for entry in "${PREMERGED_KEYS[@]}"; do
+        KEY="${entry%%:*}"; found_sha="${entry##*:}"
+        batch_subj=$(git log -1 --format="%s" "$found_sha" 2>/dev/null || echo "?")
+        pm_done="Деплоер: $AGENT. Выложена ранее: ${batch_subj}. Коммит: ${found_sha:0:10}. SMOKE OK. Лог: /opt/ihelp.am/${log}"
+        if ! cc done "$KEY" --sha "$found_sha" "$pm_done" >> "$log" 2>&1; then
+          mkdir -p data/tmp
+          printf 'Задача %s уже влита в main (%s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --agent %s\n' \
+            "$KEY" "${found_sha:0:10}" "$KEY" "$found_sha" "$AGENT" > "data/tmp/block-done-$KEY.md"
+          cc block "$KEY" --on tech --text-file "data/tmp/block-done-$KEY.md" >> "$log" 2>&1 || true
+          echo "✗ cc done не прошла для $KEY (уже влита) — заблокирована на технике" | tee -a "$log"
+        else
+          echo "✓ $KEY закрыта (ранее влита)" | tee -a "$log"
+        fi
+      done
+    else
+      echo "! Smoke не прошёл — задачи, уже влитые в main, не закрыты" | tee -a "$log"
+    fi
   fi
   exec 9>&-
   exit_code=0
@@ -185,12 +246,15 @@ fi
 # ─── Шаг 2–3: найти работающий поднабор безопасных задач ──────────────────────
 CONFLICT_RETURNED=()
 BATCH_RESULT=()
+declare -A BATCH_MERGE_SHAS
+PREMERGED_KEYS=()
 
 # Попытка смёрджить набор задач; конфликтующие исключаются и возвращаются разработчику.
 # Записывает имена смёрджанных задач в BATCH_MERGED (глобальный массив).
 BATCH_MERGED=()
 do_merges() {
   local keys=("$@")
+  local KEY
   BATCH_MERGED=()
   git reset -q --hard "$prev"
   for KEY in "${keys[@]}"; do
@@ -202,6 +266,7 @@ do_merges() {
     local title
     title=$(node scripts/cc.mjs show "$KEY" --json 2>/dev/null | jq -r '.task.title' 2>/dev/null || echo "$KEY")
     if git merge --no-ff -q "$branch" -m "Слияние пачки task/$KEY: $title" >> "$log" 2>&1; then
+      BATCH_MERGE_SHAS[$KEY]=$(git rev-parse HEAD)
       BATCH_MERGED+=("$KEY")
     else
       # Читаем конфликтные файлы ДО abort — после abort список всегда пустой
@@ -291,12 +356,19 @@ if [ ${#BATCH_RESULT[@]} -eq 0 ]; then
     echo ""
     echo "▶ [DRY-RUN] ══════════════════════ ПЛАН ПАЧКИ ══════════════════════"
     echo "▶ [DRY-RUN] Запрошено: [${KEYS[*]}]"
-    echo "▶ [DRY-RUN] Безопасных: ${#VALID_KEYS[@]}, рискованных: ${#RISKY_KEYS[@]}, пропущено: ${#SKIP_KEYS[@]}"
+    echo "▶ [DRY-RUN] Безопасных: ${#VALID_KEYS[@]}, рискованных: ${#RISKY_KEYS[@]}, пропущено: ${#SKIP_KEYS[@]}, уже влитых: ${#PREMERGED_KEYS[@]}"
     echo "▶ [DRY-RUN] Вошли бы в пачку: (нет — check.sh не прошёл ни для одного поднабора)"
     [ ${#CONFLICT_RETURNED[@]} -gt 0 ] && echo "▶ [DRY-RUN] Конфликт слияния: [${CONFLICT_RETURNED[*]}]"
     [ ${#DRY_CHECK_FAILED[@]} -gt 0 ] && echo "▶ [DRY-RUN] Не прошли check.sh: [${DRY_CHECK_FAILED[*]}]"
     [ ${#RISKY_KEYS[@]} -gt 0 ] && echo "▶ [DRY-RUN] Рискованные (выложить отдельно): [${RISKY_KEYS[*]}]"
     [ ${#SKIP_KEYS[@]} -gt 0 ] && echo "▶ [DRY-RUN] Пропущено: [${SKIP_KEYS[*]}]"
+    if [ ${#PREMERGED_KEYS[@]} -gt 0 ]; then
+      echo "▶ [DRY-RUN] Уже влитые (закрыть без сборки):"
+      for entry in "${PREMERGED_KEYS[@]}"; do
+        _dr_sha="${entry##*:}"
+        echo "▶ [DRY-RUN]   ${entry%%:*} → ${_dr_sha:0:10} (уже влита)"
+      done
+    fi
     echo "▶ [DRY-RUN] ═══════════════════════════════════════════════════════"
     exec 9>&- 2>/dev/null || true
     exit 0
@@ -304,6 +376,27 @@ if [ ${#BATCH_RESULT[@]} -eq 0 ]; then
   for KEY in "${VALID_KEYS[@]}"; do
     cc note "$KEY" "Пачковая выкладка не начата: check.sh провалился на всём наборе. Задача остаётся на проверке." --error >> "$log" 2>&1 || true
   done
+  # Закрыть уже влитые задачи (даже если batch не прошёл)
+  if [ ${#PREMERGED_KEYS[@]} -gt 0 ]; then
+    if deploy/smoke.sh >> "$log" 2>&1; then
+      for entry in "${PREMERGED_KEYS[@]}"; do
+        KEY="${entry%%:*}"; found_sha="${entry##*:}"
+        batch_subj=$(git log -1 --format="%s" "$found_sha" 2>/dev/null || echo "?")
+        pm_done="Деплоер: $AGENT. Выложена ранее: ${batch_subj}. Коммит: ${found_sha:0:10}. SMOKE OK. Лог: /opt/ihelp.am/${log}"
+        if ! cc done "$KEY" --sha "$found_sha" "$pm_done" >> "$log" 2>&1; then
+          mkdir -p data/tmp
+          printf 'Задача %s уже влита в main (%s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --agent %s\n' \
+            "$KEY" "${found_sha:0:10}" "$KEY" "$found_sha" "$AGENT" > "data/tmp/block-done-$KEY.md"
+          cc block "$KEY" --on tech --text-file "data/tmp/block-done-$KEY.md" >> "$log" 2>&1 || true
+          echo "✗ cc done не прошла для $KEY (уже влита) — заблокирована на технике" | tee -a "$log"
+        else
+          echo "✓ $KEY закрыта (ранее влита)" | tee -a "$log"
+        fi
+      done
+    else
+      echo "! Smoke не прошёл — задачи, уже влитые в main, не закрыты" | tee -a "$log"
+    fi
+  fi
   # Всё равно попробуем рискованные
   exec 9>&-
   exit_code=1
@@ -320,8 +413,20 @@ if [ -n "$DRY_RUN" ]; then
   echo ""
   echo "▶ [DRY-RUN] ══════════════════════ ПЛАН ПАЧКИ ══════════════════════"
   echo "▶ [DRY-RUN] Запрошено: [${KEYS[*]}]"
-  echo "▶ [DRY-RUN] Безопасных: ${#VALID_KEYS[@]}, рискованных: ${#RISKY_KEYS[@]}, пропущено: ${#SKIP_KEYS[@]}"
+  echo "▶ [DRY-RUN] Безопасных: ${#VALID_KEYS[@]}, рискованных: ${#RISKY_KEYS[@]}, пропущено: ${#SKIP_KEYS[@]}, уже влитых: ${#PREMERGED_KEYS[@]}"
   echo "▶ [DRY-RUN] Вошли бы в пачку: [${BATCH_RESULT[*]}]"
+  echo "▶ [DRY-RUN] Коммиты закрытия (каждая задача — своим коммитом слияния):"
+  for KEY in "${BATCH_RESULT[@]}"; do
+    _dr_sha="${BATCH_MERGE_SHAS[$KEY]:-?}"
+    echo "▶ [DRY-RUN]   $KEY → ${_dr_sha:0:10} (новое слияние)"
+  done
+  if [ ${#PREMERGED_KEYS[@]} -gt 0 ]; then
+    echo "▶ [DRY-RUN] Уже влитые (закрыть без сборки):"
+    for entry in "${PREMERGED_KEYS[@]}"; do
+      _dr_sha="${entry##*:}"
+      echo "▶ [DRY-RUN]   ${entry%%:*} → ${_dr_sha:0:10} (уже влита)"
+    done
+  fi
   [ ${#CONFLICT_RETURNED[@]} -gt 0 ] && echo "▶ [DRY-RUN] Конфликт слияния (вернули бы разработчику): [${CONFLICT_RETURNED[*]}]"
   [ ${#DRY_CHECK_FAILED[@]} -gt 0 ] && echo "▶ [DRY-RUN] Не прошли check.sh (вернули бы разработчику): [${DRY_CHECK_FAILED[*]}]"
   [ ${#RISKY_KEYS[@]} -gt 0 ] && echo "▶ [DRY-RUN] Рискованные (выложить отдельно): [${RISKY_KEYS[*]}]"
@@ -403,7 +508,7 @@ if grep -q '^deploy/Caddyfile$' <<< "$changed"; then
   { docker compose restart caddy && deploy/smoke.sh; } >> "$log" 2>&1 || fail "после перезапуска Caddy smoke-тест не прошёл"
 fi
 
-# ─── Шаг 6: отправить main, закрыть каждую задачу ────────────────────────────
+# ─── Шаг 6: отправить main, закрыть каждую задачу её собственным коммитом слияния ─────────────────────────────────
 pushed="отправлено в origin/main"
 git push -q origin main || pushed="ВНИМАНИЕ: push в origin/main не прошёл — прод впереди репозитория"
 
@@ -425,18 +530,41 @@ fi
 tested_label="Протестированы тестировщиком."
 [ -n "$NOTEST" ] && tested_label="Без отметки тестировщика (--no-test)."
 
-batch_size=${#BATCH_RESULT[@]}
-done_text="Пачковая выкладка ${merge:0:10}: SMOKE OK (${checks} проверок, соседних сайтов: ${neighbors}, задач в пачке: ${batch_size}).${migr} ${tested_label} Слияние ${pushed}. Лог: /opt/ihelp.am/${log}"
-
 all_done=true
+mkdir -p data/tmp
 for KEY in "${BATCH_RESULT[@]}"; do
-  if ! cc done "$KEY" --sha "$merge" "$done_text"; then
-    cc note "$KEY" "cc done не прошла после выкладки коммита ${merge:0:10}: задача не закрыта, нужен человек. Лог: /opt/ihelp.am/${log}" --error 2>/dev/null || true
-    echo "✗ cc done не прошла для $KEY — задача выложена, но не закрыта в Control Center" | tee -a "$log"
+  # Каждая задача закрывается своим коммитом слияния (BATCH_MERGE_SHAS[$KEY])
+  task_sha="${BATCH_MERGE_SHAS[$KEY]:-$merge}"
+  task_done_text="Пачковая выкладка ${task_sha:0:10}: SMOKE OK (${checks} проверок, соседних сайтов: ${neighbors}).${migr} ${tested_label} Слияние ${pushed}. Лог: /opt/ihelp.am/${log}"
+  if ! cc done "$KEY" --sha "$task_sha" "$task_done_text" >> "$log" 2>&1; then
+    cc note "$KEY" "cc done не прошла после выкладки коммита ${task_sha:0:10}: задача выложена, но не закрыта. Лог: /opt/ihelp.am/${log}" --error 2>/dev/null || true
+    printf 'Задача %s выложена (коммит %s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --agent %s "%s"\n' \
+      "$KEY" "${task_sha:0:10}" "$KEY" "$task_sha" "$AGENT" "$task_done_text" > "data/tmp/block-done-$KEY.md"
+    cc block "$KEY" --on tech --text-file "data/tmp/block-done-$KEY.md" >> "$log" 2>&1 || true
+    echo "✗ cc done не прошла для $KEY — задача заблокирована на технике с готовой командой" | tee -a "$log"
     all_done=false
   fi
 done
 [ "$pushed" = "отправлено в origin/main" ] || cc note "${BATCH_RESULT[0]}" "$pushed" --error 2>/dev/null || true
+
+# Закрыть задачи, уже влитые в origin/main до этой выкладки (smoke уже прошёл)
+if [ ${#PREMERGED_KEYS[@]} -gt 0 ]; then
+  echo "▶ Закрываем задачи, выложенные ранее: [$(for e in "${PREMERGED_KEYS[@]}"; do printf '%s ' "${e%%:*}"; done)]" | tee -a "$log"
+  for entry in "${PREMERGED_KEYS[@]}"; do
+    KEY="${entry%%:*}"; found_sha="${entry##*:}"
+    batch_subj=$(git log -1 --format="%s" "$found_sha" 2>/dev/null || echo "?")
+    pm_done="Деплоер: $AGENT. Выложена ранее: ${batch_subj}. Коммит: ${found_sha:0:10}. SMOKE OK. Лог: /opt/ihelp.am/${log}"
+    if ! cc done "$KEY" --sha "$found_sha" "$pm_done" >> "$log" 2>&1; then
+      printf 'Задача %s уже влита в main (%s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --agent %s\n' \
+        "$KEY" "${found_sha:0:10}" "$KEY" "$found_sha" "$AGENT" > "data/tmp/block-done-$KEY.md"
+      cc block "$KEY" --on tech --text-file "data/tmp/block-done-$KEY.md" >> "$log" 2>&1 || true
+      echo "✗ cc done не прошла для $KEY (уже влита) — заблокирована на технике" | tee -a "$log"
+      all_done=false
+    else
+      echo "✓ $KEY закрыта (ранее влита)" | tee -a "$log"
+    fi
+  done
+fi
 
 echo "▶ Уборка рабочих копий и образов стендов" | tee -a "$log"
 node scripts/cc.mjs gc --agent "$AGENT" 2>&1 | tee -a "$log" || true
