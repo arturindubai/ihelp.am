@@ -112,6 +112,7 @@ model Category {
   sort        Int        @default(0)
   active      Boolean    @default(true)
   comingSoon  Boolean    @default(false)
+  archived    Boolean    @default(false)
   services    Service[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
@@ -135,6 +136,7 @@ model Service {
   /// Что не входит в услугу — мультиязычный текст, строки разделены \n
   excludesText  Json?
   active        Boolean       @default(true)
+  comingSoon    Boolean       @default(false)
   sort          Int           @default(0)
   rating        Float         @default(0)
   reviewsCount  Int           @default(0)
@@ -538,6 +540,10 @@ model Task {
   /// Ключ эпика (Epic.key). Пусто — простая задача без эпика
   epicKey       String?
   epicRef       Epic?     @relation(fields: [epicKey], references: [key])
+  /// Ключ родительской задачи (если эта задача — часть разбитой крупной). Родитель с открытыми частями не уходит в работу
+  parentKey     String?
+  parentRef     Task?     @relation("TaskParts", fields: [parentKey], references: [key], onDelete: SetNull)
+  parts         Task[]    @relation("TaskParts")
   area          String
   /// back | front | fullstack | infra | none
   layer         String
@@ -629,6 +635,7 @@ model Task {
   @@index([stage])
   @@index([area])
   @@index([epicKey])
+  @@index([parentKey])
 }
 
 /// Эпик — крупная область работы с собственными требованиями, дизайном, статусом проверки и готовности к деплою.

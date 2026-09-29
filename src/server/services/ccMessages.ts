@@ -53,6 +53,14 @@ export async function listMessages(take = 80) {
   return msgs.map((m) => ({ ...m, isQuestion: !!(m.toRole === "owner" && m.taskKey && blocked.has(m.taskKey)) }));
 }
 
+/** Входящие владельца: только toRole="owner", отдельным запросом без смешивания с другими ролями */
+export async function listOwnerInbox(take = 100) {
+  const msgs = await db.ccMessage.findMany({ where: { toRole: "owner" }, orderBy: { createdAt: "desc" }, take });
+  const keys = msgs.filter((m) => m.taskKey).map((m) => m.taskKey as string);
+  const blocked = await blockedOwnerTaskKeys(keys);
+  return msgs.map((m) => ({ ...m, isQuestion: !!(m.taskKey && blocked.has(m.taskKey)) }));
+}
+
 export async function markRead(id: string, by: string) {
   await db.ccMessage.updateMany({ where: { id, readAt: null }, data: { readAt: new Date(), readBy: by.slice(0, 60) } });
 }
@@ -144,6 +152,18 @@ export async function convertOrphanQuestions(by: string): Promise<number> {
     }
   }
   return converted;
+}
+
+/**
+ * При закрытии задачи (done/cancelled) — отмечаем все непрочитанные уведомления владельца
+ * по этой задаче как прочитанные автоматически.
+ */
+export async function markReadForClosedTask(taskKey: string, by: string): Promise<number> {
+  const result = await db.ccMessage.updateMany({
+    where: { toRole: "owner", readAt: null, taskKey },
+    data: { readAt: new Date(), readBy: `auto:closed→${taskKey}`.slice(0, 60) },
+  });
+  return result.count;
 }
 
 /**

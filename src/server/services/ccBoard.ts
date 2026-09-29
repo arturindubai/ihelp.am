@@ -98,11 +98,14 @@ export async function needsYou() {
       : [];
   const taskStatusMap = new Map(failedTaskStatuses.map((t) => [t.key, t.status]));
 
+  // «Упавшие запуски»: только сироты — нет ключа задачи или задача не найдена в базе.
+  // Запуски по выложенным (done/cancelled) задачам — не показываем: владельцу с ними делать нечего.
   const failedRuns = allFailedRuns.filter((r) => {
     if (!r.taskKey) return true;
     const s = taskStatusMap.get(r.taskKey);
-    return !s || CLOSED_STATUSES.includes(s as (typeof CLOSED_STATUSES)[number]);
+    return !s; // задача не найдена → сирота
   });
+  // «Возвращено на доработку»: задача жива (не выложена и не отменена) — деплоер вернул из-за конфликта.
   const returnedRuns = allFailedRuns.filter((r) => {
     if (!r.taskKey) return false;
     const s = taskStatusMap.get(r.taskKey);
@@ -415,7 +418,7 @@ export async function boardAudit() {
   const [tasks, tick] = await Promise.all([
     db.task.findMany({
       select: {
-        key: true, status: true, layer: true, source: true, depends: true, branch: true, blockedOn: true, blockedReason: true, claimedBy: true, heartbeatAt: true, triagedAt: true,
+        key: true, status: true, layer: true, source: true, depends: true, branch: true, blockedOn: true, blockedReason: true, claimedBy: true, heartbeatAt: true, triagedAt: true, epicKey: true,
         comments: { orderBy: { createdAt: "desc" }, take: 1, select: { author: true, createdAt: true } },
         events: { where: { field: "status" }, orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
       },
@@ -449,6 +452,8 @@ export async function boardAudit() {
       else if (!t.heartbeatAt || t.heartbeatAt.getTime() < hourAgo) add("in_progress_stale", t.key);
     }
     if (t.key.startsWith("IN-") && !(CLOSED_STATUSES as readonly string[]).includes(t.status) && t.status !== "blocked") add("intake_open", t.key);
+    // Открытая задача без эпика: не входящая (IN-*) и не в бэклоге — уже разобрана, но эпик не назначен
+    if (!t.key.startsWith("IN-") && t.source !== "intake" && !(CLOSED_STATUSES as readonly string[]).includes(t.status) && !t.epicKey) add("no_epic_key", t.key);
   }
   const checks = Object.entries(found).map(([id, keys]) => ({ id, keys })).sort((a, b) => b.keys.length - a.keys.length);
   return { total: tasks.length, byStatus: Object.fromEntries(Object.entries(tasks.reduce<Record<string, number>>((m, t) => ((m[t.status] = (m[t.status] ?? 0) + 1), m), {}))), checks, at: new Date().toISOString() };

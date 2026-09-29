@@ -6,8 +6,10 @@ import { describe, expect, it } from "vitest";
 const ROOT = process.cwd();
 const SRC_DIR = join(ROOT, "src");
 const RU_PATH = join(ROOT, "messages", "ru.json");
+const EN_PATH = join(ROOT, "messages", "en.json");
 
 const ru: Record<string, unknown> = JSON.parse(readFileSync(RU_PATH, "utf-8"));
+const en: Record<string, unknown> = JSON.parse(readFileSync(EN_PATH, "utf-8"));
 
 /** Проверяет, что путь вида "a.b.c" существует в ru.json (в том числе промежуточные узлы) */
 function hasKey(obj: Record<string, unknown>, path: string): boolean {
@@ -208,6 +210,44 @@ describe("i18n ключи", () => {
     if (found.length > 0) {
       const details = found.map((f) => `  ${f.file}:${f.line}\n    ${f.text}`).join("\n");
       expect.fail(`Зашитые кириллические строки в JSX (должны идти через t("…")):\n${details}`);
+    }
+  });
+
+  it("все ключи messages/ru.json присутствуют в messages/en.json", () => {
+    /** Рекурсивно собирает все dot-нотации ключей вложенного объекта */
+    function collectKeys(obj: Record<string, unknown>, prefix = ""): string[] {
+      const keys: string[] = [];
+      for (const [k, v] of Object.entries(obj)) {
+        const full = prefix ? `${prefix}.${k}` : k;
+        if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+          keys.push(...collectKeys(v as Record<string, unknown>, full));
+        } else {
+          keys.push(full);
+        }
+      }
+      return keys;
+    }
+
+    const ruKeys = collectKeys(ru);
+    const missingInEn = ruKeys.filter((k) => !hasKey(en, k));
+
+    // Разделяем пропуски: секции admin.* — только печать, клиентские — падение
+    const adminMissing = missingInEn.filter((k) => k.startsWith("admin."));
+    const clientMissing = missingInEn.filter((k) => !k.startsWith("admin."));
+
+    if (adminMissing.length > 0) {
+      // Не блокирует выкладку — задача на полный перевод отдельно
+      console.info(
+        `[i18n] Ключи admin-секций отсутствуют в en.json (${adminMissing.length}, не блокирует):\n` +
+        adminMissing.map((k) => `  "${k}"`).join("\n"),
+      );
+    }
+
+    if (clientMissing.length > 0) {
+      const details = clientMissing.map((k) => `  "${k}"`).join("\n");
+      expect.fail(
+        `Ключи клиентских секций отсутствуют в messages/en.json (${clientMissing.length}):\n${details}`,
+      );
     }
   });
 });
