@@ -19,20 +19,28 @@ export function parseVariants(text: string): { question: string; variants: { id:
 export type MultiQuestionBlock = { question: string; variants: { id: string; text: string }[] | null };
 
 /**
- * Разбивает текст на несколько вопросов, если их несколько (разделены пустой строкой или нумерацией).
- * Каждый блок прогоняется через parseVariants. Если блок один — поведение аналогично parseVariants.
+ * Разбивает текст на несколько вопросов только если автор явно пронумеровал их («1. …?», «2. …?»)
+ * и каждый заканчивается знаком вопроса. Пустые строки, абзацы-пояснения, рекомендации, разделители
+ * и контекст не создают отдельных блоков с полем ответа.
  */
 export function parseMultiQuestion(text: string): MultiQuestionBlock[] {
-  const rawBlocks = text.split(/\n\n+|\n(?=\d+\.\s)/);
-  const blocks = rawBlocks.map((b) => b.trim()).filter(Boolean);
-  if (blocks.length <= 1) {
-    const parsed = parseVariants(text);
-    return [{ question: parsed?.question ?? text, variants: parsed?.variants ?? null }];
+  // Ищем явно пронумерованные блоки «N. текст» или «N) текст»
+  const numberedRe = /(?:^|\n)(\d+)[.)]\s+([\s\S]+?)(?=\n\d+[.)]\s|$)/g;
+  const matches = [...text.matchAll(numberedRe)];
+
+  // Считать отдельными вопросами только если их ≥ 2 и первая строка каждого кончается «?»
+  // (варианты А/Б/В на следующих строках — часть вопроса, не конец текста)
+  if (matches.length >= 2 && matches.every((m) => /\?\s*$/.test(m[2].trim().split("\n")[0].trim()))) {
+    return matches.map((m) => {
+      const block = m[2].trim();
+      const parsed = parseVariants(block);
+      return { question: parsed?.question ?? block, variants: parsed?.variants ?? null };
+    });
   }
-  return blocks.map((block) => {
-    const parsed = parseVariants(block);
-    return { question: parsed?.question ?? block, variants: parsed?.variants ?? null };
-  });
+
+  // Иначе весь текст — один вопрос с одним полем ответа
+  const parsed = parseVariants(text);
+  return [{ question: parsed?.question ?? text, variants: parsed?.variants ?? null }];
 }
 
 /**

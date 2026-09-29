@@ -803,7 +803,7 @@ export type YouCardTask = { key: string; title: string; href: string; priority: 
 export type YouCard = {
   id: string;
   question: string;
-  groupType: "variant" | "price" | "data" | "auth" | "approve" | "rule" | "other";
+  groupType: "variant" | "price" | "data" | "auth" | "approve" | "rule" | "do" | "other";
   tasks: YouCardTask[];
   variants: { id: string; text: string }[] | null;
   multiQuestion: { question: string; variants: { id: string; text: string }[] | null }[] | null;
@@ -821,6 +821,7 @@ export type YouPostponedTask = {
   priority: string;
   reason: string | null;
   updatedAt: string;
+  blockedUntil?: string | null;
 };
 
 const GROUP_ICONS: Record<YouCard["groupType"], string> = {
@@ -830,6 +831,7 @@ const GROUP_ICONS: Record<YouCard["groupType"], string> = {
   auth: "🔑",
   approve: "✅",
   rule: "📋",
+  do: "⚙️",
   other: "💬",
 };
 
@@ -995,6 +997,14 @@ export function YouQuestionsSection({
   const t = useTranslations("admin.cc.you");
   const [filter, setFilter] = useState<"all" | "urgent" | "postponed">("all");
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [expandedPostponed, setExpandedPostponed] = useState<Set<string>>(new Set());
+
+  const togglePostponed = (key: string) =>
+    setExpandedPostponed((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
 
   const hide = (id: string) => setHidden((prev) => new Set([...prev, id]));
   const visibleCards = cards.filter((c) => !hidden.has(c.id));
@@ -1008,10 +1018,11 @@ export function YouQuestionsSection({
   const byGroup = (
     [
       ["variant", displayCards.filter((c) => c.groupType === "variant")],
+      ["approve", displayCards.filter((c) => c.groupType === "approve")],
+      ["do", displayCards.filter((c) => c.groupType === "do")],
       ["price", displayCards.filter((c) => c.groupType === "price")],
       ["data", displayCards.filter((c) => c.groupType === "data")],
       ["auth", displayCards.filter((c) => c.groupType === "auth")],
-      ["approve", displayCards.filter((c) => c.groupType === "approve")],
       ["rule", displayCards.filter((c) => c.groupType === "rule")],
       ["other", displayCards.filter((c) => c.groupType === "other")],
     ] as [YouCard["groupType"], YouCard[]][]
@@ -1086,15 +1097,38 @@ export function YouQuestionsSection({
             <p className="text-sm text-muted">{t("postponedSectionHint")}</p>
           )}
           <div className="space-y-2">
-            {postponed.map((task) => (
-              <div key={task.key} className="rounded-card border border-line bg-paper p-3 text-sm">
-                <Link href={task.href} scroll={false} className="font-medium hover:underline">
-                  <span className="mr-2 font-mono text-xs text-muted">{task.key}</span>
-                  {task.title}
-                </Link>
-                {task.reason && <p className="mt-1 text-xs text-muted">{task.reason}</p>}
-              </div>
-            ))}
+            {postponed.map((task) => {
+              const lines = (task.reason ?? "").split("\n").filter(Boolean);
+              const firstLine = lines[0] ?? "";
+              const hasMore = lines.length > 1;
+              const isExpanded = expandedPostponed.has(task.key);
+              return (
+                <div key={task.key} className="rounded-card border border-line bg-paper p-3 text-sm">
+                  <Link href={task.href} scroll={false} className="font-medium hover:underline">
+                    <span className="mr-2 font-mono text-xs text-muted">{task.key}</span>
+                    {task.title}
+                  </Link>
+                  {firstLine && (
+                    <p className="mt-1 text-xs text-muted">
+                      {isExpanded ? task.reason : firstLine}
+                    </p>
+                  )}
+                  {hasMore && (
+                    <button
+                      className="mt-0.5 text-xs text-brand hover:underline"
+                      onClick={() => togglePostponed(task.key)}
+                    >
+                      {isExpanded ? t("collapse") : t("expand")}
+                    </button>
+                  )}
+                  {task.blockedUntil && (
+                    <p className="mt-1 text-xs text-muted">
+                      {t("postponedUntil", { date: new Date(task.blockedUntil).toLocaleDateString("ru-RU", { timeZone: "Asia/Yerevan", day: "numeric", month: "short", year: "numeric" }) })}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </>
       )}

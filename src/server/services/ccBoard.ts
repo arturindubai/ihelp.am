@@ -97,11 +97,14 @@ export async function needsYou() {
       : [];
   const taskStatusMap = new Map(failedTaskStatuses.map((t) => [t.key, t.status]));
 
+  // «Упавшие запуски»: только сироты — нет ключа задачи или задача не найдена в базе.
+  // Запуски по выложенным (done/cancelled) задачам — не показываем: владельцу с ними делать нечего.
   const failedRuns = allFailedRuns.filter((r) => {
     if (!r.taskKey) return true;
     const s = taskStatusMap.get(r.taskKey);
-    return !s || CLOSED_STATUSES.includes(s as (typeof CLOSED_STATUSES)[number]);
+    return !s; // задача не найдена → сирота
   });
+  // «Возвращено на доработку»: задача жива (не выложена и не отменена) — деплоер вернул из-за конфликта.
   const returnedRuns = allFailedRuns.filter((r) => {
     if (!r.taskKey) return false;
     const s = taskStatusMap.get(r.taskKey);

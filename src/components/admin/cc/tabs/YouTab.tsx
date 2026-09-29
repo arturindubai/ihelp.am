@@ -19,10 +19,17 @@ type OwnerTask = NeedsYouData["owner"][number];
 
 function classifyGroup(reason: string, hasVariants: boolean): YouCard["groupType"] {
   if (hasVariants) return "variant";
-  if (/цена|прайс|стоимост|тариф|число|сколько|бюджет|лимит/i.test(reason)) return "price";
-  if (/файл|документ|картинк|фото|загрузить|прислать|контент|логотип/i.test(reason)) return "data";
-  if (/войти|логин|аккаунт|авторизац|ключ.*сервис|oauth|токен/i.test(reason)) return "auth";
+  // Макет/дизайн: утвердить, согласовать — перед проверкой «прислать файл», чтобы «загрузить макет» не попало в data
   if (/утвердить|согласовать|одобрить|макет|бренд|дизайн|палитр|шрифт/i.test(reason)) return "approve";
+  // «Сделать самому»: создать запись, добавить, зарегистрироваться — действие в интерфейсе или сервисе
+  if (/\b(?:создать|создайте|добавить|добавьте|зарегистрировать|зарегистрируйтесь|заполните|заполнить)\b/i.test(reason)) return "do";
+  // Цены и числа
+  if (/цена|прайс|стоимост|тариф|число|сколько|бюджет|лимит/i.test(reason)) return "price";
+  // Файлы и документы
+  if (/файл|документ|картинк|фото|загрузить|прислать|контент|логотип/i.test(reason)) return "data";
+  // Авторизация
+  if (/войти|логин|аккаунт|авторизац|ключ.*сервис|oauth|токен/i.test(reason)) return "auth";
+  // Правила и регламенты
   if (/правило|политика|условия|регламент|настройк|решение|выбор/i.test(reason)) return "rule";
   return "other";
 }
@@ -72,6 +79,7 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
     priority: p.priority,
     reason: p.blockedReason,
     updatedAt: p.updatedAt.toISOString(),
+    blockedUntil: p.blockedUntil?.toISOString() ?? null,
   }));
 
   const nothing =

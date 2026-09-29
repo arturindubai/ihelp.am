@@ -1531,13 +1531,15 @@
         "urgent": "Urgent",
         "groups": {
           "variant": "Choose an option",
+          "approve": "Approve or agree",
+          "do": "Do it yourself",
           "price": "Name a price or number",
           "data": "Send data or document",
           "auth": "Sign in to a service",
-          "approve": "Approve or agree",
           "rule": "Approve a system rule",
           "other": "Other"
         },
+        "postponedUntil": "returns {date}",
         "postpone3days": "Postpone for 3 days",
         "paused": "Workers paused until {until}.",
         "toWorkers": "Open 'Workers'",
@@ -1567,7 +1569,7 @@
         "returnedRunsHint": "Deployer returned the task due to merge conflict or feedback — production not affected, task back in queue.",
         "failedRuns": "Failed worker runs in the last 24 hours",
         "techBlocked": "Blocked on tech/external reasons",
-        "techBlockedHint": "These tasks are waiting for a technical solution or external service response. Unblock with cc.mjs unblock KEY.",
+        "techBlockedHint": "These tasks are waiting for a technical solution or external service response. When resolved, write in the task feed.",
         "techBlockedUntil": "until {date}",
         "alertMissing": "⚠️ Tech alerts are not delivered: no recipient configured.",
         "alertMissingLink": "Configure notifications"
