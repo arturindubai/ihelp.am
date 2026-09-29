@@ -40,7 +40,8 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-AGENT="${CC_AGENT:-deployer}"
+[ -n "${CC_AGENT:-}" ] || { echo "✗ CC_AGENT не задан — укажите имя агента (например, CC_AGENT=deployer-1)"; exit 1; }
+AGENT="$CC_AGENT"
 cc() { node scripts/cc.mjs "$@" --agent "$AGENT"; }
 stop() { echo "✗ $1"; exit "${2:-3}"; }
 
