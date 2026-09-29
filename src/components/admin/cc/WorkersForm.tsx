@@ -165,26 +165,40 @@ export function WorkersMaster({ initial, running }: { initial: WorkersConfig; ru
 
       <div className="flex flex-wrap items-end gap-4 text-sm">
         <div>
-          <label className="label">{t("window")}</label>
-          <div className="flex items-center gap-1.5">
-            <input className="input h-9 w-16 py-1" type="number" min={0} max={23} value={c.deployWindow[0]} onChange={(e) => set({ deployWindow: [Number(e.target.value), c.deployWindow[1]] }, false)} />
-            —
-            <input className="input h-9 w-16 py-1" type="number" min={1} max={24} value={c.deployWindow[1]} onChange={(e) => set({ deployWindow: [c.deployWindow[0], Number(e.target.value)] }, false)} />
-          </div>
+          <label className="label mb-1 flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={c.deployWindow !== null}
+              onChange={(e) => set({ deployWindow: e.target.checked ? [10, 20] : null }, false)}
+              disabled={disabled}
+            />
+            {t("windowEnabled")}
+          </label>
+          {c.deployWindow !== null && (
+            <div className="flex items-center gap-1.5">
+              <input className="input h-9 w-16 py-1" type="number" min={0} max={23} value={c.deployWindow[0]} onChange={(e) => set({ deployWindow: [Number(e.target.value), c.deployWindow![1]] }, false)} />
+              —
+              <input className="input h-9 w-16 py-1" type="number" min={1} max={24} value={c.deployWindow[1]} onChange={(e) => set({ deployWindow: [c.deployWindow![0], Number(e.target.value)] }, false)} />
+            </div>
+          )}
         </div>
         <div>
           <label className="label">{t("triageBatch")}</label>
           <input className="input h-9 w-20 py-1" type="number" min={1} max={15} value={c.triageBatch} onChange={(e) => set({ triageBatch: Number(e.target.value) }, false)} />
         </div>
         <div>
+          <label className="label">{t("deployBatch")}</label>
+          <input className="input h-9 w-20 py-1" type="number" min={1} max={5} value={c.deployBatch} onChange={(e) => set({ deployBatch: Number(e.target.value) }, false)} />
+        </div>
+        <div>
           <label className="label">{t("sweepEveryH")}</label>
           <input className="input h-9 w-20 py-1" type="number" min={0} max={168} value={c.sweepEveryH} onChange={(e) => set({ sweepEveryH: Number(e.target.value) }, false)} />
         </div>
-        <button className="btn-dark btn-sm" disabled={pending} onClick={() => save({ deployWindow: c.deployWindow, triageBatch: c.triageBatch, sweepEveryH: c.sweepEveryH })}>
+        <button className="btn-dark btn-sm" disabled={pending} onClick={() => save({ deployWindow: c.deployWindow, triageBatch: c.triageBatch, deployBatch: c.deployBatch, sweepEveryH: c.sweepEveryH })}>
           {saved ? t("saved") : t("save")}
         </button>
       </div>
-      <p className="text-xs text-muted">{t("windowHint")}</p>
+      <p className="text-xs text-muted">{t("windowHint", { deployBatch: c.deployBatch })}</p>
       {error && <p className="rounded-lg bg-bad-50 px-3 py-2 text-xs text-bad">{t("invalid")}</p>}
     </div>
   );

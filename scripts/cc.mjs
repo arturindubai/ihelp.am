@@ -32,7 +32,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
   handoff КЛЮЧ "что сделано и что осталось"     передать задачу — вернуть в очередь с веткой
   block КЛЮЧ "причина" --on owner|product|design|tech|external|deps [--until YYYY-MM-DD]
   unblock КЛЮЧ "что изменилось"
-  reblock КЛЮЧ "причина" --on новый_адресат   сменить адресата блокировки с записью в историю
+  reblock КЛЮЧ "причина" --on новый_адресат [--until YYYY-MM-DD]   сменить адресата (external требует --until)
 
   Длинный текст (многострочный отчёт, вердикт, блокировка):
     --text-file /path/file   читать текст из файла (Write /opt/ihelp.am/data/tmp/<роль>/имя.md)
@@ -78,7 +78,8 @@ const HELP = `cc — Control Center из командной строки (docs/D
   update КЛЮЧ --file поля.json                  изменить тексты задачи (или --data '{…}')
                                                   текстом из файла: --design-file / --details-file / --summary-file
   retriage КЛЮЧ                                 вернуть задачу бэклога на повторный разбор (также owner)
-  cancel КЛЮЧ "причина"
+  cancel КЛЮЧ "причина" [--intakeClosingMap "КЛЮЧ1: ... \nКЛЮЧ2: ..."]
+                                                  для IN-N: обязателен --intakeClosingMap; при дубле: "дубль КЛЮЧ"
 
 Деплоер (--agent deployer):
   return КЛЮЧ "что исправить"                   вернуть на доработку
@@ -91,6 +92,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
 
 Уборка:
   gc                                            убрать worktree закрытых задач, влитые ветки task/* и стенды Docker старше 3 дней
+  pool <имя>                                    статус пула воркеров: exit 0 — включён, exit 1 — выключен (--json для деталей)
 
 Имя агента: --agent, иначе переменная CC_AGENT, иначе то, с которым задачу брали на этом сервере.`;
 
@@ -240,6 +242,7 @@ function hint(code) {
     sha_required: "\n  Нужен коммит в main: --sha <коммит>.",
     reason_required: "\n  Этот переход требует причину словами.",
     forbidden_transition: "\n  Этой роли такой переход не разрешён (docs/DEV_SYSTEM.md, раздел «Статусы»).",
+    triaged_refused: "\n  Запись человека в ленте новее события разбора — задача вернётся в очередь триажа автоматически.",
     not_your_task: "\n  Задачу держит другой исполнитель.",
     no_update_fields: "\n  Укажите поля: --design-file, --details-file, --summary-file или --data '{\"поле\":\"значение\"}'.",
   };
@@ -615,6 +618,17 @@ async function main() {
       block("⏳ Ждут проверки", a.review, (t) => `  ${t.key} ${t.title}${t.health.stuckReview ? " · дольше суток" : ""}`);
       block("✋ Ждут владельца или продукта", a.owner, (t) => `  ${t.key} ${t.title} · ${t.blockedReason ?? ""}`);
       block("🔧 Заблокированы на тех/внешних причинах", a.tech ?? [], (t) => `  ${t.key} ${t.title} · ${t.blockedOn}${t.blockedUntil ? ` (до ${new Date(t.blockedUntil).toISOString().slice(0, 10)})` : ""} · ${t.blockedReason ?? ""}`);
+      if (a.waitingDeps && a.waitingDeps.length) {
+        console.log(`⏳ Ждут зависимостей (${a.waitingDeps.length}):`);
+        for (const w of a.waitingDeps) {
+          console.log(`  ${w.key} ${w.title}`);
+          for (const d of w.openDeps) {
+            const on = d.blockedOn ? `заблокирована на: ${d.blockedOn}` : d.status;
+            console.log(`    → зависит от: ${d.key} (${on})`);
+          }
+        }
+        console.log();
+      }
       block("⚙ В работе", a.working, (t) => `  ${t.key} ${t.title} · ${t.claimedBy} · ${t.health.silentMin ?? "?"} мин назад`);
       console.log(`✓ Готовы к работе: ${a.readyCount}`);
       return;
@@ -749,6 +763,7 @@ async function main() {
       if (!flags.on) die("укажите, кто разблокирует: --on owner|product|design|tech|external|deps");
       const until = typeof flags.until === "string" ? flags.until : undefined;
       if (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) die("--until ожидает дату в формате YYYY-MM-DD, например --until 2026-10-10");
+      if (flags.on === "external" && !until) die("блокировка на внешнем требует даты: --until YYYY-MM-DD");
       warnIfLong(text());
       await api("POST", null, { action: "block", agent: agentFor(k), key: k, text: text(), on: flags.on, ...(until ? { blockedUntil: until } : {}) });
       dropState(k);
@@ -759,29 +774,72 @@ async function main() {
       const k = needKey();
       if (!flags.on) die("укажите нового адресата: --on owner|product|design|tech|external|deps");
       if (!text()) die("нужна причина смены адресата");
-      await api("POST", null, { action: "reblock", agent: agentFor(k), key: k, text: text(), on: flags.on });
-      console.log(`✓ ${k}: адресат блокировки изменён на ${flags.on}`);
+      const until = typeof flags.until === "string" ? flags.until : undefined;
+      if (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) die("--until ожидает дату в формате YYYY-MM-DD");
+      if (flags.on === "external" && !until) die("блокировка на внешнем требует даты: --until YYYY-MM-DD");
+      await api("POST", null, { action: "reblock", agent: agentFor(k), key: k, text: text(), on: flags.on, ...(until ? { blockedUntil: until } : {}) });
+      console.log(`✓ ${k}: адресат блокировки изменён на ${flags.on}${until ? `, авторазблокировка ${until}` : ""}`);
       return;
     }
     case "unblock":
     case "ready":
-    case "cancel":
     case "return": {
       const k = needKey();
       const r = await api("POST", null, { action: cmd, agent: agentFor(k), key: k, text: text(), force: flags.force === true });
       console.log(`✓ ${k} → ${STATUS[r.status] ?? r.status}`);
       return;
     }
+    case "cancel": {
+      const k = needKey();
+      const body = { action: cmd, agent: agentFor(k), key: k, text: text(), force: flags.force === true };
+      if (flags.intakeClosingMap) body.intakeClosingMap = String(flags.intakeClosingMap);
+      const r = await api("POST", null, body);
+      console.log(`✓ ${k} → ${STATUS[r.status] ?? r.status}`);
+      return;
+    }
     case "done": {
       const k = needKey();
       if (!flags.sha) die("нужен коммит в main: --sha <коммит>");
-      const r = await api("POST", null, { action: "done", agent: agentFor(k), key: k, sha: String(flags.sha), text: text() });
+      const sha = String(flags.sha);
+      // Проверяем, что SHA содержит файлы задачи — нельзя закрывать задачу чужим коммитом (критерии 4, 5)
+      const taskInfo = await api("GET", { key: k });
+      const scope = (taskInfo.task?.scope ?? []).filter(Boolean);
+      if (scope.length > 0 && /^[0-9a-f]{7,40}$/i.test(sha)) {
+        tryGit(["fetch", "-q", "origin"], ROOT);
+        // git diff --name-only SHA^1 SHA показывает файлы, изменённые в этом коммите (работает и для merge-коммитов)
+        const changedRaw = tryGit(["diff", "--name-only", `${sha}^1`, sha], ROOT) ?? "";
+        const changed = new Set(changedRaw.split("\n").filter(Boolean));
+        const normS = (s) => s.replace(/\/$/, "");
+        const hasTaskFile = scope.some((s) => {
+          const ns = normS(s);
+          return [...changed].some((c) => c === ns || c.startsWith(ns + "/") || normS(c) === ns || ns.startsWith(normS(c) + "/"));
+        });
+        if (!hasTaskFile) {
+          die(`Коммит ${sha.slice(0, 10)} не затрагивает файлы задачи ${k}: ${scope.slice(0, 3).join(", ")}.\nЭто коммит другой задачи — нельзя закрывать им ${k}. Проверьте SHA.`);
+        }
+      }
+      const r = await api("POST", null, { action: "done", agent: agentFor(k), key: k, sha, text: text() });
       console.log(`✓ ${k} → ${STATUS[r.status] ?? r.status}`);
+      return;
+    }
+    case "pool": {
+      // Статус пула воркеров: pool tester → exit 0 если включён, 1 если выключен
+      const poolName = (pos[0] ?? "").toLowerCase();
+      if (!poolName) die("укажите имя пула: pool tester");
+      const r = await api("GET", { resource: "workers" });
+      const pool = r.config?.pools?.[poolName];
+      if (!pool) die(`Пул «${poolName}» не найден`);
+      if (flags.json) {
+        console.log(JSON.stringify({ pool: poolName, enabled: pool.enabled, max: pool.max, mode: pool.mode }));
+      } else {
+        console.log(pool.enabled ? "enabled" : "disabled");
+      }
+      if (!pool.enabled) process.exit(1);
       return;
     }
     case "create":
     case "update": {
-      const UPD_FIELDS = ["title","summary","details","requirements","design","qaNotes","deployNotes","needs","depends","docs","epicKey","area","layer","priority","stage","owner","estimate","scope","mockupRequired","mockupUrl"];
+      const UPD_FIELDS = ["title","summary","details","requirements","design","qaNotes","deployNotes","needs","depends","docs","epicKey","area","layer","priority","stage","owner","estimate","scope","mockupRequired","mockupUrl","needsDesign"];
       if (cmd === "update" && flags["text-file"])
         die("--text-file не работает в update; используйте --design-file, --details-file или --summary-file для текстовых полей");
       const hasTextFile = cmd === "update" && ["design-file","details-file","summary-file"].some(f => typeof flags[f] === "string");
@@ -987,9 +1045,18 @@ async function main() {
       console.log("Влитые ветки task/* без рабочей копии:");
       const localBranches = (tryGit(["branch", "--list", "task/*"], ROOT) ?? "")
         .split("\n").map(l => l.replace(/^\*?\s+/, "")).filter(Boolean);
+      const wtPorcelain = tryGit(["worktree", "list", "--porcelain"], ROOT) ?? "";
       const openWorktrees = new Set(
-        (tryGit(["worktree", "list", "--porcelain"], ROOT) ?? "")
-          .split("\n").filter(l => l.startsWith("branch ")).map(l => l.replace("branch refs/heads/", ""))
+        wtPorcelain.split("\n\n").flatMap(block => {
+          const branchMatch = block.match(/^branch refs\/heads\/(.+)$/m);
+          if (branchMatch) return [branchMatch[1]];
+          // Детачированный worktree (test-KEY тестировщика) — определяем ветку по пути
+          const pathMatch = block.match(/^worktree (.+)$/m);
+          if (!pathMatch) return [];
+          const wtName = path.basename(pathMatch[1]);
+          const key = wtName.startsWith("test-") ? wtName.slice(5) : null;
+          return key ? [`task/${key}`] : [];
+        })
       );
       for (const branch of localBranches) {
         if (openWorktrees.has(branch)) continue; // открыта в worktree — не трогаем
@@ -1037,6 +1104,74 @@ async function main() {
             execFileSync("docker", ["network", "rm", net], { stdio: "ignore" });
             console.log(`  сеть ${net}: убрана`);
           } catch { /* сеть используется — пропускаем */ }
+        }
+
+        // Тома стендов iHelp по метке com.docker.compose.project=ihelp-* старше 3 дней
+        console.log("Тома стендов iHelp (com.docker.compose.project=ihelp-*) старше 3 дней:");
+        const volList = execFileSync(
+          "docker", ["volume", "ls", "--filter", "label=com.docker.compose.project", "-q"],
+          { encoding: "utf8" }
+        ).trim().split("\n").filter(Boolean);
+        if (!volList.length) { console.log("  томов нет"); }
+        else {
+          let volRemoved = 0;
+          for (const vol of volList) {
+            let project = "", volCreated = null;
+            try {
+              const raw = execFileSync(
+                "docker", ["volume", "inspect", vol, "--format", '{{index .Labels "com.docker.compose.project"}}\t{{.CreatedAt}}'],
+                { encoding: "utf8" }
+              ).trim();
+              const tab = raw.indexOf("\t");
+              project = tab >= 0 ? raw.slice(0, tab) : raw;
+              volCreated = tab >= 0 ? new Date(raw.slice(tab + 1)) : null;
+            } catch { continue; }
+            if (!project.startsWith("ihelp-")) continue;
+            if (!volCreated || isNaN(volCreated.getTime()) || (now - volCreated.getTime()) <= THREE_DAYS_MS) {
+              console.log(`  том ${vol} (${project}): свежий — оставляю`);
+              continue;
+            }
+            try {
+              execFileSync("docker", ["volume", "rm", vol], { stdio: "ignore" });
+              console.log(`  том ${vol} (${project}): удалён`);
+              volRemoved++;
+            } catch { console.log(`  том ${vol} (${project}): используется — оставляю`); }
+          }
+          if (volRemoved === 0) console.log("  нет старых томов");
+        }
+
+        // Образы стендов iHelp по метке com.docker.compose.project=ihelp-* старше 3 дней
+        console.log("Образы стендов iHelp (com.docker.compose.project=ihelp-*) старше 3 дней:");
+        const imgIds = [...new Set(execFileSync(
+          "docker", ["images", "--filter", "label=com.docker.compose.project", "-q"],
+          { encoding: "utf8" }
+        ).trim().split("\n").filter(Boolean))];
+        if (!imgIds.length) { console.log("  образов нет"); }
+        else {
+          let imgRemoved = 0;
+          for (const id of imgIds) {
+            let project = "", imgCreated = null;
+            try {
+              const raw = execFileSync(
+                "docker", ["inspect", "--type=image", id, "--format", '{{.Created}}\t{{index .Config.Labels "com.docker.compose.project"}}'],
+                { encoding: "utf8" }
+              ).trim();
+              const tab = raw.indexOf("\t");
+              imgCreated = new Date(tab >= 0 ? raw.slice(0, tab) : raw);
+              project = tab >= 0 ? raw.slice(tab + 1) : "";
+            } catch { continue; }
+            if (!project.startsWith("ihelp-")) continue;
+            if (isNaN(imgCreated.getTime()) || (now - imgCreated.getTime()) <= THREE_DAYS_MS) {
+              console.log(`  образ ${id} (${project}): свежий — оставляю`);
+              continue;
+            }
+            try {
+              execFileSync("docker", ["rmi", id], { stdio: "ignore" });
+              console.log(`  образ ${id} (${project}): удалён`);
+              imgRemoved++;
+            } catch { console.log(`  образ ${id} (${project}): используется — оставляю`); }
+          }
+          if (imgRemoved === 0) console.log("  нет старых образов");
         }
       } catch (e) {
         console.log(`  docker недоступен или нет прав: ${e.message}`);

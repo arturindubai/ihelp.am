@@ -102,7 +102,22 @@ if [ -n "$counts_file" ] && [ -f "$counts_file" ]; then
     rm -f "$counts_file"
     if [ -n "$mismatches" ]; then
       echo "  ⚠ счётчики изменились: возможно клиент зарегистрировался во время выкладки или seed создал записи"
-      echo "  ⚠ тех-алерт: проверьте вручную (отправка алерта через приложение — отдельная задача)"
+      cc_key="$(env_val CC_AGENT_KEY)"
+      if [ -n "$cc_key" ]; then
+        alert_msg="⚠ Счётчики данных изменились при выкладке: ${mismatches%%; }"
+        alert_json="{\"message\":\"${alert_msg}\"}"
+        if curl -s -m 20 -X POST \
+            -H "Content-Type: application/json" \
+            -H "x-cc-key: ${cc_key}" \
+            --data-binary "$alert_json" \
+            "$BASE/api/internal/alert" | grep -q '"ok":true'; then
+          echo "  ✓ тех-алерт отправлен"
+        else
+          echo "  ⚠ тех-алерт не отправлен (API недоступно или ключ неверен)"
+        fi
+      else
+        echo "  ⚠ тех-алерт не отправлен (CC_AGENT_KEY не задан)"
+      fi
     fi
   fi
 else

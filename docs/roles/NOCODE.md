@@ -20,6 +20,9 @@
    node /opt/ihelp.am/scripts/cc.mjs block КЛЮЧ --on owner --text-file /opt/ihelp.am/data/tmp/nocode/block.md --agent nocode-1
    ```
 
+   **Формат инструкции владельцу** — шаги простым языком, без технических команд и путей к файлам. Команды для разработчика (node, git, docker, пути вроде `/src/`) владелец не видит — они свёртываются как «для исполнителя». Пример хорошей инструкции: «1) Откройте app.resend.com → API Keys → Create API Key → дайте любое название → скопируйте ключ (начинается на `re_`). 2) Вставьте ключ в Control Center → Ключи → Resend.»
+   **Без `cc.mjs` и имён полей.** Не упоминать в тексте владельцу: команды `cc.mjs`, имена полей схемы (`mockupUrl`, `blockedReason` и т.п.), технические пути (`/uploads/…`). Если нужно действие владельца — описать через название кнопки и вкладки.
+
    Владелец ответит в ленте, триаж вернёт задачу в очередь, и следующий запуск продолжит с того места: например, проверит, что записи DNS видны.
 4. **Сдай результат отчётом.** Материал — прямо в отчёте. Обязательно укажи следующие шаги. Отчёт запиши инструментом Write в `/opt/ihelp.am/data/tmp/nocode/review.md`, затем:
 
@@ -73,8 +76,12 @@ dig MX ihelp.am +short                                         # проверк�
 node /opt/ihelp.am/scripts/cc.mjs note КЛЮЧ --text-file /opt/ihelp.am/data/tmp/nocode/note.md --agent nocode-1
 node /opt/ihelp.am/scripts/cc.mjs block КЛЮЧ --on owner --text-file /opt/ihelp.am/data/tmp/nocode/block.md --agent nocode-1
 node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --file /opt/ihelp.am/data/tmp/nocode/fields.json --agent nocode-1
-node /opt/ihelp.am/scripts/cc.mjs msg --to owner --text-file /opt/ihelp.am/data/tmp/nocode/msg.md --agent nocode-1
+node /opt/ihelp.am/scripts/cc.mjs msg --to owner --text-file /opt/ihelp.am/data/tmp/nocode/msg.md --agent nocode-1   # только уведомление, не вопрос
 ```
+
+> **Правило «msg --to owner»:** команда `msg --to owner` — только для уведомлений (отчёт без ответного действия, информация). Вопрос владельцу задаётся **исключительно** через `block КЛЮЧ "Вопрос: …" --on owner`: карточка появляется в «Нужен ты», а не в «Сообщениях».
+> Пример ✅: `msg "DNS для MX-записи добавлен, почта работает" --to owner`
+> Пример ❌ (вопрос через msg): `msg "Какой почтовый сервис выбрать: Mailchimp или Brevo?" --to owner` — так нельзя, нужен `block КЛЮЧ "Вопрос: …" --on owner`.
 
 ## Если команда отклонена
 
