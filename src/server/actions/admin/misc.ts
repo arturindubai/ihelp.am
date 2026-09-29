@@ -114,14 +114,50 @@ export async function deletePromoAction(id: string) {
 }
 
 /* ───── Баннеры ───── */
-const bannerSchema = z.object({ title: i18n, subtitle: i18n.nullable().optional(), image: z.string().max(500).nullable().optional(), link: z.string().max(300).nullable().optional(), promoCode: z.string().max(40).nullable().optional(), bg: z.string().max(20).nullable().optional(), active: z.boolean(), sort: z.number().int() });
+const PLACEMENTS = ["CAROUSEL_HOME", "HERO_HOME", "CATALOG", "SERVICE", "CHECKOUT", "SUCCESS", "EMAIL", "MASTER_CABINET"] as const;
+const BANNER_TYPES = ["PROMO", "ANNOUNCEMENT", "UPSELL", "CROSS_SELL"] as const;
+const AUDIENCES = ["ALL", "LOGGED_IN", "GUESTS"] as const;
+const SEGMENTS = ["ALL", "NEW", "RETURNING"] as const;
+
+const bannerSchema = z.object({
+  title: i18n,
+  subtitle: i18n.nullable().optional(),
+  image: z.string().max(500).nullable().optional(),
+  link: z.string().max(300).nullable().optional(),
+  promoCode: z.string().max(40).nullable().optional(),
+  bg: z.string().max(20).nullable().optional(),
+  active: z.boolean(),
+  sort: z.number().int(),
+  placement: z.enum(PLACEMENTS).default("CAROUSEL_HOME"),
+  bannerType: z.enum(BANNER_TYPES).default("PROMO"),
+  startsAt: z.string().nullable().optional(),
+  endsAt: z.string().nullable().optional(),
+  audience: z.enum(AUDIENCES).default("ALL"),
+  segment: z.enum(SEGMENTS).default("ALL"),
+});
 export type BannerPayload = z.infer<typeof bannerSchema>;
 
 export async function saveBannerAction(id: string | null, input: BannerPayload) {
   const u = await requireSection("banners");
   const p = bannerSchema.safeParse(input);
   if (!p.success) return { ok: false };
-  const d = { ...p.data, subtitle: J(p.data.subtitle) };
+  // "YYYY-MM-DDTHH:mm" (datetime-local) интерпретируем как Ереван UTC+4; ISO строки из БД тоже принимаем
+  const parseDate = (s: string | null | undefined): Date | null | "invalid" => {
+    if (!s) return null;
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) return new Date(`${s}:00+04:00`);
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? "invalid" : d;
+  };
+  const startsAt = parseDate(p.data.startsAt);
+  const endsAt = parseDate(p.data.endsAt);
+  if (startsAt === "invalid") return { ok: false as const, error: "startsAt" };
+  if (endsAt === "invalid") return { ok: false as const, error: "endsAt" };
+  const d = {
+    ...p.data,
+    subtitle: J(p.data.subtitle),
+    startsAt,
+    endsAt,
+  };
   const r = id ? await db.banner.update({ where: { id }, data: d }) : await db.banner.create({ data: d });
   await audit(u.id, "banner.save", "Banner", r.id);
   rAll();
