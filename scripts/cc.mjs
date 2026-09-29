@@ -827,7 +827,7 @@ async function main() {
     }
     case "create":
     case "update": {
-      const UPD_FIELDS = ["title","summary","details","requirements","design","qaNotes","deployNotes","needs","depends","docs","epicKey","area","layer","priority","stage","owner","estimate","scope","mockupRequired","mockupUrl"];
+      const UPD_FIELDS = ["title","summary","details","requirements","design","qaNotes","deployNotes","needs","depends","docs","epicKey","area","layer","priority","stage","owner","estimate","scope","mockupRequired","mockupUrl","needsDesign"];
       if (cmd === "update" && flags["text-file"])
         die("--text-file не работает в update; используйте --design-file, --details-file или --summary-file для текстовых полей");
       const hasTextFile = cmd === "update" && ["design-file","details-file","summary-file"].some(f => typeof flags[f] === "string");

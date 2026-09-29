@@ -97,6 +97,7 @@ const full = (t: Task) => ({
   mockupUrl: t.mockupUrl,
   mockupApprovedBy: t.mockupApprovedBy,
   mockupApprovedAt: t.mockupApprovedAt,
+  needsDesign: t.needsDesign,
   releaseNote: t.releaseNote,
   ownerSummary: t.ownerSummary,
   nextSteps: t.nextSteps,
@@ -362,7 +363,7 @@ export async function POST(req: Request) {
           if (Object.keys(patch).length === 0) {
             const available = role === "designer"
               ? DESIGNER_FIELDS.join(", ")
-              : "title, summary, details, requirements, design, qaNotes, deployNotes, needs, depends, docs, epicKey, area, layer, priority, stage, owner, estimate, scope, mockupRequired, mockupUrl";
+              : "title, summary, details, requirements, design, qaNotes, deployNotes, needs, depends, docs, epicKey, area, layer, priority, stage, owner, estimate, scope, mockupRequired, mockupUrl, needsDesign";
             return json({ error: "no_update_fields", detail: `нет полей для обновления; допустимые поля: ${available}` }, 400);
           }
           content = { ...full(current), ...patch, key };
