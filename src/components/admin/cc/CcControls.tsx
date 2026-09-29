@@ -9,7 +9,6 @@ import {
   ccApproveMockupAction,
   ccCommentAction,
   ccReturnDesignAction,
-  ccIntakeAction,
   ccMessageToIntakeAction,
   ccOwnerAnswerAction,
   ccOwnerAnswerManyAction,
@@ -102,6 +101,7 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
   // Черновик живёт в браузере: выкладка, случайное закрытие окна или ошибка не стирают набранное
   const wantStop = useRef(false);
   const [pending, start] = useTransition();
+  const [retryAttempt, setRetryAttempt] = useState(0);
   const rec = useRef<SpeechRec | null>(null);
   const router = useRouter();
   const [speech, setSpeech] = useState(false);
@@ -194,9 +194,32 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
   const send = () =>
     start(async () => {
       setError(null);
-      // Действие может не найтись после выкладки — окно и текст остаются, показываем причину
-      const r = await ccIntakeAction(text).catch((e: unknown) => ({ ok: false as const, error: staleOrError(e) }));
-      if (!r.ok) return setError(t(r.error === "too_short" ? "tooShort" : r.error === "stale" ? "stale" : "error"));
+      setRetryAttempt(0);
+      // Постоянный маршрут /api/cc/intake работает из старой вкладки после выкладки,
+      // в отличие от Server Action. При 5xx сервер ещё перезапускается — повторяем до 3 раз.
+      type IntakeResult = { ok: true; key: string } | { ok: false; error: string };
+      let r: IntakeResult = { ok: false, error: "stale" };
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        if (attempt > 1) {
+          setRetryAttempt(attempt);
+          await new Promise<void>((res) => setTimeout(res, 3000 * (attempt - 1)));
+        }
+        try {
+          const resp = await fetch("/api/cc/intake", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text }),
+          });
+          const data = (await resp.json()) as IntakeResult;
+          if (resp.ok || resp.status < 500) { r = data; break; }
+          // 5xx — сервер перезапускается: пробуем ещё раз
+          r = data;
+        } catch {
+          // Сеть недоступна — пробуем ещё раз
+        }
+      }
+      setRetryAttempt(0);
+      if (!r.ok) return setError(t(r.error === "too_short" ? "tooShort" : "error"));
       for (const f of files) {
         const form = new FormData();
         form.set("file", f);
@@ -258,7 +281,7 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
               ))}
               <span className="flex-1" />
               <button className="btn-primary btn-sm" disabled={pending || text.trim().length < 10} onClick={send}>
-                {pending ? t("sending") : t("send")}
+                {pending ? (retryAttempt > 1 ? t("retrying", { n: retryAttempt }) : t("sending")) : t("send")}
               </button>
             </div>
             {error && <p className="mt-2 rounded-lg bg-bad-50 px-3 py-2 text-xs text-bad">{error}</p>}
