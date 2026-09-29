@@ -115,6 +115,16 @@ describe("setRoleAction — тех-алерт при смене роли вла�
     await setRoleAction(OPERATOR.phone, "ADMIN");
     expect(notifyTech).not.toHaveBeenCalled();
   });
+
+  it("тех-алерт не содержит телефон оператора, содержит идентификатор", async () => {
+    mockFindUnique.mockResolvedValue(SELF);
+    mockCount.mockResolvedValue(2);
+    mockUpsert.mockResolvedValue({ id: SELF.id });
+    await setRoleAction(SELF.phone, "CLIENT");
+    const call = (notifyTech as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(call).not.toContain(SELF.phone);
+    expect(call).toContain(SELF.id);
+  });
 });
 
 describe("setRoleAction — обычные роли", () => {

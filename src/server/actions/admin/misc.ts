@@ -325,7 +325,7 @@ export async function setRoleAction(phoneRaw: string, role: Role, name?: string)
   await audit(u.id, "staff.role", "User", r.id, { role });
   // Тех-алерт при изменении роли владельца (понижение или повышение)
   if (target?.role === "OWNER" || role === "OWNER") {
-    await notifyTech(html`⚠️ Смена роли владельца: <b>${r.id}</b> → <code>${role}</code> (оператор: <code>${u.phone}</code>)`);
+    await notifyTech(html`⚠️ Смена роли владельца: <b>${r.id}</b> → <code>${role}</code> (оператор: <b>${u.name || u.id}</b>)`);
   }
   return { ok: true as const };
 }
