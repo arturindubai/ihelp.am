@@ -617,6 +617,17 @@ async function main() {
       block("⏳ Ждут проверки", a.review, (t) => `  ${t.key} ${t.title}${t.health.stuckReview ? " · дольше суток" : ""}`);
       block("✋ Ждут владельца или продукта", a.owner, (t) => `  ${t.key} ${t.title} · ${t.blockedReason ?? ""}`);
       block("🔧 Заблокированы на тех/внешних причинах", a.tech ?? [], (t) => `  ${t.key} ${t.title} · ${t.blockedOn}${t.blockedUntil ? ` (до ${new Date(t.blockedUntil).toISOString().slice(0, 10)})` : ""} · ${t.blockedReason ?? ""}`);
+      if (a.waitingDeps && a.waitingDeps.length) {
+        console.log(`⏳ Ждут зависимостей (${a.waitingDeps.length}):`);
+        for (const w of a.waitingDeps) {
+          console.log(`  ${w.key} ${w.title}`);
+          for (const d of w.openDeps) {
+            const on = d.blockedOn ? `заблокирована на: ${d.blockedOn}` : d.status;
+            console.log(`    → зависит от: ${d.key} (${on})`);
+          }
+        }
+        console.log();
+      }
       block("⚙ В работе", a.working, (t) => `  ${t.key} ${t.title} · ${t.claimedBy} · ${t.health.silentMin ?? "?"} мин назад`);
       console.log(`✓ Готовы к работе: ${a.readyCount}`);
       return;
@@ -827,7 +838,7 @@ async function main() {
     }
     case "create":
     case "update": {
-      const UPD_FIELDS = ["title","summary","details","requirements","design","qaNotes","deployNotes","needs","depends","docs","epicKey","area","layer","priority","stage","owner","estimate","scope","mockupRequired","mockupUrl"];
+      const UPD_FIELDS = ["title","summary","details","requirements","design","qaNotes","deployNotes","needs","depends","docs","epicKey","area","layer","priority","stage","owner","estimate","scope","mockupRequired","mockupUrl","needsDesign"];
       if (cmd === "update" && flags["text-file"])
         die("--text-file не работает в update; используйте --design-file, --details-file или --summary-file для текстовых полей");
       const hasTextFile = cmd === "update" && ["design-file","details-file","summary-file"].some(f => typeof flags[f] === "string");
