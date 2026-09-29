@@ -9,6 +9,7 @@ import { OPEN_STATUSES, isReady, needsAttention, readiness, taskHealth } from "@
 import { closedKeys } from "./ccWork";
 import { createNote } from "./library";
 import { needsLibrary, buildSummaryText, buildLibraryTitle } from "@/lib/cc-overflow";
+import { waitingDeps as waitingDepsLib, depChains as depChainsLib } from "@/lib/cc-chains";
 import type { Prisma, Task } from "@prisma/client";
 
 export type TaskFilters = {
@@ -40,13 +41,16 @@ function where(f: TaskFilters): Prisma.TaskWhereInput {
   if (f.epicKey) w.epicKey = f.epicKey === "none" ? null : f.epicKey;
   if (f.claimedBy) w.claimedBy = f.claimedBy;
   if (f.q) {
-    const q = f.q.trim();
-    w.OR = [
-      { key: { contains: q, mode: "insensitive" } },
-      { title: { contains: q, mode: "insensitive" } },
-      { summary: { contains: q, mode: "insensitive" } },
-      { details: { contains: q, mode: "insensitive" } },
-    ];
+    // Каждое слово должно встречаться хотя бы в одном поле (AND по словам, OR по полям)
+    const words = f.q.trim().split(/\s+/).filter(Boolean);
+    w.AND = words.map((word) => ({
+      OR: [
+        { key: { contains: word, mode: "insensitive" } },
+        { title: { contains: word, mode: "insensitive" } },
+        { summary: { contains: word, mode: "insensitive" } },
+        { details: { contains: word, mode: "insensitive" } },
+      ],
+    }));
   }
   return w;
 }
@@ -103,17 +107,40 @@ export async function annotate<T extends Task>(tasks: T[]) {
 
 /**
  * «Нужно вам»: то, что стоит без людей. Брошенные и фантомные задачи, очередь деплоера,
- * блокировки на владельце и продукте, готовые к работе задачи без исполнителей.
+ * блокировки на владельце и продукте, готовые к работе задачи без исполнителей,
+ * задачи, ждущие зависимостей с зависшим корнем.
  */
 export async function attention() {
-  const tasks = await db.task.findMany({
-    where: { status: { in: ["in_progress", "review", "blocked", "ready"] } },
-    select: { key: true, title: true, priority: true, status: true, claimedBy: true, claimUntil: true, heartbeatAt: true, assignee: true, staleAt: true, updatedAt: true, blockedOn: true, blockedUntil: true, blockedReason: true, depends: true, rework: true, reclaims: true, branch: true },
-    orderBy: [{ priority: "asc" }, { sort: "asc" }],
-  });
-  const closed = await closedKeys();
+  const [tasks, backlogWaiters, closed] = await Promise.all([
+    db.task.findMany({
+      where: { status: { in: ["in_progress", "review", "blocked", "ready"] } },
+      select: { key: true, title: true, priority: true, status: true, claimedBy: true, claimUntil: true, heartbeatAt: true, assignee: true, staleAt: true, updatedAt: true, blockedOn: true, blockedUntil: true, blockedReason: true, depends: true, rework: true, reclaims: true, branch: true },
+      orderBy: [{ priority: "asc" }, { sort: "asc" }],
+    }),
+    db.task.findMany({
+      where: { status: "backlog", depends: { isEmpty: false } },
+      select: { key: true, title: true, status: true, depends: true, updatedAt: true, blockedOn: true, blockedUntil: true },
+    }),
+    closedKeys(),
+  ]);
   const now = new Date();
   const withHealth = tasks.map((t) => ({ ...t, health: taskHealth(t, closed, now) }));
+
+  // Кандидаты в «ждут зависимостей»: ready/blocked из основной выборки + backlog из отдельной
+  const potentialWaiters = [
+    ...tasks.filter((t) => ["ready", "blocked"].includes(t.status) && t.depends.length > 0),
+    ...backlogWaiters,
+  ];
+  const depKeys = [...new Set(potentialWaiters.flatMap((t) => t.depends))];
+  const depTasks = depKeys.length > 0
+    ? await db.task.findMany({
+        where: { key: { in: depKeys } },
+        select: { key: true, title: true, status: true, blockedOn: true, blockedUntil: true, updatedAt: true },
+      })
+    : [];
+  const depMap = new Map(depTasks.map((t) => [t.key, t]));
+  const waitingDepsResult = waitingDepsLib(potentialWaiters, depMap, now);
+
   return {
     stale: withHealth.filter((t) => t.health.stale || t.health.phantom),
     review: withHealth.filter((t) => t.status === "review"),
@@ -122,6 +149,10 @@ export async function attention() {
     tech: withHealth.filter((t) => t.status === "blocked" && (t.blockedOn === "tech" || t.blockedOn === "external")),
     working: withHealth.filter((t) => t.status === "in_progress" && !t.health.stale && !t.health.phantom),
     readyCount: withHealth.filter((t) => t.status === "ready").length,
+    /** Задачи, ждущие зависимостей с зависшим корнем */
+    waitingDeps: waitingDepsResult,
+    /** Цепочки: корень → список задач, которые его ждут */
+    depChains: depChainsLib(waitingDepsResult, depMap),
   };
 }
 
