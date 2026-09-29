@@ -242,6 +242,7 @@ function hint(code) {
     sha_required: "\n  Нужен коммит в main: --sha <коммит>.",
     reason_required: "\n  Этот переход требует причину словами.",
     forbidden_transition: "\n  Этой роли такой переход не разрешён (docs/DEV_SYSTEM.md, раздел «Статусы»).",
+    triaged_refused: "\n  Запись человека в ленте новее события разбора — задача вернётся в очередь триажа автоматически.",
     not_your_task: "\n  Задачу держит другой исполнитель.",
     no_update_fields: "\n  Укажите поля: --design-file, --details-file, --summary-file или --data '{\"поле\":\"значение\"}'.",
   };
@@ -617,6 +618,17 @@ async function main() {
       block("⏳ Ждут проверки", a.review, (t) => `  ${t.key} ${t.title}${t.health.stuckReview ? " · дольше суток" : ""}`);
       block("✋ Ждут владельца или продукта", a.owner, (t) => `  ${t.key} ${t.title} · ${t.blockedReason ?? ""}`);
       block("🔧 Заблокированы на тех/внешних причинах", a.tech ?? [], (t) => `  ${t.key} ${t.title} · ${t.blockedOn}${t.blockedUntil ? ` (до ${new Date(t.blockedUntil).toISOString().slice(0, 10)})` : ""} · ${t.blockedReason ?? ""}`);
+      if (a.waitingDeps && a.waitingDeps.length) {
+        console.log(`⏳ Ждут зависимостей (${a.waitingDeps.length}):`);
+        for (const w of a.waitingDeps) {
+          console.log(`  ${w.key} ${w.title}`);
+          for (const d of w.openDeps) {
+            const on = d.blockedOn ? `заблокирована на: ${d.blockedOn}` : d.status;
+            console.log(`    → зависит от: ${d.key} (${on})`);
+          }
+        }
+        console.log();
+      }
       block("⚙ В работе", a.working, (t) => `  ${t.key} ${t.title} · ${t.claimedBy} · ${t.health.silentMin ?? "?"} мин назад`);
       console.log(`✓ Готовы к работе: ${a.readyCount}`);
       return;
@@ -1033,9 +1045,18 @@ async function main() {
       console.log("Влитые ветки task/* без рабочей копии:");
       const localBranches = (tryGit(["branch", "--list", "task/*"], ROOT) ?? "")
         .split("\n").map(l => l.replace(/^\*?\s+/, "")).filter(Boolean);
+      const wtPorcelain = tryGit(["worktree", "list", "--porcelain"], ROOT) ?? "";
       const openWorktrees = new Set(
-        (tryGit(["worktree", "list", "--porcelain"], ROOT) ?? "")
-          .split("\n").filter(l => l.startsWith("branch ")).map(l => l.replace("branch refs/heads/", ""))
+        wtPorcelain.split("\n\n").flatMap(block => {
+          const branchMatch = block.match(/^branch refs\/heads\/(.+)$/m);
+          if (branchMatch) return [branchMatch[1]];
+          // Детачированный worktree (test-KEY тестировщика) — определяем ветку по пути
+          const pathMatch = block.match(/^worktree (.+)$/m);
+          if (!pathMatch) return [];
+          const wtName = path.basename(pathMatch[1]);
+          const key = wtName.startsWith("test-") ? wtName.slice(5) : null;
+          return key ? [`task/${key}`] : [];
+        })
       );
       for (const branch of localBranches) {
         if (openWorktrees.has(branch)) continue; // открыта в worktree — не трогаем
@@ -1083,6 +1104,74 @@ async function main() {
             execFileSync("docker", ["network", "rm", net], { stdio: "ignore" });
             console.log(`  сеть ${net}: убрана`);
           } catch { /* сеть используется — пропускаем */ }
+        }
+
+        // Тома стендов iHelp по метке com.docker.compose.project=ihelp-* старше 3 дней
+        console.log("Тома стендов iHelp (com.docker.compose.project=ihelp-*) старше 3 дней:");
+        const volList = execFileSync(
+          "docker", ["volume", "ls", "--filter", "label=com.docker.compose.project", "-q"],
+          { encoding: "utf8" }
+        ).trim().split("\n").filter(Boolean);
+        if (!volList.length) { console.log("  томов нет"); }
+        else {
+          let volRemoved = 0;
+          for (const vol of volList) {
+            let project = "", volCreated = null;
+            try {
+              const raw = execFileSync(
+                "docker", ["volume", "inspect", vol, "--format", '{{index .Labels "com.docker.compose.project"}}\t{{.CreatedAt}}'],
+                { encoding: "utf8" }
+              ).trim();
+              const tab = raw.indexOf("\t");
+              project = tab >= 0 ? raw.slice(0, tab) : raw;
+              volCreated = tab >= 0 ? new Date(raw.slice(tab + 1)) : null;
+            } catch { continue; }
+            if (!project.startsWith("ihelp-")) continue;
+            if (!volCreated || isNaN(volCreated.getTime()) || (now - volCreated.getTime()) <= THREE_DAYS_MS) {
+              console.log(`  том ${vol} (${project}): свежий — оставляю`);
+              continue;
+            }
+            try {
+              execFileSync("docker", ["volume", "rm", vol], { stdio: "ignore" });
+              console.log(`  том ${vol} (${project}): удалён`);
+              volRemoved++;
+            } catch { console.log(`  том ${vol} (${project}): используется — оставляю`); }
+          }
+          if (volRemoved === 0) console.log("  нет старых томов");
+        }
+
+        // Образы стендов iHelp по метке com.docker.compose.project=ihelp-* старше 3 дней
+        console.log("Образы стендов iHelp (com.docker.compose.project=ihelp-*) старше 3 дней:");
+        const imgIds = [...new Set(execFileSync(
+          "docker", ["images", "--filter", "label=com.docker.compose.project", "-q"],
+          { encoding: "utf8" }
+        ).trim().split("\n").filter(Boolean))];
+        if (!imgIds.length) { console.log("  образов нет"); }
+        else {
+          let imgRemoved = 0;
+          for (const id of imgIds) {
+            let project = "", imgCreated = null;
+            try {
+              const raw = execFileSync(
+                "docker", ["inspect", "--type=image", id, "--format", '{{.Created}}\t{{index .Config.Labels "com.docker.compose.project"}}'],
+                { encoding: "utf8" }
+              ).trim();
+              const tab = raw.indexOf("\t");
+              imgCreated = new Date(tab >= 0 ? raw.slice(0, tab) : raw);
+              project = tab >= 0 ? raw.slice(tab + 1) : "";
+            } catch { continue; }
+            if (!project.startsWith("ihelp-")) continue;
+            if (isNaN(imgCreated.getTime()) || (now - imgCreated.getTime()) <= THREE_DAYS_MS) {
+              console.log(`  образ ${id} (${project}): свежий — оставляю`);
+              continue;
+            }
+            try {
+              execFileSync("docker", ["rmi", id], { stdio: "ignore" });
+              console.log(`  образ ${id} (${project}): удалён`);
+              imgRemoved++;
+            } catch { console.log(`  образ ${id} (${project}): используется — оставляю`); }
+          }
+          if (imgRemoved === 0) console.log("  нет старых образов");
         }
       } catch (e) {
         console.log(`  docker недоступен или нет прав: ${e.message}`);

@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
+import { stripMd } from "@/lib/markdown";
 import { boardTasks, type BoardTask } from "@/server/services/ccBoard";
 import { readyForAutoDev } from "@/server/services/workers";
 import { listEpics } from "@/server/services/epics";
@@ -154,11 +155,11 @@ export async function BacklogTab({ sp, taskHref }: { sp: CcSearch; taskHref: (ke
                     <Link href={taskHref(task.key)} scroll={false} className="flex min-w-0 flex-1 gap-3">
                       <span className="w-24 shrink-0 pt-0.5 font-mono text-xs text-muted">{task.key}</span>
                       <span className="min-w-0 flex-1">
-                        <span className="block font-medium">{task.title}</span>
+                        <span className="block font-medium">{stripMd(task.title)}</span>
                         <span className="block text-xs text-muted">
                           {STAGES[task.stage]} · {AREAS[task.area]}
                           {task.epic ? ` · ${task.epic}` : ""}
-                          {task.blockedReason ? ` · ${task.blockedReason}` : ""}
+                          {task.blockedReason ? ` · ${stripMd(task.blockedReason)}` : ""}
                         </span>
                         <span className="mt-1 block">
                           <TaskBadges task={task} />
