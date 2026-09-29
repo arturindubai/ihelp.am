@@ -1119,7 +1119,13 @@
         "cancel": "Cancel",
         "quickReady": "To queue",
         "noMoves": "Task is moved by the assignee or deployer from here",
-        "claimHint": "Task is claimed by the assignee: node scripts/cc.mjs take {key} --agent dev-1"
+        "claimHint": "Task is claimed by the assignee: node scripts/cc.mjs take {key} --agent dev-1",
+        "criteriaLabel": "Criteria met",
+        "criteriaSpawnedCard": "↗ spawned card",
+        "criteriaCardPlaceholder": "IN-7",
+        "incompleteGate": "Check each criterion or specify a card key",
+        "whatChangedLabel": "What changed for people",
+        "whatChangedPlaceholder": "Describe in one sentence what now works differently for clients or the team"
       },
       "feed": {
         "title": "Task feed",
@@ -1155,7 +1161,8 @@
         "mockup_required": "Mockup not approved — task cannot be started",
         "mockup_not_required": "Task does not have 'mockup required' flag",
         "already_approved": "Mockup already approved",
-        "needs_open": "There are open product questions — get an answer first or remove them from the card"
+        "needs_open": "There are open product questions — get an answer first or remove them from the card",
+        "criteria_incomplete": "Check each criterion or specify a card key"
       },
       "attrs": "Task parameters",
       "workers": {
@@ -1600,7 +1607,9 @@
         "today": "Closed today: {n}",
         "hint": "closed in the last two weeks, newest first",
         "empty": "Nothing closed in the last two weeks",
-        "noCode": "no code"
+        "noCode": "no code",
+        "pendingStep": "↗ {key}",
+        "pendingStepTitle": "Manual step not closed"
       },
       "notify": {
         "inbox": "Owner inbox",

@@ -153,7 +153,11 @@ export const isReady = (items: CheckItem[]) => items.every((i) => i.ok || !i.har
 /** Код-задача: её доказательство готовности — коммит в main, а не слова */
 export const isCodeTask = (layer: string) => layer !== "none";
 
-/** Гейт «На проверке»: у код-задачи есть ветка, у любой — отчёт; если переданы opts — проверяем releaseNote, ownerSummary и nextSteps */
+/**
+ * Гейт «На проверке»: у код-задачи есть ветка, у любой — отчёт.
+ * Поля releaseNote и ownerSummary проверяются только если переданы явно (не undefined):
+ * cc.mjs всегда передаёт оба, UI может передать только releaseNote — тогда ownerSummary не проверяется.
+ */
 export function reviewGate(
   t: { layer: string; branch?: string | null },
   report: string,
@@ -162,8 +166,8 @@ export function reviewGate(
   if (!opts?.noWork && isCodeTask(t.layer) && !t.branch?.trim()) return "branch_required";
   if (report.trim().length < 40) return "report_required";
   if (opts !== undefined) {
-    if (!opts.releaseNote?.trim()) return "release_note_required";
-    if (!opts.ownerSummary?.trim()) return "owner_summary_required";
+    if (opts.releaseNote !== undefined && !opts.releaseNote.trim()) return "release_note_required";
+    if (opts.ownerSummary !== undefined && !opts.ownerSummary.trim()) return "owner_summary_required";
     // Для не-код задачи исполнитель обязан явно указать следующие шаги (или что их нет)
     if (!isCodeTask(t.layer) && opts.nextSteps === undefined) return "next_steps_required";
   }
@@ -171,6 +175,29 @@ export function reviewGate(
 }
 
 export const SHA_RE = /^[0-9a-f]{7,40}$/i;
+
+export type CriterionResult = { done: boolean; cardKey?: string };
+
+/** Формат ключа follow-up карточки: PREFX-N (например IN-7, RISK-3) */
+const CARD_KEY_RE = /^[A-Z]+-\d+$/;
+
+/**
+ * Гейт критериев при переходе в «Сделано»: каждый критерий должен быть либо отмечен ✓,
+ * либо вынесен в карточку с ключом вида IN-7. Без force — блокирует; с force — пропускает.
+ */
+export function criteriaGate(requirements: string[], result?: CriterionResult[]): string | null {
+  if (!requirements.length || !result) return null;
+  const incomplete = result.some((r, i) => i < requirements.length && !r.done && !CARD_KEY_RE.test(r.cardKey?.trim() ?? ""));
+  return incomplete ? "criteria_incomplete" : null;
+}
+
+/** Ключи follow-up карточек из чек-листа критериев: только незакрытые пункты с корректным ключом */
+export function extractFollowUpKeys(requirements: string[], result?: CriterionResult[]): string[] {
+  if (!requirements.length || !result) return [];
+  return result
+    .filter((r, i) => i < requirements.length && !r.done && CARD_KEY_RE.test(r.cardKey?.trim() ?? ""))
+    .map(r => r.cardKey!.trim());
+}
 
 /**
  * Гейт «В очереди»: задача с открытыми вопросами к продукту не идёт разработчику.

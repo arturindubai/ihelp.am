@@ -4,7 +4,7 @@ import { upsertNote, createNote } from "./library";
 import { alertTech } from "../alerts";
 import { html, notifyTech } from "../notify";
 import { BLOCKED_ON_LABELS, STATUSES } from "@/lib/backlog-labels";
-import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, doneGate, isDesignerTask, isProductTask, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
+import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, criteriaGate, doneGate, extractFollowUpKeys, isDesignerTask, isProductTask, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type CriterionResult, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
 import { isAgentAuthor, findBlockingError } from "@/lib/cc-triage";
 import { nextIntakeKey, intakeTitle } from "@/lib/cc-lanes";
 import { intakeClosingMapValid, parseDuplicateOriginalKey } from "@/lib/cc-intake";
@@ -96,6 +96,8 @@ export type TransitionInput = {
   noWork?: boolean;
   /** Карта просьб при закрытии intake (source=intake, to=done|cancelled): каждая просьба → ключ задачи или причина */
   intakeClosingMap?: string;
+  /** Результат чек-листа критериев при переходе в «Сделано»: по одному для каждого критерия */
+  criteriaResult?: CriterionResult[];
 };
 
 /** Смена статуса с проверкой прав, гейтов и записью в историю. Возвращает обновлённую задачу */
@@ -151,9 +153,17 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   if (to === "done") {
     const gate = doneGate({ layer: task.layer, noWork: task.noWork }, { sha: input.sha, text, attachments: task._count.attachments });
     if (gate && !force) throw new CcError(gate);
+    // Критерии: нельзя закрыть с невыполненным и не вынесенным критерием (без force)
+    const cGate = criteriaGate(task.requirements, input.criteriaResult);
+    if (cGate && !force) throw new CcError(cGate);
     data.deployedSha = input.sha?.trim() || null;
     data.proof = text.slice(0, 2000) || null;
     data.doneAt = new Date();
+    // Обновить releaseNote если передан новый
+    if (input.releaseNote?.trim()) data.releaseNote = input.releaseNote.trim().slice(0, 500);
+    // Ключи follow-up карточек из чек-листа критериев
+    const spawned = extractFollowUpKeys(task.requirements, input.criteriaResult);
+    if (spawned.length > 0) data.followUps = spawned;
   }
   if (to === "blocked") {
     const on = input.blockedOn || "tech";
