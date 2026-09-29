@@ -130,6 +130,10 @@ model Service {
   badge         Json?
   /// Блоки страницы: howItWorks[], benefits[], faq[], policy, note — всё мультиязычно
   content       Json?
+  /// Что включено в услугу — мультиязычный текст, строки разделены \n
+  includesText  Json?
+  /// Что не входит в услугу — мультиязычный текст, строки разделены \n
+  excludesText  Json?
   active        Boolean       @default(true)
   sort          Int           @default(0)
   rating        Float         @default(0)
@@ -600,6 +604,8 @@ model Task {
   mockupApprovedBy  String?
   /// Когда утвердили макет
   mockupApprovedAt  DateTime?
+  /// Нужно описание дизайна: ставит триаж при разборе; true — задача идёт к дизайнеру, false — разработчик возьмёт без ожидания
+  needsDesign       Boolean?
   /// «Что изменилось для людей» — 1–2 предложения простым языком для Release Notes
   releaseNote   String?
   /// Резюме для владельца: что сделано, что проверить, риск — до трёх строк

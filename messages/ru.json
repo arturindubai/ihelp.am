@@ -106,7 +106,9 @@
     "guarantee3": "Проверенные мастера",
     "perVisitSaving": "−{amount} с визита",
     "firstVisitBannerTitle": "Скидка новому клиенту",
-    "firstVisitBannerText": "−{percent}% от стоимости первого визита"
+    "firstVisitBannerText": "−{percent}% от стоимости первого визита",
+    "includes": "Включено",
+    "excludes": "Не входит"
   },
   "booking": {
     "title": "Оформление заказа",
@@ -696,6 +698,9 @@
       "deleteCategory": "Удалить категорию",
       "categoryHasServices": "В категории есть услуги — сначала перенесите или удалите их",
       "openOnSite": "Открыть на сайте",
+      "includesText": "Что включено",
+      "excludesText": "Что не входит",
+      "includesExcludesPlaceholder": "Каждая строка — отдельный пункт",
       "rating": "Рейтинг",
       "bookings": "Заказов"
     },
@@ -1367,11 +1372,12 @@
           "nobranch": "ветка не отправлена",
           "holding": "без вердикта, повтор в {detail}",
           "question": "вопрос: {detail}",
-          "nodesign": "нет описания дизайна",
+          "nodesign": "нужно описание дизайна",
           "mockup": "нужен макет",
           "returned": "Возвращено",
           "deploy": "протестировано"
         },
+        "capWaiting": "{n, plural, one {# задача} few {# задачи} other {# задач}} ждут из-за суточного лимита",
         "more": "и ещё {n} — во вкладке «Бэклог»",
         "tokens": "{in}k→{out}k токенов",
         "requestedBy": "по кнопке: {who}",

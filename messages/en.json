@@ -94,7 +94,9 @@
       "PACKAGE": "Package"
     },
     "firstOffer": "−{percent}% off the first visit for new customers",
-    "notFound": "Service not found"
+    "notFound": "Service not found",
+    "includes": "Included",
+    "excludes": "Not included"
   },
   "booking": {
     "title": "Checkout",
@@ -665,6 +667,9 @@
       "deleteCategory": "Delete category",
       "categoryHasServices": "Category has services — move or delete them first",
       "openOnSite": "Open on website",
+      "includesText": "What's included",
+      "excludesText": "What's not included",
+      "includesExcludesPlaceholder": "Each line is a separate item",
       "rating": "Rating",
       "bookings": "Bookings"
     },

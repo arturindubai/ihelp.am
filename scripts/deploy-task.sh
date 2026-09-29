@@ -125,15 +125,36 @@ log="data/deploys/$KEY-$(date +%Y%m%d-%H%M%S).log"
 prod_marker=$(< src/lib/deploy-marker.txt)
 echo "▶ $KEY: слияние $merge, лог $log"
 
-echo "▶ check.sh на результате слияния"
-if ! scripts/check.sh >> "$log" 2>&1; then
-  git reset -q --hard "$prev"
-  tail_txt=$(grep -E '✗|FAIL|Error|error' "$log" | tail -n 6)
-  cc note "$KEY" "check.sh упал на результате слияния — типы или тесты не прошли на merge commit ${merge:0:10}. Лог: /opt/ihelp.am/${log}
-${tail_txt}" --error
-  cc return "$KEY" "check.sh упал на merge commit (типы/тесты). Подтяните main (git merge origin/main), исправьте и сдайте снова. Детали — в ленте и логе ${log}."
-  echo "✗ check.sh упал — задача возвращена"
-  exit 2
+# Проверка типов и тестов на результате слияния (до бэкапа и сборки)
+mkdir -p data/tmp
+check_start=$(date +%s)
+check_tmp="data/tmp/check-$KEY.log"
+check_skip=""
+if ! docker info >/dev/null 2>&1; then
+  echo "⚠ check.sh пропущен: docker недоступен" | tee -a "$log"
+  cc note "$KEY" "check.sh пропущен при выкладке: docker недоступен. Прод выложен без проверки типов и тестов на результате слияния." --error || true
+  check_skip=1
+elif ! docker image inspect homecare-migrate >/dev/null 2>&1; then
+  echo "⚠ check.sh пропущен: образ homecare-migrate не найден" | tee -a "$log"
+  cc note "$KEY" "check.sh пропущен при выкладке: образ homecare-migrate не найден. Прод выложен без проверки типов и тестов на результате слияния." --error || true
+  check_skip=1
+fi
+if [ -z "$check_skip" ]; then
+  echo "▶ check.sh на результате слияния..." | tee -a "$log"
+  if scripts/check.sh > "$check_tmp" 2>&1; then
+    check_time=$(( $(date +%s) - check_start ))
+    echo "▶ check.sh: CHECK OK за ${check_time}с" | tee -a "$log"
+    cat "$check_tmp" >> "$log"
+    rm -f "$check_tmp"
+  else
+    cat "$check_tmp" >> "$log"
+    tail_txt=$(tail -n 30 "$check_tmp")
+    rm -f "$check_tmp"
+    git reset -q --hard "$prev"
+    cc return "$KEY" "check.sh не прошёл на результате слияния с main. Слияние отменено, main возвращён к коммиту до слияния. Прод не тронут. Исправьте ошибку и сдайте снова.
+${tail_txt}"
+    stop "check.sh упал на результате слияния — задача возвращена" 2
+  fi
 fi
 
 backup_file=""
