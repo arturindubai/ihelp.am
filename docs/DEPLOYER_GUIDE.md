@@ -72,6 +72,10 @@ git diff main..origin/<ветка>
 
 Не доверяй утверждению автора «проверено» — прогони сам, тем же способом:
 
+> **Воркер-деплоер:** явная проверка не нужна — `scripts/deploy-task.sh` автоматически запускает `scripts/check.sh` на результате слияния и отменяет его при провале, не трогая прод (шаг 5 в описании скрипта выкладки). `git worktree` и `docker run` воркеру недоступны (`scripts/worker-run.sh`).
+
+Для **ручной сессии** (техдиректор):
+
 ```bash
 cd /opt/ihelp.am
 git worktree add ../ihelp.am-review origin/<ветка>
@@ -88,6 +92,8 @@ cd /opt/ihelp.am && git worktree remove ../ihelp.am-review
 Нужен для: миграции схемы, денег (оплата, промокоды), прав доступа и ролей, новой интеграции с внешним сервисом, всего, что стоит один раз увидеть в браузере, а не только в дифе. Не обязателен для: правки текста, мелкой правки стиля, документации, задач без пользовательского эффекта.
 
 ### 5. Поднять изолированный стенд (если решил, что нужен)
+
+> **Воркер-деплоер:** `deploy/staging.sh` в его разрешениях отсутствует (`scripts/worker-run.sh`) — стенд поднять нельзя. Этот раздел только для ручной сессии техдиректора.
 
 Тот же `docker-compose.yml`, значит тот же стек 1 к 1, но отдельные тома, отдельная база, отдельные порты — прод и соседи не задеты. Порты: 8080 — прод, 8081 — стенд деплоера, 8082–8099 — стенды разработчиков (перед запуском `ss -ltn`). **Без `COMPOSE_PROJECT_NAME` команда `docker compose` работает с продом**: имя проекта `homecare` зашито в `docker-compose.yml`.
 
@@ -232,23 +238,27 @@ deploy/rollback.sh
 ## Справочник команд
 
 ```bash
-cd /opt/ihelp.am
-docker compose ps                                   # состояние контейнеров
-docker compose logs --tail 50 app                    # логи приложения
-docker compose logs app | grep otp                   # код входа, пока каналы не у всех подключены
-docker compose exec -T db psql -U app -d homeservices -tAc 'select count(*) from "Order"'   # запрос к базе
-docker compose exec -T backup sh /backup.sh once     # бэкап прямо сейчас
+# — доступны воркеру-деплоеру и в ручной сессии —
 deploy/smoke.sh                                      # быстрая проверка, что всё живо, без полного деплоя
-deploy/staging.sh up <ветка> [--no-notify]           # поднять изолированный стенд для проверки ветки
-deploy/staging.sh down                               # снести стенд и тома полностью
-deploy/staging.sh status                             # адрес работающего стенда
-deploy/update.sh                                     # мёрдж уже сделан → выложить
-deploy/rollback.sh                                   # откат образа приложения (не базы)
-git worktree list                                    # какие временные копии сейчас подняты — не забывать чистить
 node scripts/cc.mjs list review                      # очередь на проверку
 node scripts/cc.mjs show <КЛЮЧ>                      # задача целиком: отчёт, факты из git, лента
 node scripts/cc.mjs return <КЛЮЧ> "…" --agent deployer            # вернуть на доработку
 node scripts/cc.mjs done <КЛЮЧ> --sha <коммит> "…" --agent deployer   # закрыть с доказательством
+scripts/deploy-task.sh <КЛЮЧ>                        # выложить одну задачу
+scripts/deploy-batch.sh <КЛЮЧ1> <КЛЮЧ2> …           # пачковая выкладка до 5 задач
+
+# — только ручная сессия (техдиректор), воркеру недоступно —
+docker compose ps                                    # состояние контейнеров
+docker compose logs --tail 50 app                    # логи приложения
+docker compose logs app | grep otp                   # код входа, пока каналы не у всех подключены
+docker compose exec -T db psql -U app -d homeservices -tAc 'select count(*) from "Order"'   # запрос к базе
+docker compose exec -T backup sh /backup.sh once     # бэкап прямо сейчас
+deploy/staging.sh up <ветка> [--no-notify]           # поднять изолированный стенд для проверки ветки
+deploy/staging.sh down                               # снести стенд и тома полностью
+deploy/staging.sh status                             # адрес работающего стенда
+deploy/update.sh                                     # мёрдж уже сделан → выложить (не через скрипт выкладки)
+deploy/rollback.sh                                   # откат образа приложения (не базы)
+git worktree list                                    # какие временные копии сейчас подняты — не забывать чистить
 ```
 
 ## Куда смотреть за подробностями
