@@ -1,10 +1,11 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { workersOverview } from "@/server/services/workers";
+import { listMessages, MESSAGE_ROLES } from "@/server/services/ccMessages";
 import { POOLS, type Pool } from "@/lib/workers";
 import { Card } from "@/components/admin/fields";
 import { PoolSettings, WorkersMaster } from "@/components/admin/cc/WorkersForm";
-import { RunLog, RunWorkerButton, StopRunButton } from "@/components/admin/cc/CcControls";
+import { MessageComposer, RunLog, RunWorkerButton, StopRunButton } from "@/components/admin/cc/CcControls";
 import { Collapsible } from "@/components/admin/cc/Collapsible";
 import { PRIORITY_TONE, RUN_TONE, ago } from "./shared";
 import { PRIORITIES } from "@/lib/backlog-labels";
@@ -35,8 +36,9 @@ const SHOW = 8;
  * работающие сейчас со стоп-кнопкой, журнал запусков с логом, ходами и токенами, состояние диспетчера
  */
 export async function WorkersTab({ locale, taskHref }: { locale: string; taskHref: (key: string) => string }) {
-  const [t, data] = await Promise.all([getTranslations("admin.cc"), workersOverview()]);
+  const [t, data, messages] = await Promise.all([getTranslations("admin.cc"), workersOverview(), listMessages(60)]);
   const tw = await getTranslations("admin.cc.workers");
+  const tn = await getTranslations("admin.cc.notify");
   const when = (d: Date) => `${dateLabel(d, locale, { day: "numeric", month: "short" })}, ${timeLabel(d)}`;
   const minutes = (a: Date, b: Date | null) => Math.max(1, Math.round(((b ?? new Date()).getTime() - a.getTime()) / 60_000));
   const tickAge = data.tick ? (Date.now() - Date.parse(data.tick.at)) / 60_000 : null;
@@ -95,6 +97,11 @@ export async function WorkersTab({ locale, taskHref }: { locale: string; taskHre
                 {p === "triage" && lastTriageBatch !== null && ` · ${tw("lastBatch", { n: lastTriageBatch })}`}
                 {p === "deployer" && ` · ${data.deployWindowOpen ? tw("windowOpen") : tw("windowClosed", { from: data.config.deployWindow[0], to: data.config.deployWindow[1] })}`}
               </div>
+              {p === "designer" && capOut && queue.length > 0 && (
+                <div key="capWaiting" className="mt-1 rounded-lg bg-warn-50 px-3 py-2 text-xs text-warn">
+                  {tw("capWaiting", { n: queue.length })}
+                </div>
+              )}
 
               {running.length > 0 && (
                 <ul key="running" className="mt-3 space-y-1.5">
@@ -178,6 +185,31 @@ export async function WorkersTab({ locale, taskHref }: { locale: string; taskHre
       </Card>
 
       <p className="text-xs text-muted">{tw("footer")}</p>
+
+      {/* Блок «Написать воркерам» перенесён сюда из вкладки «Сообщения» */}
+      <Card title={tn("compose")}>
+        <MessageComposer roles={MESSAGE_ROLES.filter((r) => r !== "owner")} />
+      </Card>
+
+      {/* Блок «Отправленные» — все исходящие (не к владельцу), включая сообщения воркеров техдиректору */}
+      <Card title={tn("outbox")}>
+        {messages.filter((m) => m.toRole !== "owner").length === 0 && (
+          <p className="text-sm text-muted">{tn("outboxEmpty")}</p>
+        )}
+        <ul className="divide-y divide-line">
+          {messages
+            .filter((m) => m.toRole !== "owner")
+            .slice(0, 30)
+            .map((m) => (
+              <li key={m.id} className="py-2 text-sm">
+                <div className="text-xs text-muted">
+                  {m.fromAgent} → <b className="text-ink">{tn(`roles.${m.toRole}` as "roles.owner")}</b> · {`${dateLabel(m.createdAt, locale, { day: "numeric", month: "short" })}, ${timeLabel(m.createdAt)}`} · {m.readAt ? tn("readBy", { who: m.readBy ?? "" }) : tn("unread")}
+                </div>
+                <p className="line-clamp-3 whitespace-pre-line">{m.text}</p>
+              </li>
+            ))}
+        </ul>
+      </Card>
     </div>
   );
 }
