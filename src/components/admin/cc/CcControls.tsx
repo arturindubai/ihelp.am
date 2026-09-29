@@ -836,6 +836,8 @@ const GROUP_ICONS: Record<YouCard["groupType"], string> = {
   other: "💬",
 };
 
+const QUESTION_COLLAPSE_LINES = 8;
+
 /** Один блок вопроса с вариантами или текстовым вводом */
 function QuestionBlock({
   block,
@@ -852,13 +854,30 @@ function QuestionBlock({
 }) {
   const t = useTranslations("admin.cc.you");
   const [replyText, setReplyText] = useState("");
+  const [textExpanded, setTextExpanded] = useState(false);
+
+  const questionLines = block.question ? block.question.split("\n") : [];
+  const isLong = questionLines.length > QUESTION_COLLAPSE_LINES;
+  const visibleText =
+    isLong && !textExpanded
+      ? questionLines.slice(0, QUESTION_COLLAPSE_LINES).join("\n")
+      : block.question;
 
   return (
     <div>
       {block.question && (
         <div className="mb-2 text-sm font-medium">
           {blockCount > 1 && <span className="mr-1 text-muted">{blockIdx + 1}.</span>}
-          {renderOwnerText(block.question, t("devOnly"))}
+          {renderOwnerText(visibleText, t("devOnly"))}
+          {isLong && (
+            <button
+              type="button"
+              className="mt-0.5 text-xs text-brand hover:underline"
+              onClick={() => setTextExpanded(!textExpanded)}
+            >
+              {textExpanded ? t("collapse") : t("expand")}
+            </button>
+          )}
         </div>
       )}
       {block.variants ? (
