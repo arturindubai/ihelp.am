@@ -1,6 +1,8 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { redirect, Link } from "@/i18n/navigation";
 import { db } from "@/server/db";
+import { VisitCacheSync } from "@/components/pwa/VisitCacheSync";
+import { PRO_CACHE_KEY } from "@/lib/visitCache";
 import { getCurrentUser } from "@/server/auth";
 import { getSettings } from "@/server/settings";
 import { tr } from "@/i18n/locales";
@@ -40,6 +42,7 @@ export default async function ProPage({ params, searchParams }: { params: Promis
   const tabs = [["today", t("today")], ["upcoming", t("upcoming")], ["done", t("done")], ["settings", t("settingsTab")]];
   return (
     <div className="container-m pt-4 pb-10">
+      {isVisitTab && <VisitCacheSync endpoint="/api/visits/pro" cacheKey={PRO_CACHE_KEY} />}
       <div className="card flex items-center gap-3 p-3">
         <Img src={master.photo || "/img/master-1.svg"} width={48} className="size-12 rounded-full object-cover" />
         <div className="flex-1">

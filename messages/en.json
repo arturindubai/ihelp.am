@@ -2253,6 +2253,15 @@
       "subjectVisitCancelled": "Visit {date} cancelled — order #{n}"
     }
   },
+  "offline": {
+    "backOnline": "You're back online — loading page…",
+    "cachedAt": "Data saved: {time}",
+    "clientTitle": "My Visits (offline)",
+    "noCache": "No cached data. Open the visits page while online.",
+    "noVisits": "No upcoming visits",
+    "proTitle": "Visit schedule (offline)",
+    "viewOnly": "Read only"
+  },
   "operator": {
     "all": "All",
     "assignMaster": "Assign pro",
