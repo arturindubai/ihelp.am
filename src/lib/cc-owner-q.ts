@@ -2,21 +2,31 @@
  * Парсинг вариантов в тексте блокировки: латиница A-E / а-е и кириллица А-Д / а-д, любой регистр.
  * Вопрос с вариантами: "Текст вопроса? А) Да Б) Нет В) Позже"
  */
-export function parseVariants(text: string): { question: string; variants: { id: string; text: string }[] } | null {
+export function parseVariants(text: string): { question: string; variants: { id: string; text: string }[]; trailingText?: string } | null {
   // (?:^|\s) — маркер в начале строки или после пробела; захватывает пробел-разделитель
   const markers = [...text.matchAll(/(?:^|\s)([A-Ea-eАБВГДабвгд])\)\s*/g)];
   if (markers.length < 2) return null;
+
+  // Конец секции вариантов: первый разрыв абзаца после начала последнего варианта.
+  // Отдельный абзац после вариантов — это «трейлинг-текст», он рендерится под кнопками.
+  const lastStart = markers[markers.length - 1].index! + markers[markers.length - 1][0].length;
+  const afterLast = text.slice(lastStart);
+  const paraBreak = afterLast.search(/\n\s*\n/);
+  const variantSectionEnd = paraBreak >= 0 ? lastStart + paraBreak : text.length;
+
   const variants: { id: string; text: string }[] = [];
   for (let i = 0; i < markers.length; i++) {
     const start = markers[i].index! + markers[i][0].length;
-    const end = i + 1 < markers.length ? markers[i + 1].index! : text.length;
+    const end = i + 1 < markers.length ? markers[i + 1].index! : variantSectionEnd;
     const varText = text.slice(start, end).replace(/\s*\/\s*$/, "").trim();
     variants.push({ id: markers[i][1].toUpperCase(), text: varText });
   }
-  return { question: text.slice(0, markers[0].index!).trim(), variants };
+
+  const trailingText = text.slice(variantSectionEnd).trim() || undefined;
+  return { question: text.slice(0, markers[0].index!).trim(), variants, trailingText };
 }
 
-export type MultiQuestionBlock = { question: string; variants: { id: string; text: string }[] | null };
+export type MultiQuestionBlock = { question: string; variants: { id: string; text: string }[] | null; trailingText?: string };
 
 /**
  * Разбивает текст на несколько вопросов только если автор явно пронумеровал их («1. …?», «2. …?»)
@@ -34,13 +44,13 @@ export function parseMultiQuestion(text: string): MultiQuestionBlock[] {
     return matches.map((m) => {
       const block = m[2].trim();
       const parsed = parseVariants(block);
-      return { question: parsed?.question ?? block, variants: parsed?.variants ?? null };
+      return { question: parsed?.question ?? block, variants: parsed?.variants ?? null, trailingText: parsed?.trailingText };
     });
   }
 
   // Иначе весь текст — один вопрос с одним полем ответа
   const parsed = parseVariants(text);
-  return [{ question: parsed?.question ?? text, variants: parsed?.variants ?? null }];
+  return [{ question: parsed?.question ?? text, variants: parsed?.variants ?? null, trailingText: parsed?.trailingText }];
 }
 
 /** Категории карточек на вкладке «Нужен ты» */

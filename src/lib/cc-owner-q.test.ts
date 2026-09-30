@@ -69,6 +69,37 @@ describe("parseVariants", () => {
     expect(r!.variants[0]).toEqual({ id: "A", text: "да" });
     expect(r!.variants[1]).toEqual({ id: "B", text: "нет" });
   });
+
+  it("trailingText: отдельный абзац после вариантов попадает в trailingText, не в текст кнопки (образец ROUTE-5)", () => {
+    const text = [
+      "Какой бюджет? А) Маленький Б) Средний В) Другая сумма",
+      "",
+      "Рекомендую: В — можно договориться",
+    ].join("\n");
+    const r = parseVariants(text);
+    expect(r).not.toBeNull();
+    expect(r!.variants).toHaveLength(3);
+    expect(r!.variants[2].text).toBe("Другая сумма");
+    expect(r!.trailingText).toBe("Рекомендую: В — можно договориться");
+  });
+
+  it("trailingText: несколько абзацев после вариантов — всё попадает в trailingText", () => {
+    const text = [
+      "Выбрать подход? А) Быстро Б) Качественно",
+      "",
+      "Первый абзац пояснения.",
+      "",
+      "Второй абзац.",
+    ].join("\n");
+    const r = parseVariants(text);
+    expect(r!.variants).toHaveLength(2);
+    expect(r!.trailingText).toBe("Первый абзац пояснения.\n\nВторой абзац.");
+  });
+
+  it("trailingText: без отдельного абзаца — trailingText не определён", () => {
+    const r = parseVariants("Выбрать? А) Да Б) Нет");
+    expect(r!.trailingText).toBeUndefined();
+  });
 });
 
 describe("parseMultiQuestion", () => {
