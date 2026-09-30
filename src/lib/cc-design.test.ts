@@ -92,10 +92,17 @@ describe("mockupHold — что держит дизайн задачи", () => {
   it("в работе у дизайнера → active", () => {
     expect(mockupHold({ status: "in_progress", claimedBy: "designer-1" })).toBe("active");
   });
-  it("готова к работе → queue", () => {
-    expect(mockupHold({ status: "ready" })).toBe("queue");
+  it("готова к работе и есть в очереди дизайнера → queue", () => {
+    expect(mockupHold({ status: "ready" }, true)).toBe("queue");
   });
-  it("бэклог → queue", () => {
-    expect(mockupHold({ status: "backlog" })).toBe("queue");
+  it("бэклог и есть в очереди дизайнера → queue", () => {
+    expect(mockupHold({ status: "backlog" }, true)).toBe("queue");
+  });
+  it("готова к работе, но нет в очереди дизайнера → none (не показывать метку)", () => {
+    expect(mockupHold({ status: "ready" })).toBe("none");
+    expect(mockupHold({ status: "ready" }, false)).toBe("none");
+  });
+  it("бэклог, нет в очереди → none", () => {
+    expect(mockupHold({ status: "backlog" })).toBe("none");
   });
 });

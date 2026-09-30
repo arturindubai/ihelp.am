@@ -11,10 +11,11 @@ import { executorOf } from "@/lib/workers";
 import { TaskBadges } from "@/components/admin/cc/TaskBadges";
 import { FilterBar } from "@/components/admin/cc/FilterBar";
 import { TaskBoard } from "@/components/admin/cc/TaskBoard";
+import { EpicsView } from "./EpicsView";
 import { FLOW_TONE, LANE_DOT, PRIORITY_TONE, ccHref, type CcSearch } from "./shared";
 import { cn } from "@/lib/format";
 
-const VIEWS = ["lanes", "flow", "flat", "board"] as const;
+const VIEWS = ["lanes", "flow", "flat", "board", "epics"] as const;
 
 /**
  * Бэклог, как в LIA: каждая открытая задача, сгруппированная по дорожке (кто исполняет) — сразу видно,
@@ -22,15 +23,17 @@ const VIEWS = ["lanes", "flow", "flat", "board"] as const;
  * виды «по дорожкам / по этапу / списком», поиск, закрытые, приоритет, размер и эпик
  */
 export async function BacklogTab({ sp, taskHref }: { sp: CcSearch; taskHref: (key: string) => string }) {
-  const [t, tb, all, epics, claimable, doneTotal] = await Promise.all([
+  const view = (VIEWS as readonly string[]).includes(sp.view ?? "") ? (sp.view as (typeof VIEWS)[number]) : "lanes";
+
+  const [t, tb, all, epics, claimable, doneTotal, allWithClosed] = await Promise.all([
     getTranslations("admin.cc"),
     getTranslations("admin.cc.backlog"),
     boardTasks({ closed: !!sp.closed }),
     listEpics(),
     readyForAutoDev(),
     db.task.count({ where: { status: "done" } }),
+    view === "epics" ? boardTasks({ closed: true }) : Promise.resolve(null as null),
   ]);
-  const view = (VIEWS as readonly string[]).includes(sp.view ?? "") ? (sp.view as (typeof VIEWS)[number]) : "lanes";
   const q = sp.q?.trim().toLowerCase();
 
   let base = all;
@@ -51,10 +54,22 @@ export async function BacklogTab({ sp, taskHref }: { sp: CcSearch; taskHref: (ke
   const here = (patch: CcSearch) => ccHref({ ...sp, task: "" }, patch);
   const flows = FLOWS.filter((f) => sp.closed || !["done", "cancelled"].includes(f));
 
+  // Задачи для вида «Эпики»: применяем все активные фильтры (closed, q, priority, size, epicKey, lane, flow)
+  let epicTasks: BoardTask[] | null = null;
+  if (view === "epics" && allWithClosed) {
+    epicTasks = sp.closed ? allWithClosed : allWithClosed.filter((x) => !["done", "cancelled"].includes(x.status));
+    if (q) epicTasks = epicTasks.filter((x) => `${x.key} ${x.title} ${x.summary} ${x.details ?? ""}`.toLowerCase().includes(q));
+    if (sp.priority) epicTasks = epicTasks.filter((x) => x.priority === sp.priority);
+    if (sp.size) epicTasks = epicTasks.filter((x) => x.size === sp.size);
+    if (sp.epicKey) epicTasks = epicTasks.filter((x) => (sp.epicKey === "none" ? !x.epicKey : x.epicKey === sp.epicKey));
+    if (sp.lane) epicTasks = epicTasks.filter((x) => x.lane === sp.lane);
+    if (sp.flow) epicTasks = epicTasks.filter((x) => x.flow === sp.flow);
+  }
+
   const groups: { id: string; title: React.ReactNode; items: BoardTask[] }[] =
     view === "flat"
       ? [{ id: "all", title: null, items: tasks }]
-      : view === "board"
+      : view === "board" || view === "epics"
         ? []
       : view === "flow"
         ? flows.map((f) => ({ id: f, title: <span className={cn("chip text-xs", FLOW_TONE[f])}>{tb(`flows.${f}`)}</span>, items: tasks.filter((x) => x.flow === f) }))
@@ -134,57 +149,63 @@ export async function BacklogTab({ sp, taskHref }: { sp: CcSearch; taskHref: (ke
         </div>
       </div>
 
-      {tasks.length === 0 && <p className="card py-10 text-center text-muted">{t("empty")}</p>}
+      {view === "epics" && epicTasks ? (
+        <EpicsView epics={epics} tasks={epicTasks} sp={sp} taskHref={taskHref} />
+      ) : (
+        <>
+          {tasks.length === 0 && <p className="card py-10 text-center text-muted">{t("empty")}</p>}
 
-      {view === "board" && <TaskBoard tasks={tasks} taskHref={taskHref} />}
+          {view === "board" && <TaskBoard tasks={tasks} taskHref={taskHref} />}
 
-      <div className="space-y-4">
-        {view !== "board" &&
-          groups
-          .filter((g) => g.items.length > 0)
-          .map((g) => (
-            <section key={g.id} className="card overflow-hidden">
-              {g.title && (
-                <div className="flex items-center gap-2 border-b border-line bg-surface/60 px-3 py-2 text-sm font-semibold">
-                  {g.title} <span className="font-normal text-muted">{g.items.length}</span>
-                </div>
-              )}
-              <ul className="divide-y divide-line">
-                {g.items.map((task) => (
-                  <li key={task.key} className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5", task.attention && "bg-bad-50/40", task.status === "cancelled" && "opacity-50")}>
-                    <Link href={taskHref(task.key)} scroll={false} className="flex min-w-0 flex-1 gap-3">
-                      <span className="w-24 shrink-0 pt-0.5 font-mono text-xs text-muted">{task.key}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block font-medium">{stripMd(task.title)}</span>
-                        <span className="block text-xs text-muted">
-                          {STAGES[task.stage]} · {AREAS[task.area]}
-                          {task.epic ? ` · ${task.epic}` : ""}
-                          {task.blockedReason ? ` · ${stripMd(task.blockedReason)}` : ""}
+          <div className="space-y-4">
+            {view !== "board" &&
+              groups
+              .filter((g) => g.items.length > 0)
+              .map((g) => (
+                <section key={g.id} className="card overflow-hidden">
+                  {g.title && (
+                    <div className="flex items-center gap-2 border-b border-line bg-surface/60 px-3 py-2 text-sm font-semibold">
+                      {g.title} <span className="font-normal text-muted">{g.items.length}</span>
+                    </div>
+                  )}
+                  <ul className="divide-y divide-line">
+                    {g.items.map((task) => (
+                      <li key={task.key} className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5", task.attention && "bg-bad-50/40", task.status === "cancelled" && "opacity-50")}>
+                        <Link href={taskHref(task.key)} scroll={false} className="flex min-w-0 flex-1 gap-3">
+                          <span className="w-24 shrink-0 pt-0.5 font-mono text-xs text-muted">{task.key}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block font-medium">{stripMd(task.title)}</span>
+                            <span className="block text-xs text-muted">
+                              {STAGES[task.stage]} · {AREAS[task.area]}
+                              {task.epic ? ` · ${task.epic}` : ""}
+                              {task.blockedReason ? ` · ${stripMd(task.blockedReason)}` : ""}
+                            </span>
+                            <span className="mt-1 block">
+                              <TaskBadges task={task} />
+                            </span>
+                          </span>
+                        </Link>
+                        <span className="flex shrink-0 flex-wrap items-center gap-1">
+                          <span className={cn("chip text-[10px]", FLOW_TONE[task.flow])}>{tb(`flows.${task.flow}`)}</span>
+                          <span className={cn("chip text-[10px]", PRIORITY_TONE[task.priority])} title={PRIORITIES[task.priority]}>
+                            {task.priority.toUpperCase()}
+                          </span>
+                          {task.size !== "none" && <span className="chip bg-surface text-[10px] text-muted">{task.size}</span>}
+                          {executorOf(task) && (
+                            <span className="chip bg-surface text-[10px] text-muted" title={tb("executor")}>
+                              → {tw(`pools.${executorOf(task)!}`)}
+                            </span>
+                          )}
+                          {view !== "lanes" && <span className={cn("size-2 rounded-full", LANE_DOT[task.lane])} title={tb(`lanes.${task.lane}`)} />}
                         </span>
-                        <span className="mt-1 block">
-                          <TaskBadges task={task} />
-                        </span>
-                      </span>
-                    </Link>
-                    <span className="flex shrink-0 flex-wrap items-center gap-1">
-                      <span className={cn("chip text-[10px]", FLOW_TONE[task.flow])}>{tb(`flows.${task.flow}`)}</span>
-                      <span className={cn("chip text-[10px]", PRIORITY_TONE[task.priority])} title={PRIORITIES[task.priority]}>
-                        {task.priority.toUpperCase()}
-                      </span>
-                      {task.size !== "none" && <span className="chip bg-surface text-[10px] text-muted">{task.size}</span>}
-                      {executorOf(task) && (
-                        <span className="chip bg-surface text-[10px] text-muted" title={tb("executor")}>
-                          → {tw(`pools.${executorOf(task)!}`)}
-                        </span>
-                      )}
-                      {view !== "lanes" && <span className={cn("size-2 rounded-full", LANE_DOT[task.lane])} title={tb(`lanes.${task.lane}`)} />}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
-      </div>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

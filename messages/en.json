@@ -159,6 +159,12 @@
       "backlog": {
         "allFlows": "All stages",
         "allLanes": "All lanes",
+        "epicNoEpics": "No epics",
+        "epicNoTasks": "No tasks in epic",
+        "epicNoTasksLink": "create the first one",
+        "epicProgress": "{done} of {total}",
+        "epicWaits": "Waits: {key}",
+        "epicWithout": "No epic · {n}",
         "executor": "Assignee: which worker does the next step",
         "flows": {
           "backlog": "Backlog",
@@ -196,6 +202,7 @@
         },
         "views": {
           "board": "Board",
+          "epics": "Epics",
           "flat": "List",
           "flow": "By stage",
           "lanes": "By lane"
@@ -1254,6 +1261,7 @@
     },
     "nav": {
       "banners": "Banners",
+      "catalog": "Catalog",
       "clients": "Clients",
       "control": "Control Center",
       "dashboard": "Dashboard",
@@ -1262,6 +1270,7 @@
       "menu": "Menu",
       "orders": "Orders",
       "pages": "Pages",
+      "prices": "Prices",
       "promos": "Promo codes",
       "reviews": "Reviews",
       "schedule": "Schedule",
@@ -1344,6 +1353,27 @@
       "body": "Text",
       "newPage": "New page",
       "title": "Pages"
+    },
+    "prices": {
+      "bulkApply": "Apply",
+      "bulkCancel": "Cancel",
+      "bulkConfirm": "Apply changes",
+      "bulkFlat": "± ֏ to price",
+      "bulkPercent": "+% to price",
+      "bulkPreview": "Preview",
+      "bulkZeroError": "One or more prices would become zero — reduce the value.",
+      "colNewPrice": "→ New price",
+      "colOption": "Option / plan",
+      "colParam": "Parameter",
+      "colPrice": "Price, ֏",
+      "colService": "Service",
+      "confirmMsg": "Prices of {count} options will change by {value}{unit}. This action cannot be undone automatically.",
+      "empty": "No options with a price — add services.",
+      "saved": "Saved",
+      "selected": "{count, plural, one {# option selected} other {# options selected}}",
+      "sub": "{count, plural, one {# option} other {# options}} · {services, plural, one {# service} other {# services}}",
+      "title": "Prices",
+      "unchanged": "unchanged"
     },
     "promos": {
       "anyService": "All services",
@@ -1724,6 +1754,8 @@
       "google_failed": "Google did not confirm sign-in. Please try again",
       "google_not_linked": "This Google account is not linked. Sign in with your phone and add this email in your profile",
       "google_off": "Google sign-in is currently disabled",
+      "google_signup_phone_taken": "This phone number is already linked to another account",
+      "google_signup_ticket_expired": "Registration link expired — please sign in with Google again",
       "google_state": "Sign-in session expired, please try again",
       "name": "Please enter your name",
       "phone": "Please check the phone number",
@@ -1738,6 +1770,9 @@
     "getCodeVia": "Get code via",
     "google": "Sign in with Google",
     "googleHint": "For staff: sign in with your work email listed in your profile",
+    "googleSignupEmailConfirmed": "Email {email} confirmed by Google",
+    "googleSignupPhoneHint": "Enter your phone number to complete registration",
+    "googleSignupTitle": "Sign up with Google",
     "method": {
       "email": "By email",
       "phone": "By phone number"
@@ -1768,6 +1803,10 @@
     "anyMasterSub": "We'll assign the best available",
     "availableTime": "Available times",
     "base": "Price",
+    "calMonthNav": {
+      "next": "Next month",
+      "prev": "Previous month"
+    },
     "cancelRules": "Cancellation policy",
     "card": "Card online",
     "cardSoon": "Coming soon",
@@ -1814,6 +1853,7 @@
     "promoNotBetter": "This promo code is not better than your current discount",
     "promoPlaceholder": "Enter promo code",
     "savings": "Save {first} ֏ on the first visit and {regular} ֏ on each following",
+    "selectedDate": "{date}",
     "serviceLabel": "Service",
     "startDate": "First visit date",
     "success": "Order placed!",
@@ -1828,6 +1868,7 @@
     "summary": "Summary",
     "title": "Checkout",
     "toOrder": "Go to my orders",
+    "weekdaysMin": "Mo,Tu,We,Th,Fr,Sa,Su",
     "weekdaysShort": "Mon,Tue,Wed,Thu,Fri,Sat,Sun",
     "whoComes": "Who's coming",
     "wishes": "Preferences"
@@ -2171,6 +2212,7 @@
     "noReviews": "No reviews yet",
     "notFound": "Service not found",
     "packTotal": "for {count} visits",
+    "packageSaving": "Save {amount}",
     "perVisitSaving": "−{amount} per visit",
     "policy": "Terms",
     "reviews": "Reviews",

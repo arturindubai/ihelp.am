@@ -178,6 +178,12 @@
       "backlog": {
         "allFlows": "Все этапы",
         "allLanes": "Все дорожки",
+        "epicNoEpics": "Эпиков нет",
+        "epicNoTasks": "Задач в эпике нет",
+        "epicNoTasksLink": "создайте первый",
+        "epicProgress": "{done} из {total}",
+        "epicWaits": "Ждёт: {key}",
+        "epicWithout": "Без эпика · {n}",
         "executor": "Исполнитель: какой воркер делает следующий шаг",
         "flows": {
           "backlog": "Бэклог",
@@ -215,6 +221,7 @@
         },
         "views": {
           "board": "Доска",
+          "epics": "Эпики",
           "flat": "Списком",
           "flow": "По этапу",
           "lanes": "По дорожкам"
@@ -247,12 +254,6 @@
         "approvedAgent": "у {agent}",
         "approvedEmpty": "Пока ничего не утверждено",
         "canon": "запись в Библиотеке",
-        "chainBreadcrumb": "Требования → Макет → Утверждение",
-        "chainStep": {
-          "approval": "Утверждение",
-          "mockup": "Макет",
-          "requirements": "Требования"
-        },
         "designSnippet": "Дизайн: {text}",
         "files": "файлов: {n}",
         "gate": "нужен макет",
@@ -1350,6 +1351,7 @@
     "nav": {
       "analytics": "Аналитика",
       "banners": "Баннеры",
+      "catalog": "Каталог",
       "clients": "Клиенты",
       "content": "Контент",
       "control": "Control Center",
@@ -1359,6 +1361,7 @@
       "menu": "Меню",
       "orders": "Заказы",
       "pages": "Страницы",
+      "prices": "Цены",
       "promos": "Промокоды",
       "reviews": "Отзывы",
       "schedule": "Расписание",
@@ -1442,6 +1445,27 @@
       "markdownHint": "Поддерживается Markdown: ## заголовок, - пункт списка, **жирный**, [текст](ссылка)",
       "newPage": "Новая страница",
       "title": "Страницы"
+    },
+    "prices": {
+      "bulkApply": "Применить",
+      "bulkCancel": "Отмена",
+      "bulkConfirm": "Применить изменения",
+      "bulkFlat": "± ֏ к цене",
+      "bulkPercent": "+% к цене",
+      "bulkPreview": "Предпросмотр",
+      "bulkZeroError": "Одна или несколько цен станут нулевыми — уменьшите значение.",
+      "colNewPrice": "→ Новая цена",
+      "colOption": "Вариант / тариф",
+      "colParam": "Параметр",
+      "colPrice": "Цена, ֏",
+      "colService": "Услуга",
+      "confirmMsg": "Цены {count} вариантов будут изменены на {value}{unit}. Это действие нельзя отменить автоматически.",
+      "empty": "Нет вариантов с ценой — добавьте услуги.",
+      "saved": "Сохранено",
+      "selected": "{count, plural, one {Выбран # вариант} few {Выбрано # варианта} other {Выбрано # вариантов}}",
+      "sub": "{count, plural, one {# вариант} few {# варианта} other {# вариантов}} · {services, plural, one {# услуга} few {# услуги} other {# услуг}}",
+      "title": "Цены",
+      "unchanged": "не изменится"
     },
     "promos": {
       "anyService": "Все услуги",
@@ -1678,6 +1702,8 @@
       "telegram": "Telegram",
       "telegramOrderThreadHint": "Числовой ID топика «Заявки» в группе. Уведомления о заказах пойдут туда. Если пусто — в общий чат",
       "telegramOrderThreadId": "ID топика заявок",
+      "telegramTasksThreadHint": "Числовой ID топика для CC-бота: новые задачи IN-N, /status, уведомления «нужен ты». Если пусто — не отправляется",
+      "telegramTasksThreadId": "ID топика «Задачи портала»",
       "telegramTechThreadHint": "Числовой ID топика для тех-алертов. Если пусто — алерты идут в топик заявок или общий чат",
       "telegramTechThreadId": "ID тех-топика",
       "telegramWidget": "Виджет Telegram",
@@ -1830,6 +1856,8 @@
       "google_failed": "Google не подтвердил вход. Попробуйте ещё раз",
       "google_not_linked": "Этот Google-аккаунт не привязан. Войдите по номеру телефона и укажите эту почту в профиле",
       "google_off": "Вход через Google сейчас выключен",
+      "google_signup_phone_taken": "Этот телефон уже привязан к другому аккаунту",
+      "google_signup_ticket_expired": "Ссылка на регистрацию устарела — войдите через Google ещё раз",
       "google_state": "Сессия входа устарела, попробуйте ещё раз",
       "name": "Укажите имя",
       "phone": "Проверьте номер телефона",
@@ -1844,6 +1872,9 @@
     "getCodeVia": "Получить код через",
     "google": "Войти через Google",
     "googleHint": "Для сотрудников: вход по рабочей почте, указанной в профиле",
+    "googleSignupEmailConfirmed": "Email {email} подтверждён Google",
+    "googleSignupPhoneHint": "Введите номер телефона, чтобы завершить регистрацию",
+    "googleSignupTitle": "Регистрация через Google",
     "method": {
       "email": "По email",
       "phone": "По номеру телефона"
@@ -1874,6 +1905,10 @@
     "anyMasterSub": "Назначим лучшего из доступных",
     "availableTime": "Доступное время",
     "base": "Стоимость",
+    "calMonthNav": {
+      "next": "Следующий месяц",
+      "prev": "Предыдущий месяц"
+    },
     "cancelRules": "Правила отмены",
     "card": "Картой онлайн",
     "cardSoon": "Скоро",
@@ -1920,6 +1955,7 @@
     "promoNotBetter": "Промокод не выгоднее текущей скидки",
     "promoPlaceholder": "Введите промокод",
     "savings": "Вы экономите {first} ֏ на первом визите и {regular} ֏ на каждом следующем",
+    "selectedDate": "{date}",
     "serviceLabel": "Услуга",
     "startDate": "Дата первого визита",
     "success": "Заказ оформлен!",
@@ -1934,6 +1970,7 @@
     "summary": "Смета",
     "title": "Оформление заказа",
     "toOrder": "Перейти к моим заказам",
+    "weekdaysMin": "Пн,Вт,Ср,Чт,Пт,Сб,Вс",
     "weekdaysShort": "Пн,Вт,Ср,Чт,Пт,Сб,Вс",
     "whoComes": "Кто приедет",
     "wishes": "Пожелания"
@@ -2277,6 +2314,7 @@
     "noReviews": "Отзывов пока нет",
     "notFound": "Услуга не найдена",
     "packTotal": "за {count} визита",
+    "packageSaving": "Экономия {amount}",
     "perVisitSaving": "−{amount} с визита",
     "policy": "Условия",
     "reviews": "Отзывы",
