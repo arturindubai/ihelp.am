@@ -25,6 +25,7 @@ import {
 } from "@/server/actions/admin/cc";
 import { cn } from "@/lib/format";
 import { parseVariants } from "@/lib/cc-owner-q";
+import type { OwnerCardGroupType } from "@/lib/cc-owner-q";
 
 /** Кнопки и формы пульта Control Center: Intake, запуск и остановка воркеров, согласования, сообщения */
 
@@ -318,10 +319,15 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
             {listening && <p className="mt-1 text-xs text-muted">🎙 {interim || t("listening")}</p>}
             {voiceError && <p className="mt-1 rounded-lg bg-warn-50 px-3 py-1.5 text-xs text-warn">{voiceError}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              {speech && (
+              {speech ? (
                 <button type="button" className={cn("btn-sm gap-1.5", listening ? "btn-danger" : "btn-outline")} onClick={toggleVoice}>
                   {listening ? <MicOff size={15} /> : <Mic size={15} />} {listening ? t("voiceStop") : t("voice")}
                 </button>
+              ) : (
+                <span className="flex items-center gap-1 text-xs text-muted" title={t("voiceErrors.unsupported")}>
+                  <Mic size={13} className="opacity-50" />
+                  {t("voiceUnsupported")}
+                </span>
               )}
               <label className="btn-outline btn-sm cursor-pointer gap-1.5">
                 <Paperclip size={15} /> {t("attach")}
@@ -927,10 +933,12 @@ export type YouCardTask = { key: string; title: string; href: string; priority: 
 export type YouCard = {
   id: string;
   question: string;
-  groupType: "variant" | "price" | "data" | "auth" | "approve" | "rule" | "other";
+  groupType: OwnerCardGroupType;
   tasks: YouCardTask[];
   variants: { id: string; text: string }[] | null;
-  multiQuestion: { question: string; variants: { id: string; text: string }[] | null }[] | null;
+  /** Текст отдельным абзацем после вариантов (рекомендация, пояснение) */
+  trailingText?: string;
+  multiQuestion: { question: string; variants: { id: string; text: string }[] | null; trailingText?: string }[] | null;
   isUrgent: boolean;
   textMayCut: boolean;
   /** Ссылка на задачу-оригинал при уведомлении о дубле */
@@ -947,6 +955,7 @@ export type YouPostponedTask = {
   priority: string;
   reason: string | null;
   updatedAt: string;
+  blockedUntil?: string | null;
 };
 
 const GROUP_ICONS: Record<YouCard["groupType"], string> = {
@@ -956,8 +965,11 @@ const GROUP_ICONS: Record<YouCard["groupType"], string> = {
   auth: "🔑",
   approve: "✅",
   rule: "📋",
+  do: "⚙️",
   other: "💬",
 };
+
+const QUESTION_COLLAPSE_LINES = 8;
 
 /** Один блок вопроса с вариантами или текстовым вводом */
 function QuestionBlock({
@@ -967,7 +979,7 @@ function QuestionBlock({
   pending,
   onAnswer,
 }: {
-  block: { question: string; variants: { id: string; text: string }[] | null };
+  block: { question: string; variants: { id: string; text: string }[] | null; trailingText?: string };
   blockIdx: number;
   blockCount: number;
   pending: boolean;
@@ -975,28 +987,78 @@ function QuestionBlock({
 }) {
   const t = useTranslations("admin.cc.you");
   const [replyText, setReplyText] = useState("");
+  const [textExpanded, setTextExpanded] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const questionLines = block.question ? block.question.split("\n") : [];
+  const isLong = questionLines.length > QUESTION_COLLAPSE_LINES;
+  const visibleText =
+    isLong && !textExpanded
+      ? questionLines.slice(0, QUESTION_COLLAPSE_LINES).join("\n")
+      : block.question;
+
+  // Вариант «другое/напишите» не отправляет ответ сразу — фокусирует поле свободного ввода
+  const handleVariantClick = (v: { id: string; text: string }) => {
+    if (/другое|другая|напишите|своё/i.test(v.text)) {
+      inputRef.current?.focus();
+    } else {
+      onAnswer(blockCount > 1 ? `[Вопрос ${blockIdx + 1}] ${t("answerVariant", { id: v.id })}` : t("answerVariant", { id: v.id }));
+    }
+  };
 
   return (
     <div>
       {block.question && (
         <div className="mb-2 text-sm font-medium">
           {blockCount > 1 && <span className="mr-1 text-muted">{blockIdx + 1}.</span>}
-          {renderOwnerText(block.question, t("devOnly"))}
+          {renderOwnerText(visibleText, t("devOnly"))}
+          {isLong && (
+            <button
+              type="button"
+              className="mt-0.5 text-xs text-brand hover:underline"
+              onClick={() => setTextExpanded(!textExpanded)}
+            >
+              {textExpanded ? t("collapse") : t("expand")}
+            </button>
+          )}
         </div>
       )}
       {block.variants ? (
-        <div className="flex flex-wrap gap-2">
-          {block.variants.map((v) => (
-            <button
-              key={v.id}
-              disabled={pending}
-              className="rounded-lg border border-brand px-3 py-1.5 text-sm text-brand transition-colors hover:bg-brand hover:text-inverse disabled:opacity-50"
-              onClick={() => onAnswer(blockCount > 1 ? `[Вопрос ${blockIdx + 1}] ${t("answerVariant", { id: v.id })}` : t("answerVariant", { id: v.id }))}
-            >
-              {v.id}) {v.text}
+        <>
+          <div className="flex flex-wrap gap-2">
+            {block.variants.map((v) => (
+              <button
+                key={v.id}
+                disabled={pending}
+                className="rounded-lg border border-brand px-3 py-1.5 text-sm text-brand transition-colors hover:bg-brand hover:text-inverse disabled:opacity-50"
+                onClick={() => handleVariantClick(v)}
+              >
+                {v.id}) {v.text}
+              </button>
+            ))}
+          </div>
+          {block.trailingText && (
+            <p className="mt-2 whitespace-pre-line text-sm text-muted">{block.trailingText}</p>
+          )}
+          <form
+            className="mt-2 flex gap-1.5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              onAnswer(replyText);
+            }}
+          >
+            <input
+              ref={inputRef}
+              className="input h-9 flex-1 py-1 text-sm"
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              placeholder={t("replyOrWritePh")}
+            />
+            <button className="btn-primary btn-sm" disabled={pending || replyText.trim().length < 2}>
+              {t("replySend")}
             </button>
-          ))}
-        </div>
+          </form>
+        </>
       ) : (
         <form
           className="flex gap-1.5"
@@ -1047,7 +1109,7 @@ function YouQuestionCard({ card, onDone }: { card: YouCard; onDone: (id: string)
       setTimeout(() => onDone(card.id), 300);
     });
 
-  const blocks = card.multiQuestion ?? [{ question: card.question, variants: card.variants }];
+  const blocks = card.multiQuestion ?? [{ question: card.question, variants: card.variants, trailingText: card.trailingText }];
   const visibleBlocks = blocks.filter((_, idx) => !hiddenBlocks.has(idx));
 
   return (
@@ -1126,6 +1188,14 @@ export function YouQuestionsSection({
   const t = useTranslations("admin.cc.you");
   const [filter, setFilter] = useState<"all" | "urgent" | "postponed">("all");
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [expandedPostponed, setExpandedPostponed] = useState<Set<string>>(new Set());
+
+  const togglePostponed = (key: string) =>
+    setExpandedPostponed((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
 
   const hide = (id: string) => setHidden((prev) => new Set([...prev, id]));
   const visibleCards = cards.filter((c) => !hidden.has(c.id));
@@ -1139,10 +1209,11 @@ export function YouQuestionsSection({
   const byGroup = (
     [
       ["variant", displayCards.filter((c) => c.groupType === "variant")],
+      ["approve", displayCards.filter((c) => c.groupType === "approve")],
+      ["do", displayCards.filter((c) => c.groupType === "do")],
       ["price", displayCards.filter((c) => c.groupType === "price")],
       ["data", displayCards.filter((c) => c.groupType === "data")],
       ["auth", displayCards.filter((c) => c.groupType === "auth")],
-      ["approve", displayCards.filter((c) => c.groupType === "approve")],
       ["rule", displayCards.filter((c) => c.groupType === "rule")],
       ["other", displayCards.filter((c) => c.groupType === "other")],
     ] as [YouCard["groupType"], YouCard[]][]
@@ -1217,15 +1288,38 @@ export function YouQuestionsSection({
             <p className="text-sm text-muted">{t("postponedSectionHint")}</p>
           )}
           <div className="space-y-2">
-            {postponed.map((task) => (
-              <div key={task.key} className="rounded-card border border-line bg-paper p-3 text-sm">
-                <Link href={task.href} scroll={false} className="font-medium hover:underline">
-                  <span className="mr-2 font-mono text-xs text-muted">{task.key}</span>
-                  {task.title}
-                </Link>
-                {task.reason && <p className="mt-1 text-xs text-muted">{task.reason}</p>}
-              </div>
-            ))}
+            {postponed.map((task) => {
+              const lines = (task.reason ?? "").split("\n").filter(Boolean);
+              const firstLine = lines[0] ?? "";
+              const hasMore = lines.length > 1;
+              const isExpanded = expandedPostponed.has(task.key);
+              return (
+                <div key={task.key} className="rounded-card border border-line bg-paper p-3 text-sm">
+                  <Link href={task.href} scroll={false} className="font-medium hover:underline">
+                    <span className="mr-2 font-mono text-xs text-muted">{task.key}</span>
+                    {task.title}
+                  </Link>
+                  {firstLine && (
+                    <p className="mt-1 text-xs text-muted">
+                      {isExpanded ? task.reason : firstLine}
+                    </p>
+                  )}
+                  {hasMore && (
+                    <button
+                      className="mt-0.5 text-xs text-brand hover:underline"
+                      onClick={() => togglePostponed(task.key)}
+                    >
+                      {isExpanded ? t("collapse") : t("expand")}
+                    </button>
+                  )}
+                  {task.blockedUntil && (
+                    <p className="mt-1 text-xs text-muted">
+                      {t("postponedUntil", { date: new Date(task.blockedUntil).toLocaleDateString("ru-RU", { timeZone: "Asia/Yerevan", day: "numeric", month: "short", year: "numeric" }) })}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </>
       )}

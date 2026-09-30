@@ -320,7 +320,15 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
                 {task.blockedReason}
               </p>
             )}
-            <TransitionPanel taskKey={task.key} status={task.status} source={task.source} layer={task.layer} moves={moves} />
+            <TransitionPanel
+              taskKey={task.key}
+              status={task.status}
+              source={task.source}
+              layer={task.layer}
+              moves={moves}
+              requirements={task.requirements}
+              currentReleaseNote={task.releaseNote ?? ""}
+            />
             {(health.stale || health.phantom) && (
               <div className="mt-3">
                 <QuickMove taskKey={task.key} to={health.phantom ? "backlog" : "ready"} text={health.phantom ? t("attention.phantomReason") : t("attention.returnReason")} label={t("attention.returnToQueue")} />

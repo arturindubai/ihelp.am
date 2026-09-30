@@ -94,9 +94,17 @@ case "$role" in
     deny+=("NotebookEdit" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(cat >*)" "Bash(cat *>*)" "Bash(curl *)")
     ;;
   dev)
-    # Разработчик пишет в свою рабочую копию; tmp-папка на случай --text-file
-    # lock-update.sh разрешён явно: он нужен при изменении package.json (обновляет lock в образе сборки)
-    allow+=("Write(//opt/ihelp.am/data/tmp/dev/**)" "Edit(//opt/ihelp.am/data/tmp/dev/**)" "${lockupdate[@]}")
+    # Разработчик пишет только в свою рабочую копию (.claude/worktrees/**) и data/tmp/dev/.
+    # Незащищённые Edit/Write из базового массива убраны: запись в корень /opt/ihelp.am
+    # и в .claude/worktrees/ напрямую запрещена (именно так однажды возник .claire/ в корне).
+    # lock-update.sh разрешён явно: он нужен при изменении package.json.
+    allow=(Read Glob Grep TodoWrite "${common[@]}" "${check[@]}" "${lockupdate[@]}"
+      "Bash(git *)"
+      "Bash(ls *)" "Bash(ls)" "Bash(pwd)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(jq *)"
+      "Bash(diff *)" "Bash(sort *)" "Bash(sed -n *)" "Bash(node --check *)" "Bash(bash -n *)" "Bash(python3 -c *)" "Bash(mkdir *)" "Bash(date)"
+      "Bash(curl -s http://127.0.0.1:*)"
+      "Write(//opt/ihelp.am/.claude/worktrees/**)" "Edit(//opt/ihelp.am/.claude/worktrees/**)"
+      "Write(//opt/ihelp.am/data/tmp/dev/**)" "Edit(//opt/ihelp.am/data/tmp/dev/**)")
     ;;
   *) echo '{"is_error":true,"result":"неизвестная роль"}'; exit 2 ;;
 esac

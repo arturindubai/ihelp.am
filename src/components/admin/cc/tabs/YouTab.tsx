@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { needsYou } from "@/server/services/ccBoard";
-import { parseMultiQuestion } from "@/lib/cc-owner-q";
+import { classifyGroup, parseMultiQuestion } from "@/lib/cc-owner-q";
 import { parseDuplicateOriginalKey } from "@/lib/cc-intake";
 import { BLOCKED_ON_LABELS, PRIORITIES } from "@/lib/backlog-labels";
 import { QuickMove } from "@/components/admin/cc/TaskControls";
@@ -18,15 +18,6 @@ type Href = (key: string) => string;
 type NeedsYouData = Awaited<ReturnType<typeof needsYou>>;
 type OwnerTask = NeedsYouData["owner"][number];
 
-function classifyGroup(reason: string, hasVariants: boolean): YouCard["groupType"] {
-  if (hasVariants) return "variant";
-  if (/цена|прайс|стоимост|тариф|число|сколько|бюджет|лимит/i.test(reason)) return "price";
-  if (/файл|документ|картинк|фото|загрузить|прислать|контент|логотип/i.test(reason)) return "data";
-  if (/войти|логин|аккаунт|авторизац|ключ.*сервис|oauth|токен/i.test(reason)) return "auth";
-  if (/утвердить|согласовать|одобрить|макет|бренд|дизайн|палитр|шрифт/i.test(reason)) return "approve";
-  if (/правило|политика|условия|регламент|настройк|решение|выбор/i.test(reason)) return "rule";
-  return "other";
-}
 
 /** Группирует задачи с одинаковым вопросом в одну карточку */
 function groupOwnerQuestions(tasks: OwnerTask[], taskHref: Href, waitingDeps: WaitingDepEntry[]): YouCard[] {
@@ -51,6 +42,7 @@ function groupOwnerQuestions(tasks: OwnerTask[], taskHref: Href, waitingDeps: Wa
       groupType: classifyGroup(reason, hasVariants),
       tasks: group.map((t) => ({ key: t.key, title: t.title, href: taskHref(t.key), priority: t.priority })),
       variants: multiQuestion.length === 1 ? (multiQuestion[0].variants ?? null) : null,
+      trailingText: multiQuestion.length === 1 ? multiQuestion[0].trailingText : undefined,
       multiQuestion: multiQuestion.length > 1 ? multiQuestion : null,
       isUrgent: group.some((t) => t.priority === "p0"),
       textMayCut: group.some((t) => t.textMayCut),
@@ -76,6 +68,7 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
     priority: p.priority,
     reason: p.blockedReason,
     updatedAt: p.updatedAt.toISOString(),
+    blockedUntil: p.blockedUntil?.toISOString() ?? null,
   }));
 
   const nothing =

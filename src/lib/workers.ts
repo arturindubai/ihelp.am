@@ -484,12 +484,14 @@ export function executorOf(t: { status: string; layer: string; blockedOn?: strin
   return null;
 }
 
-export function poolForTask(t: { status: string; layer: string; testedSha?: string | null; blockedOn?: string | null; mockupRequired?: boolean | null; mockupApprovedBy?: string | null }): Pool | null {
+export function poolForTask(t: { status: string; layer: string; testedSha?: string | null; blockedOn?: string | null; mockupRequired?: boolean | null; mockupApprovedBy?: string | null; screenRequirements?: string | null }): Pool | null {
   if (t.status === "blocked" && t.blockedOn === "product") return "product";
   if (t.status === "blocked" && t.blockedOn === "design") return "designer";
   if (t.status === "backlog" || t.status === "blocked") return "triage";
-  // Задачи с флагом «нужен макет» без утверждения — к дизайнеру, пока макет не утверждён
-  if (t.mockupRequired && !t.mockupApprovedBy) return "designer";
+  if (t.mockupRequired && !t.mockupApprovedBy) {
+    // Шаг 1 цепочки: требования к экранам не написаны → к продакту; написаны → к дизайнеру
+    return t.screenRequirements?.trim() ? "designer" : "product";
+  }
   if (t.status === "ready") return t.layer === "none" ? "nocode" : "dev";
   if (t.status === "review" && t.layer !== "none") return t.testedSha ? "deployer" : "tester";
   return null;
@@ -513,12 +515,15 @@ export function inDesignerQueue(t: {
   hasAnyAttachments: boolean;
   /** Нужно описание дизайна: ставит триаж при разборе. true — задача идёт к дизайнеру */
   needsDesign?: boolean | null;
+  /** Требования к экранам (шаг 1 цепочки): без них задача идёт к продакту, не к дизайнеру */
+  screenRequirements?: string | null;
 }): boolean {
   // Заблокирована на дизайне, но макет ещё не подан (нет mockupUrl)
   if (t.status === "blocked" && t.blockedOn === "design" && !t.mockupUrl) return true;
   // Нужен макет, не утверждён и не подан: бэклог, очередь или в работе
+  // Гейт шага 1: без screenRequirements задача сначала идёт к продакту (шаг 1)
   const open = ["backlog", "ready", "in_progress"];
-  if (open.includes(t.status) && t.mockupRequired && !t.mockupApprovedBy && !t.mockupUrl && !t.hasImageAttachments) return true;
+  if (open.includes(t.status) && t.mockupRequired && !t.mockupApprovedBy && !t.mockupUrl && !t.hasImageAttachments && t.screenRequirements?.trim()) return true;
   // Задача с флагом «нужно описание дизайна» без описания, без файлов и без утверждённого макета
   if (["backlog", "ready"].includes(t.status) && t.needsDesign === true && !t.design?.trim() && !t.hasAnyAttachments && !t.mockupApprovedBy && !t.mockupUrl) return true;
   return false;
