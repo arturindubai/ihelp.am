@@ -1895,7 +1895,7 @@
   },
   "cart": {
     "checkout": "Book",
-    "itemsCount": "{count, plural, one {# item} other {# items}}",
+    "itemsCount": "{count, plural, one {# service} other {# services}}",
     "total": "{amount} ֏"
   },
   "catalog": {
