@@ -28,6 +28,11 @@
     "telegramDisconnect": "Disconnect",
     "telegramLinked": "Telegram @{username} connected",
     "telegramLinkedNoUsername": "Telegram connected",
+    "googleConnect": "Connect Google",
+    "googleEmailMismatch": "Your profile already has a different email; change it manually first",
+    "googleLinked": "Google connected",
+    "googleTitle": "Google",
+    "googleUsed": "This Google account is already in use",
     "telegramTitle": "Telegram",
     "title": "Profile",
     "upcoming": "Upcoming"

@@ -11,7 +11,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { AddressForm, addressLine, type AddressRow } from "@/components/booking/AddressForm";
 import { formatPhone } from "@/lib/phone";
 
-export function ProfileClient({ user, addresses: initial, districts, enabledLocales, emailCodes, telegramLinkEnabled, telegramError }: { user: { name: string | null; phone: string; email: string | null; emailVerified: boolean; locale: string; telegramId: string | null; telegramUsername: string | null; adsConsent: boolean; emailReminders: boolean }; addresses: AddressRow[]; districts: string[]; enabledLocales: string[]; emailCodes: boolean; telegramLinkEnabled: boolean; telegramError: string | null }) {
+export function ProfileClient({ user, addresses: initial, districts, enabledLocales, emailCodes, telegramLinkEnabled, telegramError, googleEnabled, googleLinkError }: { user: { name: string | null; phone: string; email: string | null; emailVerified: boolean; locale: string; telegramId: string | null; telegramUsername: string | null; adsConsent: boolean; emailReminders: boolean }; addresses: AddressRow[]; districts: string[]; enabledLocales: string[]; emailCodes: boolean; telegramLinkEnabled: boolean; telegramError: string | null; googleEnabled: boolean; googleLinkError: string | null }) {
   const t = useTranslations("account");
   const ta = useTranslations("address");
   const tc = useTranslations("common");
@@ -66,6 +66,10 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
 
       {telegramLinkEnabled && (
         <TelegramSection telegramId={user.telegramId} telegramUsername={user.telegramUsername} error={telegramError} />
+      )}
+
+      {googleEnabled && (
+        <GoogleSection emailVerified={emailVerified} email={savedEmail} error={googleLinkError} />
       )}
 
       {user.email && <EmailRemindersSection initialValue={user.emailReminders} />}
@@ -205,6 +209,28 @@ function AdsConsentSection({ initialValue }: { initialValue: boolean }) {
           <span className="mt-0.5 block text-xs text-muted">{tc("ads.hint")}</span>
         </span>
       </label>
+    </section>
+  );
+}
+
+/** Блок привязки Google в профиле (AUTH-20): привязать OAuth или показать chip «Google подключён» */
+function GoogleSection({ emailVerified, email, error }: { emailVerified: boolean; email: string; error: string | null }) {
+  const t = useTranslations("account");
+
+  return (
+    <section className="card mt-4 p-4">
+      <h2 className="h3 mb-3">{t("googleTitle")}</h2>
+      {emailVerified ? (
+        <span className="chip bg-ok-50 text-ok">{t("googleLinked")} {email}</span>
+      ) : (
+        <>
+          <a className="btn-outline btn-sm" href="/api/auth/google/link-start">
+            {t("googleConnect")}
+          </a>
+          {error === "google_used" && <p className="mt-2 text-sm bg-bad-50 text-bad rounded px-2 py-1">{t("googleUsed")}</p>}
+          {error === "email_mismatch" && <p className="mt-2 text-sm bg-bad-50 text-bad rounded px-2 py-1">{t("googleEmailMismatch")}</p>}
+        </>
+      )}
     </section>
   );
 }

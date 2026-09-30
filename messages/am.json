@@ -26,6 +26,11 @@
     "telegramDisconnect": "",
     "telegramLinked": "",
     "telegramLinkedNoUsername": "",
+    "googleConnect": "",
+    "googleEmailMismatch": "",
+    "googleLinked": "",
+    "googleTitle": "Google",
+    "googleUsed": "",
     "telegramTitle": "Telegram",
     "title": "Պրոֆիլ",
     "upcoming": ""

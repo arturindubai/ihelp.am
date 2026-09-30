@@ -28,6 +28,11 @@
     "telegramDisconnect": "Отвязать",
     "telegramLinked": "Telegram @{username} подключён",
     "telegramLinkedNoUsername": "Telegram подключён",
+    "googleConnect": "Привязать Google",
+    "googleEmailMismatch": "В профиле уже указан другой email; сначала измените его вручную",
+    "googleLinked": "Google подключён",
+    "googleTitle": "Google",
+    "googleUsed": "Этот Google-аккаунт уже используется",
     "telegramTitle": "Telegram",
     "title": "Профиль",
     "upcoming": "Предстоящие"
