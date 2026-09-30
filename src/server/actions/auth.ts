@@ -8,6 +8,7 @@ import { sendOtp, verifyOtp } from "../otp";
 import { createSession, getCurrentUser, hash, logout } from "../auth";
 import { audit } from "../audit";
 import { packSignupTicket, unpackSignupTicket } from "@/lib/signupTicket";
+import { unpackGoogleSignupTicket } from "@/lib/googleSignupTicket";
 import { alertTech } from "../alerts";
 import { html } from "../notify";
 
@@ -164,4 +165,39 @@ export async function setNameAction(name: string) {
 
 export async function logoutAction() {
   await logout();
+}
+
+/**
+ * Завершение регистрации через Google: email подтверждён Google (тикет), телефон — OTP-кодом.
+ * Аккаунт создаётся только после успешного подтверждения телефона.
+ */
+export async function finishGoogleSignupAction(ticket: string, nameRaw: string, phoneRaw: string, code: string) {
+  const t = unpackGoogleSignupTicket(ticket, secret());
+  if (!t) return { ok: false as const, error: "google_signup_ticket_expired" };
+  const name = nameRaw.trim().slice(0, 80);
+  if (!name) return { ok: false as const, error: "name" };
+  const phone = normalizePhone(phoneRaw);
+  if (!phone) return { ok: false as const, error: "phone" };
+  if (!/^\d{4,6}$/.test(code.trim()) || !(await verifyOtp(phone, code))) return { ok: false as const, error: "code" };
+  if (await db.user.findUnique({ where: { phone } })) return { ok: false as const, error: "google_signup_phone_taken" };
+  try {
+    const now = new Date();
+    const created = await db.user.create({
+      data: {
+        phone,
+        email: t.email,
+        emailVerifiedAt: now,
+        name,
+        locale: ["ru", "en", "am"].includes(t.locale) ? t.locale : "ru",
+        privacyConsentAt: now,
+      },
+    });
+    const user = await linkMasterRole(created);
+    await createSession(user.id, user.role);
+    await audit(user.id, "auth.google.signup", "User", user.id, { email: t.email });
+    return { ok: true as const, role: user.role };
+  } catch {
+    // Гонка: email или телефон успели занять пока вводили код
+    return { ok: false as const, error: "exists" };
+  }
 }

@@ -478,6 +478,16 @@ async function testTask(key) {
   tryGit(["fetch", "-q", "origin"], ROOT);
   const sha = tryGit(["rev-parse", "--verify", "-q", `refs/remotes/origin/${branch}`], ROOT);
   if (!sha) die(`ветки ${branch} нет в репозитории — проверять нечего`);
+  // Критерий 2: ветка должна содержать текущий origin/main; тестировщик проверяет merged-result, не изолированную ветку
+  const isUpToDate = tryGit(["merge-base", "--is-ancestor", "origin/main", `refs/remotes/origin/${branch}`], ROOT);
+  if (isUpToDate === null) {
+    const behind = tryGit(["rev-list", "--count", `origin/${branch}..origin/main`], ROOT) ?? "?";
+    const reason = `Ветка ${branch} отстаёт от origin/main на ${behind} коммит(а). Тестирование не начато: тестировщик проверяет merged-result, а не изолированную ветку. Разработчик должен обновить ветку: git merge origin/main && git push, затем сдать задачу снова.`;
+    await api("POST", null, { action: "test-fail", agent, key, text: reason });
+    dropState(key);
+    console.log(`✗ ${key}: ветка не содержит текущий main — возвращена разработчику без тестирования`);
+    return;
+  }
   const dir = path.join(WT, `test-${key}`);
   const list = tryGit(["worktree", "list", "--porcelain"], ROOT) ?? "";
   if (list.split("\n").includes(`worktree ${dir}`)) git(["checkout", "-q", "--detach", sha], dir);
@@ -509,14 +519,23 @@ function branchFacts(branch) {
   }
   const commits = tryGit(["log", "--oneline", "--no-merges", `origin/main..origin/${branch}`], ROOT) ?? "";
   if (!commits) die(`в ${branch} нет коммитов поверх main — сдавать нечего`);
+  // Критерий 1: ветка должна содержать текущий origin/main, иначе при слиянии деплоер получит конфликт
+  const isUpToDate = tryGit(["merge-base", "--is-ancestor", "origin/main", `origin/${branch}`], ROOT);
+  const behind = tryGit(["rev-list", "--count", `origin/${branch}..origin/main`], ROOT);
+  if (isUpToDate === null) {
+    die(
+      `Ветка ${branch} отстаёт от origin/main на ${behind ?? "?"} коммит(а).\n` +
+      `  Обновите: git merge origin/main\n` +
+      `  Затем:    git push && node scripts/cc.mjs review ${branch.replace("task/", "")} "…"`,
+    );
+  }
   const stat = (tryGit(["diff", "--shortstat", `origin/main...origin/${branch}`], ROOT) ?? "").trim();
   const files = (tryGit(["diff", "--name-only", `origin/main...origin/${branch}`], ROOT) ?? "").split("\n").filter(Boolean);
   const migrations = files.filter((f) => f.startsWith("prisma/migrations/"));
-  const behind = tryGit(["rev-list", "--count", `origin/${branch}..origin/main`], ROOT);
   return [
     "",
     "— факты из git —",
-    `Ветка: ${branch}${behind && behind !== "0" ? ` (отстаёт от main на ${behind})` : ""}`,
+    `Ветка: ${branch}`,
     `Коммиты:\n${commits
       .split("\n")
       .slice(0, 20)
@@ -801,21 +820,42 @@ async function main() {
       const k = needKey();
       if (!flags.sha) die("нужен коммит в main: --sha <коммит>");
       const sha = String(flags.sha);
-      // Проверяем, что SHA содержит файлы задачи — нельзя закрывать задачу чужим коммитом (критерии 4, 5)
-      const taskInfo = await api("GET", { key: k });
-      const scope = (taskInfo.task?.scope ?? []).filter(Boolean);
-      if (scope.length > 0 && /^[0-9a-f]{7,40}$/i.test(sha)) {
+      // Проверяем, что коммит принадлежит задаче — нельзя закрывать задачу чужим коммитом
+      if (/^[0-9a-f]{7,40}$/i.test(sha)) {
         tryGit(["fetch", "-q", "origin"], ROOT);
-        // git diff --name-only SHA^1 SHA показывает файлы, изменённые в этом коммите (работает и для merge-коммитов)
-        const changedRaw = tryGit(["diff", "--name-only", `${sha}^1`, sha], ROOT) ?? "";
-        const changed = new Set(changedRaw.split("\n").filter(Boolean));
-        const normS = (s) => s.replace(/\/$/, "");
-        const hasTaskFile = scope.some((s) => {
-          const ns = normS(s);
-          return [...changed].some((c) => c === ns || c.startsWith(ns + "/") || normS(c) === ns || ns.startsWith(normS(c) + "/"));
-        });
-        if (!hasTaskFile) {
-          die(`Коммит ${sha.slice(0, 10)} не затрагивает файлы задачи ${k}: ${scope.slice(0, 3).join(", ")}.\nЭто коммит другой задачи — нельзя закрывать им ${k}. Проверьте SHA.`);
+        // Первичная проверка: тема коммита «Слияние task/KEY: …» или «Слияние пачки task/KEY: …»
+        // Такие темы устанавливает только деплоер — по ним однозначно определяем принадлежность слияния
+        const commitSubject = tryGit(["log", "-1", "--format=%s", sha], ROOT)?.trim() ?? "";
+        const isMergeForTask =
+          commitSubject.startsWith(`Слияние task/${k}:`) ||
+          commitSubject.startsWith(`Слияние пачки task/${k}:`);
+        if (!isMergeForTask) {
+          // Вторичная проверка: второй родитель — голова ветки task/KEY (если ветка ещё не удалена)
+          const parent2 = tryGit(["rev-parse", "--verify", "-q", `${sha}^2`], ROOT)?.trim();
+          const branchHead = parent2
+            ? (tryGit(["rev-parse", "--verify", "-q", `origin/task/${k}`], ROOT)?.trim()
+               ?? tryGit(["rev-parse", "--verify", "-q", `task/${k}`], ROOT)?.trim())
+            : null;
+          const isParentOnTaskBranch = !!(parent2 && branchHead && parent2 === branchHead);
+          if (!isParentOnTaskBranch) {
+            // Запасная проверка: коммит меняет хотя бы один файл из поля «Затрагивает»
+            // Поле бывает неточным (BUG-8 29.09), поэтому не является единственным критерием
+            const taskInfo = await api("GET", { key: k });
+            const scope = (taskInfo.task?.scope ?? []).filter(Boolean);
+            if (scope.length > 0) {
+              // git diff --name-only SHA^1 SHA показывает файлы коммита (работает и для merge-коммитов)
+              const changedRaw = tryGit(["diff", "--name-only", `${sha}^1`, sha], ROOT) ?? "";
+              const changed = new Set(changedRaw.split("\n").filter(Boolean));
+              const normS = (s) => s.replace(/\/$/, "");
+              const hasTaskFile = scope.some((s) => {
+                const ns = normS(s);
+                return [...changed].some((c) => c === ns || c.startsWith(ns + "/") || normS(c) === ns || ns.startsWith(normS(c) + "/"));
+              });
+              if (!hasTaskFile) {
+                die(`Коммит ${sha.slice(0, 10)} не является слиянием ветки task/${k} и не затрагивает файлы задачи ${k}: ${scope.slice(0, 3).join(", ")}.\nЭто коммит другой задачи — нельзя закрывать им ${k}. Проверьте SHA.`);
+              }
+            }
+          }
         }
       }
       const r = await api("POST", null, { action: "done", agent: agentFor(k), key: k, sha, text: text() });
@@ -883,7 +923,8 @@ async function main() {
     case "triaged": {
       const k = needKey();
       if (text().length < 10) die("нужен вердикт словами: что проверено и что решено (в очередь, вопрос, отложено, разбито на …)");
-      await api("POST", null, { action: "triaged", agent: agentFor(k), key: k, text: text() });
+      const r = await api("POST", null, { action: "triaged", agent: agentFor(k), key: k, text: text() });
+      if (!r?.ok) die(`${k}: сервер не принял отметку триажа`);
       console.log(`✓ ${k} разобрана триажем`);
       return;
     }

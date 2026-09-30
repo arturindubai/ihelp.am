@@ -46,6 +46,8 @@ model User {
   telegramUsername String?
   /// Согласие на рекламные рассылки (LEGAL-2): null — не давал, дата — дал; отзывается в профиле
   adsConsentAt     DateTime?
+  /// Когда клиент отписался от транзакционных писем (ссылка в подвале письма): дата отписки или null
+  emailUnsubscribedAt DateTime?
   /// Поправка прав по конкретному человеку поверх роли: { added: string[], removed: string[] }
   sectionDelta     Json?
 
@@ -474,7 +476,7 @@ model Banner {
   bg          String?
   active      Boolean   @default(true)
   sort        Int       @default(0)
-  /// Место размещения: CAROUSEL_HOME | HERO_HOME | CATALOG | SERVICE | CHECKOUT | SUCCESS | EMAIL | MASTER_CABINET
+  /// Место размещения: CAROUSEL_HOME | HERO_HOME | CATALOG | SERVICE | CHECKOUT | SUCCESS | EMAIL | CLIENT_CABINET | MASTER_CABINET
   placement   String    @default("CAROUSEL_HOME")
   /// Тип: PROMO | ANNOUNCEMENT | UPSELL | CROSS_SELL
   bannerType  String    @default("PROMO")
@@ -625,6 +627,8 @@ model Task {
   mockupApprovedBy  String?
   /// Когда утвердили макет
   mockupApprovedAt  DateTime?
+  /// Требования к экранам: продакт пишет до того, как дизайнер берёт задачу (шаг 1 цепочки макета)
+  screenRequirements String?  @map("screen_requirements")
   /// Нужно описание дизайна: ставит триаж при разборе; true — задача идёт к дизайнеру, false — разработчик возьмёт без ожидания
   needsDesign       Boolean?
   /// «Что изменилось для людей» — 1–2 предложения простым языком для Release Notes
@@ -639,6 +643,8 @@ model Task {
   intakeText       String?
   /// Карта просьб при закрытии intake: каждая просьба → ключ задачи или причина отказа. Обязательна для source=intake при закрытии
   intakeClosingMap String?
+  /// Ключи follow-up карточек, заведённых при закрытии из чек-листа критериев (ручные шаги «вынесены в карточку»)
+  followUps     String[]  @default([]) @map("follow_ups")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -887,4 +893,18 @@ model AppError {
   taskKey     String?
 
   @@index([lastSeenAt])
+}
+
+/// Заявки «Уведомить меня» для категорий-заглушек
+model ServiceInterest {
+  id          String   @id @default(cuid())
+  serviceSlug String
+  contact     String
+  ip          String?
+  createdAt   DateTime @default(now())
+
+  @@unique([serviceSlug, contact])
+  @@index([serviceSlug])
+  @@index([ip, createdAt])
+  @@map("service_interest")
 }

@@ -30,7 +30,7 @@ export interface Settings {
     telegram: { enabled: boolean; gatewayToken: string };
   };
   /** telegramBotUsername — имя бота без @ (для кнопки «Войти через Telegram»); заполняется при подключении входа через бота */
-  notify: { telegramBotToken: string; telegramChatId: string; techChatId: string; telegramBotUsername: string; teamChatId: string; telegramOrderThreadId: string; telegramTechThreadId: string };
+  notify: { telegramBotToken: string; telegramChatId: string; techChatId: string; telegramBotUsername: string; teamChatId: string; telegramOrderThreadId: string; telegramTechThreadId: string; telegramTasksThreadId: string; quietHourStart: number; quietHourEnd: number };
   /** Вход через Google (OAuth). Адрес возврата: <APP_URL>/api/auth/google/callback — работает только по https */
   google: { enabled: boolean; clientId: string; clientSecret: string };
   /** Вход через Apple (Sign in with Apple). Адрес возврата: <APP_URL>/api/auth/apple/callback — работает только по https.
@@ -92,7 +92,7 @@ export const DEFAULT_SETTINGS: Settings = {
     whatsapp: { enabled: false, phoneNumberId: "", accessToken: "", templateName: "", templateLang: "ru" },
     telegram: { enabled: false, gatewayToken: "" },
   },
-  notify: { telegramBotToken: "", telegramChatId: "", techChatId: "", telegramBotUsername: "", teamChatId: "", telegramOrderThreadId: "", telegramTechThreadId: "" },
+  notify: { telegramBotToken: "", telegramChatId: "", techChatId: "", telegramBotUsername: "", teamChatId: "", telegramOrderThreadId: "", telegramTechThreadId: "", telegramTasksThreadId: "", quietHourStart: 21, quietHourEnd: 9 },
   google: { enabled: false, clientId: "", clientSecret: "" },
   apple: { enabled: false, teamId: "", keyId: "", clientId: "", privateKey: "" },
   mail: { enabled: false, apiKey: "", from: "", replyTo: "" },

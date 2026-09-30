@@ -239,7 +239,8 @@ export async function designerQueue() {
       OR: [
         // Заблокирована на дизайне, но макет ещё не подан (mockupUrl не задан)
         { status: "blocked", blockedOn: "design", mockupUrl: null },
-        { status: open, mockupRequired: true, mockupApprovedBy: null, mockupUrl: null, attachments: { none: { mime: { startsWith: "image/" } } } },
+        // Гейт шага 1: задача с mockupRequired попадает к дизайнеру только после того, как продакт написал screenRequirements
+        { status: open, mockupRequired: true, mockupApprovedBy: null, mockupUrl: null, attachments: { none: { mime: { startsWith: "image/" } } }, NOT: [{ screenRequirements: null }, { screenRequirements: "" }] },
         { status: { in: ["backlog", "ready"] }, needsDesign: true, mockupApprovedBy: null, mockupUrl: null, OR: [{ design: null }, { design: "" }], attachments: { none: {} } },
       ],
     },
@@ -264,16 +265,19 @@ export async function designerQueue() {
   return filtered.sort((a, b) => Number(b.status === "blocked") - Number(a.status === "blocked") || PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority) || STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage) || a.sort - b.sort);
 }
 
-/** Очередь продакта: заблокированные на product + «В очереди» с открытыми needs; важные первыми */
+/** Очередь продакта: заблокированные на product + «В очереди» с открытыми needs + шаг 1 цепочки макета (mockupRequired без screenRequirements); важные первыми */
 export async function productQueue() {
+  const open = ["backlog", "ready", "in_progress"];
   const rows = await db.task.findMany({
     where: {
       OR: [
         { status: "blocked", blockedOn: "product" },
         { status: "ready", needs: { isEmpty: false } },
+        // Шаг 1 цепочки: нужен макет, но требования к экранам ещё не написаны
+        { status: { in: open }, mockupRequired: true, mockupApprovedBy: null, OR: [{ screenRequirements: null }, { screenRequirements: "" }] },
       ],
     },
-    select: { key: true, title: true, priority: true, stage: true, status: true, sort: true, source: true, blockedReason: true, needs: true },
+    select: { key: true, title: true, priority: true, stage: true, status: true, sort: true, source: true, blockedReason: true, needs: true, mockupRequired: true, screenRequirements: true },
   });
   // Заблокированные (ждут ответа) — первыми; внутри группы — по приоритету и этапу
   return rows.sort(
@@ -527,14 +531,12 @@ export async function workersOverview() {
     lastStart,
     queues: {
       triage: triage.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, intake: t.source === "intake" })),
-      product: product.map((t) => ({
-        key: t.key,
-        title: t.title,
-        priority: t.priority,
-        status: t.status,
-        reason: t.status === "blocked" ? "question" : "needs",
-        detail: t.status === "blocked" ? (t.blockedReason ?? "").slice(0, 80) : (t.needs?.[0] ?? "").slice(0, 80),
-      })),
+      product: product.map((t) => {
+        const isStep1 = t.mockupRequired && !t.screenRequirements?.trim();
+        const reason = t.status === "blocked" ? "question" : isStep1 ? "requirements" : "needs";
+        const detail = t.status === "blocked" ? (t.blockedReason ?? "").slice(0, 80) : isStep1 ? "" : (t.needs?.[0] ?? "").slice(0, 80);
+        return { key: t.key, title: t.title, priority: t.priority, status: t.status, reason, detail };
+      }),
       designer: designer.map((t) => ({ key: t.key, title: t.title, priority: t.priority, status: t.status, reason: t.status === "blocked" && t.blockedOn === "design" ? "returned" : t.status === "blocked" ? "question" : t.mockupRequired ? "mockup" : "nodesign", detail: (t.blockedReason ?? "").slice(0, 80) })),
       dev,
       nocode,
