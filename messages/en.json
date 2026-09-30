@@ -640,6 +640,14 @@
         "note": "Values are write-only: they are not shown in the browser, not written to log, not visible in chats. Stored in database encrypted and included in nightly backup. Log only records who and when changed the key.",
         "pastePh": "Paste key",
         "present": "set",
+        "push": {
+          "createdAt": "Created {when}",
+          "noEncKey": "no encryption key",
+          "notReady": "not created yet",
+          "purpose": "VAPID keys for push notifications on mobile without an open site. Created automatically on first request.",
+          "ready": "keys created",
+          "title": "Push notifications"
+        },
         "replace": "Replace",
         "save": "Save",
         "saving": "Saving…",
@@ -1110,7 +1118,6 @@
         "postponePh": "Reason (optional)…",
         "postponedSectionHint": "Tasks with external blocks: postponed by owner and waiting for external events.",
         "postponedUntil": "returns {date}",
-        "replyOrWritePh": "or write your answer",
         "replyPh": "Your answer…",
         "replySend": "Reply",
         "returnedRuns": "Returned for revision",
@@ -1500,7 +1507,6 @@
       "newService": "+ Service",
       "noMasters": "No assigned masters",
       "noServicesInCategory": "No services in category",
-      "noVariants": "No variants — clients won't be able to choose",
       "note": "Note block",
       "noteBody": "Text",
       "noteTitle": "Title",
@@ -1512,8 +1518,6 @@
       "planKind": "Plan type",
       "plans": "Plans (frequency & packages)",
       "policy": "Terms",
-      "previewOptions": "{groups} {groups, plural, one {group} other {groups}}, {variants} {variants, plural, one {variant} other {variants}}",
-      "previewStep": "Step {n}",
       "pricePreview": "Visit price for '{option}': {price}",
       "question": "Question",
       "rating": "Rating",
@@ -2263,6 +2267,12 @@
     "toCollect": "Collect from client",
     "today": "Today",
     "upcoming": "Upcoming"
+  },
+  "push": {
+    "allow": "Allow",
+    "body": "Allow notifications to stay updated on your bookings",
+    "dismiss": "Not now",
+    "title": "Visit notifications"
   },
   "review": {
     "alreadyLeft": "You have already left a review for this visit.",

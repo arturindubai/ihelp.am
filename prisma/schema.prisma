@@ -51,13 +51,27 @@ model User {
   /// Поправка прав по конкретному человеку поверх роли: { added: string[], removed: string[] }
   sectionDelta     Json?
 
-  sessions    Session[]
-  addresses   Address[]
-  orders      Order[]
-  reviews     Review[]
-  master      Master?
-  redemptions PromoRedemption[]
-  auditLogs   AuditLog[]
+  sessions          Session[]
+  addresses         Address[]
+  orders            Order[]
+  reviews           Review[]
+  master            Master?
+  redemptions       PromoRedemption[]
+  auditLogs         AuditLog[]
+  pushSubscriptions PushSubscription[]
+}
+
+/// Web Push подписки (VAPID): endpoint + ключи для отправки push-уведомлений без открытого сайта
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Session {

@@ -1,4 +1,4 @@
-// Минимальный сервис-воркер: нужен, чтобы телефон предлагал установить сайт как приложение.
+// Сервис-воркер: установка сайта как приложения, кэш статики, push-уведомления.
 // Страницы не кэшируем (контент меняется в админке), кэшируем только статику сборки.
 const STATIC = "ihelp-static-v1";
 
@@ -58,4 +58,37 @@ self.addEventListener("fetch", (event) => {
       }),
     );
   }
+});
+
+// Push-уведомления: показать системное уведомление при получении push от сервера
+self.addEventListener("push", (event) => {
+  // Всегда вызываем waitUntil: браузер требует видимого уведомления для каждого push-события
+  let data = { title: "iHelp", body: "", url: "/" };
+  if (event.data) {
+    try { Object.assign(data, event.data.json()); } catch { /* не JSON — показываем заглушку */ }
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      data: { url: data.url },
+    }),
+  );
+});
+
+// Клик по уведомлению — открыть нужную страницу
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const relUrl = event.notification.data?.url || "/";
+  // client.url — полный адрес; преобразуем относительный url к абсолютному для сравнения
+  const absUrl = new URL(relUrl, self.location.origin).href;
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if (client.url === absUrl && "focus" in client) return client.focus();
+      }
+      return clients.openWindow(relUrl);
+    }),
+  );
 });
