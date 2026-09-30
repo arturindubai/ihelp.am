@@ -79,6 +79,8 @@ const orderSchema = z.object({
   masterId: z.string().nullable(),
   promoCode: z.string().max(40).nullable(),
   comment: z.string().max(1000).nullable(),
+  noCall: z.boolean().default(false),
+  tipAmount: z.number().int().min(0).max(100_000).default(0),
   paymentMethod: z.enum(["CASH", "CARD"]),
   locale: z.string().max(5),
 });

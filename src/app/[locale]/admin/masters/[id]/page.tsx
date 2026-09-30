@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
-import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
 import { tr } from "@/i18n/locales";
 import { ymd } from "@/lib/time";
+import { getAdminMasterEdit } from "@/server/services/pages/admin";
 import { Forbidden } from "@/components/admin/ui";
 import { MasterEditor } from "@/components/admin/MasterEditor";
 import type { MasterPayload } from "@/server/actions/admin/masters";
@@ -12,14 +12,13 @@ const DEFAULT_HOURS = Object.fromEntries([1, 2, 3, 4, 5, 6].map((d) => [String(d
 export default async function EditMaster({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params;
   if (!(await pageUser("masters"))) return <Forbidden />;
-  const services = await db.service.findMany({ orderBy: { sort: "asc" } });
+  const { master: m, services } = await getAdminMasterEdit(id);
   const sv = services.map((s) => ({ id: s.id, title: tr(s.title, locale) }));
-  if (id === "new") {
+  if (!m) {
+    if (id !== "new") notFound();
     const init: MasterPayload = { slug: "", name: {}, bio: {}, photo: null, phone: "", experienceYears: 0, languages: ["hy", "ru"], workingHours: DEFAULT_HOURS, active: true, sort: 0, skills: services.map((s) => s.id), timeOff: [] };
     return <MasterEditor id={null} initial={init} services={sv} stats={null} />;
   }
-  const m = await db.master.findUnique({ where: { id }, include: { skills: { select: { id: true } }, timeOff: { orderBy: { from: "asc" } } } });
-  if (!m) notFound();
   const init: MasterPayload = {
     slug: m.slug, name: m.name as Record<string, string>, bio: m.bio as Record<string, string>, photo: m.photo, phone: m.phone || "", experienceYears: m.experienceYears, languages: m.languages,
     workingHours: m.workingHours as MasterPayload["workingHours"], active: m.active, sort: m.sort, skills: m.skills.map((s) => s.id),

@@ -59,6 +59,7 @@ model User {
   redemptions       PromoRedemption[]
   auditLogs         AuditLog[]
   pushSubscriptions PushSubscription[]
+  cart              Cart?
   priceAudits       PriceAudit[]
 }
 
@@ -333,6 +334,12 @@ model Order {
   promoCodeId       String?
   promoCode         PromoCode?    @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
   comment           String?
+  /// Клиент попросил не звонить, только мессенджер — отдельное булево поле, не префикс комментария
+  noCall            Boolean       @default(false)
+  /// Чаевые мастеру целыми драмами, 100 % мастеру; 0 = не выбраны
+  tipAmount         Int           @default(0)
+  /// Штраф за позднюю отмену (фиксированная сумма из настроек на момент отмены); 0 = отмены не было или отменили вовремя
+  cancelPenalty     Int           @default(0)
   locale            String        @default("ru")
   source            String        @default("web")
   cancelReason      String?
@@ -955,6 +962,37 @@ model AiRequest {
 
   @@index([status, createdAt])
   @@index([createdAt])
+}
+
+/// Серверная корзина покупок (FLOW-3): переживает выход/вход и смену устройства
+model Cart {
+  id        String     @id @default(cuid())
+  /// Пользователь — корзина привязана к аккаунту
+  userId    String?    @unique
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Анонимный идентификатор из cookie cart_anon (до входа)
+  anonId    String?    @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  items     CartItem[]
+
+  @@index([anonId])
+}
+
+/// Позиция в серверной корзине: одна запись на услугу
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  serviceId String
+  optionIds String[] @default([])
+  planId    String?
+  qty       Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cartId, serviceId])
+  @@index([cartId])
 }
 
 /// Журнал изменений цен (ADMIN-11): кто, когда, какой тариф изменён с какой на какую цену

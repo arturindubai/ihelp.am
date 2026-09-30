@@ -43,10 +43,15 @@ function SmallToggle({ checked, onChange, disabled, label }: { checked: boolean;
   );
 }
 
-function StatusBadge({ active, comingSoon, archived }: { active: boolean; comingSoon: boolean; archived: boolean }) {
+function StatusBadge({ active, comingSoon, archived, demandCount }: { active: boolean; comingSoon: boolean; archived: boolean; demandCount?: number }) {
   const t = useTranslations("admin.services");
   if (archived) return <span className="chip bg-surface text-muted">{t("archived")}</span>;
-  if (comingSoon) return <span className="chip bg-badge text-on-badge">{t("comingSoonLabel")}</span>;
+  if (comingSoon) return (
+    <span className="flex items-center gap-1">
+      <span className="chip bg-badge text-on-badge">{t("comingSoonLabel")}</span>
+      {!!demandCount && <span className="chip bg-surface text-muted text-[10px]">{t("demandCount", { n: demandCount })}</span>}
+    </span>
+  );
   if (!active) return <span className="chip bg-bad-50 text-bad">{t("filterHidden")}</span>;
   return null;
 }
@@ -184,7 +189,7 @@ export function CatalogList({ categories: initial, pageTitle }: { categories: Ad
               </div>
             </div>
             <div className="shrink-0">
-              <StatusBadge active={cat.active} comingSoon={cat.comingSoon} archived={cat.archived} />
+              <StatusBadge active={cat.active} comingSoon={cat.comingSoon} archived={cat.archived} demandCount={cat.demandCount} />
             </div>
           </li>
         ))}
@@ -330,6 +335,7 @@ export function CatalogList({ categories: initial, pageTitle }: { categories: Ad
                     onDragEnd={() => { dragSvcRef.current = null; setDragSvcOver(null); }}
                     onToggleActive={(v) => toggleActive(svc.id, v)}
                     onToggleSoon={(v) => toggleSoon(svc.id, v)}
+                    demandCount={svc.demandCount}
                     onDuplicate={() => start(async () => { const r = await duplicateServiceAction(svc.id); router.push(`/admin/services/${r.id}`); })}
                     onDelete={() => { if (confirm(tc("deleteConfirm"))) start(async () => { await deleteServiceAction(svc.id); router.refresh(); }); }}
                   />
@@ -385,6 +391,9 @@ export function CatalogList({ categories: initial, pageTitle }: { categories: Ad
             <NumInput label={tc("sort")} value={editCat.sort} onChange={(v) => setEditCat({ ...editCat, sort: v ?? 0 })} />
             <Toggle label={tc("active")} checked={editCat.active} onChange={(v) => setEditCat({ ...editCat, active: v })} />
             <Toggle label={t("comingSoon")} checked={editCat.comingSoon} onChange={(v) => setEditCat({ ...editCat, comingSoon: v })} />
+            {!editCat.comingSoon && editCat.id && (categories.find((c) => c.id === editCat.id)?.services.filter((s) => s.active).length ?? 1) === 0 && (
+              <p className="text-xs text-muted">{t("comingSoonEmptyCategoryHint")}</p>
+            )}
             <Toggle label={t("showFormats")} checked={editCat.showFormats ?? false} onChange={(v) => setEditCat({ ...editCat, showFormats: v })} />
             {editCatErr && <p className="text-sm text-bad">{editCatErr}</p>}
           </div>
@@ -397,7 +406,7 @@ export function CatalogList({ categories: initial, pageTitle }: { categories: Ad
 function ServiceRow({
   svc, locale, index, pending, dragOver,
   onDragStart, onDragOver, onDragLeave, onDrop, onDragEnd,
-  onToggleActive, onToggleSoon, onDuplicate, onDelete,
+  onToggleActive, onToggleSoon, onDuplicate, onDelete, demandCount,
 }: {
   svc: AdminCatalogService;
   locale: string;
@@ -413,6 +422,7 @@ function ServiceRow({
   onToggleSoon: (v: boolean) => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  demandCount: number;
 }) {
   const t = useTranslations("admin.services");
   const tc = useTranslations("admin.common");
@@ -455,7 +465,12 @@ function ServiceRow({
       {/* Переключатели и кнопки */}
       <div className="flex items-center gap-2 sm:shrink-0">
         <SmallToggle checked={svc.active} onChange={onToggleActive} disabled={pending} label={tc("active")} />
-        <SmallToggle checked={svc.comingSoon} onChange={onToggleSoon} disabled={pending} label={t("comingSoon")} />
+        <div className="flex items-center gap-1">
+          <SmallToggle checked={svc.comingSoon} onChange={onToggleSoon} disabled={pending} label={t("comingSoon")} />
+          {svc.comingSoon && demandCount > 0 && (
+            <span className="chip bg-surface text-muted text-[10px]">{t("demandCount", { n: demandCount })}</span>
+          )}
+        </div>
         <div className="flex items-center">
           <Link className="btn-ghost btn-sm px-1.5" href={`/admin/services/${svc.id}`} title={tc("edit")}><Pencil size={15} /></Link>
           <button className="btn-ghost btn-sm px-1.5" title={tc("copy")} disabled={pending} onClick={onDuplicate}><Copy size={15} /></button>

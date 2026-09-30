@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
-import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
 import { getSettings } from "@/server/settings";
+import { getAdminServiceEdit } from "@/server/services/pages/admin";
 import { tr } from "@/i18n/locales";
 import { Forbidden } from "@/components/admin/ui";
 import { ServiceEditor } from "@/components/admin/ServiceEditor";
@@ -10,37 +10,8 @@ import type { ServicePayload } from "@/server/actions/admin/catalog";
 export default async function EditService({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params;
   if (!(await pageUser("services"))) return <Forbidden />;
-  const s = await db.service.findUnique({
-    where: { id },
-    include: {
-      groups: { orderBy: { sort: "asc" }, include: { options: { orderBy: { sort: "asc" } } } },
-      plans: { orderBy: { sort: "asc" } },
-      masters: { select: { id: true } },
-    },
-  });
+  const [{ service: s, cats, masters: allMasters, visitMap, orders30d }, settings] = await Promise.all([getAdminServiceEdit(id), getSettings()]);
   if (!s) notFound();
-
-  const now = new Date();
-  const weekEnd = new Date(now.getTime() + 7 * 86400_000);
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400_000);
-
-  const [cats, allMasters, settings, visitCounts, orders30d] = await Promise.all([
-    db.category.findMany({ orderBy: { sort: "asc" } }),
-    db.master.findMany({ orderBy: { sort: "asc" }, select: { id: true, name: true, photo: true, active: true } }),
-    getSettings(),
-    db.visit.groupBy({
-      by: ["masterId"],
-      where: {
-        masterId: { not: null },
-        scheduledAt: { gte: now, lte: weekEnd },
-        status: { notIn: ["CANCELLED", "SKIPPED", "NO_SHOW"] },
-      },
-      _count: { id: true },
-    }),
-    db.order.count({ where: { serviceId: id, createdAt: { gte: thirtyDaysAgo } } }),
-  ]);
-
-  const visitMap = new Map(visitCounts.map((v) => [v.masterId, v._count.id]));
 
   type AnyI = Record<string, string>;
   const content = (s.content || {}) as Partial<ServicePayload["content"]>;
@@ -54,6 +25,7 @@ export default async function EditService({ params }: { params: Promise<{ locale
     image: s.image,
     bannerImage: s.bannerImage,
     active: s.active,
+    comingSoon: s.comingSoon,
     sort: s.sort,
     isNew: s.isNew,
     arrivalHours: s.arrivalHours,

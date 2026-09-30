@@ -1,8 +1,8 @@
 import { getTranslations } from "next-intl/server";
 import { Plus } from "lucide-react";
 import { Link } from "@/i18n/navigation";
-import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
+import { getAdminMasters } from "@/server/services/pages/admin";
 import { tr } from "@/i18n/locales";
 import { formatPhone } from "@/lib/phone";
 import { PageHead, Forbidden } from "@/components/admin/ui";
@@ -12,7 +12,7 @@ export default async function AdminMasters({ params }: { params: Promise<{ local
   const { locale } = await params;
   if (!(await pageUser("masters"))) return <Forbidden />;
   const t = await getTranslations("admin");
-  const masters = await db.master.findMany({ orderBy: [{ active: "desc" }, { sort: "asc" }], include: { skills: true } });
+  const masters = await getAdminMasters();
   return (
     <div className="max-w-4xl">
       <PageHead title={t("masters.title")} actions={<Link href="/admin/masters/new" className="btn-dark"><Plus size={18} /> {t("masters.newMaster")}</Link>} />

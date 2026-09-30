@@ -1,9 +1,7 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { redirect, Link } from "@/i18n/navigation";
-import { db } from "@/server/db";
-import { VisitCacheSync } from "@/components/pwa/VisitCacheSync";
-import { PRO_CACHE_KEY } from "@/lib/visitCache";
 import { getCurrentUser } from "@/server/auth";
+import { getMasterByUserId, getProVisits } from "@/server/services/pages/pro";
 import { getSettings } from "@/server/settings";
 import { tr } from "@/i18n/locales";
 import { addDays, atYerevan, ymd, hm } from "@/lib/time";
@@ -22,7 +20,7 @@ export default async function ProPage({ params, searchParams }: { params: Promis
   const user = await getCurrentUser();
   if (!user) return redirect({ href: "/login?next=/pro", locale });
   const [t, to, tc, ta, settings] = await Promise.all([getTranslations("pro"), getTranslations("order"), getTranslations("common"), getTranslations("address"), getSettings()]);
-  const master = await db.master.findUnique({ where: { userId: user.id } });
+  const master = await getMasterByUserId(user.id);
   if (!master) return <div className="container-m py-10 text-center text-muted">{t("notLinked")}</div>;
 
   const today = ymd(new Date());
@@ -30,19 +28,13 @@ export default async function ProPage({ params, searchParams }: { params: Promis
     tab === "today" ? { gte: atYerevan(today, "00:00"), lt: atYerevan(addDays(today, 1), "00:00") }
     : tab === "upcoming" ? { gte: atYerevan(addDays(today, 1), "00:00"), lt: atYerevan(addDays(today, 15), "00:00") }
     : { gte: atYerevan(addDays(today, -30), "00:00"), lt: atYerevan(addDays(today, 1), "00:00") };
-
   const isVisitTab = tab === "today" || tab === "upcoming" || tab === "done";
-  const visits = isVisitTab ? await db.visit.findMany({
-    where: { masterId: master.id, scheduledAt: range, status: tab === "done" ? "DONE" : { in: ["SCHEDULED", "CONFIRMED", "ON_WAY", "IN_PROGRESS", "DONE"] } },
-    orderBy: { scheduledAt: tab === "done" ? "desc" : "asc" },
-    include: { order: { include: { user: true, service: true } } },
-  }) : [];
+  const visits = isVisitTab ? await getProVisits(master.id, range, tab) : [];
   const cashToday = tab === "today" ? visits.filter((v) => v.order.paymentMethod === "CASH" && v.cashCollected).reduce((s, v) => s + v.price, 0) : 0;
 
   const tabs = [["today", t("today")], ["upcoming", t("upcoming")], ["done", t("done")], ["settings", t("settingsTab")]];
   return (
     <div className="container-m pt-4 pb-10">
-      {isVisitTab && <VisitCacheSync endpoint="/api/visits/pro" cacheKey={PRO_CACHE_KEY} />}
       <div className="card flex items-center gap-3 p-3">
         <Img src={master.photo || "/img/master-1.svg"} width={48} className="size-12 rounded-full object-cover" />
         <div className="flex-1">
@@ -93,8 +85,10 @@ export default async function ProPage({ params, searchParams }: { params: Promis
                     {a.intercom && <div className="text-muted">🔔 {a.intercom}</div>}
                     {a.comment && <div className="text-muted">💬 {a.comment}</div>}
                     {v.order.comment && <div className="rounded-lg bg-warn-50 p-2 text-warn">{v.order.comment}</div>}
+                    {v.order.noCall && <div className="rounded-lg bg-warn-50 p-2 font-medium text-warn">📵 {t("noCall")}</div>}
                     <div>👤 {v.order.user.name || "—"} · {formatPhone(v.order.user.phone)}</div>
                     {v.order.paymentMethod === "CASH" && <div className="font-semibold">💵 {t("toCollect")}: {amd(v.price)}</div>}
+                    {v.order.tipAmount > 0 && <div className="text-ok">✨ {t("tipAmount")}: {amd(v.order.tipAmount)}</div>}
                   </div>
                   <ProVisitActions visit={{ id: v.id, status: v.status, cashCollected: v.cashCollected, price: v.price, isCash: v.order.paymentMethod === "CASH" }} phone={v.order.user.phone} mapQuery={`${a.street} ${a.building}, Yerevan`} />
                 </li>
