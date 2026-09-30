@@ -12,6 +12,8 @@ import {
   isOwnerQuestion,
   isProductTask,
   isReady,
+  isUiTask,
+  standGate,
   needsReason,
   nextStatuses,
   ownerAnswerTarget,
@@ -523,6 +525,49 @@ describe("переводы: все ключи пунктов готовност�
     for (const key of keys) {
       expect(enItems[key], `ключ admin.cc.dor.items.${key} отсутствует в en.json`).toBeTruthy();
     }
+  });
+});
+
+describe("гейт живой проверки на стенде (DEV-143)", () => {
+  it("isUiTask: front и fullstack — задачи с интерфейсом", () => {
+    expect(isUiTask("front")).toBe(true);
+    expect(isUiTask("fullstack")).toBe(true);
+    expect(isUiTask("back")).toBe(false);
+    expect(isUiTask("infra")).toBe(false);
+    expect(isUiTask("none")).toBe(false);
+  });
+  it("isUiTask: back с scope src/app или src/components — тоже UI-задача", () => {
+    expect(isUiTask("back", ["src/app/page.tsx"])).toBe(true);
+    expect(isUiTask("back", ["src/app"])).toBe(true);
+    expect(isUiTask("back", ["src/components/Button.tsx"])).toBe(true);
+    expect(isUiTask("back", ["src/components"])).toBe(true);
+    expect(isUiTask("back", ["src/server/services/cc.ts"])).toBe(false);
+    expect(isUiTask("back", [])).toBe(false);
+    expect(isUiTask("back", undefined)).toBe(false);
+  });
+  it("isUiTask: нормализует путь со слешами и ./", () => {
+    expect(isUiTask("back", ["./src/app/"])).toBe(true);
+    expect(isUiTask("back", ["src/app/"])).toBe(true);
+  });
+
+  it("standGate: нет вложения — screenshot_required", () => {
+    expect(standGate("Проверено на стенде: открыл страницу", 0)).toBe("screenshot_required");
+  });
+  it("standGate: вложение есть, но нет метки — live_stand_required", () => {
+    expect(standGate("Проверено: всё работает", 1)).toBe("live_stand_required");
+    expect(standGate("", 1)).toBe("live_stand_required");
+  });
+  it("standGate: вложение есть и метка есть — проходит", () => {
+    expect(standGate("Проверено на стенде: вход, форма заказа, адаптив.", 1)).toBeNull();
+    expect(standGate("ПРОВЕРЕНО НА СТЕНДЕ: страница категорий.", 2)).toBeNull();
+  });
+  it("standGate: back-задача без интерфейса — вызывать не нужно, но функция не зависит от слоя", () => {
+    // standGate — чистая функция без привязки к слою; вызов с 0 вложениями всегда screenshot_required
+    expect(standGate("Проверено на стенде: логи смотрел", 0)).toBe("screenshot_required");
+  });
+  it("standGate: любой файл (не только PNG) считается достаточным вложением — критерий 4", () => {
+    // Для задач без экрана (письма, бот) тестировщик прикладывает файл письма или лога
+    expect(standGate("Проверено на стенде: письмо отображено корректно.", 1)).toBeNull();
   });
 });
 

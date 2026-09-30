@@ -4,7 +4,7 @@ import { upsertNote, createNote } from "./library";
 import { alertTech } from "../alerts";
 import { html, notifyTech } from "../notify";
 import { BLOCKED_ON_LABELS, STATUSES } from "@/lib/backlog-labels";
-import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, doneGate, isDesignerTask, isProductTask, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
+import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, doneGate, isDesignerTask, isProductTask, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type Role, type TaskStatusKey, unblockTarget, isCodeTask, isUiTask, standGate } from "@/lib/cc-flow";
 import { isAgentAuthor, findBlockingError, baselineFor } from "@/lib/cc-triage";
 import { nextIntakeKey, intakeTitle } from "@/lib/cc-lanes";
 import { intakeClosingMapValid, parseDuplicateOriginalKey } from "@/lib/cc-intake";
@@ -98,6 +98,8 @@ export type TransitionInput = {
   noWork?: boolean;
   /** Карта просьб при закрытии intake (source=intake, to=done|cancelled): каждая просьба → ключ задачи или причина */
   intakeClosingMap?: string;
+  /** Для «Сделано» у задач с интерфейсом: что проверено на живом сайте после выкладки */
+  liveProof?: string;
 };
 
 /** Смена статуса с проверкой прав, гейтов и записью в историю. Возвращает обновлённую задачу */
@@ -153,6 +155,11 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   if (to === "done") {
     const gate = doneGate({ layer: task.layer, noWork: task.noWork }, { sha: input.sha, text, attachments: task._count.attachments });
     if (gate && !force) throw new CcError(gate);
+    // Гейт живой проверки на сайте: для задач с интерфейсом требуется доказательство
+    if (!force && !task.noWork && isUiTask(task.layer, task.scope)) {
+      const liveProof = input.liveProof?.trim() || await findLiveProofFromFeed(task.id);
+      if (!liveProof) throw new CcError("site_check_required");
+    }
     data.deployedSha = input.sha?.trim() || null;
     data.proof = text.slice(0, 2000) || null;
     data.doneAt = new Date();
@@ -522,16 +529,38 @@ export async function reviewTake(key: string, agent: string) {
   return db.task.findUniqueOrThrow({ where: { id: t.id } });
 }
 
+/** Ищем запись от деплоера/CTO/владельца с «проверено на сайте» — для гейта cc done на UI-задаче */
+async function findLiveProofFromFeed(taskId: string): Promise<string | null> {
+  const comments = await db.taskComment.findMany({
+    where: { taskId },
+    orderBy: { createdAt: "desc" },
+    select: { author: true, text: true },
+    take: 100,
+  });
+  for (const c of comments) {
+    const role = roleOf(c.author);
+    if (["deployer", "cto", "owner"].includes(role) && /проверено на сайте/i.test(c.text)) {
+      return c.text.slice(0, 500);
+    }
+  }
+  return null;
+}
+
 /** Тестировщик: проверка пройдена. Для noWork-задач SHA не требуется; задача сразу отменяется как «не потребовалось» */
 export async function testPass(key: string, agent: string, sha: string, text: string) {
   if (roleOf(agent) !== "tester") throw new CcError("forbidden_role", roleOf(agent));
   if (text.trim().length < 40) throw new CcError("report_required");
-  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, claimedBy: true, noWork: true } });
+  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, claimedBy: true, noWork: true, layer: true, scope: true, _count: { select: { attachments: true } } } });
   if (!t) throw new CcError("not_found");
   // Критерий 8: понятный отказ когда задача не на проверке
   if (t.status !== "review") throw new CcError("not_in_review", `задача сейчас в статусе «${STATUSES[t.status] ?? t.status}» — завершите текущий запуск`);
   if (t.claimedBy !== agent) throw new CcError("not_your_task", t.claimedBy ?? "");
   if (!t.noWork && !SHA_RE.test(sha.trim())) throw new CcError("sha_required");
+  // Гейт живой проверки на стенде: для задач с интерфейсом требуется скриншот и отметка в тексте
+  if (!t.noWork && isUiTask(t.layer, t.scope)) {
+    const gate = standGate(text, t._count.attachments);
+    if (gate) throw new CcError(gate);
+  }
   // Критерий 5: блокировать отметку, если после последней сдачи на проверку появилась запись об ошибке
   const lastReviewEvent = await db.taskEvent.findFirst({
     where: { taskId: t.id, field: "status", to: "review" },
