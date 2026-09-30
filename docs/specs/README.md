@@ -10,6 +10,7 @@
 
 | Файл | О чём | Где в коде |
 |---|---|---|
+| [`purchase-flow.md`](purchase-flow.md) | Сценарий покупки: 12 шагов от главной до повторного заказа | FLOW-1…FLOW-14, карта задач |
 | [`pricing.md`](pricing.md) | Цены, скидки (тариф / первый заказ / промокод), payNow | `src/lib/pricing.ts`, `src/lib/firstOrder.ts`, `src/server/services/booking.ts` |
 | [`slots.md`](slots.md) | Слоты, рабочие часы мастеров, буфер, advisory lock | `src/lib/slots.ts`, `src/server/services/booking.ts` |
 | [`subscriptions.md`](subscriptions.md) | Подписки и пакеты: Recurrence, горизонт, пауза, истечение | `src/lib/recurrence.ts`, `src/server/services/booking.ts`, `src/app/api/cron/route.ts` |
