@@ -371,6 +371,7 @@ async function main() {
   };
   const demoOrder = await db.order.create({
     data: {
+      id: "demo-reschedule-visit-order",
       userId: owner.id,
       serviceId: svc.id,
       planId: oneTimePlan?.id,
