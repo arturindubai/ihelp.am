@@ -178,6 +178,12 @@
       "backlog": {
         "allFlows": "Все этапы",
         "allLanes": "Все дорожки",
+        "epicNoEpics": "Эпиков нет",
+        "epicNoTasks": "Задач в эпике нет",
+        "epicNoTasksLink": "создайте первый",
+        "epicProgress": "{done} из {total}",
+        "epicWaits": "Ждёт: {key}",
+        "epicWithout": "Без эпика · {n}",
         "executor": "Исполнитель: какой воркер делает следующий шаг",
         "flows": {
           "backlog": "Бэклог",
@@ -215,6 +221,7 @@
         },
         "views": {
           "board": "Доска",
+          "epics": "Эпики",
           "flat": "Списком",
           "flow": "По этапу",
           "lanes": "По дорожкам"

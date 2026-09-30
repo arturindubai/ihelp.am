@@ -159,6 +159,12 @@
       "backlog": {
         "allFlows": "All stages",
         "allLanes": "All lanes",
+        "epicNoEpics": "No epics",
+        "epicNoTasks": "No tasks in epic",
+        "epicNoTasksLink": "create the first one",
+        "epicProgress": "{done} of {total}",
+        "epicWaits": "Waits: {key}",
+        "epicWithout": "No epic · {n}",
         "executor": "Assignee: which worker does the next step",
         "flows": {
           "backlog": "Backlog",
@@ -196,6 +202,7 @@
         },
         "views": {
           "board": "Board",
+          "epics": "Epics",
           "flat": "List",
           "flow": "By stage",
           "lanes": "By lane"
