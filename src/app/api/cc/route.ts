@@ -8,6 +8,9 @@ import { listEpics, getEpic } from "@/server/services/epics";
 import { DESIGNER_FIELDS, taskContentSchema } from "@/lib/cc-schema";
 import { canCreateTask, roleOf, type TaskStatusKey } from "@/lib/cc-flow";
 import type { Task } from "@prisma/client";
+import { popQueued, markRunning, markDone, markFailed, sumMonthTokens } from "@/server/services/aiQueue";
+import { alertTech } from "@/server/alerts";
+import { html } from "@/lib/html";
 
 /**
  * API Control Center для рабочих сессий (разработчики, техдиректор, деплоер, продукт, дизайнер).
@@ -124,6 +127,14 @@ export async function GET(req: Request) {
     if (p.get("resource") === "workers") return json(await workersOverview());
     if (p.get("resource") === "triage") return json({ tasks: await triageQueue() });
     if (p.get("resource") === "audit") return json(await boardAudit());
+    if (p.get("resource") === "ai-queue") {
+      const req = await popQueued();
+      return json({ request: req ? { id: req.id, kind: req.kind, input: req.input } : null });
+    }
+    if (p.get("resource") === "ai-tokens") {
+      const tokens = await sumMonthTokens();
+      return json({ tokens });
+    }
     if (p.get("resource") === "inbox") {
       const agent = (p.get("agent") ?? "").trim().slice(0, 60);
       if (!agent) return json({ error: "agent_required" }, 400);
@@ -374,6 +385,47 @@ export async function POST(req: Request) {
         // Правка карточки бэклога через API — то же, что правка в интерфейсе: возвращает задачу на разбор
         if (action === "update") await retriage(task.key);
         return json({ ok: true, task: brief(task) });
+      }
+      // Создать AI-запрос в очереди (используется диспетчером или тестами; CC-ключ обязателен)
+      case "ai-queue-enqueue": {
+        const kind = str(body.kind) ?? "echo";
+        const input = (body.input ?? {}) as Record<string, unknown>;
+        const requestedBy = agent;
+        const req = await (await import("@/server/services/aiQueue")).enqueueInternal(kind, input, requestedBy);
+        return json({ ok: true, id: req.id, status: req.status });
+      }
+      // ИИ-очередь: диспетчер берёт запросы и пишет результаты (ROUTE-8)
+      case "ai-queue-start": {
+        if (agent !== "dispatcher") return json({ error: "forbidden_role" }, 403);
+        const reqId = str(body.id);
+        if (!reqId) return json({ error: "id_required" }, 400);
+        await markRunning(reqId);
+        return json({ ok: true });
+      }
+      case "ai-queue-done": {
+        if (agent !== "dispatcher") return json({ error: "forbidden_role" }, 403);
+        const reqId = str(body.id);
+        if (!reqId) return json({ error: "id_required" }, 400);
+        const tokens = typeof body.tokens === "number" ? body.tokens : 0;
+        await markDone(reqId, body.output ?? null, tokens);
+        return json({ ok: true });
+      }
+      case "ai-queue-fail": {
+        if (agent !== "dispatcher") return json({ error: "forbidden_role" }, 403);
+        const reqId = str(body.id);
+        if (!reqId) return json({ error: "id_required" }, 400);
+        const errText = str(body.error) ?? "Ошибка выполнения";
+        const loginErr = body.loginError === true;
+        await markFailed(reqId, errText, loginErr);
+        return json({ ok: true });
+      }
+      // Тех-алерт от диспетчера (не привязан к задаче)
+      case "tech-alert": {
+        if (agent !== "dispatcher") return json({ error: "forbidden_role" }, 403);
+        const alertKey = str(body.key) ?? "dispatcher:alert";
+        const alertText = str(body.text) ?? "Тех-алерт от диспетчера";
+        await alertTech(alertKey, html`${alertText}`, 60, "dispatcher");
+        return json({ ok: true });
       }
       default:
         return json({ error: "unknown_action" }, 400);
