@@ -624,6 +624,7 @@
     },
     "services": {
       "addCategory": "",
+      "addDurationOption": "",
       "addFirstService": "",
       "addGroup": "",
       "addItem": "",
@@ -643,6 +644,7 @@
       "categoryArchivedBanner": "",
       "categoryHasServices": "",
       "categoryHiddenBanner": "",
+      "clientPriceLabel": "",
       "comingSoon": "",
       "comingSoonLabel": "",
       "deleteCategory": "",
@@ -683,7 +685,9 @@
       "multi": "",
       "newCategory": "",
       "newService": "",
+      "noGroups": "",
       "noMasters": "",
+      "noPlans": "",
       "noServicesInCategory": "",
       "note": "",
       "noteBody": "",
@@ -706,6 +710,11 @@
       "services": "",
       "single": "",
       "slugFromTitle": "",
+      "stats": {
+        "orders30d": "",
+        "rating": "",
+        "reviews": ""
+      },
       "stepBody": "",
       "stepTitle": "",
       "tabs": {
@@ -1171,9 +1180,9 @@
     "howTitle": "",
     "popular": "",
     "reviewsTitle": "",
-    "slogan": "",
     "searchEmpty": "",
     "searchEmptyHint": "",
+    "slogan": "",
     "stickyOrder": "",
     "title": "",
     "whatsapp": "",
