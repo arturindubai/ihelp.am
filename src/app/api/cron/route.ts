@@ -11,7 +11,7 @@ import { processQueue, cleanQueue } from "@/server/services/notifyQueue";
 import { findExpiringPackages } from "@/server/services/packages";
 import { runLogWatcher } from "@/server/services/logWatcher";
 import { sendMasterTomorrowSchedule } from "@/server/services/workerNotify";
-import { sendVisitReminders, sendReviewRequests } from "@/server/services/bookingNotify";
+import { sendVisitReminders, sendReviewRequests, sendVisit2hReminders } from "@/server/services/bookingNotify";
 import { html, notifyTeam } from "@/server/notify";
 import { alertTech } from "@/server/alerts";
 import { ymd } from "@/lib/time";
@@ -129,7 +129,10 @@ export async function GET(req: Request) {
   // 4б. Напоминания клиентам о визитах через ~24 часа
   const remindedCount = await step("client-reminders", () => sendVisitReminders(now), 0);
 
-  // 4в. Запросы отзыва через ~2 часа после завершения визита
+  // 4в. Напоминания клиентам за ~2 часа до визита
+  const reminder2hCount = await step("client-reminders-2h", () => sendVisit2hReminders(now), 0);
+
+  // 4г. Запросы отзыва через ~2 часа после завершения визита
   const reviewRequestCount = await step("client-reviews", () => sendReviewRequests(now), 0);
 
   // 5. Очистка: коды входа (с IP) старше 7 дней, истёкшие сессии, журнал действий старше 6 месяцев
@@ -212,5 +215,5 @@ export async function GET(req: Request) {
     console.error("[cron] disk check failed", e);
   }
 
-  return NextResponse.json({ ok: true, resumed, created, expired, pkgWarn, unassigned, masterScheduleSent, remindedCount, reviewRequestCount, cleaned, cleanImages, diskFreePct, cc, nq, lw });
+  return NextResponse.json({ ok: true, resumed, created, expired, pkgWarn, unassigned, masterScheduleSent, remindedCount, reminder2hCount, reviewRequestCount, cleaned, cleanImages, diskFreePct, cc, nq, lw });
 }

@@ -8,6 +8,7 @@ import { sendOtp, verifyOtp } from "../otp";
 import { createSession, getCurrentUser, hash, logout } from "../auth";
 import { audit } from "../audit";
 import { packSignupTicket, unpackSignupTicket } from "@/lib/signupTicket";
+import { unpackGoogleSignupTicket } from "@/lib/googleSignupTicket";
 import { alertTech } from "../alerts";
 import { html } from "../notify";
 
@@ -78,7 +79,15 @@ export async function sendEmailLoginCodeAction(emailRaw: string, locale = "ru") 
   const email = normalizeEmail(emailRaw);
   if (!email) return { ok: false as const, error: "email" };
   const user = await verifiedUserByEmail(email);
-  if (!user) alertTech("email-login-unknown", html`⚠️ <b>Вход по почте: адрес не найден</b>\nПопытка входа на адрес, не привязанный ни к одному аккаунту. Проверьте раздел «Сотрудники», если это ваш коллега.`, 30).catch(() => null);
+  if (!user) {
+    // Разделяем два случая: адрес есть в базе (не подтверждён) или адреса нет вообще
+    const unverified = await db.user.findFirst({ where: { email: { equals: email, mode: "insensitive" }, emailVerifiedAt: null } });
+    if (unverified) {
+      alertTech("email-login-unverified", html`⚠️ <b>Вход по почте: адрес не подтверждён</b>\nПопытка входа — адрес в базе, но подтверждение не завершено.`, 60).catch(() => null);
+    } else if (!await db.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } } })) {
+      alertTech("email-login-unknown", html`⚠️ <b>Вход по почте: адрес не найден</b>\nПопытка входа на адрес, не привязанный ни к одному аккаунту. Проверьте раздел «Сотрудники», если это ваш коллега.`, 30).catch(() => null);
+    }
+  }
   const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || undefined;
   const r = await sendOtp(email, "EMAIL", ip, ["ru", "en", "am"].includes(locale) ? locale : "ru", { skipDelivery: !user || user.blocked });
@@ -164,4 +173,39 @@ export async function setNameAction(name: string) {
 
 export async function logoutAction() {
   await logout();
+}
+
+/**
+ * Завершение регистрации через Google: email подтверждён Google (тикет), телефон — OTP-кодом.
+ * Аккаунт создаётся только после успешного подтверждения телефона.
+ */
+export async function finishGoogleSignupAction(ticket: string, nameRaw: string, phoneRaw: string, code: string) {
+  const t = unpackGoogleSignupTicket(ticket, secret());
+  if (!t) return { ok: false as const, error: "google_signup_ticket_expired" };
+  const name = nameRaw.trim().slice(0, 80);
+  if (!name) return { ok: false as const, error: "name" };
+  const phone = normalizePhone(phoneRaw);
+  if (!phone) return { ok: false as const, error: "phone" };
+  if (!/^\d{4,6}$/.test(code.trim()) || !(await verifyOtp(phone, code))) return { ok: false as const, error: "code" };
+  if (await db.user.findUnique({ where: { phone } })) return { ok: false as const, error: "google_signup_phone_taken" };
+  try {
+    const now = new Date();
+    const created = await db.user.create({
+      data: {
+        phone,
+        email: t.email,
+        emailVerifiedAt: now,
+        name,
+        locale: ["ru", "en", "am"].includes(t.locale) ? t.locale : "ru",
+        privacyConsentAt: now,
+      },
+    });
+    const user = await linkMasterRole(created);
+    await createSession(user.id, user.role);
+    await audit(user.id, "auth.google.signup", "User", user.id, { email: t.email });
+    return { ok: true as const, role: user.role };
+  } catch {
+    // Гонка: email или телефон успели занять пока вводили код
+    return { ok: false as const, error: "exists" };
+  }
 }

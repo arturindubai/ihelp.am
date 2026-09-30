@@ -3,7 +3,7 @@ import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
 import { getSettings, saveSettingsSection, type Settings } from "../settings";
-import { html } from "../notify";
+import { html, notifyTasks } from "../notify";
 import { intakeCreate, ccCounts } from "./ccBoard";
 import { addAttachment } from "./attachments";
 import { getWorkersConfig } from "./workers";
@@ -232,7 +232,9 @@ export async function handleTeamUpdate(update: TgUpdate) {
     return;
   }
   if (/^\/status\b|^статус\.?$/i.test(text)) {
-    await reply(msg.chat.id, await statusText());
+    const statusMsg = await statusText();
+    await reply(msg.chat.id, statusMsg);
+    await notifyTasks(statusMsg).catch(() => null);
     return;
   }
   if (msg.voice || msg.audio || msg.video_note) {
@@ -258,4 +260,5 @@ export async function handleTeamUpdate(update: TgUpdate) {
     msg.chat.id,
     `✓ <b>${task.key}</b> в очереди триажа${attached ? " (с вложением)" : hasFile ? " (вложение не сохранилось — пришлите PNG, JPG или PDF)" : ""}.\nТриаж разберёт её в ближайшие минуты; вопросы придут сюда.\n${base()}/ru/admin/control?task=${task.key}`,
   );
+  await notifyTasks(html`📋 <b>${task.key}</b> · ${task.title}\nОт: ${member.name}\n${base()}/ru/admin/control?task=${task.key}`).catch(() => null);
 }

@@ -407,6 +407,7 @@ export async function notifyClientVisitCancelled(visitId: string): Promise<void>
   }
 }
 
+
 /** 5. Визит завершён (статус DONE) */
 export async function notifyClientVisitCompleted(visitId: string): Promise<void> {
   const ok = await markVisitEvent(visitId, "completed");
@@ -628,6 +629,112 @@ export async function sendReviewRequests(now: Date): Promise<number> {
       await alertTech(
         `bookingNotify:review:${v.id}`,
         html`❌ Запрос отзыва не отправлен\nВизит ${v.id}\n<code>${String((e as Error).message ?? e).slice(0, 200)}</code>`,
+        60,
+      );
+    }
+  }
+  return sent;
+}
+
+/** 8. Напоминания клиентам за 2 часа до визита (окно 90–150 минут).
+ *  Дедупликация через clientNotifiedEvents с ключом "reminder2h".
+ *  В тихий период (notify.quietHourStart–quietHourEnd) — не отправляет. */
+export async function sendVisit2hReminders(now: Date): Promise<number> {
+  const s0 = await getSettings();
+  if (isQuietHour(now, s0.notify.quietHourStart, s0.notify.quietHourEnd)) return 0;
+
+  const from = new Date(now.getTime() + 90 * 60_000);
+  const to = new Date(now.getTime() + 150 * 60_000);
+
+  const visits = await db.visit.findMany({
+    where: {
+      scheduledAt: { gte: from, lte: to },
+      status: { in: ["SCHEDULED", "CONFIRMED"] },
+    },
+    select: {
+      id: true,
+      scheduledAt: true,
+      clientNotifiedEvents: true,
+      order: {
+        select: {
+          number: true,
+          config: true,
+          addressSnapshot: true,
+          locale: true,
+          userId: true,
+          user: { select: { id: true, telegramId: true, email: true, emailUnsubscribedAt: true } },
+        },
+      },
+      master: { select: { name: true } },
+    },
+  });
+
+  let sent = 0;
+  for (const v of visits) {
+    if (!v.scheduledAt || !v.order.user) continue;
+    if (v.clientNotifiedEvents.includes("reminder2h")) continue;
+
+    // Актуальная проверка перед отправкой
+    const liveVisit = await db.visit.findUnique({
+      where: { id: v.id },
+      select: { status: true, clientNotifiedEvents: true, order: { select: { status: true } } },
+    });
+    if (!liveVisit || liveVisit.status === "CANCELLED" || liveVisit.order.status === "CANCELLED") continue;
+    if (liveVisit.clientNotifiedEvents.includes("reminder2h")) continue;
+
+    const locale = v.order.locale || "ru";
+    const ch = await selectClientChannel(v.order.user);
+    if (ch.channel === "none") continue;
+
+    const tmpl = clientTemplates(locale);
+    const brand = (await getSettings()).brand.name || "iHelp";
+    const service = serviceTitle(v.order.config, locale);
+    const date = dateLabel(v.scheduledAt, locale);
+    const time = timeLabel(v.scheduledAt);
+    const address = addrLine(v.order.addressSnapshot);
+    const master = v.master ? tr(v.master.name, locale) : "—";
+
+    try {
+      let deliveryOk = false;
+      if (ch.channel === "telegram") {
+        const text =
+          html`⏰ <b>${fill(tmpl.reminder2h.title, {})}</b>\n` +
+          html`${fill(tmpl.reminder2h.service, { service })}\n` +
+          html`${fill(tmpl.reminder2h.date, { date, time })}\n` +
+          html`${fill(tmpl.reminder2h.master, { master })}\n` +
+          html`${fill(tmpl.reminder2h.address, { address })}`;
+        await sendTelegramDirect(ch.token, ch.telegramId, text);
+        deliveryOk = true;
+      } else {
+        const lines = [
+          fillPlain(tmpl.reminder2h.service, { service }),
+          fillPlain(tmpl.reminder2h.date, { date, time }),
+          fillPlain(tmpl.reminder2h.master, { master }),
+          fillPlain(tmpl.reminder2h.address, { address }),
+        ];
+        const htmlBody = mailTemplate({
+          brand,
+          title: tmpl.reminder2h.title,
+          lines,
+          footer: unsubscribeFooterHtml(v.order.user.id, locale),
+          button: { text: tmpl.reminder2h.button, url: `${APP_URL()}/${locale}/account/orders` },
+        });
+        const r = await sendMail({ to: ch.email, subject: tmpl.reminder2h.subject, html: htmlBody });
+        if (r.ok) {
+          deliveryOk = true;
+        } else {
+          console.error(`[bookingNotify:reminder2h] не отправлено visit=${v.id}`, r.error);
+        }
+      }
+      if (deliveryOk) {
+        await db.visit.update({ where: { id: v.id }, data: { clientNotifiedEvents: { push: "reminder2h" } } });
+        sent++;
+      }
+    } catch (e) {
+      console.error(`[bookingNotify:reminder2h] ошибка visit=${v.id}`, e);
+      await alertTech(
+        `bookingNotify:reminder2h:${v.id}`,
+        html`❌ Напоминание 2ч не отправлено\nВизит ${v.id}\n<code>${String((e as Error).message ?? e).slice(0, 200)}</code>`,
         60,
       );
     }

@@ -41,7 +41,7 @@ export function StickyCartBar() {
   const bookHref = `/book/${cart.slug}?o=${cart.opts.join(",")}${cart.planId ? `&p=${cart.planId}` : ""}`;
 
   return (
-    <div className={`pb-safe fixed inset-x-0 ${bottomClass} z-40 border-t border-line bg-paper shadow-[0_-2px_12px_rgba(0,0,0,0.08)]`}>
+    <div className={`${aboveNav ? "" : "pb-safe"} fixed inset-x-0 ${bottomClass} z-40 border-t border-line bg-paper shadow-[0_-2px_12px_rgba(0,0,0,0.08)]`}>
       <div className="mx-auto flex max-w-xl items-center gap-3 px-4 py-3">
         <div className="flex-1">
           <div className="font-medium text-ink">{countLabel}</div>

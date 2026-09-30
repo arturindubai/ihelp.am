@@ -196,13 +196,14 @@ const DESIGN_PENDING: Prisma.TaskWhereInput = {
   OR: [{ mockupUrl: { not: null } }, { attachments: { some: { mime: { startsWith: "image/" } } } }],
 };
 
-/** Ждут макета от дизайнера: флаг «нужен макет», но реального макета ещё нет */
+/** Ждут макета от дизайнера: шаг 2 цепочки — требования уже написаны, но макета ещё нет */
 const WAITING_MOCKUP: Prisma.TaskWhereInput = {
   status: { notIn: ["done", "cancelled"] },
   mockupApprovedBy: null,
   mockupRequired: true,
   mockupUrl: null,
   attachments: { none: { mime: { startsWith: "image/" } } },
+  NOT: [{ screenRequirements: null }, { screenRequirements: "" }],
 };
 
 export async function mockupPendingApprovals() {
@@ -215,6 +216,20 @@ export async function mockupPendingApprovals() {
       _count: { select: { attachments: true } },
       attachments: { where: { mime: { startsWith: "image/" } }, select: { url: true, fileName: true }, orderBy: { createdAt: "desc" } },
     },
+  });
+}
+
+/** Задачи шага 1 цепочки: нужен макет, но продакт ещё не написал требования к экранам */
+export async function mockupWaitingRequirements() {
+  return db.task.findMany({
+    where: {
+      status: { notIn: ["done", "cancelled"] },
+      mockupRequired: true,
+      mockupApprovedBy: null,
+      OR: [{ screenRequirements: null }, { screenRequirements: "" }],
+    },
+    orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
+    select: { key: true, title: true, priority: true, status: true },
   });
 }
 
@@ -233,7 +248,7 @@ export async function mockupWaitingDesign() {
 /** Утверждённые дизайны за две недели — со статусом задачи и первым открытым блокером */
 export async function designApproved(days = 14) {
   const tasks = await db.task.findMany({
-    where: { mockupApprovedAt: { gte: new Date(Date.now() - days * 86400_000) } },
+    where: { mockupApprovedAt: { gte: new Date(Date.now() - days * 86400_000) }, status: { not: "cancelled" } },
     orderBy: { mockupApprovedAt: "desc" },
     select: {
       key: true, title: true, status: true, layer: true, mockupApprovedAt: true, mockupApprovedBy: true,
@@ -326,16 +341,33 @@ export async function activityFeed(take = 150) {
   return items.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, take);
 }
 
-/** Готово за последние дни: по дням (Ереван), новое сверху */
+/** Готово за последние дни: по дням (Ереван), новое сверху; для каждой задачи — незакрытые follow-up */
 export async function doneFeed(days = 14) {
   const tasks = await db.task.findMany({
     where: { status: "done", doneAt: { gte: new Date(Date.now() - days * 24 * 3600_000) } },
     orderBy: { doneAt: "desc" },
-    select: { key: true, title: true, layer: true, deployedSha: true, proof: true, doneAt: true },
+    select: { key: true, title: true, layer: true, deployedSha: true, proof: true, doneAt: true, followUps: true },
   });
+  // Все ключи follow-up задач из закрытых задач
+  const allFollowUpKeys = [...new Set(tasks.flatMap(t => t.followUps))];
+  const followUpStatuses = allFollowUpKeys.length
+    ? new Map(
+        (await db.task.findMany({ where: { key: { in: allFollowUpKeys } }, select: { key: true, status: true } }))
+          .map(t => [t.key, t.status]),
+      )
+    : new Map<string, string>();
+
+  const withPending = tasks.map(t => ({
+    ...t,
+    pendingFollowUps: t.followUps.filter(k => {
+      const s = followUpStatuses.get(k);
+      return s && s !== "done" && s !== "cancelled";
+    }),
+  }));
+
   const day = (d: Date) => new Date(d.getTime() + 4 * 3600_000).toISOString().slice(0, 10);
-  const groups = new Map<string, typeof tasks>();
-  for (const t of tasks) {
+  const groups = new Map<string, typeof withPending>();
+  for (const t of withPending) {
     const k = day(t.doneAt!);
     groups.set(k, [...(groups.get(k) ?? []), t]);
   }
@@ -490,6 +522,17 @@ export async function boardAudit() {
   }
   const checks = Object.entries(found).map(([id, keys]) => ({ id, keys })).sort((a, b) => b.keys.length - a.keys.length);
   return { total: tasks.length, byStatus: Object.fromEntries(Object.entries(tasks.reduce<Record<string, number>>((m, t) => ((m[t.status] = (m[t.status] ?? 0) + 1), m), {}))), checks, at: new Date().toISOString() };
+}
+
+/** Доля возвратов задач из-за конфликта слияния за последние N дней */
+export async function mergeConflictStats(days = 30) {
+  const since = new Date(Date.now() - days * 86400_000);
+  const [total, conflicts] = await Promise.all([
+    db.taskComment.count({ where: { kind: "review", createdAt: { gte: since } } }),
+    db.taskComment.count({ where: { kind: "review", text: { contains: "Конфликт при слиянии" }, createdAt: { gte: since } } }),
+  ]);
+  const pct = total > 0 ? Math.round((conflicts / total) * 100) : 0;
+  return { total, conflicts, pct, days };
 }
 
 export async function healthStatus() {
