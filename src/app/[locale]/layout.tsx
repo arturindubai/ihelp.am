@@ -51,7 +51,13 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       languages: Object.fromEntries(s.locales.enabled.map((l) => [localeIso[l as "ru"], `/${l}`])),
     },
     appleWebApp: { capable: true, title: s.brand.name, statusBarStyle: "default" },
-    icons: { icon: "/img/icon.svg", apple: "/icon-180.png" },
+    icons: {
+      icon: [
+        { url: "/favicon.ico", sizes: "any" },
+        { url: "/img/icon.svg", type: "image/svg+xml" },
+      ],
+      apple: "/icon-180.png",
+    },
     // Превью ссылок в WhatsApp, Telegram, соцсетях; картинка — ./opengraph-image.tsx
     openGraph: { type: "website", siteName: s.brand.name, title: `${s.brand.name} — ${tr(s.brand.tagline, locale)}`, description: tr(s.brand.tagline, locale), locale: OG_LOCALE[locale as "ru"] },
     twitter: { card: "summary_large_image" },
