@@ -3,7 +3,7 @@ import { NextIntlClientProvider, hasLocale } from "next-intl";
 import { getMessages, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
-import { localeIso, tr } from "@/i18n/locales";
+import { defaultLocale, localeIso, tr } from "@/i18n/locales";
 import { getSettings } from "@/server/settings";
 import { ServiceWorker } from "@/components/ServiceWorker";
 import { CookieBanner } from "@/components/CookieBanner";
@@ -48,7 +48,11 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     description: tr(s.brand.tagline, locale),
     manifest: "/manifest.webmanifest",
     alternates: {
-      languages: Object.fromEntries(s.locales.enabled.map((l) => [localeIso[l as "ru"], `/${l}`])),
+      // hreflang только для индексируемых языков + x-default на дефолтную локаль
+      languages: {
+        ...Object.fromEntries(s.locales.indexable.map((l) => [localeIso[l as "ru"], `/${l}`])),
+        "x-default": `/${defaultLocale}`,
+      },
     },
     appleWebApp: { capable: true, title: s.brand.name, statusBarStyle: "default" },
     icons: {
@@ -61,8 +65,8 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     // Превью ссылок в WhatsApp, Telegram, соцсетях; картинка — ./opengraph-image.tsx
     openGraph: { type: "website", siteName: s.brand.name, title: `${s.brand.name} — ${tr(s.brand.tagline, locale)}`, description: tr(s.brand.tagline, locale), locale: OG_LOCALE[locale as "ru"] },
     twitter: { card: "summary_large_image" },
-    // Выключенный язык открывается с русским текстом — не индексируем, чтобы не плодить дубли страниц
-    ...(s.locales.enabled.includes(locale) ? {} : { robots: { index: false, follow: false } }),
+    // Язык вне списка indexable закрываем от поисковиков, чтобы не плодить дубли
+    ...(s.locales.indexable.includes(locale) ? {} : { robots: { index: false, follow: false } }),
   };
 }
 

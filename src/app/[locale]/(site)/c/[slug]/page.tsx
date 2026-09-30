@@ -3,6 +3,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { CalendarClock } from "lucide-react";
 import { getCategory, getCategories } from "@/server/services/catalog";
 import { ServiceCard } from "@/components/ServiceCard";
+import { FormatCards } from "@/components/FormatCards";
 import { Link } from "@/i18n/navigation";
 import { NotifyForm } from "@/components/catalog/NotifyForm";
 import { cn } from "@/lib/format";
@@ -47,6 +48,8 @@ export default async function CategoryPage({ params }: { params: Promise<{ local
           </Link>
         ))}
       </div>
+
+      <FormatCards showFormats={c.showFormats} formats={c.formats} />
 
       {c.comingSoon ? (
         <div className="mt-10 pb-16">
