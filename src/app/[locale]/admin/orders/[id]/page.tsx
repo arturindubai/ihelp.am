@@ -65,11 +65,13 @@ export default async function AdminOrder({ params }: { params: Promise<{ locale:
           <section className="card p-4 text-sm">
             <h2 className="h3 mb-2">{t("orders.client")}</h2>
             <Link href={`/admin/clients/${o.userId}`} className="font-semibold underline-offset-2 hover:underline">{o.user.name || "—"}</Link>
-            <div><a href={`tel:${o.user.phone}`}>{formatPhone(o.user.phone)}</a></div>
-            <div className="mt-1 flex gap-2">
-              <a className="btn-outline btn-sm" href={`https://wa.me/${o.user.phone.replace("+", "")}`} target="_blank">WhatsApp</a>
-              <a className="btn-outline btn-sm" href={`tel:${o.user.phone}`}>{t("orders.phone")}</a>
-            </div>
+            {o.user.phone && <div><a href={`tel:${o.user.phone}`}>{formatPhone(o.user.phone)}</a></div>}
+            {o.user.phone && (
+              <div className="mt-1 flex gap-2">
+                <a className="btn-outline btn-sm" href={`https://wa.me/${o.user.phone.replace("+", "")}`} target="_blank">WhatsApp</a>
+                <a className="btn-outline btn-sm" href={`tel:${o.user.phone}`}>{t("orders.phone")}</a>
+              </div>
+            )}
             <h3 className="mt-4 mb-1 font-semibold">{t("orders.address")}</h3>
             <p>{[a.district, `${a.street} ${a.building}`, a.apartment && ta("aptShort", { n: a.apartment }), a.entrance && ta("entranceShort", { n: a.entrance }), a.floor && ta("floorShort", { n: a.floor })].filter(Boolean).join(", ")}</p>
             {a.intercom && <p className="text-muted">🔔 {a.intercom}</p>}
