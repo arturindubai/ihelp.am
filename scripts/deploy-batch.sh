@@ -248,10 +248,10 @@ if [ ${#VALID_KEYS[@]} -eq 0 ]; then
         KEY="${entry%%:*}"; found_sha="${entry##*:}"
         batch_subj=$(git log -1 --format="%s" "$found_sha" 2>/dev/null || echo "?")
         pm_done="Деплоер: $AGENT. Выложена ранее: ${batch_subj}. Коммит: ${found_sha:0:10}. SMOKE OK. Лог: /opt/ihelp.am/${log}"
-        if ! cc done "$KEY" --sha "$found_sha" "$pm_done" >> "$log" 2>&1; then
+        if ! cc done "$KEY" --sha "$found_sha" --live "$pm_done" "$pm_done" >> "$log" 2>&1; then
           mkdir -p data/tmp
-          printf 'Задача %s уже влита в main (%s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --agent %s\n' \
-            "$KEY" "${found_sha:0:10}" "$KEY" "$found_sha" "$AGENT" > "data/tmp/block-done-$KEY.md"
+          printf 'Задача %s уже влита в main (%s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --live "%s" --agent %s\n' \
+            "$KEY" "${found_sha:0:10}" "$KEY" "$found_sha" "$pm_done" "$AGENT" > "data/tmp/block-done-$KEY.md"
           cc block "$KEY" --on tech --text-file "data/tmp/block-done-$KEY.md" >> "$log" 2>&1 || true
           echo "✗ cc done не прошла для $KEY (уже влита) — заблокирована на технике" | tee -a "$log"
         else
@@ -411,10 +411,10 @@ if [ ${#BATCH_RESULT[@]} -eq 0 ]; then
         KEY="${entry%%:*}"; found_sha="${entry##*:}"
         batch_subj=$(git log -1 --format="%s" "$found_sha" 2>/dev/null || echo "?")
         pm_done="Деплоер: $AGENT. Выложена ранее: ${batch_subj}. Коммит: ${found_sha:0:10}. SMOKE OK. Лог: /opt/ihelp.am/${log}"
-        if ! cc done "$KEY" --sha "$found_sha" "$pm_done" >> "$log" 2>&1; then
+        if ! cc done "$KEY" --sha "$found_sha" --live "$pm_done" "$pm_done" >> "$log" 2>&1; then
           mkdir -p data/tmp
-          printf 'Задача %s уже влита в main (%s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --agent %s\n' \
-            "$KEY" "${found_sha:0:10}" "$KEY" "$found_sha" "$AGENT" > "data/tmp/block-done-$KEY.md"
+          printf 'Задача %s уже влита в main (%s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --live "%s" --agent %s\n' \
+            "$KEY" "${found_sha:0:10}" "$KEY" "$found_sha" "$pm_done" "$AGENT" > "data/tmp/block-done-$KEY.md"
           cc block "$KEY" --on tech --text-file "data/tmp/block-done-$KEY.md" >> "$log" 2>&1 || true
           echo "✗ cc done не прошла для $KEY (уже влита) — заблокирована на технике" | tee -a "$log"
         else
@@ -564,10 +564,10 @@ for KEY in "${BATCH_RESULT[@]}"; do
   # Каждая задача закрывается своим коммитом слияния (BATCH_MERGE_SHAS[$KEY])
   task_sha="${BATCH_MERGE_SHAS[$KEY]:-$merge}"
   task_done_text="Пачковая выкладка ${task_sha:0:10}: SMOKE OK (${checks} проверок, соседних сайтов: ${neighbors}).${migr} ${tested_label} Слияние ${pushed}. Лог: /opt/ihelp.am/${log}"
-  if ! cc done "$KEY" --sha "$task_sha" "$task_done_text" >> "$log" 2>&1; then
+  if ! cc done "$KEY" --sha "$task_sha" --live "$task_done_text" "$task_done_text" >> "$log" 2>&1; then
     cc note "$KEY" "cc done не прошла после выкладки коммита ${task_sha:0:10}: задача выложена, но не закрыта. Лог: /opt/ihelp.am/${log}" --error 2>/dev/null || true
-    printf 'Задача %s выложена (коммит %s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --agent %s "%s"\n' \
-      "$KEY" "${task_sha:0:10}" "$KEY" "$task_sha" "$AGENT" "$task_done_text" > "data/tmp/block-done-$KEY.md"
+    printf 'Задача %s выложена (коммит %s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --live "%s" --agent %s "%s"\n' \
+      "$KEY" "${task_sha:0:10}" "$KEY" "$task_sha" "$task_done_text" "$AGENT" "$task_done_text" > "data/tmp/block-done-$KEY.md"
     cc block "$KEY" --on tech --text-file "data/tmp/block-done-$KEY.md" >> "$log" 2>&1 || true
     echo "✗ cc done не прошла для $KEY — задача заблокирована на технике с готовой командой" | tee -a "$log"
     all_done=false

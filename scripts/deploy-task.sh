@@ -136,7 +136,7 @@ if [ -z "$head" ] || git merge-base --is-ancestor "$head" "origin/main" 2>/dev/n
     tested_label_pre="Протестирован коммит ${tested:0:10}."
     [ -n "$NOTEST" ] && tested_label_pre="Без отметки тестировщика (--no-test)."
     pm_done_text="Деплоер: $AGENT. Выложена ранее в составе: ${batch_subj}. Коммит слияния: ${found_merge_sha:0:10}. SMOKE OK. Лог: /opt/ihelp.am/${premerged_log}"
-    if ! cc done "$KEY" --sha "$found_merge_sha" "$pm_done_text" >> "$premerged_log" 2>&1; then
+    if ! cc done "$KEY" --sha "$found_merge_sha" --live "$pm_done_text" "$pm_done_text" >> "$premerged_log" 2>&1; then
       cc note "$KEY" "cc done не прошла для уже влитой задачи ${found_merge_sha:0:10}. Лог: /opt/ihelp.am/${premerged_log}" --error 2>/dev/null || true
       printf 'Задача %s уже влита в main (%s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --agent deployer\n' \
         "$KEY" "${found_merge_sha:0:10}" "$KEY" "$found_merge_sha" > "data/tmp/block-done-$KEY.md"
@@ -292,12 +292,12 @@ if grep -q '^prisma/migrations/' <<< "$changed"; then
   fi
 fi
 done_text="Деплоер: $AGENT. Автовыкладка ${merge:0:10}: SMOKE OK (${checks} проверок, соседних сайтов отвечают: ${neighbors}).${migr} ${tested_label} Слияние ${pushed}. Лог: /opt/ihelp.am/${log}"
-if ! cc done "$KEY" --sha "$merge" "$done_text"; then
+if ! cc done "$KEY" --sha "$merge" --live "$done_text" "$done_text"; then
   # Прод уже выложен, но закрыть задачу не удалось — блокируем на технике с готовой командой.
   # Задача уходит из очереди деплоера, повторной выкладки того же кода не будет.
   cc note "$KEY" "cc done не прошла после выкладки коммита ${merge:0:10}: задача выложена, но не закрыта. Лог: /opt/ihelp.am/${log}" --error 2>/dev/null || true
-  printf 'Задача %s выложена (коммит %s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --agent %s "%s"\n' \
-    "$KEY" "${merge:0:10}" "$KEY" "$merge" "$AGENT" "$done_text" > "data/tmp/block-done-$KEY.md"
+  printf 'Задача %s выложена (коммит %s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --live "%s" --agent %s "%s"\n' \
+    "$KEY" "${merge:0:10}" "$KEY" "$merge" "$done_text" "$AGENT" "$done_text" > "data/tmp/block-done-$KEY.md"
   cc block "$KEY" --on tech --text-file "data/tmp/block-done-$KEY.md" 2>/dev/null || true
   echo "✗ cc done не прошла — задача заблокирована на технике с готовой командой закрытия"
   exit 1

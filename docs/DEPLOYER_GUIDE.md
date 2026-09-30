@@ -145,6 +145,7 @@ bash /opt/ihelp.am/scripts/deploy-batch.sh <КЛЮЧ1> <КЛЮЧ2> …
 6. Если есть миграция — снимает бэкап (правило 5 в CLAUDE.md).
 7. Запускает `deploy/update.sh`: бэкап, образы для отката, сборка, запуск, smoke-тест вместе с соседями. Если менялся `deploy/Caddyfile`, перезапускает Caddy.
 8. **Успех:** отправляет `main`, удаляет ветку и закрывает задачу «Сделано» с коммитом и доказательством. В тех-чат уходит «🚀 Выложено».
+   **UI-задачи (layer front/fullstack или scope src/app/src/components):** скрипт передаёт SMOKE-текст как `--live` автоматически. Если `cc done` вернёт `site_check_required` — добавь запись в ленту с фразой «проверено на сайте: …» и повтори `cc done` с `--live "…"`.
 9. **Провал:** если сборка не дошла до запуска, прод не тронут. Если упал smoke — `deploy/rollback.sh`. Локальный `main` возвращается назад, задача уходит на доработку с причиной и путём к логу `data/deploys/…`, ошибка — в тех-чат.
 
 Нет тестировщика (пул выключен, проверял сам) — `scripts/deploy-task.sh <КЛЮЧ> --no-test`. Воркеру этот флаг недоступен. В доказательстве будет записано, что отметки тестировщика не было.
@@ -182,7 +183,9 @@ git merge --no-ff origin/<ветка>                    # конфликт → 
 docker compose exec -T backup sh /backup.sh once    # если ветка меняла схему — обязательно
 deploy/update.sh                                    # читать блок SMOKE целиком
 git push origin main && git push origin --delete <ветка>
-node scripts/cc.mjs done <КЛЮЧ> --sha <коммит мёржа> "Smoke OK. Проверено: …" --agent deployer
+node scripts/cc.mjs done <КЛЮЧ> --sha <коммит мёржа> --live "SMOKE OK, проверено на https://ihelp.am: …" "Smoke OK. Проверено: …" --agent deployer
+# Флаг --live обязателен для задач с интерфейсом (layer front/fullstack или src/app/src/components).
+# Для остальных задач --live не мешает — передаётся и игнорируется.
 ```
 </details>
 
@@ -271,7 +274,7 @@ git worktree list                                    # какие временн
 node scripts/cc.mjs list review                      # очередь на проверку
 node scripts/cc.mjs show <КЛЮЧ>                      # задача целиком: отчёт, факты из git, лента
 node scripts/cc.mjs return <КЛЮЧ> "…" --agent deployer            # вернуть на доработку
-node scripts/cc.mjs done <КЛЮЧ> --sha <коммит> "…" --agent deployer   # закрыть с доказательством
+node scripts/cc.mjs done <КЛЮЧ> --sha <коммит> --live "SMOKE OK, …" "…" --agent deployer   # закрыть с доказательством; --live обязателен для UI-задач
 ```
 
 ## Куда смотреть за подробностями
