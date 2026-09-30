@@ -134,6 +134,7 @@ export async function needsYou() {
     returnedRuns: returnedRuns.slice(0, 10),
     pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null,
     alertMissing: !hasAlertRecipient(settings),
+    teamChatMissing: !(settings.notify.teamChatId || settings.notify.telegramChatId),
     /** Задачи, ждущие зависимостей с зависшим корнем */
     waitingDeps: attn.waitingDeps,
     /** Цепочки зависимостей: корень → ждущие задачи */
