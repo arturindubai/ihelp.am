@@ -176,6 +176,14 @@
         "no": "Ոչ",
         "note": "",
         "pastePh": "",
+        "push": {
+          "createdAt": "",
+          "noEncKey": "",
+          "notReady": "",
+          "purpose": "",
+          "ready": "",
+          "title": "Push ծանուցումներ"
+        },
         "services": {
           "APPLE_SIGNIN": {
             "how": "",
@@ -218,13 +226,18 @@
       "library": {
         "comparePrev": "",
         "empty": "",
+        "emptySection": "",
         "markdownHint": "",
         "new": "Նոր",
         "repoHint": "",
-        "subtitle": "",
-        "tabs": {
-          "role": ""
+        "sections": {
+          "decisions": "",
+          "design": "",
+          "docs": "",
+          "research": "",
+          "rules": ""
         },
+        "subtitle": "",
         "title": ""
       },
       "logs": {
@@ -635,6 +648,7 @@
       "answer": "",
       "archiveCategory": "",
       "archived": "",
+      "arrivalHours": "",
       "banner": "",
       "benefits": "",
       "bookings": "",
@@ -670,6 +684,7 @@
       "infoTitle": "",
       "intervalDays": "",
       "isDefault": "",
+      "isNew": "",
       "kinds": {
         "ONE_TIME": "Մեկանգամ այց",
         "PACKAGE": "Այցերի Պակետ",
@@ -685,7 +700,6 @@
       "newService": "",
       "noMasters": "",
       "noServicesInCategory": "",
-      "noVariants": "",
       "note": "",
       "noteBody": "",
       "noteTitle": "",
@@ -697,8 +711,6 @@
       "planKind": "",
       "plans": "",
       "policy": "",
-      "previewOptions": "",
-      "previewStep": "",
       "pricePreview": "",
       "question": "",
       "rating": "",
@@ -1067,20 +1079,40 @@
     "total": ""
   },
   "catalog": {
+    "arrivalToday": "",
+    "arrivalWithin": "",
+    "badgeNew": "",
     "comingSoonText": "",
     "comingSoonTitle": "Շուտով կբացենք",
+    "formatOnce": {
+      "cta": "Պատվիրել",
+      "desc": "Մեկ այց — երբ անհրաժեշտ է",
+      "title": "Միանվագ այց"
+    },
+    "formatPack": {
+      "cta": "Գնել փաթեթ",
+      "desc": "Մի քանի այց կանխավճարով — ավելի էժան",
+      "title": "Այցերի փաթեթ"
+    },
+    "formatRegular": {
+      "badge": "Ձեռնտու",
+      "cta": "Բաժանորդագրվել",
+      "desc": "Կանոնավոր այցեր բաժանորդագրության զեղչով",
+      "title": "Կանոնավոր մաքրություն"
+    },
+    "formatsTitle": "Ընտրեք մաքրման ձևաչափ",
     "newService": "Նոր ծառայություն",
-    "notifyAlready": "",
-    "notifyButton": "",
-    "notifyConsent": "",
-    "notifyHint": "",
-    "notifyInvalid": "",
-    "notifyPlaceholder": "",
-    "notifySubtitle": "",
-    "notifySuccess": "",
-    "notifyTitle": "",
-    "notifyTooMany": "",
-    "writeWhatsApp": "Գրել WhatsApp-ում"
+    "notifyAlready": "Менк арден стацел енк дзер контакты",
+    "notifyButton": "Ծануцел индз",
+    "notifyConsent": "Кттацнелов кочакы, дуз памаjордвоум ек дзер контакти машакман: <privacy>Гаjтнипетян кагакакануtян</privacy>",
+    "notifyHint": "Куjарканк мияйн мек хагорданагруtян",
+    "notifyInvalid": "Мутказгрек херахос кам e-mail",
+    "notifyPlaceholder": "+374 … кам name@mail.com",
+    "notifySubtitle": "Херахос кам e-mail — дзер кнтруtямб",
+    "notifySuccess": "Граíвац ек! Кцануценк, ерп амрагумы бацви:",
+    "notifyTitle": "Цануцел горцаркман масин",
+    "notifyTooMany": "Чафазанc шат хайтер, хнтрум енк брзел авели уш",
+    "writeWhatsApp": "Գрел WhatsApp-ում"
   },
   "common": {
     "add": "Ավելացնել",
@@ -1339,6 +1371,12 @@
     "toCollect": "",
     "today": "Այսոր",
     "upcoming": ""
+  },
+  "push": {
+    "allow": "Թույլ տալ",
+    "body": "Թույլ տվեք ծանուցումները՝ ձեր պատվերների մասին տեղեկանալու համար",
+    "dismiss": "Ոչ հիմա",
+    "title": "Այցելությունների ծանուցումներ"
   },
   "review": {
     "alreadyLeft": "",
