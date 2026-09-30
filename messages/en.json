@@ -250,6 +250,11 @@
         "approvedAgent": "by {agent}",
         "approvedEmpty": "Nothing approved yet",
         "canon": "Canon record",
+        "chainStep": {
+          "approval": "Approval",
+          "mockup": "Mockup",
+          "requirements": "Requirements"
+        },
         "designSnippet": "Design: {text}",
         "files": "files: {n}",
         "gate": "mockup required",
