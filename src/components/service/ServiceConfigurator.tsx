@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Check, Info } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
@@ -9,6 +9,7 @@ import type { ServiceView } from "@/server/services/catalog";
 import { Sheet } from "@/components/ui/Sheet";
 import { Icon } from "@/components/Icon";
 import { PriceBar } from "./PriceBar";
+import { writeCart, clearCart } from "@/lib/cart";
 
 export function initialSelection(s: ServiceView) {
   const opts: string[] = [];
@@ -66,6 +67,15 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy }: { s: Ser
   }
   const barPrice = plan?.kind === "PACKAGE" ? price.payNow : price.first.price;
   const barStrike = plan?.kind === "PACKAGE" ? price.payNowBase : price.base;
+
+  // Сохраняем выбор в localStorage, чтобы StickyCartBar показывал его на других страницах
+  useEffect(() => {
+    if (lines.length > 0) {
+      writeCart({ slug: s.slug, opts, planId, count: 1, total: barPrice });
+    } else {
+      clearCart();
+    }
+  }, [lines.length, opts, planId, barPrice, s.slug]);
 
   function go() {
     const q = new URLSearchParams({ o: opts.join(","), ...(planId ? { p: planId } : {}) });
@@ -220,8 +230,10 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy }: { s: Ser
             {s.plans.map((p) => {
               const pr = priceFor(p);
               const on = p.id === planId;
-              // Экономия за визит относительно базовой цены (без тарифа)
-              const saving = basePrice.regular.price - pr.regular.price;
+              // Для пакета — экономия на весь пакет; для подписки — экономия за один визит
+              const saving = p.kind === "PACKAGE"
+                ? pr.payNowBase - pr.payNow
+                : basePrice.regular.price - pr.regular.price;
               return (
                 <button key={p.id} data-on={on} onClick={() => setPlanId(p.id)} className={cn("w-full flex-row items-center gap-3 rounded-xl border border-line bg-paper px-3 py-3 text-left transition", on && "border-action bg-brand-50 ring-1 ring-action")}>
                   <div className="flex items-center gap-3">
@@ -242,7 +254,9 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy }: { s: Ser
                       </span>
                       {saving > 0 && (
                         <span className="block text-[11px] font-semibold text-ok">
-                          {t("perVisitSaving", { amount: amd(saving) })}
+                          {p.kind === "PACKAGE"
+                            ? t("packageSaving", { amount: amd(saving) })
+                            : t("perVisitSaving", { amount: amd(saving) })}
                         </span>
                       )}
                     </span>

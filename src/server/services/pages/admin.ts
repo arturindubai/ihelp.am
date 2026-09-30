@@ -175,7 +175,9 @@ export async function getAdminServices() {
 
 /** Данные услуги для редактирования вместе со справочниками */
 export async function getAdminServiceEdit(id: string) {
-  const [service, cats, masters] = await Promise.all([
+  const now = new Date();
+  const weekEnd = new Date(now.getTime() + 7 * 86400_000);
+  const [service, cats, masters, visitCounts] = await Promise.all([
     db.service.findUnique({
       where: { id },
       include: {
@@ -185,9 +187,19 @@ export async function getAdminServiceEdit(id: string) {
       },
     }),
     db.category.findMany({ orderBy: { sort: "asc" } }),
-    db.master.findMany({ orderBy: { sort: "asc" } }),
+    db.master.findMany({ orderBy: { sort: "asc" }, select: { id: true, name: true, photo: true, active: true } }),
+    db.visit.groupBy({
+      by: ["masterId"],
+      where: {
+        masterId: { not: null },
+        scheduledAt: { gte: now, lte: weekEnd },
+        status: { notIn: ["CANCELLED", "SKIPPED", "NO_SHOW"] },
+      },
+      _count: { id: true },
+    }),
   ]);
-  return { service, cats, masters };
+  const visitMap = new Map(visitCounts.map((v) => [v.masterId, v._count.id]));
+  return { service, cats, masters, visitMap };
 }
 
 // ──────────────── РАСПИСАНИЕ ────────────────

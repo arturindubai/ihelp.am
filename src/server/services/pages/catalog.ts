@@ -41,6 +41,25 @@ export async function getStaticPage(slug: string) {
   return db.page.findFirst({ where: { slug, active: true } });
 }
 
+/** Данные токена отзыва для страницы оставления отзыва */
+export async function getReviewToken(token: string) {
+  return db.reviewToken.findUnique({
+    where: { token },
+    select: {
+      usedAt: true,
+      expiresAt: true,
+      visit: {
+        select: {
+          id: true,
+          status: true,
+          review: { select: { id: true } },
+          master: { select: { name: true } },
+        },
+      },
+    },
+  });
+}
+
 /** Данные для sitemap: активные услуги и мастера */
 export async function getSitemapEntries() {
   return Promise.all([

@@ -1,10 +1,22 @@
 /**
- * Библиотека знаний и инструкций (Control Center → «Библиотека», как Canon в админке LIA).
+ * Канон — Control Center → «Канон» (переименован из «Библиотека»).
  * Чистые функции: вид документа по пути, заголовок из текста, построчное сравнение версий.
  */
 
 export const LIBRARY_KINDS = ["rules", "role", "process", "decision", "spec", "knowledge"] as const;
 export type LibraryKind = (typeof LIBRARY_KINDS)[number];
+
+/** Пять разделов Канона и какие kind-ы в них попадают */
+export const CANON_SECTIONS: Record<string, string[]> = {
+  decisions: ["decision"],
+  rules: ["rules", "role", "process"],
+  design: ["spec"],
+  research: ["knowledge"],
+  docs: [], // загруженные файлы и прочее — будущая функциональность
+};
+
+export type CanonSection = "decisions" | "rules" | "design" | "research" | "docs";
+export const CANON_SECTION_KEYS: CanonSection[] = ["decisions", "rules", "design", "research", "docs"];
 
 /** Файлы репозитория, которые снимаются в Библиотеку при каждой выкладке */
 export const REPO_DOC_ROOTS = ["CLAUDE.md", "README.md", "DESIGN.md", "docs"] as const;

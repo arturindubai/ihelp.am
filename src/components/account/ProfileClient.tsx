@@ -3,7 +3,7 @@ import { useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { MapPin, Pencil, Trash2, Plus, LogOut, Send } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
-import { confirmProfileEmailAction, sendProfileEmailCodeAction, unlinkTelegramAction, updateProfileAction } from "@/server/actions/account";
+import { confirmProfileEmailAction, sendProfileEmailCodeAction, toggleEmailRemindersAction, unlinkTelegramAction, updateProfileAction } from "@/server/actions/account";
 import { toggleAdsConsentAction } from "@/server/actions/consent";
 import { deleteAddressAction } from "@/server/actions/booking";
 import { logoutAction } from "@/server/actions/auth";
@@ -11,7 +11,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { AddressForm, addressLine, type AddressRow } from "@/components/booking/AddressForm";
 import { formatPhone } from "@/lib/phone";
 
-export function ProfileClient({ user, addresses: initial, districts, enabledLocales, emailCodes, telegramLinkEnabled, telegramError }: { user: { name: string | null; phone: string; email: string | null; emailVerified: boolean; locale: string; telegramId: string | null; telegramUsername: string | null; adsConsent: boolean }; addresses: AddressRow[]; districts: string[]; enabledLocales: string[]; emailCodes: boolean; telegramLinkEnabled: boolean; telegramError: string | null }) {
+export function ProfileClient({ user, addresses: initial, districts, enabledLocales, emailCodes, telegramLinkEnabled, telegramError }: { user: { name: string | null; phone: string; email: string | null; emailVerified: boolean; locale: string; telegramId: string | null; telegramUsername: string | null; adsConsent: boolean; emailReminders: boolean }; addresses: AddressRow[]; districts: string[]; enabledLocales: string[]; emailCodes: boolean; telegramLinkEnabled: boolean; telegramError: string | null }) {
   const t = useTranslations("account");
   const ta = useTranslations("address");
   const tc = useTranslations("common");
@@ -68,6 +68,8 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
         <TelegramSection telegramId={user.telegramId} telegramUsername={user.telegramUsername} error={telegramError} />
       )}
 
+      {user.email && <EmailRemindersSection initialValue={user.emailReminders} />}
+
       <AdsConsentSection initialValue={user.adsConsent} />
 
       <section className="card mt-4 p-4">
@@ -89,7 +91,18 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
         <button className="btn-outline mt-2 w-full" onClick={() => setEdit({})}><Plus size={18} /> {ta("saveAddress")}</button>
       </section>
 
-      <button className="btn-ghost mt-4 w-full text-bad" onClick={() => start(async () => { await logoutAction(); router.replace("/"); router.refresh(); })}><LogOut size={18} /> {tn("logout")}</button>
+      <button className="btn-ghost mt-4 w-full text-bad" onClick={() => start(async () => {
+        let endpoint: string | undefined;
+        try {
+          if ("serviceWorker" in navigator) {
+            const reg = await navigator.serviceWorker.ready;
+            endpoint = (await reg.pushManager.getSubscription())?.endpoint;
+          }
+        } catch { /* нет подписки или SW недоступен */ }
+        await logoutAction(endpoint);
+        router.replace("/");
+        router.refresh();
+      })}><LogOut size={18} /> {tn("logout")}</button>
 
       <Sheet open={!!edit} onClose={() => setEdit(null)} title={edit?.id ? tc("edit") : ta("saveAddress")}>
         {edit && (
@@ -140,6 +153,36 @@ function TelegramSection({ telegramId, telegramUsername, error }: { telegramId: 
           {t("telegramConnect")}
         </a>
       )}
+    </section>
+  );
+}
+
+/** Переключатель необязательных email-уведомлений: напоминания и просьбы об отзыве */
+function EmailRemindersSection({ initialValue }: { initialValue: boolean }) {
+  const t = useTranslations("account");
+  const [checked, setChecked] = useState(initialValue);
+  const [, start] = useTransition();
+
+  function toggle(next: boolean) {
+    setChecked(next);
+    start(async () => {
+      const r = await toggleEmailRemindersAction(next);
+      if (!r.ok) setChecked(!next);
+    });
+  }
+
+  return (
+    <section className="card mt-4 p-4">
+      <h2 className="h3 mb-3">{t("emailRemindersTitle")}</h2>
+      <label className="flex cursor-pointer items-start gap-3">
+        <input
+          type="checkbox"
+          className="checkbox-brand mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-action)]"
+          checked={checked}
+          onChange={(e) => toggle(e.target.checked)}
+        />
+        <span className="text-sm">{t("emailRemindersLabel")}</span>
+      </label>
     </section>
   );
 }

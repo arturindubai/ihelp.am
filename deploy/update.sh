@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Обновление iHelp: проверка git → бэкап → образы для отката → сборка → гейт → запуск → smoke-тест → очистка.
+# Обновление iHelp без простоя: blue-green переключение контейнеров.
+# Схема: migrate → app-next (новый образ) → ждать healthy → остановить app →
+#        перезапустить app (новый образ) → ждать healthy → остановить app-next.
+# Caddy переключается автоматически через lb_policy first + health checks.
 #   deploy/update.sh              — обновить (соседние сайты берутся из NEIGHBORS в .env)
 #   deploy/update.sh https://… …  — проверить конкретные адреса соседей
 # Откат, если что-то пошло не так: deploy/rollback.sh
@@ -58,7 +61,7 @@ else
   docker compose build
 fi
 
-echo "▶ 4/7 Гейт (хардкод цветов, строки мимо переводов, секреты в сборке)"
+echo "▶ 4/7 Гейт (секреты в собранном коде; цвета, строки, миграции — уже проверены в check.sh до сборки)"
 if ! deploy/gate.sh; then
   echo "✗ Гейт не прошёл. Прод не затронут. Исправить и запустить deploy/update.sh заново."
   exit 1
@@ -80,12 +83,11 @@ else
   echo "  БД не запущена — пропускаю"
 fi
 
-echo "▶ 5/7 Запуск на готовом образе (миграции базы применяются автоматически)"
+echo "▶ 5/7 Выкладка без простоя (blue-green)"
 echo "$(< src/lib/deploy-marker.txt)"
 
 # Замер простоя: поллер опрашивает /api/health раз в секунду в фоне.
-# Во время выкладки Caddy держит клиентские соединения открытыми (lb_try_duration 60s) и
-# не возвращает 502 — поэтому поллер с коротким таймаутом фиксирует реальное окно перезапуска.
+# При корректном blue-green переключении поллер не должен увидеть ни одного не-200 ответа.
 _http_bind="$(grep -E '^HTTP_BIND=' .env 2>/dev/null | tail -n 1 | cut -d= -f2-)" || _http_bind=""
 _hport="${_http_bind##*:}"
 _hbase="http://127.0.0.1:${_hport:-80}"
@@ -101,7 +103,76 @@ _poll_log="$(mktemp /tmp/health-poll.XXXXXX)"
 ) > "$_poll_log" &
 _poll_pid=$!
 
-docker compose up -d --no-build
+# 5а: Убрать старый app-next (если остался с предыдущего прерванного деплоя)
+if docker inspect homecare-app-next-1 >/dev/null 2>&1; then
+  echo "  обнаружен старый app-next — удаляю перед деплоем"
+  docker compose --profile deploy rm -f -s app-next 2>/dev/null || true
+fi
+
+# 5б: Запустить migrate (миграции применяются до переключения трафика)
+echo "  запуск migrate (миграции до переключения)"
+docker compose up --no-build -d migrate
+_migrate_ok=0
+for _ in $(seq 1 60); do
+  _mstate="$(docker inspect -f '{{.State.Status}}' homecare-migrate-1 2>/dev/null || echo unknown)"
+  _mexit="$(docker inspect -f '{{.State.ExitCode}}' homecare-migrate-1 2>/dev/null || echo -1)"
+  if [ "$_mstate" = "exited" ]; then
+    if [ "$_mexit" = "0" ]; then _migrate_ok=1; break; fi
+    echo "✗ migrate завершился с кодом $_mexit"
+    docker compose logs --tail 30 migrate || true
+    exit 1
+  fi
+  sleep 5
+done
+if [ "$_migrate_ok" -ne 1 ]; then
+  echo "✗ migrate не завершился за 5 минут"
+  exit 1
+fi
+echo "  ✓ migrate завершился успешно"
+
+# 5в: Запустить app-next с новым образом
+echo "  запуск app-next (новый образ)"
+docker compose --profile deploy up --no-build --no-deps -d app-next
+
+# 5г: Ждать готовности app-next (до 75 секунд: start_period 15s + 5s*retries + запас)
+_anext_ok=0
+for _ in $(seq 1 15); do
+  [ "$(docker inspect -f '{{.State.Health.Status}}' homecare-app-next-1 2>/dev/null)" = healthy ] && _anext_ok=1 && break
+  sleep 5
+done
+if [ "$_anext_ok" -ne 1 ]; then
+  echo "✗ app-next не стал healthy за 75 с — деплой отменён, прод не затронут"
+  docker compose --profile deploy rm -f -s app-next 2>/dev/null || true
+  exit 1
+fi
+echo "  ✓ app-next healthy — Caddy переключится на него пока app перезапускается"
+
+# Пик памяти при двух экземплярах: измерить до того, как остановим app
+_mem_app=$(docker stats homecare-app-1 --no-stream --format '{{.MemUsage}}' 2>/dev/null | awk '{print $1}' || echo "?")
+_mem_anext=$(docker stats homecare-app-next-1 --no-stream --format '{{.MemUsage}}' 2>/dev/null | awk '{print $1}' || echo "?")
+echo "  память при двух экземплярах: app=${_mem_app} app-next=${_mem_anext}"
+
+# 5д: Остановить app — Caddy автоматически переключается на app-next (lb_policy first, health check)
+echo "  останавливаем app"
+docker compose stop app
+
+# 5е: Запустить app с новым образом (migrate уже применён; --no-deps безопасен)
+echo "  перезапускаем app с новым образом"
+docker compose up --no-build --no-deps -d app
+
+# 5ж: Ждать готовности app
+for _ in $(seq 1 15); do
+  [ "$(docker inspect -f '{{.State.Health.Status}}' homecare-app-1 2>/dev/null)" = healthy ] && break
+  sleep 5
+done
+echo "  ✓ app healthy — Caddy возвращает трафик на app"
+
+# 5з: Остановить app-next
+echo "  останавливаем app-next"
+docker compose --profile deploy rm -f -s app-next
+
+# 5и: Запустить прочие службы (db, caddy, cron, backup — идемпотентно)
+docker compose up --no-build -d db caddy cron backup
 
 # Применяем конфигурацию Caddy (graceful reload — соединения не обрываются).
 # docker compose up не пересоздаёт контейнер caddy при изменении bind-mount, поэтому
@@ -115,15 +186,9 @@ fi
 
 # Пересоздаём backup, чтобы получить актуальный /backup.sh (git при merge меняет inode файла)
 echo "  пересоздаём контейнер backup"
-docker compose up -d --no-build --force-recreate backup
+docker compose up --no-build --force-recreate -d backup
 
-echo "▶ 6/7 Ожидание готовности приложения"
-for _ in $(seq 1 60); do
-  [ "$(docker inspect -f '{{.State.Health.Status}}' homecare-app-1 2> /dev/null)" = healthy ] && break
-  sleep 5
-done
-
-# Останавливаем замер и рассчитываем время простоя
+echo "▶ 6/7 Остановка замера и расчёт времени простоя"
 kill "$_poll_pid" 2>/dev/null || true
 wait "$_poll_pid" 2>/dev/null || true
 _poll_pid=""

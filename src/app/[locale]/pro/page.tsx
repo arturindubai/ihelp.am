@@ -11,6 +11,7 @@ import { StatusBadge } from "@/components/account/StatusBadge";
 import { ProVisitActions } from "./ProVisitActions";
 import { ProSettings } from "@/components/pro/ProSettings";
 import { Img } from "@/components/Img";
+import { PromoSlot } from "@/components/PromoSlot";
 
 export default async function ProPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { locale } = await params;
@@ -47,6 +48,8 @@ export default async function ProPage({ params, searchParams }: { params: Promis
           {tabs.map(([k, l]) => <Link key={k} href={`/pro?tab=${k}`} className={cn("flex-1 rounded-lg px-3 py-2 text-center text-sm font-medium whitespace-nowrap", tab === k ? "bg-ink text-inverse" : "text-muted")}>{l}</Link>)}
         </div>
       </div>
+      <PromoSlot placement="MASTER_CABINET" locale={locale} />
+
       {tab === "settings" ? (
         <ProSettings
           notifyEnabled={master.notifyEnabled}

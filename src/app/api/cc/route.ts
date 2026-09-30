@@ -46,7 +46,7 @@ function fail(e: unknown) {
   }
   const msg = (e as Error)?.message ?? "error";
   // Ошибки проверки содержимого из saveTask — это ошибки запроса, а не сервера
-  if (/^(bad_key|key_exists|not_found|unknown_depends|unknown_epic)/.test(msg)) return json({ error: msg.split(":")[0], detail: msg.split(":")[1] ?? null }, 400);
+  if (/^(bad_key|key_exists|not_found|unknown_depends|unknown_epic|unknown_parent|parent_self_reference)/.test(msg)) return json({ error: msg.split(":")[0], detail: msg.split(":")[1] ?? null }, 400);
   console.error("[cc api]", e);
   return json({ error: "server_error" }, 500);
 }
@@ -97,6 +97,8 @@ const full = (t: Task) => ({
   mockupUrl: t.mockupUrl,
   mockupApprovedBy: t.mockupApprovedBy,
   mockupApprovedAt: t.mockupApprovedAt,
+  screenRequirements: t.screenRequirements,
+  needsDesign: t.needsDesign,
   releaseNote: t.releaseNote,
   ownerSummary: t.ownerSummary,
   nextSteps: t.nextSteps,
@@ -155,7 +157,7 @@ export async function GET(req: Request) {
         claimedBy: p.get("agent") ?? undefined,
         epicKey: p.get("epicKey") ?? undefined,
         q: p.get("q") ?? undefined,
-        open: !p.get("status"),
+        open: !p.get("q") && !p.get("status"),
       }),
     );
     return json({ tasks: tasks.map((t) => ({ ...brief(t), health: t.health, dorOk: t.dorOk })) });
@@ -324,7 +326,7 @@ export async function POST(req: Request) {
         const blockedUntilRaw = str(body.blockedUntil);
         const blockedUntil = blockedUntilRaw ? (() => { const d = new Date(blockedUntilRaw); return isNaN(d.getTime()) ? undefined : d; })() : undefined;
         const nextSteps = Array.isArray(body.nextSteps) ? (body.nextSteps as unknown[]).filter((s) => typeof s === "string").map(String) : undefined;
-        const input: TransitionInput = { to, text, force: body.force === true, blockedOn: str(body.on), blockedUntil, sha: str(body.sha), branch: str(body.branch), releaseNote: str(body.releaseNote), ownerSummary: str(body.ownerSummary), nextSteps, noWork: body.noWork === true };
+        const input: TransitionInput = { to, text, force: body.force === true, blockedOn: str(body.on), blockedUntil, sha: str(body.sha), branch: str(body.branch), releaseNote: str(body.releaseNote), ownerSummary: str(body.ownerSummary), nextSteps, noWork: body.noWork === true, intakeClosingMap: str(body.intakeClosingMap), liveProof: str(body.liveProof) };
         const task = await transition(key, input, actor);
         return json({ ok: true, status: task.status, task: brief(task) });
       }
@@ -333,7 +335,9 @@ export async function POST(req: Request) {
         if (!key) return json({ error: "key_required" }, 400);
         const newOn = str(body.on);
         if (!newOn) return json({ error: "on_required" }, 400);
-        const task = await reblockOn(key, newOn, text, actor);
+        const reblockUntilRaw = str(body.blockedUntil);
+        const reblockUntil = reblockUntilRaw ? (() => { const d = new Date(reblockUntilRaw); return isNaN(d.getTime()) ? undefined : d; })() : undefined;
+        const task = await reblockOn(key, newOn, text, actor, reblockUntil);
         return json({ ok: true, task: brief(task) });
       }
       case "report": {
@@ -360,7 +364,7 @@ export async function POST(req: Request) {
           if (Object.keys(patch).length === 0) {
             const available = role === "designer"
               ? DESIGNER_FIELDS.join(", ")
-              : "title, summary, details, requirements, design, qaNotes, deployNotes, needs, depends, docs, epicKey, area, layer, priority, stage, owner, estimate, scope, mockupRequired, mockupUrl";
+              : "title, summary, details, requirements, design, qaNotes, deployNotes, needs, depends, docs, epicKey, area, layer, priority, stage, owner, estimate, scope, mockupRequired, mockupUrl, screenRequirements, needsDesign";
             return json({ error: "no_update_fields", detail: `нет полей для обновления; допустимые поля: ${available}` }, 400);
           }
           content = { ...full(current), ...patch, key };

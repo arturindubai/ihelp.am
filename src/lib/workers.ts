@@ -28,8 +28,8 @@ export type PoolConfig = {
   model: (typeof MODELS)[number];
   /** Модель для задач размера L — только для пула dev; остальные пулы игнорируют это поле */
   modelForL: (typeof MODELS)[number];
-  /** Сколько запусков пула в сутки, чтобы не съесть лимит подписки */
-  dailyCap: number;
+  /** Сколько запусков пула в сутки; null — без лимита. От перерасхода подписки защищает пауза по ответу Claude о лимите */
+  dailyCap: number | null;
   mode: Mode;
   /** Для режима «по расписанию»: не чаще раза в столько минут */
   everyMin: number;
@@ -41,10 +41,12 @@ export type WorkersConfig = {
   /** Пробный режим: диспетчер считает план и пишет его в журнал, но никого не запускает */
   dryRun: boolean;
   pools: Record<Pool, PoolConfig>;
-  /** Часы выкладки по Еревану: деплоер сам запускается только в этом окне, [с, до) */
-  deployWindow: [number, number];
+  /** Часы выкладки по Еревану: деплоер сам запускается только в этом окне, [с, до); null — без ограничения */
+  deployWindow: [number, number] | null;
   /** Сколько карточек триаж разбирает за один запуск */
   triageBatch: number;
+  /** Размер пачки выкладки: сколько протестированных задач деплоер сливает и собирает за один раз; 1 — по одной (старое поведение), максимум 5 */
+  deployBatch: number;
   /** Раз в столько часов триаж пересматривает весь бэклог и готовые задачи; 0 — не пересматривать */
   sweepEveryH: number;
   /** Пауза после исчерпанного лимита подписки или отказа входа: до этого момента никого не запускаем */
@@ -57,6 +59,11 @@ export type WorkersConfig = {
   plannedStart: boolean;
   /** Opus на лимите до этого момента: L-задачи в пуле dev переключаются на Sonnet; null — лимит не известен */
   opusLimitUntil: string | null;
+  /**
+   * Суточный лимит необязателен (решение владельца 28.09.2026). Настройки, сохранённые до этого признака,
+   * хранят обязательные лимиты — они считаются снятыми один раз; заданные после этого значения сохраняются
+   */
+  capsOptional: boolean;
 };
 
 export const DEFAULT_WORKERS: WorkersConfig = {
@@ -64,24 +71,26 @@ export const DEFAULT_WORKERS: WorkersConfig = {
   dryRun: false,
   pools: {
     // Триаж: каждая входящая IN-N — отдельный запуск, пачка бэклога — ещё один; 12 в сутки не хватало и очередь вставала
-    triage: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 40, mode: "auto", everyMin: 30 },
-    dev: { enabled: true, max: 2, model: "sonnet", modelForL: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
-    nocode: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
+    triage: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: null, mode: "auto", everyMin: 30 },
+    dev: { enabled: true, max: 2, model: "sonnet", modelForL: "sonnet", dailyCap: null, mode: "auto", everyMin: 30 },
+    nocode: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: null, mode: "auto", everyMin: 30 },
     // Продакт: отвечает на вопросы, заблокированные «на продукте», раз в сутки проходит бэклог на качество требований
-    product: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
+    product: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: null, mode: "auto", everyMin: 30 },
     // Дизайнер: интерфейсные задачи без описания дизайна и вопросы «на дизайне»
-    designer: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
-    tester: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 16, mode: "auto", everyMin: 30 },
-    deployer: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: 8, mode: "auto", everyMin: 30 },
+    designer: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: null, mode: "auto", everyMin: 30 },
+    tester: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: null, mode: "auto", everyMin: 30 },
+    deployer: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: null, mode: "auto", everyMin: 30 },
   },
-  deployWindow: [10, 20],
+  deployWindow: null,
   triageBatch: 6,
+  deployBatch: 1,
   sweepEveryH: 24,
   pausedUntil: null,
   pausedReason: null,
   stopRunning: false,
   plannedStart: false,
   opusLimitUntil: null,
+  capsOptional: true,
 };
 
 const clamp = (v: unknown, min: number, max: number, fallback: number) => {
@@ -89,9 +98,24 @@ const clamp = (v: unknown, min: number, max: number, fallback: number) => {
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 };
 
+/** Верхняя граница суточного лимита, если он задан */
+export const DAILY_CAP_MAX = 1000;
+
+/** Суточный лимит из сохранённого значения: пусто, null или не число — без лимита; число — в границах 0…DAILY_CAP_MAX */
+export function normalizeDailyCap(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.min(DAILY_CAP_MAX, Math.max(0, n)) : null;
+}
+
+/** Остаток запусков пула на сегодня; без лимита — бесконечность */
+export const capLeft = (dailyCap: number | null, today: number) => (dailyCap === null ? Infinity : Math.max(0, dailyCap - today));
+
 /** Настройки из базы поверх значений по умолчанию: старое или битое значение не ломает диспетчер */
 export function normalizeWorkers(raw: unknown): WorkersConfig {
   const r = (raw && typeof raw === "object" ? raw : {}) as Partial<WorkersConfig>;
+  // Настройки без признака сохранены при обязательном лимите: прежние значения считаются снятыми
+  const capsOptional = r.capsOptional === true;
   const pools = {} as Record<Pool, PoolConfig>;
   for (const p of POOLS) {
     const src = (r.pools?.[p] ?? {}) as Partial<PoolConfig>;
@@ -101,20 +125,26 @@ export function normalizeWorkers(raw: unknown): WorkersConfig {
       max: SINGLE.includes(p) ? 1 : clamp(src.max ?? d.max, 0, 4, d.max),
       model: (MODELS as readonly string[]).includes(String(src.model)) ? (src.model as PoolConfig["model"]) : d.model,
       modelForL: (MODELS as readonly string[]).includes(String((src as Partial<PoolConfig>).modelForL)) ? ((src as Partial<PoolConfig>).modelForL as PoolConfig["modelForL"]) : d.modelForL,
-      dailyCap: clamp(src.dailyCap ?? d.dailyCap, 0, 100, d.dailyCap),
+      dailyCap: capsOptional ? normalizeDailyCap(src.dailyCap) : null,
       mode: (MODES as readonly string[]).includes(String(src.mode)) ? (src.mode as Mode) : d.mode,
       everyMin: (EVERY_MIN as readonly number[]).includes(Number(src.everyMin)) ? Number(src.everyMin) : d.everyMin,
     };
   }
-  const w = Array.isArray(r.deployWindow) ? r.deployWindow.map(Number) : DEFAULT_WORKERS.deployWindow;
-  const from = clamp(w[0], 0, 23, 10);
-  const to = Math.max(from + 1, clamp(w[1], 1, 24, 20));
+  let deployWindow: [number, number] | null = null;
+  if (Array.isArray(r.deployWindow)) {
+    const w = r.deployWindow.map(Number);
+    const from = clamp(w[0], 0, 23, 0);
+    const to = Math.max(from + 1, clamp(w[1], 1, 24, 24));
+    // [0, 24] — полный день, это старый способ задать «без окна» — читаем как null
+    deployWindow = from === 0 && to === 24 ? null : [from, to];
+  }
   return {
     enabled: r.enabled === true,
     dryRun: r.dryRun === true,
     pools,
-    deployWindow: [from, to],
+    deployWindow,
     triageBatch: clamp(r.triageBatch ?? DEFAULT_WORKERS.triageBatch, 1, 15, DEFAULT_WORKERS.triageBatch),
+    deployBatch: clamp(r.deployBatch ?? DEFAULT_WORKERS.deployBatch, 1, 5, DEFAULT_WORKERS.deployBatch),
     sweepEveryH: clamp(r.sweepEveryH ?? DEFAULT_WORKERS.sweepEveryH, 0, 168, DEFAULT_WORKERS.sweepEveryH),
     pausedUntil: typeof r.pausedUntil === "string" ? r.pausedUntil : null,
     pausedReason: typeof r.pausedReason === "string" ? r.pausedReason.slice(0, 300) : null,
@@ -122,6 +152,7 @@ export function normalizeWorkers(raw: unknown): WorkersConfig {
     // Запланированный старт без времени бессмыслен: без pausedUntil — обычная работа
     plannedStart: r.plannedStart === true && typeof r.pausedUntil === "string",
     opusLimitUntil: typeof r.opusLimitUntil === "string" ? r.opusLimitUntil : null,
+    capsOptional: true,
   };
 }
 
@@ -333,7 +364,7 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
   }
 
   if (!config.enabled) return actions;
-  const left = (p: Pool) => Math.max(0, config.pools[p].dailyCap - (s.today[p] ?? 0));
+  const left = (p: Pool) => capLeft(config.pools[p].dailyCap, s.today[p] ?? 0);
   const due = (p: Pool) => {
     const pc = config.pools[p];
     if (!pc.enabled || pc.mode === "manual" || left(p) <= 0 || free(p) <= 0) return false;
@@ -343,9 +374,25 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
   };
 
   const hour = yerevanHour(now);
-  if (due("deployer") && hour >= config.deployWindow[0] && hour < config.deployWindow[1]) {
-    const t = nextDeploy();
-    if (t) actions.push({ pool: "deployer", agent: "deployer", key: t.key });
+  const inWindow = config.deployWindow === null || (hour >= config.deployWindow[0] && hour < config.deployWindow[1]);
+  if (due("deployer") && inWindow) {
+    const batchSize = config.deployBatch ?? 1;
+    if (batchSize <= 1) {
+      const t = nextDeploy();
+      if (t) actions.push({ pool: "deployer", agent: "deployer", key: t.key });
+    } else {
+      const batchKeys: string[] = [];
+      for (let i = 0; i < batchSize; i++) {
+        const t = q.deploy.find((x) => !taken().has(x.key) && !batchKeys.includes(x.key));
+        if (!t) break;
+        batchKeys.push(t.key);
+      }
+      if (batchKeys.length === 1) {
+        actions.push({ pool: "deployer", agent: "deployer", key: batchKeys[0] });
+      } else if (batchKeys.length > 1) {
+        actions.push({ pool: "deployer", agent: "deployer", keys: batchKeys });
+      }
+    }
   }
 
   if (due("tester")) {
@@ -404,10 +451,22 @@ export function freeName(base: string, taken: string[]): string {
   return `${base}-x`;
 }
 
+/** Слова, которыми Claude сообщает об исчерпанном лимите подписки */
+export const LIMIT_PATTERN = /usage limit|limit reached|rate.?limit|out of (extra )?usage|5-hour limit|weekly limit/i;
+
+/**
+ * Упёрлись ли в лимит подписки. Только для запуска, завершившегося ошибкой: успешный отчёт может
+ * упоминать «rate limit» по делу (задача про ограничение частоты запросов) — это не лимит подписки.
+ * errText — вывод ошибок процесса, когда результата нет вовсе
+ */
+export function isLimitOutcome(result: { is_error?: boolean; result?: string; subtype?: string } | null, errText = ""): boolean {
+  if (result && !result.is_error) return false;
+  return LIMIT_PATTERN.test(`${result?.result ?? ""} ${result?.subtype ?? ""} ${errText}`);
+}
+
 /** Итог запуска по ответу claude -p: закончен, ошибка или упёрлись в лимит подписки */
-export function runOutcome(result: { is_error?: boolean; result?: string; subtype?: string } | null, exitCode: number | null): "done" | "failed" | "limit" | "timeout" {
-  const text = `${result?.result ?? ""} ${result?.subtype ?? ""}`;
-  if (/usage limit|limit reached|rate.?limit|out of (extra )?usage|5-hour limit|weekly limit/i.test(text)) return "limit";
+export function runOutcome(result: { is_error?: boolean; result?: string; subtype?: string } | null, exitCode: number | null, errText = ""): "done" | "failed" | "limit" | "timeout" {
+  if (isLimitOutcome(result, errText)) return "limit";
   if (!result) return exitCode === null ? "timeout" : "failed";
   if (result.subtype === "error_max_turns") return "failed";
   return result.is_error ? "failed" : "done";
@@ -425,12 +484,14 @@ export function executorOf(t: { status: string; layer: string; blockedOn?: strin
   return null;
 }
 
-export function poolForTask(t: { status: string; layer: string; testedSha?: string | null; blockedOn?: string | null; mockupRequired?: boolean | null; mockupApprovedBy?: string | null }): Pool | null {
+export function poolForTask(t: { status: string; layer: string; testedSha?: string | null; blockedOn?: string | null; mockupRequired?: boolean | null; mockupApprovedBy?: string | null; screenRequirements?: string | null }): Pool | null {
   if (t.status === "blocked" && t.blockedOn === "product") return "product";
   if (t.status === "blocked" && t.blockedOn === "design") return "designer";
   if (t.status === "backlog" || t.status === "blocked") return "triage";
-  // Задачи с флагом «нужен макет» без утверждения — к дизайнеру, пока макет не утверждён
-  if (t.mockupRequired && !t.mockupApprovedBy) return "designer";
+  if (t.mockupRequired && !t.mockupApprovedBy) {
+    // Шаг 1 цепочки: требования к экранам не написаны → к продакту; написаны → к дизайнеру
+    return t.screenRequirements?.trim() ? "designer" : "product";
+  }
   if (t.status === "ready") return t.layer === "none" ? "nocode" : "dev";
   if (t.status === "review" && t.layer !== "none") return t.testedSha ? "deployer" : "tester";
   return null;
@@ -452,15 +513,19 @@ export function inDesignerQueue(t: {
   layer: string;
   hasImageAttachments: boolean;
   hasAnyAttachments: boolean;
+  /** Нужно описание дизайна: ставит триаж при разборе. true — задача идёт к дизайнеру */
+  needsDesign?: boolean | null;
+  /** Требования к экранам (шаг 1 цепочки): без них задача идёт к продакту, не к дизайнеру */
+  screenRequirements?: string | null;
 }): boolean {
   // Заблокирована на дизайне, но макет ещё не подан (нет mockupUrl)
   if (t.status === "blocked" && t.blockedOn === "design" && !t.mockupUrl) return true;
   // Нужен макет, не утверждён и не подан: бэклог, очередь или в работе
+  // Гейт шага 1: без screenRequirements задача сначала идёт к продакту (шаг 1)
   const open = ["backlog", "ready", "in_progress"];
-  if (open.includes(t.status) && t.mockupRequired && !t.mockupApprovedBy && !t.mockupUrl && !t.hasImageAttachments) return true;
-  // Интерфейсная задача (фронт или бэк+фронт) без описания дизайна, без файлов, без ссылки на макет и без утверждения
-  const isUi = t.layer === "front" || t.layer === "fullstack";
-  if (["backlog", "ready"].includes(t.status) && isUi && !t.design?.trim() && !t.hasAnyAttachments && !t.mockupApprovedBy && !t.mockupUrl) return true;
+  if (open.includes(t.status) && t.mockupRequired && !t.mockupApprovedBy && !t.mockupUrl && !t.hasImageAttachments && t.screenRequirements?.trim()) return true;
+  // Задача с флагом «нужно описание дизайна» без описания, без файлов и без утверждённого макета
+  if (["backlog", "ready"].includes(t.status) && t.needsDesign === true && !t.design?.trim() && !t.hasAnyAttachments && !t.mockupApprovedBy && !t.mockupUrl) return true;
   return false;
 }
 

@@ -61,6 +61,27 @@ describe("isWaitingMockup — блок «Ждёт макета»", () => {
   });
 });
 
+describe("isPendingApproval — возврат дизайнеру (DEV-111)", () => {
+  it("заблокирована на дизайне без макета → НЕ на согласовании (возврат из блокировки на владельце)", () => {
+    expect(isPendingApproval({ status: "blocked", blockedOn: "design", mockupApprovedBy: null, mockupUrl: null, imageAttachments: [] })).toBe(false);
+  });
+  it("заблокирована на дизайне без макета → НЕ на согласовании (возврат из «В очереди»)", () => {
+    expect(isPendingApproval({ status: "blocked", blockedOn: "design", mockupApprovedBy: null })).toBe(false);
+  });
+  it("заблокирована на дизайне без макета → НЕ на согласовании (возврат из «В работе»)", () => {
+    expect(isPendingApproval({ status: "blocked", blockedOn: "design", mockupApprovedBy: null, mockupUrl: null })).toBe(false);
+  });
+  it("заблокирована на дизайне с новым mockupUrl → на согласовании (дизайнер прислал новый макет)", () => {
+    expect(isPendingApproval({ status: "blocked", blockedOn: "design", mockupApprovedBy: null, mockupUrl: "https://figma.com/new" })).toBe(true);
+  });
+  it("заблокирована на дизайне с новой картинкой → на согласовании (дизайнер загрузил изображение)", () => {
+    expect(isPendingApproval({ status: "blocked", blockedOn: "design", mockupApprovedBy: null, mockupUrl: null, imageAttachments: [{}] })).toBe(true);
+  });
+  it("заблокирована на владельце с макетом → на согласовании", () => {
+    expect(isPendingApproval({ status: "blocked", blockedOn: "owner", mockupApprovedBy: null, mockupUrl: "https://figma.com/x" })).toBe(true);
+  });
+});
+
 describe("mockupHold — что держит дизайн задачи", () => {
   it("заблокирована на владельце → owner", () => {
     expect(mockupHold({ status: "blocked", blockedOn: "owner" })).toBe("owner");
@@ -71,10 +92,17 @@ describe("mockupHold — что держит дизайн задачи", () => {
   it("в работе у дизайнера → active", () => {
     expect(mockupHold({ status: "in_progress", claimedBy: "designer-1" })).toBe("active");
   });
-  it("готова к работе → queue", () => {
-    expect(mockupHold({ status: "ready" })).toBe("queue");
+  it("готова к работе и есть в очереди дизайнера → queue", () => {
+    expect(mockupHold({ status: "ready" }, true)).toBe("queue");
   });
-  it("бэклог → queue", () => {
-    expect(mockupHold({ status: "backlog" })).toBe("queue");
+  it("бэклог и есть в очереди дизайнера → queue", () => {
+    expect(mockupHold({ status: "backlog" }, true)).toBe("queue");
+  });
+  it("готова к работе, но нет в очереди дизайнера → none (не показывать метку)", () => {
+    expect(mockupHold({ status: "ready" })).toBe("none");
+    expect(mockupHold({ status: "ready" }, false)).toBe("none");
+  });
+  it("бэклог, нет в очереди → none", () => {
+    expect(mockupHold({ status: "backlog" })).toBe("none");
   });
 });

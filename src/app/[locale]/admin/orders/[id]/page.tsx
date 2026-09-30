@@ -10,6 +10,7 @@ import { formatPhone } from "@/lib/phone";
 import { PageHead, Forbidden } from "@/components/admin/ui";
 import { StatusBadge } from "@/components/account/StatusBadge";
 import { AdminOrderControls, AdminVisitRow, AdminAddVisit } from "@/components/admin/OrderControls";
+import { OrderMessages } from "@/components/admin/OrderMessages";
 
 export default async function AdminOrder({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params;
@@ -76,6 +77,7 @@ export default async function AdminOrder({ params }: { params: Promise<{ locale:
             {o.comment && <><h3 className="mt-4 mb-1 font-semibold">{t("orders.comment")}</h3><p className="rounded-lg bg-warn-50 p-2">{o.comment}</p></>}
           </section>
           <AdminOrderControls order={{ id: o.id, status: o.status, kind: o.kind, paymentStatus: o.paymentStatus, preferredMasterId: o.preferredMasterId, pausedUntil: o.pausedUntil?.toISOString().slice(0, 10) || null }} masters={mList} />
+          <OrderMessages orderId={o.id} locale={locale} />
         </div>
       </div>
     </div>

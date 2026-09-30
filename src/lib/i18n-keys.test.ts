@@ -6,8 +6,10 @@ import { describe, expect, it } from "vitest";
 const ROOT = process.cwd();
 const SRC_DIR = join(ROOT, "src");
 const RU_PATH = join(ROOT, "messages", "ru.json");
+const EN_PATH = join(ROOT, "messages", "en.json");
 
 const ru: Record<string, unknown> = JSON.parse(readFileSync(RU_PATH, "utf-8"));
+const en: Record<string, unknown> = JSON.parse(readFileSync(EN_PATH, "utf-8"));
 
 /** Проверяет, что путь вида "a.b.c" существует в ru.json (в том числе промежуточные узлы) */
 function hasKey(obj: Record<string, unknown>, path: string): boolean {
@@ -116,6 +118,42 @@ function extractCalls(content: string): Call[] {
   return result;
 }
 
+/** Рекурсивно собирает только .tsx файлы в заданных директориях (клиентские компоненты и страницы) */
+function walkTsx(dir: string): string[] {
+  const result: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) result.push(...walkTsx(full));
+    else if (/\.tsx$/.test(entry.name) && !/\.test\.tsx$/.test(entry.name)) result.push(full);
+  }
+  return result;
+}
+
+// Пропускает строки, которые не нужно проверять на хардкодные строки:
+// комментарии, import/export, строки с useTranslations/getTranslations
+function shouldSkipLine(line: string): boolean {
+  const trimmed = line.trim();
+  // Пропускаем комментарии
+  if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) return true;
+  // Пропускаем import/export
+  if (/^(import|export)\s/.test(trimmed)) return true;
+  // Пропускаем строки, где кириллица — только в className/type/id/key/name/style/placeholder, который идёт через t()
+  // Допускаем строки с вызовами t() или useTranslations
+  if (/(?:useTranslations|getTranslations)\s*\(/.test(line)) return true;
+  return false;
+}
+
+/**
+ * Проверяет, содержит ли строка JSX-текст с кириллицей вне выражений {…}.
+ * Ищет паттерн: > ... кириллица ... < (без { между > и <)
+ */
+function hasHardcodedCyrillicJsx(line: string): boolean {
+  // Убираем JSX-комментарии {/* … */} и выражения {…}
+  const stripped = line.replace(/\{\/\*.*?\*\/\}/g, "").replace(/\{[^}]*\}/g, "");
+  // Ищем текстовый узел JSX с кириллицей: >...кириллица...<
+  return />[^<]*[А-Яа-яёЁ][^<]*</.test(stripped);
+}
+
 describe("i18n ключи", () => {
   it("все t(\"…\") с известным неймспейсом имеют ключ в messages/ru.json", () => {
     const files = walkSrc(SRC_DIR);
@@ -146,6 +184,70 @@ describe("i18n ключи", () => {
     if (missing.length > 0) {
       const details = missing.map((m) => `  ${m.file}:${m.line} — "${m.key}"`).join("\n");
       expect.fail(`Ключи i18n отсутствуют в messages/ru.json:\n${details}`);
+    }
+  });
+
+  it("клиентские компоненты и страницы не содержат зашитых кириллических строк в JSX", () => {
+    const APP_DIR = join(SRC_DIR, "app");
+    const COMP_DIR = join(SRC_DIR, "components");
+    const tsxFiles = [...walkTsx(APP_DIR), ...walkTsx(COMP_DIR)];
+    const found: Array<{ file: string; line: number; text: string }> = [];
+
+    for (const filePath of tsxFiles) {
+      const content = readFileSync(filePath, "utf-8");
+      const lines = content.split("\n");
+      const relPath = "src/" + filePath.slice(SRC_DIR.length + 1);
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (shouldSkipLine(line)) continue;
+        if (hasHardcodedCyrillicJsx(line)) {
+          found.push({ file: relPath, line: i + 1, text: line.trim().slice(0, 120) });
+        }
+      }
+    }
+
+    if (found.length > 0) {
+      const details = found.map((f) => `  ${f.file}:${f.line}\n    ${f.text}`).join("\n");
+      expect.fail(`Зашитые кириллические строки в JSX (должны идти через t("…")):\n${details}`);
+    }
+  });
+
+  it("все ключи messages/ru.json присутствуют в messages/en.json", () => {
+    /** Рекурсивно собирает все dot-нотации ключей вложенного объекта */
+    function collectKeys(obj: Record<string, unknown>, prefix = ""): string[] {
+      const keys: string[] = [];
+      for (const [k, v] of Object.entries(obj)) {
+        const full = prefix ? `${prefix}.${k}` : k;
+        if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+          keys.push(...collectKeys(v as Record<string, unknown>, full));
+        } else {
+          keys.push(full);
+        }
+      }
+      return keys;
+    }
+
+    const ruKeys = collectKeys(ru);
+    const missingInEn = ruKeys.filter((k) => !hasKey(en, k));
+
+    // Разделяем пропуски: секции admin.* — только печать, клиентские — падение
+    const adminMissing = missingInEn.filter((k) => k.startsWith("admin."));
+    const clientMissing = missingInEn.filter((k) => !k.startsWith("admin."));
+
+    if (adminMissing.length > 0) {
+      // Не блокирует выкладку — задача на полный перевод отдельно
+      console.info(
+        `[i18n] Ключи admin-секций отсутствуют в en.json (${adminMissing.length}, не блокирует):\n` +
+        adminMissing.map((k) => `  "${k}"`).join("\n"),
+      );
+    }
+
+    if (clientMissing.length > 0) {
+      const details = clientMissing.map((k) => `  "${k}"`).join("\n");
+      expect.fail(
+        `Ключи клиентских секций отсутствуют в messages/en.json (${clientMissing.length}):\n${details}`,
+      );
     }
   });
 });

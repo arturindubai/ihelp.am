@@ -7,7 +7,7 @@ import { requireSection } from "../../admin";
 import { audit } from "../../audit";
 import { recalcRatings } from "../../services/catalog";
 import { invalidateUiCache, saveSettingsSection, getSettings, SECRET_PATHS, type Settings } from "../../settings";
-import { notifyTeam, notifyTech } from "../../notify";
+import { html, notifyTeam, notifyTech } from "../../notify";
 import { envContacts } from "../../contacts";
 import { sendMail, mailTemplate } from "../../services/mail";
 import { registerTelegramWebhook } from "../../services/telegramBot";
@@ -84,6 +84,8 @@ const promoSchema = z.object({
   serviceIds: z.array(z.string()),
   planKinds: z.array(z.enum(["ONE_TIME", "SUBSCRIPTION", "PACKAGE"])),
   active: z.boolean(),
+  forPhone: z.string().max(30).nullable().optional(),
+  forEmail: z.string().max(200).nullable().optional(),
 });
 export type PromoPayload = z.infer<typeof promoSchema>;
 
@@ -93,7 +95,12 @@ export async function savePromoAction(id: string | null, input: PromoPayload) {
   if (!p.success) return { ok: false as const, error: p.error.issues[0]?.path.join(".") };
   const d = p.data;
   if (d.type === "PERCENT" && d.value > 100) return { ok: false as const, error: "value" };
-  const data = { ...d, validFrom: d.validFrom ? new Date(`${d.validFrom}T00:00:00+04:00`) : null, validTo: d.validTo ? new Date(`${d.validTo}T23:59:59+04:00`) : null };
+  // Нормализуем телефон и email, если они заданы
+  const forPhone = d.forPhone ? (normalizePhone(d.forPhone) || null) : null;
+  if (d.forPhone && !forPhone) return { ok: false as const, error: "forPhone" };
+  const forEmail = d.forEmail ? (normalizeEmail(d.forEmail) || null) : null;
+  if (d.forEmail && !forEmail) return { ok: false as const, error: "forEmail" };
+  const data = { ...d, forPhone, forEmail, validFrom: d.validFrom ? new Date(`${d.validFrom}T00:00:00+04:00`) : null, validTo: d.validTo ? new Date(`${d.validTo}T23:59:59+04:00`) : null };
   try {
     const r = id ? await db.promoCode.update({ where: { id }, data }) : await db.promoCode.create({ data });
     await audit(u.id, id ? "promo.update" : "promo.create", "PromoCode", r.id, { code: d.code });
@@ -114,14 +121,50 @@ export async function deletePromoAction(id: string) {
 }
 
 /* ───── Баннеры ───── */
-const bannerSchema = z.object({ title: i18n, subtitle: i18n.nullable().optional(), image: z.string().max(500).nullable().optional(), link: z.string().max(300).nullable().optional(), promoCode: z.string().max(40).nullable().optional(), bg: z.string().max(20).nullable().optional(), active: z.boolean(), sort: z.number().int() });
+const PLACEMENTS = ["CAROUSEL_HOME", "HERO_HOME", "CATALOG", "SERVICE", "CHECKOUT", "SUCCESS", "EMAIL", "CLIENT_CABINET", "MASTER_CABINET"] as const;
+const BANNER_TYPES = ["PROMO", "ANNOUNCEMENT", "UPSELL", "CROSS_SELL"] as const;
+const AUDIENCES = ["ALL", "LOGGED_IN", "GUESTS"] as const;
+const SEGMENTS = ["ALL", "NEW", "RETURNING"] as const;
+
+const bannerSchema = z.object({
+  title: i18n,
+  subtitle: i18n.nullable().optional(),
+  image: z.string().max(500).nullable().optional(),
+  link: z.string().max(300).nullable().optional(),
+  promoCode: z.string().max(40).nullable().optional(),
+  bg: z.string().max(20).nullable().optional(),
+  active: z.boolean(),
+  sort: z.number().int(),
+  placement: z.enum(PLACEMENTS).default("CAROUSEL_HOME"),
+  bannerType: z.enum(BANNER_TYPES).default("PROMO"),
+  startsAt: z.string().nullable().optional(),
+  endsAt: z.string().nullable().optional(),
+  audience: z.enum(AUDIENCES).default("ALL"),
+  segment: z.enum(SEGMENTS).default("ALL"),
+});
 export type BannerPayload = z.infer<typeof bannerSchema>;
 
 export async function saveBannerAction(id: string | null, input: BannerPayload) {
   const u = await requireSection("banners");
   const p = bannerSchema.safeParse(input);
   if (!p.success) return { ok: false };
-  const d = { ...p.data, subtitle: J(p.data.subtitle) };
+  // "YYYY-MM-DDTHH:mm" (datetime-local) интерпретируем как Ереван UTC+4; ISO строки из БД тоже принимаем
+  const parseDate = (s: string | null | undefined): Date | null | "invalid" => {
+    if (!s) return null;
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) return new Date(`${s}:00+04:00`);
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? "invalid" : d;
+  };
+  const startsAt = parseDate(p.data.startsAt);
+  const endsAt = parseDate(p.data.endsAt);
+  if (startsAt === "invalid") return { ok: false as const, error: "startsAt" };
+  if (endsAt === "invalid") return { ok: false as const, error: "endsAt" };
+  const d = {
+    ...p.data,
+    subtitle: J(p.data.subtitle),
+    startsAt,
+    endsAt,
+  };
   const r = id ? await db.banner.update({ where: { id }, data: d }) : await db.banner.create({ data: d });
   await audit(u.id, "banner.save", "Banner", r.id);
   rAll();
@@ -250,6 +293,60 @@ export async function saveSettingsAction<K extends keyof Settings>(key: K, value
   return { ok: true };
 }
 
+/** Найти чаты и группы, куда бот получал сообщения (через getUpdates). Возвращает список чатов. */
+export async function findTelegramChatsAction() {
+  await requireSection("settings");
+  const s = await getSettings();
+  const token = s.team.botToken || s.notify.telegramBotToken;
+  if (!token) return { ok: false as const, error: "noToken" };
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=100`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    const json = (await r.json().catch(() => null)) as { ok: boolean; result?: { message?: { date: number; chat: { id: number; title?: string; username?: string; first_name?: string; type: string } } }[]; description?: string } | null;
+    if (!r.ok || !json?.ok) {
+      const desc = json?.description ?? "";
+      if (desc.toLowerCase().includes("webhook")) return { ok: false as const, error: "webhook" };
+      return { ok: false as const, error: "telegram" };
+    }
+    const since = Date.now() / 1000 - 86400;
+    const seen = new Map<number, { id: number; title: string; type: string }>();
+    for (const upd of json.result ?? []) {
+      const msg = upd.message;
+      if (!msg || msg.date < since) continue;
+      const c = msg.chat;
+      if (!seen.has(c.id)) {
+        seen.set(c.id, { id: c.id, title: c.title ?? c.username ?? c.first_name ?? String(c.id), type: c.type });
+      }
+    }
+    return { ok: true as const, chats: [...seen.values()] };
+  } catch {
+    return { ok: false as const, error: "network" };
+  }
+}
+
+/** Отправить тестовое сообщение в конкретный чат (по chatId из поля). */
+export async function sendTestNotifyToAction(chatId: string) {
+  await requireSection("settings");
+  if (!chatId) return { ok: false as const, error: "noChatId" };
+  const s = await getSettings();
+  const token = s.team.botToken || s.notify.telegramBotToken;
+  if (!token) return { ok: false as const, error: "noToken" };
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: "✅ Тест iHelp: уведомления настроены", parse_mode: "HTML" }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const json = (await r.json().catch(() => null)) as { ok: boolean; description?: string } | null;
+    if (!r.ok || !json?.ok) return { ok: false as const, error: json?.description ?? "Ошибка Telegram" };
+    return { ok: true as const };
+  } catch {
+    return { ok: false as const, error: "Ошибка сети" };
+  }
+}
+
 export async function testNotifyAction() {
   await requireSection("settings");
   const s = await getSettings();
@@ -307,11 +404,26 @@ export async function setRoleAction(phoneRaw: string, role: Role, name?: string)
   const u = await requireSection("staff");
   const phone = normalizePhone(phoneRaw);
   if (!phone) return { ok: false as const, error: "phone" };
-  if (phone === u.phone && role !== "OWNER") return { ok: false as const, error: "self" };
+
+  const target = await db.user.findUnique({ where: { phone }, select: { id: true, role: true } });
+  if (target?.role === "OWNER") {
+    // Вариант А: роль другого владельца менять нельзя
+    if (phone !== u.phone) return { ok: false as const, error: "cannotRemoveOwner" };
+    // Последнего владельца нельзя понизить ни при каком варианте
+    const ownerCount = await db.user.count({ where: { role: "OWNER" } });
+    if (ownerCount <= 1) return { ok: false as const, error: "lastOwner" };
+  } else {
+    if (phone === u.phone && role !== "OWNER") return { ok: false as const, error: "self" };
+  }
+
   const namePatch = name ? { name } : {};
   const r = await db.user.upsert({ where: { phone }, create: { phone, role, ...namePatch }, update: { role, ...namePatch } });
   if (role === "CLIENT") await db.session.deleteMany({ where: { userId: r.id } });
   await audit(u.id, "staff.role", "User", r.id, { role });
+  // Тех-алерт при изменении роли владельца (понижение или повышение)
+  if (target?.role === "OWNER" || role === "OWNER") {
+    await notifyTech(html`⚠️ Смена роли владельца: <b>${r.id}</b> → <code>${role}</code> (оператор: <b>${u.name || u.id}</b>)`);
+  }
   return { ok: true as const };
 }
 

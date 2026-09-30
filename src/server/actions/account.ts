@@ -8,11 +8,14 @@ import { html, notifyTeam } from "../notify";
 import { notifyCancelOrderTeam, notifyCancelVisitTeam, notifyRescheduleVisitTeam } from "../services/teamNotify";
 import { notifyMasterCancelled, notifyMasterRescheduled } from "../services/workerNotify";
 import { notifyClientCancelled, notifyClientRescheduled } from "../services/bookingNotify";
+import { consumeReviewToken } from "../services/reviews";
 import { headers } from "next/headers";
 import { sendOtp, verifyOtp } from "../otp";
 import { normalizeEmail } from "@/lib/email";
 import { BookingError, scheduleVisit, BUSY_STATUSES } from "../services/booking";
 import { atYerevan } from "@/lib/time";
+import { verifyUnsubscribeToken } from "@/lib/emailToken";
+import { redirect } from "next/navigation";
 
 async function me() {
   const u = await getCurrentUser();
@@ -163,6 +166,64 @@ export async function reviewAction(visitId: string, rating: number, text: string
   if (exists) return { ok: false };
   await db.review.create({ data: { visitId, userId: u.id, masterId: v.masterId, serviceId: v.order.serviceId, rating: r, text: text.trim().slice(0, 2000) || null, authorName: u.name, status: "PENDING" } });
   await notifyTeam(html`⭐ Новый отзыв ${r}/5 · заказ №${v.order.number} — на модерации`);
+  return { ok: true };
+}
+
+/** Оставить отзыв по одноразовому токену из сообщения (без входа в аккаунт). */
+export async function reviewByTokenAction(token: string, rating: number, text: string) {
+  const data = await consumeReviewToken(token);
+  if (!data) return { ok: false, reason: "invalid" as const };
+
+  const { visitId, userId } = data;
+  const visit = await db.visit.findUnique({
+    where: { id: visitId },
+    select: { status: true, masterId: true, order: { select: { number: true, serviceId: true } } },
+  });
+  if (!visit || visit.status !== "DONE") return { ok: false, reason: "invalid" as const };
+
+  const exists = await db.review.findUnique({ where: { visitId } });
+  if (exists) return { ok: false, reason: "already" as const };
+
+  const user = await db.user.findUnique({ where: { id: userId }, select: { name: true } });
+  const r = Math.min(5, Math.max(1, Math.round(rating)));
+  await db.review.create({
+    data: {
+      visitId,
+      userId,
+      masterId: visit.masterId,
+      serviceId: visit.order.serviceId,
+      rating: r,
+      text: text.trim().slice(0, 2000) || null,
+      authorName: user?.name ?? null,
+      status: "PENDING",
+    },
+  });
+  await notifyTeam(html`⭐ Новый отзыв ${r}/5 · заказ №${visit.order.number} — на модерации`);
+  return { ok: true };
+}
+
+/** Подтвердить отписку от необязательных писем по токену из ссылки.
+ *  Используется формой на странице /email/unsubscribed?token=... */
+export async function confirmUnsubscribeAction(token: string, locale: string, _: FormData) {
+  const userId = verifyUnsubscribeToken(token);
+  if (!userId) {
+    redirect(`/${locale}`);
+  }
+  await db.user.updateMany({
+    where: { id: userId, emailUnsubscribedAt: null },
+    data: { emailUnsubscribedAt: new Date() },
+  });
+  redirect(`/${locale}/email/unsubscribed`);
+}
+
+/** Включить / выключить получение необязательных писем (напоминания, просьбы об отзыве) */
+export async function toggleEmailRemindersAction(enabled: boolean) {
+  const u = await me();
+  await db.user.update({
+    where: { id: u.id },
+    data: { emailUnsubscribedAt: enabled ? null : new Date() },
+  });
+  revalidatePath("/", "layout");
   return { ok: true };
 }
 

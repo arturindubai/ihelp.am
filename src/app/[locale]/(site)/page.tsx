@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { MessageCircle } from "lucide-react";
 import { getHome } from "@/server/services/catalog";
@@ -5,8 +6,14 @@ import { getSettings } from "@/server/settings";
 import { contactLink } from "@/lib/contacts";
 import { getCurrentUser } from "@/server/auth";
 import { tr } from "@/i18n/locales";
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  return { alternates: { canonical: `/${locale}` } };
+}
 import { HeroSection } from "@/components/home/HeroSection";
 import { PromoCarousel } from "@/components/home/PromoCarousel";
+import { PromoSlot } from "@/components/PromoSlot";
 import { PopularServices } from "@/components/home/PopularServices";
 import { HowItWorks } from "@/components/home/HowItWorks";
 import { Promises } from "@/components/home/Promises";
@@ -17,7 +24,8 @@ import { StickyOrderButton } from "@/components/home/StickyOrderButton";
 export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   setRequestLocale(locale);
-  const [data, s, user, t, tc] = await Promise.all([getHome(locale), getSettings(), getCurrentUser(), getTranslations("home"), getTranslations("common")]);
+  const [user, s, t, tc] = await Promise.all([getCurrentUser(), getSettings(), getTranslations("home"), getTranslations("common")]);
+  const data = await getHome(locale, user?.id);
   const wa = contactLink(s.brand, "whatsapp");
   return (
     <div className="container-w pt-4">
@@ -32,6 +40,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           slogan={t("slogan")}
         />
 
+        <PromoSlot placement="HERO_HOME" locale={locale} />
         <PromoCarousel banners={data.banners} />
 
         <PopularServices services={data.services} />

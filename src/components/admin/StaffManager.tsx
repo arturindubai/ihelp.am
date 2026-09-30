@@ -99,7 +99,7 @@ function LoginField({
 
 // ───── Панель деталей сотрудника ─────
 
-function StaffPanel({ item, onClose, ownerPhone }: { item: StaffItem; onClose: () => void; ownerPhone: string }) {
+function StaffPanel({ item, onClose, currentUserPhone }: { item: StaffItem; onClose: () => void; currentUserPhone: string }) {
   const t = useTranslations("admin.staff");
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -107,7 +107,7 @@ function StaffPanel({ item, onClose, ownerPhone }: { item: StaffItem; onClose: (
   const [saved, setSaved] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const isOwner = item.role === "OWNER";
-  const isSelf = item.phone === ownerPhone;
+  const isSelf = item.phone === currentUserPhone;
 
   // Состояние чекбоксов: "added" | "removed" | "base" | "absent"
   const addedSet = new Set(item.sectionDelta?.added ?? []);
@@ -251,7 +251,7 @@ function StaffPanel({ item, onClose, ownerPhone }: { item: StaffItem; onClose: (
 
 // ───── Главный компонент ─────
 
-export function StaffManager({ staff }: { staff: StaffItem[] }) {
+export function StaffManager({ staff, currentUserPhone }: { staff: StaffItem[]; currentUserPhone: string }) {
   const t = useTranslations("admin.staff");
   const router = useRouter();
   const [phone, setPhone] = useState("+374 ");
@@ -263,7 +263,7 @@ export function StaffManager({ staff }: { staff: StaffItem[] }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const selectedItem = staff.find((s) => s.id === selectedId) ?? null;
-  const ownerPhone = staff.find((s) => s.role === "OWNER")?.phone ?? "";
+  const ownerCount = staff.filter((s) => s.role === "OWNER").length;
 
   const add = () =>
     start(async () => {
@@ -287,7 +287,14 @@ export function StaffManager({ staff }: { staff: StaffItem[] }) {
     start(async () => {
       setErr(undefined);
       const x = await setRoleAction(p, r);
-      if (!x.ok) return setErr(x.error);
+      if (!x.ok) {
+        const errMap: Record<string, string> = {
+          cannotRemoveOwner: t("cannotRemoveOwner"),
+          lastOwner: t("lastOwner"),
+          phone: t("phoneInvalid"),
+        };
+        return setErr(errMap[x.error] ?? x.error);
+      }
       router.refresh();
     });
 
@@ -339,13 +346,17 @@ export function StaffManager({ staff }: { staff: StaffItem[] }) {
               </div>
               <div className="flex flex-col items-end gap-1 shrink-0">
                 <span className="chip text-xs">{t(`roles.${s.role}`)}</span>
-                <button
-                  className="text-xs text-bad hover:underline"
-                  disabled={pending}
-                  onClick={() => revoke(s.phone, s.label)}
-                >
-                  {t("revokeAccess")}
-                </button>
+                {s.role === "OWNER" && ownerCount <= 1 ? (
+                  <span className="text-xs text-muted">{t("lastOwner")}</span>
+                ) : s.role !== "OWNER" || s.phone === currentUserPhone ? (
+                  <button
+                    className="text-xs text-bad hover:underline"
+                    disabled={pending}
+                    onClick={() => revoke(s.phone, s.label)}
+                  >
+                    {t("revokeAccess")}
+                  </button>
+                ) : null}
               </div>
             </div>
           ))}
@@ -358,7 +369,7 @@ export function StaffManager({ staff }: { staff: StaffItem[] }) {
               key={selectedItem.id + JSON.stringify(selectedItem.sectionDelta)}
               item={selectedItem}
               onClose={() => setSelectedId(null)}
-              ownerPhone={ownerPhone}
+              currentUserPhone={currentUserPhone}
             />
           </div>
         )}

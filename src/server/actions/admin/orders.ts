@@ -67,16 +67,19 @@ export async function adminOrderAction(orderId: string, patch: { status?: OrderS
     if (patch.status === "CANCELLED") {
       data.cancelReason = patch.cancelReason || "admin";
       // Уведомить мастеров ДО массовой отмены визитов
-      const vsToCancel = await db.visit.findMany({ where: { orderId, status: { in: [...BUSY_STATUSES, "UNSCHEDULED"] }, masterId: { not: null } }, select: { id: true } });
-      for (const vs of vsToCancel) await notifyMasterCancelled(vs.id).catch(() => {});
-      await db.visit.updateMany({ where: { orderId, status: { in: [...BUSY_STATUSES, "UNSCHEDULED"] } }, data: { status: "CANCELLED" } });
+      const allToCancel = await db.visit.findMany({ where: { orderId, status: { in: [...BUSY_STATUSES, "UNSCHEDULED"] } }, select: { id: true, masterId: true } });
+      for (const vs of allToCancel) if (vs.masterId) await notifyMasterCancelled(vs.id).catch(() => {});
+      for (const vs of allToCancel) await setVisitStatus(vs.id, "CANCELLED", "админ");
       // Уведомить клиента об отмене заказа
       await notifyClientCancelled(orderId).catch(() => {});
     }
     if (patch.status === "PAUSED") {
       const until = patch.pausedUntil ? new Date(`${patch.pausedUntil}T00:00:00+04:00`) : null;
       data.pausedUntil = until;
-      if (until) await db.visit.updateMany({ where: { orderId, status: { in: ["SCHEDULED", "CONFIRMED"] }, scheduledAt: { gt: new Date(), lt: until } }, data: { status: "SKIPPED" } });
+      if (until) {
+        const toSkip = await db.visit.findMany({ where: { orderId, status: { in: ["SCHEDULED", "CONFIRMED"] }, scheduledAt: { gt: new Date(), lt: until } }, select: { id: true } });
+        for (const vs of toSkip) await setVisitStatus(vs.id, "SKIPPED", "админ");
+      }
     }
     if (patch.status === "ACTIVE") data.pausedUntil = null;
   }

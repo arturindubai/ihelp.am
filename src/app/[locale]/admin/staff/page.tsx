@@ -8,13 +8,15 @@ import { PageHead, Forbidden } from "@/components/admin/ui";
 import { StaffManager } from "@/components/admin/StaffManager";
 
 export default async function AdminStaff() {
-  if (!(await pageUser("staff"))) return <Forbidden />;
+  const me = await pageUser("staff");
+  if (!me) return <Forbidden />;
   const t = await getTranslations("admin");
   const staff = await getAdminStaff();
   return (
     <div className="max-w-5xl">
       <PageHead title={t("staff.title")} sub={t("staff.manageSub")} />
       <StaffManager
+        currentUserPhone={me.phone}
         staff={staff.map((u) => ({
           id: u.id,
           phone: u.phone,

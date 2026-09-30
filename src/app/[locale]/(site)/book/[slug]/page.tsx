@@ -11,6 +11,7 @@ import { getBookingAddresses } from "@/server/services/pages/catalog";
 import { tr } from "@/i18n/locales";
 import { Checkout } from "@/components/booking/Checkout";
 import { InlineLogin } from "./InlineLogin";
+import { PromoSlot } from "@/components/PromoSlot";
 
 export default async function BookPage({ params, searchParams }: { params: Promise<{ locale: string; slug: string }>; searchParams: Promise<{ o?: string; p?: string }> }) {
   const { locale, slug } = await params;
@@ -48,8 +49,10 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   ]);
 
   return (
-    <Checkout
-      service={{ id: s.id, slug: s.slug, title: s.title }}
+    <>
+      <PromoSlot placement="CHECKOUT" locale={locale} />
+      <Checkout
+        service={{ id: s.id, slug: s.slug, title: s.title }}
       lines={ok.lines.map(({ groupTitle, optionTitle, price, discountable, durationMin }) => ({ groupTitle, optionTitle, price, discountable, durationMin }))}
       optionIds={optionIds}
       plan={ok.plan ? { id: ok.plan.id, kind: ok.plan.kind, title: ok.plan.title, discountPercent: ok.plan.discountPercent, packageVisits: ok.plan.packageVisits, visitsPerWeek: ok.plan.visitsPerWeek } : null}
@@ -66,5 +69,6 @@ export default async function BookPage({ params, searchParams }: { params: Promi
       freeCancelHours={settings.booking.freeCancelHours}
       contacts={envContacts()}
     />
+    </>
   );
 }

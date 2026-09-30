@@ -10,24 +10,85 @@ import type { ServicePayload } from "@/server/actions/admin/catalog";
 export default async function EditService({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params;
   if (!(await pageUser("services"))) return <Forbidden />;
-  const [{ service: s, cats, masters }, settings] = await Promise.all([getAdminServiceEdit(id), getSettings()]);
+  const [{ service: s, cats, masters: allMasters, visitMap }, settings] = await Promise.all([getAdminServiceEdit(id), getSettings()]);
   if (!s) notFound();
+
   type AnyI = Record<string, string>;
   const content = (s.content || {}) as Partial<ServicePayload["content"]>;
   const payload: ServicePayload = {
-    slug: s.slug, categoryId: s.categoryId, title: s.title as AnyI, subtitle: s.subtitle as AnyI, description: s.description as AnyI, badge: s.badge as AnyI, image: s.image, bannerImage: s.bannerImage, active: s.active, sort: s.sort,
-    groups: s.groups.map((g) => ({ id: g.id, title: g.title as AnyI, hint: g.hint as AnyI, infoTitle: g.infoTitle as AnyI, infoBody: g.infoBody as AnyI, type: g.type, required: g.required, isDuration: g.isDuration, active: g.active,
-      options: g.options.map((o) => ({ id: o.id, title: o.title as AnyI, subtitle: o.subtitle as AnyI, badge: o.badge as AnyI, price: o.price, durationMin: o.durationMin, discountable: o.discountable, isDefault: o.isDefault, active: o.active, schedule: (o.schedule as ServicePayload["groups"][number]["options"][number]["schedule"]) || [] })) })),
-    plans: s.plans.map((p) => ({ id: p.id, kind: p.kind, title: p.title as AnyI, subtitle: p.subtitle as AnyI, badge: p.badge as AnyI, discountPercent: p.discountPercent, intervalDays: p.intervalDays, visitsPerWeek: p.visitsPerWeek, packageVisits: p.packageVisits, validityDays: p.validityDays, active: p.active, isDefault: p.isDefault })),
-    content: { note: content.note || { title: {}, body: {} }, benefits: content.benefits || [], howItWorks: content.howItWorks || [], faq: content.faq || [], policy: content.policy || {} },
+    slug: s.slug,
+    categoryId: s.categoryId,
+    title: s.title as AnyI,
+    subtitle: s.subtitle as AnyI,
+    description: s.description as AnyI,
+    badge: s.badge as AnyI,
+    image: s.image,
+    bannerImage: s.bannerImage,
+    active: s.active,
+    sort: s.sort,
+    isNew: s.isNew,
+    arrivalHours: s.arrivalHours,
+    includesText: s.includesText as AnyI,
+    excludesText: s.excludesText as AnyI,
+    groups: s.groups.map((g) => ({
+      id: g.id,
+      title: g.title as AnyI,
+      hint: g.hint as AnyI,
+      infoTitle: g.infoTitle as AnyI,
+      infoBody: g.infoBody as AnyI,
+      type: g.type,
+      required: g.required,
+      isDuration: g.isDuration,
+      active: g.active,
+      options: g.options.map((o) => ({
+        id: o.id,
+        title: o.title as AnyI,
+        subtitle: o.subtitle as AnyI,
+        badge: o.badge as AnyI,
+        price: o.price,
+        durationMin: o.durationMin,
+        discountable: o.discountable,
+        isDefault: o.isDefault,
+        active: o.active,
+        schedule: (o.schedule as ServicePayload["groups"][number]["options"][number]["schedule"]) || [],
+      })),
+    })),
+    plans: s.plans.map((p) => ({
+      id: p.id,
+      kind: p.kind,
+      title: p.title as AnyI,
+      subtitle: p.subtitle as AnyI,
+      badge: p.badge as AnyI,
+      discountPercent: p.discountPercent,
+      intervalDays: p.intervalDays,
+      visitsPerWeek: p.visitsPerWeek,
+      packageVisits: p.packageVisits,
+      validityDays: p.validityDays,
+      active: p.active,
+      isDefault: p.isDefault,
+    })),
+    content: {
+      note: content.note || { title: {}, body: {} },
+      benefits: content.benefits || [],
+      howItWorks: content.howItWorks || [],
+      faq: content.faq || [],
+      policy: content.policy || {},
+    },
     masterIds: s.masters.map((m) => m.id),
   };
+
   return (
     <ServiceEditor
       id={s.id}
       initial={payload}
       categories={cats.map((c) => ({ id: c.id, title: tr(c.title, locale) }))}
-      masters={masters.map((m) => ({ id: m.id, name: tr(m.name, locale), active: m.active }))}
+      masters={allMasters.map((m) => ({
+        id: m.id,
+        name: tr(m.name as Record<string, string>, locale),
+        photo: m.photo,
+        active: m.active,
+        visitsNextWeek: visitMap.get(m.id) ?? 0,
+      }))}
       rules={settings.pricing}
     />
   );

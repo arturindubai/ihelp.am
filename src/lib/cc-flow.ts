@@ -121,9 +121,11 @@ type TaskShape = {
   design?: string | null;
   estimate?: string | null;
   epicKey?: string | null;
+  parentKey?: string | null;
   scope?: string[];
   mockupRequired?: boolean;
   mockupApprovedBy?: string | null;
+  screenRequirements?: string | null;
 };
 
 export type CheckItem = { key: string; ok: boolean; hard: boolean };
@@ -145,6 +147,8 @@ export function readiness(t: TaskShape, closedKeys: Set<string>, attachments = 0
     { key: "mockup", ok: !t.mockupRequired || !!t.mockupApprovedBy, hard: true },
     { key: "size", ok: !!t.estimate && t.estimate !== "L", hard: false },
     { key: "scope", ok: t.layer === "none" || (t.scope?.length ?? 0) > 0, hard: false },
+    // Папка messages целиком — слишком широко: задача зацепит все три языка и заблокирует любой перевод
+    { key: "scope_messages_folder", ok: !(t.scope ?? []).map(normPath).some((p) => p === "messages"), hard: false },
   ];
 }
 
@@ -152,6 +156,23 @@ export const isReady = (items: CheckItem[]) => items.every((i) => i.ok || !i.har
 
 /** Код-задача: её доказательство готовности — коммит в main, а не слова */
 export const isCodeTask = (layer: string) => layer !== "none";
+
+/** Задача с интерфейсом: layer front/fullstack или scope содержит src/app или src/components */
+export function isUiTask(layer: string, scope?: string[] | null): boolean {
+  if (layer === "front" || layer === "fullstack") return true;
+  if (!scope) return false;
+  return scope.some((s) => {
+    const p = s.trim().replace(/^\.\//, "").replace(/\/+$/, "");
+    return p === "src/app" || p.startsWith("src/app/") || p === "src/components" || p.startsWith("src/components/");
+  });
+}
+
+/** Гейт «протестировано на стенде»: для задач с интерфейсом требуется вложение (скриншот или файл) и явная отметка в тексте */
+export function standGate(text: string, attachments: number): string | null {
+  if (attachments === 0) return "screenshot_required";
+  if (!/проверено на стенде:/i.test(text)) return "live_stand_required";
+  return null;
+}
 
 /** Гейт «На проверке»: у код-задачи есть ветка, у любой — отчёт; если переданы opts — проверяем releaseNote, ownerSummary и nextSteps */
 export function reviewGate(
@@ -171,6 +192,32 @@ export function reviewGate(
 }
 
 export const SHA_RE = /^[0-9a-f]{7,40}$/i;
+
+export type CriterionResult = { done: boolean; cardKey?: string };
+
+/** Формат ключа follow-up карточки: PREFX-N (например IN-7, RISK-3) */
+const CARD_KEY_RE = /^[A-Z]+-\d+$/;
+
+/**
+ * Гейт критериев при переходе в «Сделано»: каждый критерий должен быть либо отмечен ✓,
+ * либо вынесен в карточку с ключом вида IN-7. Без force — блокирует; с force — пропускает.
+ * Если result не передан и есть требования — блокирует (путь через API/деплоер без тестировщика).
+ * Проверяет все требования по длине массива: короткий result не проходит.
+ */
+export function criteriaGate(requirements: string[], result?: CriterionResult[]): string | null {
+  if (!requirements.length) return null;
+  if (!result || result.length < requirements.length) return "criteria_incomplete";
+  const incomplete = requirements.some((_, i) => !result[i]?.done && !CARD_KEY_RE.test(result[i]?.cardKey?.trim() ?? ""));
+  return incomplete ? "criteria_incomplete" : null;
+}
+
+/** Ключи follow-up карточек из чек-листа критериев: только незакрытые пункты с корректным ключом */
+export function extractFollowUpKeys(requirements: string[], result?: CriterionResult[]): string[] {
+  if (!requirements.length || !result) return [];
+  return result
+    .filter((r, i) => i < requirements.length && !r.done && CARD_KEY_RE.test(r.cardKey?.trim() ?? ""))
+    .map(r => r.cardKey!.trim());
+}
 
 /**
  * Гейт «В очереди»: задача с открытыми вопросами к продукту не идёт разработчику.
@@ -206,12 +253,17 @@ export function isOwnerQuestion(task: { status: string; blockedOn: string | null
 }
 
 /**
- * Дизайнер берёт: задачи с флагом макета; дизайн-исследования (assignee=designer);
- * фронт/бэк+фронт без описания дизайна и без вложений — задача ждёт дизайна, а не кода.
+ * Дизайнер берёт: задачи с флагом макета (если продакт уже написал требования к экранам);
+ * дизайн-исследования (assignee=designer); фронт/бэк+фронт без описания дизайна и без вложений.
+ * Задача с mockupRequired=true и пустыми screenRequirements сначала идёт к продакту — шаг 1 цепочки.
  * Логика совпадает с designerQueue() в workers.ts.
  */
-export function isDesignerTask(t: { layer: string; mockupRequired?: boolean | null; assignee?: string | null; design?: string | null; hasAttachments?: boolean }): boolean {
-  if (t.mockupRequired) return true;
+export function isDesignerTask(t: { layer: string; mockupRequired?: boolean | null; assignee?: string | null; design?: string | null; hasAttachments?: boolean; screenRequirements?: string | null }): boolean {
+  if (t.mockupRequired) {
+    // Шаг 1 цепочки: требования ещё не написаны → задача идёт к продакту, не к дизайнеру
+    if (!t.screenRequirements?.trim()) return false;
+    return true;
+  }
   if (t.assignee === "designer") return true;
   if (t.layer === "front" || t.layer === "fullstack") {
     return !t.design?.trim() && !t.hasAttachments;
@@ -219,9 +271,11 @@ export function isDesignerTask(t: { layer: string; mockupRequired?: boolean | nu
   return false;
 }
 
-/** Продакт берёт только задачи с открытыми вопросами к нему */
-export function isProductTask(t: { needs: string[] }): boolean {
-  return t.needs.length > 0;
+/** Продакт берёт задачи с открытыми вопросами к нему или задачи шага 1 цепочки макета (mockupRequired без screenRequirements) */
+export function isProductTask(t: { needs: string[]; mockupRequired?: boolean | null; screenRequirements?: string | null }): boolean {
+  if (t.needs.length > 0) return true;
+  if (t.mockupRequired && !t.screenRequirements?.trim()) return true;
+  return false;
 }
 
 /** Роли, которым разрешено брать задачи в работу через claim (deployer, watchdog, triage и tester работают иначе) */
@@ -238,11 +292,19 @@ export function doneGate(t: { layer: string; noWork?: boolean }, proof: { sha?: 
 
 const normPath = (p: string) => p.trim().replace(/^\.\//, "").replace(/\/+$/, "");
 
-/** Пересечение областей кода: один путь — префикс другого (папка и файл в ней тоже пересекаются) */
+/**
+ * Файл перевода в папке messages: messages/ru.json, messages/en.json и т. д.
+ * Такие пути НЕ считаются пересечением — над переводами всегда работают несколько задач.
+ * Папка messages целиком (без уточнения файла) — всё ещё пересечение.
+ */
+const isMsgFile = (p: string) => /^messages\/[^/]+\.json$/.test(p);
+
+/** Пересечение областей кода: один путь — префикс другого (папка и файл в ней тоже пересекаются).
+ *  Файлы messages/*.json из проверки исключаются: их правят параллельно все задачи с переводами. */
 export function scopeOverlap(a: string[], b: string[]): string[] {
   const out: string[] = [];
-  for (const x of a.map(normPath).filter(Boolean)) {
-    for (const y of b.map(normPath).filter(Boolean)) {
+  for (const x of a.map(normPath).filter((p) => p && !isMsgFile(p))) {
+    for (const y of b.map(normPath).filter((p) => p && !isMsgFile(p))) {
       if (x === y || x.startsWith(`${y}/`) || y.startsWith(`${x}/`)) out.push(x.length <= y.length ? x : y);
     }
   }
@@ -316,6 +378,20 @@ export function taskHealth(t: HealthTask, closedKeys: Set<string>, now = new Dat
 }
 
 export const needsAttention = (h: Health) => h.stale || h.phantom || h.stuckReview || h.needsOwner;
+
+/**
+ * Вычисляет статус эпика из списка статусов его задач (без доступа к базе).
+ * Правило: «горячий» статус побеждает — наличие in_progress важнее review, review важнее backlog.
+ * Если задач нет или все закрыты — «planned»/«done» соответственно.
+ */
+export function computeEpicStatus(taskStatuses: string[]): string {
+  const open = taskStatuses.filter((s) => !(CLOSED_STATUSES as readonly string[]).includes(s));
+  if (open.length === 0) return taskStatuses.length > 0 ? "done" : "planned";
+  if (open.some((s) => s === "in_progress")) return "in_progress";
+  if (open.some((s) => s === "review")) return "testing";
+  if (open.some((s) => s === "ready")) return "in_progress";
+  return "planned";
+}
 
 export type WatchdogPlan = {
   /** Впервые заметили брошенную аренду — отметить и сообщить */
