@@ -872,12 +872,13 @@
       "exportJson": "Export JSON",
       "importBtn": "Import",
       "importedN": "Imported {n} keys",
+      "placeholderIssues": "Skipped {n} keys with invalid placeholders {{…}}",
       "skippedN": "Skipped {n} unknown keys",
       "importError": "Invalid file format — expected JSON with flat keys",
       "missingKeys": "Missing keys",
       "showingOf": "Showing {n} of {total}",
       "externalTitle": "Texts outside translation files",
-      "externalMail": "Customer emails (mail-template.ts) — called via tr(), translation connected",
+      "externalMail": "Customer emails: subjects and content from messages/notify.order.*, HTML wrapper in mail-template.ts",
       "externalNotify": "Telegram team messages (notify.ts etc.) — {n} templates, internal use, no translation needed",
       "externalDb": "Service and master content is translated in the corresponding admin sections",
       "langRu": "RU — Russian",
@@ -2068,6 +2069,14 @@
     "back": "Go home"
   },
   "notify": {
+    "bot": {
+      "blocked": "This phone number is blocked in iHelp.",
+      "existingUser": "Sign in to iHelp — one-time link, valid 10 minutes:\n{link}",
+      "greeting": "Hello! Tap the button below: Telegram will verify your phone number and you'll sign in to iHelp or register.",
+      "newUser": "This number isn't registered in iHelp yet. Your number has been verified — complete registration via the link (you'll need your name and email; link valid 10 minutes):\n{link}",
+      "sharePhone": "📱 Share phone number",
+      "wrongContact": "Please send your own phone number using the «📱 Share phone number» button below — Telegram verifies it belongs to you. Forwarded or others' contacts are not accepted."
+    },
     "master": {
       "assigned": "📋 New visit\nClient: {clientName}\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}",
       "rescheduled": "🔄 Visit rescheduled\n{serviceName}\nNew date: {date}, {time}",
@@ -2084,7 +2093,13 @@
       "masterAssigned": "👷 Master assigned\nService: {serviceName}, {date} at {time}\nMaster: {masterName}\nFeel free to contact us with any questions.",
       "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}",
       "cancelled": "❌ Visit cancelled\nService: {serviceName}, {date}\nWant to reschedule? Place a new order on the website.",
-      "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}"
+      "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}",
+      "subjectCancelled": "Order #{n} cancelled",
+      "subjectCompleted": "How was your visit? — order #{n}",
+      "subjectCreated": "Order #{n} confirmed",
+      "subjectMasterAssigned": "Master assigned — order #{n}",
+      "subjectRescheduled": "Visit rescheduled — order #{n}",
+      "subjectVisitCancelled": "Visit {date} cancelled — order #{n}"
     }
   },
   "review": {

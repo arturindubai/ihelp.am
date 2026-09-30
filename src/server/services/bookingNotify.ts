@@ -10,10 +10,20 @@ import { sendMail, mailTemplate } from "./mail";
 import { notifyTech, html } from "../notify";
 import { createReviewToken } from "./reviews";
 import { getEmailBannerHtml } from "./banners";
+import { loadMessages } from "@/i18n/messages";
 import defaultTemplates from "../../../messages/ru.json";
 
 type AddressSnapshot = { street?: string; building?: string; apartment?: string };
 type Config = { service?: { title?: unknown }; plan?: { title?: unknown } | null };
+
+/** Тема письма по ключу из messages/notify.order с учётом локали клиента */
+async function mailSubject(locale: string, key: string, params: Record<string, string | number>): Promise<string> {
+  const msgs = await loadMessages(locale);
+  const order = (msgs.notify as Record<string, unknown>)?.order as Record<string, string> | undefined;
+  const tmpl = order?.[key];
+  if (!tmpl) return "";
+  return Object.entries(params).reduce((s, [k, v]) => s.replace(new RegExp(`\\{${k}\\}`, "g"), String(v)), tmpl);
+}
 
 function addrLine(snapshot: unknown): string {
   const a = snapshot as AddressSnapshot | null;
@@ -51,9 +61,10 @@ async function getOrderTemplates(): Promise<typeof defaultTemplates.notify.order
 async function sendToClient(
   userId: string,
   text: string,
-  mailSubject: string,
+  subject: string,
   tag: string,
   log?: { orderId: string; visitId?: string; event: string },
+  locale = "ru",
 ): Promise<"telegram" | "email" | "alert" | "none"> {
   const user = await db.user.findUnique({
     where: { id: userId },
@@ -87,9 +98,9 @@ async function sendToClient(
           .replace(/&lt;/g, "<")
           .replace(/&gt;/g, ">");
         const lines = plainText.split("\n").filter(Boolean);
-        const bannerHtml = await getEmailBannerHtml("ru").catch(() => null);
-        const htmlBody = mailTemplate({ title: mailSubject, lines, brand, ...(bannerHtml ? { bannerHtml } : {}) });
-        const r = await sendMail({ to: user.email, subject: mailSubject, html: htmlBody, text: plainText });
+        const bannerHtml = await getEmailBannerHtml(locale).catch(() => null);
+        const htmlBody = mailTemplate({ title: subject, lines, brand, ...(bannerHtml ? { bannerHtml } : {}) });
+        const r = await sendMail({ to: user.email, subject, html: htmlBody, text: plainText });
         if (r.ok) channel = "email";
       }
     } catch (e) {
@@ -114,7 +125,7 @@ async function sendToClient(
           orderId: log.orderId,
           visitId: log.visitId ?? null,
           event: log.event,
-          subject: mailSubject,
+          subject: subject,
           channel,
           delivered: channel === "telegram" || channel === "email",
         },
@@ -165,6 +176,7 @@ export async function notifyClientOrderCreated(orderId: string): Promise<void> {
         firstVisitPrice: true,
         config: true,
         addressSnapshot: true,
+        locale: true,
         visits: { where: { index: 1 }, select: { scheduledAt: true }, take: 1 },
       },
     });
@@ -173,6 +185,7 @@ export async function notifyClientOrderCreated(orderId: string): Promise<void> {
     const visit = order.visits[0];
     if (!visit?.scheduledAt) return;
 
+    const locale = order.locale || "ru";
     const tmpl = await getOrderTemplates();
     const text = fill(tmpl.created, {
       serviceName: serviceTitle(order.config),
@@ -181,11 +194,12 @@ export async function notifyClientOrderCreated(orderId: string): Promise<void> {
       address: addrLine(order.addressSnapshot),
       price: amd(order.firstVisitPrice),
     });
+    const subject = await mailSubject(locale, "subjectCreated", { n: order.number });
 
-    await sendToClient(order.userId, text, `Заказ №${order.number} принят`, "client:created", {
+    await sendToClient(order.userId, text, subject, "client:created", {
       orderId,
       event: "created",
-    });
+    }, locale);
   } catch (e) {
     console.error("[bookingNotify:created] ошибка", e);
   }
@@ -208,6 +222,7 @@ export async function notifyClientMasterAssigned(visitId: string): Promise<void>
             number: true,
             userId: true,
             config: true,
+            locale: true,
           },
         },
       },
@@ -218,6 +233,7 @@ export async function notifyClientMasterAssigned(visitId: string): Promise<void>
     const ok = await markVisitEvent(visitId, eventKey);
     if (!ok) return;
 
+    const locale = visit.order.locale || "ru";
     const tmpl = await getOrderTemplates();
     const masterName = tr(visit.master.name, "ru");
     const text = fill(tmpl.masterAssigned, {
@@ -226,12 +242,13 @@ export async function notifyClientMasterAssigned(visitId: string): Promise<void>
       time: hm(visit.scheduledAt),
       masterName,
     });
+    const subject = await mailSubject(locale, "subjectMasterAssigned", { n: visit.order.number });
 
-    await sendToClient(visit.order.userId, text, `Мастер назначен — заказ №${visit.order.number}`, "client:masterAssigned", {
+    await sendToClient(visit.order.userId, text, subject, "client:masterAssigned", {
       orderId: visit.order.id,
       visitId,
       event: `masterAssigned:${visit.masterId}`,
-    });
+    }, locale);
   } catch (e) {
     console.error("[bookingNotify:masterAssigned] ошибка", e);
   }
@@ -251,6 +268,7 @@ export async function notifyClientRescheduled(visitId: string): Promise<void> {
             userId: true,
             config: true,
             addressSnapshot: true,
+            locale: true,
           },
         },
       },
@@ -262,6 +280,7 @@ export async function notifyClientRescheduled(visitId: string): Promise<void> {
     const ok = await markVisitEvent(visitId, eventKey);
     if (!ok) return;
 
+    const locale = visit.order.locale || "ru";
     const tmpl = await getOrderTemplates();
     const text = fill(tmpl.rescheduled, {
       serviceName: serviceTitle(visit.order.config),
@@ -269,12 +288,13 @@ export async function notifyClientRescheduled(visitId: string): Promise<void> {
       time: hm(visit.scheduledAt),
       address: addrLine(visit.order.addressSnapshot),
     });
+    const subject = await mailSubject(locale, "subjectRescheduled", { n: visit.order.number });
 
-    await sendToClient(visit.order.userId, text, `Визит перенесён — заказ №${visit.order.number}`, "client:rescheduled", {
+    await sendToClient(visit.order.userId, text, subject, "client:rescheduled", {
       orderId: visit.order.id,
       visitId,
       event: `rescheduled:${visit.scheduledAt.toISOString()}`,
-    });
+    }, locale);
   } catch (e) {
     console.error("[bookingNotify:rescheduled] ошибка", e);
   }
@@ -292,6 +312,7 @@ export async function notifyClientCancelled(orderId: string): Promise<void> {
         number: true,
         userId: true,
         config: true,
+        locale: true,
         visits: {
           where: { status: "CANCELLED" },
           orderBy: { scheduledAt: "asc" },
@@ -302,6 +323,7 @@ export async function notifyClientCancelled(orderId: string): Promise<void> {
     });
     if (!order) return;
 
+    const locale = order.locale || "ru";
     const visit = order.visits[0];
     const dateStr = visit?.scheduledAt ? ymd(visit.scheduledAt) : "—";
 
@@ -310,11 +332,12 @@ export async function notifyClientCancelled(orderId: string): Promise<void> {
       serviceName: serviceTitle(order.config),
       date: dateStr,
     });
+    const subject = await mailSubject(locale, "subjectCancelled", { n: order.number });
 
-    await sendToClient(order.userId, text, `Заказ №${order.number} отменён`, "client:cancelled", {
+    await sendToClient(order.userId, text, subject, "client:cancelled", {
       orderId,
       event: "cancelled",
-    });
+    }, locale);
   } catch (e) {
     console.error("[bookingNotify:cancelled] ошибка", e);
   }
@@ -336,24 +359,27 @@ export async function notifyClientVisitCancelled(visitId: string): Promise<void>
             number: true,
             userId: true,
             config: true,
+            locale: true,
           },
         },
       },
     });
     if (!visit) return;
 
+    const locale = visit.order.locale || "ru";
     const dateStr = visit.scheduledAt ? ymd(visit.scheduledAt) : "—";
     const tmpl = await getOrderTemplates();
     const text = fill(tmpl.cancelled, {
       serviceName: serviceTitle(visit.order.config),
       date: dateStr,
     });
+    const subject = await mailSubject(locale, "subjectVisitCancelled", { n: visit.order.number, date: dateStr });
 
-    await sendToClient(visit.order.userId, text, `Визит ${dateStr} отменён — заказ №${visit.order.number}`, "client:visitCancelled", {
+    await sendToClient(visit.order.userId, text, subject, "client:visitCancelled", {
       orderId: visit.order.id,
       visitId,
       event: "cancelled",
-    });
+    }, locale);
   } catch (e) {
     console.error("[bookingNotify:visitCancelled] ошибка", e);
   }
@@ -374,28 +400,31 @@ export async function notifyClientVisitCompleted(visitId: string): Promise<void>
             id: true,
             number: true,
             userId: true,
+            locale: true,
           },
         },
       },
     });
     if (!visit) return;
 
+    const locale = visit.order.locale || "ru";
     const masterName = visit.master ? tr(visit.master.name, "ru") : "—";
     const appUrl = process.env.APP_URL || "";
     const token = await createReviewToken(visitId);
-    const reviewLink = `${appUrl}/ru/review/${token}`;
+    const reviewLink = `${appUrl}/${locale}/review/${token}`;
 
     const tmpl = await getOrderTemplates();
     const text = fill(tmpl.completed, {
       masterName,
       reviewLink,
     });
+    const subject = await mailSubject(locale, "subjectCompleted", { n: visit.order.number });
 
-    await sendToClient(visit.order.userId, text, `Как прошёл визит? — заказ №${visit.order.number}`, "client:completed", {
+    await sendToClient(visit.order.userId, text, subject, "client:completed", {
       orderId: visit.order.id,
       visitId,
       event: "completed",
-    });
+    }, locale);
   } catch (e) {
     console.error("[bookingNotify:completed] ошибка", e);
   }

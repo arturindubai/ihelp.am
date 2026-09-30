@@ -1,5 +1,3 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
 import { getTranslations } from "next-intl/server";
 import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
@@ -8,6 +6,7 @@ import { TranslationsEditor } from "@/components/admin/TranslationsEditor";
 import ru from "../../../../../messages/ru.json";
 import en from "../../../../../messages/en.json";
 import am from "../../../../../messages/am.json";
+import i18nMeta from "../../../../../messages/i18n-meta.json";
 
 type Tree = { [k: string]: string | Tree };
 function flat(obj: Tree, prefix = "", out: Record<string, string> = {}) {
@@ -19,26 +18,6 @@ function flat(obj: Tree, prefix = "", out: Record<string, string> = {}) {
   return out;
 }
 
-/** Считает количество вхождений html` в серверных файлах (сообщения команде через Telegram) */
-function countTelegramTemplates(): number {
-  const ROOT = process.cwd();
-  const serverDir = join(ROOT, "src", "server");
-  let count = 0;
-  function walk(dir: string) {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (/\.(ts|tsx)$/.test(entry.name) && !/\.test\./.test(entry.name)) {
-        const content = readFileSync(full, "utf-8");
-        const matches = content.match(/html`/g);
-        if (matches) count += matches.length;
-      }
-    }
-  }
-  walk(serverDir);
-  return count;
-}
-
 export default async function AdminTranslations() {
   if (!(await pageUser("translations"))) return <Forbidden />;
   const t = await getTranslations("admin");
@@ -48,7 +27,7 @@ export default async function AdminTranslations() {
   for (const o of overrides) ov[o.locale][o.key] = o.value;
   const rows = Object.keys(base.ru).map((key) => ({ key, def: { ru: base.ru[key], en: base.en[key] || "", am: base.am[key] || "" }, ov: { ru: ov.ru[key] || "", en: ov.en[key] || "", am: ov.am[key] || "" } }));
 
-  const telegramCount = countTelegramTemplates();
+  const telegramCount = i18nMeta.telegramCount;
 
   const ruKeys = Object.keys(base.ru);
   const reportStats = {

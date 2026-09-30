@@ -158,9 +158,10 @@ function ReportTab({
   }
 
   function handleExport(lang: "en" | "am") {
-    const out: Record<string, string> = {};
+    // Формат: {ключ: {ru: "...", [lang]: "..."}} — переводчик видит русский оригинал
+    const out: Record<string, Record<string, string>> = {};
     for (const row of rows) {
-      out[row.key] = row.ov[lang] || row.def[lang] || "";
+      out[row.key] = { ru: row.def.ru, [lang]: row.ov[lang] || row.def[lang] || "" };
     }
     const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -187,11 +188,23 @@ function ReportTab({
       setImportError(t("translations.importError"));
       return;
     }
-    const flat = data as Record<string, unknown>;
-    if (Object.values(flat).some((v) => typeof v === "object" && v !== null)) {
-      setImportError(t("translations.importError"));
-      return;
+    const raw = data as Record<string, unknown>;
+
+    // Принимаем два формата: плоский {key: "val"} и двухколоночный {key: {ru: "...", en/am: "..."}}
+    const flat: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(raw)) {
+      if (typeof val === "string") {
+        flat[key] = val;
+      } else if (typeof val === "object" && val !== null && !Array.isArray(val)) {
+        const nested = val as Record<string, unknown>;
+        const langVal = nested[importLang];
+        if (typeof langVal === "string") flat[key] = langVal;
+      } else {
+        setImportError(t("translations.importError"));
+        return;
+      }
     }
+
     const result = await importTranslationsAction(importLang, flat);
     if (!result.ok) {
       setImportError(t("translations.importError"));
@@ -199,6 +212,7 @@ function ReportTab({
     }
     showToast(t("translations.importedN", { n: result.imported }));
     if (result.skipped > 0) showToast(t("translations.skippedN", { n: result.skipped }));
+    if (result.placeholderIssues > 0) showToast(t("translations.placeholderIssues", { n: result.placeholderIssues }));
     if (importRef.current) importRef.current.value = "";
   }
 
