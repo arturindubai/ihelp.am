@@ -1780,6 +1780,10 @@
     "anyMasterSub": "We'll assign the best available",
     "availableTime": "Available times",
     "base": "Price",
+    "calMonthNav": {
+      "next": "Next month",
+      "prev": "Previous month"
+    },
     "cancelRules": "Cancellation policy",
     "card": "Card online",
     "cardSoon": "Coming soon",
@@ -1826,6 +1830,7 @@
     "promoNotBetter": "This promo code is not better than your current discount",
     "promoPlaceholder": "Enter promo code",
     "savings": "Save {first} ֏ on the first visit and {regular} ֏ on each following",
+    "selectedDate": "{date}",
     "serviceLabel": "Service",
     "startDate": "First visit date",
     "success": "Order placed!",
@@ -1840,6 +1845,7 @@
     "summary": "Summary",
     "title": "Checkout",
     "toOrder": "Go to my orders",
+    "weekdaysMin": "Mo,Tu,We,Th,Fr,Sa,Su",
     "weekdaysShort": "Mon,Tue,Wed,Thu,Fri,Sat,Sun",
     "whoComes": "Who's coming",
     "wishes": "Preferences"

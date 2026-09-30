@@ -948,6 +948,10 @@
     "anyMasterSub": "",
     "availableTime": "",
     "base": "",
+    "calMonthNav": {
+      "next": "",
+      "prev": ""
+    },
     "cancelRules": "",
     "card": "",
     "cardSoon": "",
@@ -994,6 +998,7 @@
     "promoNotBetter": "",
     "promoPlaceholder": "",
     "savings": "",
+    "selectedDate": "{date}",
     "serviceLabel": "",
     "startDate": "",
     "success": "",
@@ -1008,6 +1013,7 @@
     "summary": "",
     "title": "",
     "toOrder": "",
+    "weekdaysMin": "",
     "weekdaysShort": "",
     "whoComes": "",
     "wishes": ""
