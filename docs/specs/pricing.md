@@ -18,6 +18,23 @@
    - `PACKAGE` → `first.price + regular.price × (N−1)`, где N = `packageVisits`.
 8. **Дефолты (`DEFAULT_RULES`):** `roundTo=50`, `firstVisitDiscount=10`, `firstVisitCommittedDiscount=25`, `commitmentMinVisits=4`, `stackDiscounts=false`.
 
+## Экономия на тарифе (строка «Экономия N ֏»)
+
+Показывает **настоящую выгоду** клиента: разницу между стоимостью тех же визитов разово (с учётом скидки первого заказа, которую клиент получил бы в любом случае) и ценой пакета/подписки.
+
+**Формула:**
+- **Пакет** (`PACKAGE`): `oneTimeCost(N) − payNow`, где `oneTimeCost(N) = oneTime.first.price + oneTime.regular.price × (N−1)`, а `oneTime` — результат `calculatePrice` с `plan: {kind: "ONE_TIME", discountPercent: 0}` и тем же `isFirstOrder`.
+- **Подписка** (`SUBSCRIPTION`): `oneTime.first.price − plan.regular.price` (сравнение за один визит).
+
+Если выгода ≤ 0 — строку не показывают. Реализация: `calculatePlanSavings` в `src/lib/pricing.ts`.
+
+**Почему не `payNowBase − payNow`:** `payNowBase` — прейскурантная цена без любых скидок. Для нового клиента и гостя в неё попадает скидка первого визита, которую они получили бы при разовом заказе — это не настоящая выгода от пакета.
+
+**Пример** (правила по умолчанию, база 16 000, новый клиент):
+- Пакет 4 визита, дисконт тарифа 0%: payNow = 12 000 + 3×16 000 = 60 000
+- Четыре разовых: 14 400 + 3×16 000 = 62 400
+- Экономия = 2 400 ֏ (а не 4 000 ֏ от прейскуранта)
+
 ## Крайние случаи
 
 - **Только доплаты, без дисконтируемых.** `discountableBase=0` → все скидки равны 0, `source="none"`.
@@ -31,6 +48,7 @@
 | Что | Файл / функция |
 |---|---|
 | Вся логика цены | `src/lib/pricing.ts` → `calculatePrice`, `isCommitted` |
+| Настоящая экономия на тарифе | `src/lib/pricing.ts` → `calculatePlanSavings` |
 | Проверка первого заказа | `src/lib/firstOrder.ts` → `usesFirstOrderRight`, `firstOrderUsedBy` |
 | Применение в заказе | `src/server/services/booking.ts` → `isFirstOrder`, `createOrder` |
 | Дефолты настроек | `src/server/settings.ts` → `DEFAULT_SETTINGS.pricing` |
@@ -41,3 +59,4 @@
 
 - 25.09.2026 — первая запись (DEV-15, nocode-1).
 - 28.09.2026 — файл создан в git (DEV-9); расхождений с кодом на 5a23c30 не выявлено.
+- 30.09.2026 — добавлено правило «Экономия на тарифе» и функция `calculatePlanSavings` (COMP-38).
