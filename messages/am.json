@@ -7,6 +7,11 @@
     "emailConfirm": "",
     "emailNotVerified": "",
     "emailVerified": "",
+    "googleConnect": "",
+    "googleEmailMismatch": "",
+    "googleLinked": "",
+    "googleTitle": "Google",
+    "googleUsed": "",
     "history": "",
     "language": "",
     "locales": {

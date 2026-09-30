@@ -9,6 +9,11 @@
     "emailRemindersLabel": "Receive visit reminders and review requests by email",
     "emailRemindersTitle": "Email notifications",
     "emailVerified": "Email verified",
+    "googleConnect": "Connect Google",
+    "googleEmailMismatch": "Your profile already has a different email; change it manually first",
+    "googleLinked": "Google connected",
+    "googleTitle": "Google",
+    "googleUsed": "This Google account is already in use",
     "history": "History",
     "language": "Notification language",
     "locales": {

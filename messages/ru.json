@@ -9,6 +9,11 @@
     "emailRemindersLabel": "Получать напоминания о визитах и просьбы об отзыве по почте",
     "emailRemindersTitle": "Email-уведомления",
     "emailVerified": "Email подтверждён",
+    "googleConnect": "Привязать Google",
+    "googleEmailMismatch": "В профиле уже указан другой email; сначала измените его вручную",
+    "googleLinked": "Google подключён",
+    "googleTitle": "Google",
+    "googleUsed": "Этот Google-аккаунт уже используется",
     "history": "История",
     "language": "Язык уведомлений",
     "locales": {
