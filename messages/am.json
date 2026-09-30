@@ -226,13 +226,18 @@
       "library": {
         "comparePrev": "",
         "empty": "",
+        "emptySection": "",
         "markdownHint": "",
         "new": "Նոր",
         "repoHint": "",
-        "subtitle": "",
-        "tabs": {
-          "role": ""
+        "sections": {
+          "decisions": "",
+          "design": "",
+          "docs": "",
+          "research": "",
+          "rules": ""
         },
+        "subtitle": "",
         "title": ""
       },
       "logs": {
