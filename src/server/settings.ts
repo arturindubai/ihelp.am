@@ -19,6 +19,8 @@ export interface Settings {
     leadHours: number;
     horizonDays: number;
     freeCancelHours: number;
+    /** Фиксированный штраф в ֏ за отмену позже freeCancelHours до визита (FLOW-4; реальное списание — после PAY-1) */
+    lateCancelFeeAmd: number;
     subscriptionHorizonDays: number;
     allowChooseMaster: boolean;
     districts: string[];
@@ -82,6 +84,7 @@ export const DEFAULT_SETTINGS: Settings = {
     leadHours: 3,
     horizonDays: 21,
     freeCancelHours: 24,
+    lateCancelFeeAmd: 2000,
     subscriptionHorizonDays: 28,
     allowChooseMaster: true,
     districts: ["Кентрон", "Арабкир", "Давташен", "Аджапняк", "Малатия-Себастия", "Шенгавит", "Эребуни", "Канакер-Зейтун", "Норк-Мараш", "Нор Норк", "Аван", "Нубарашен"],

@@ -1,6 +1,8 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { redirect, Link } from "@/i18n/navigation";
 import { db } from "@/server/db";
+import { VisitCacheSync } from "@/components/pwa/VisitCacheSync";
+import { PRO_CACHE_KEY } from "@/lib/visitCache";
 import { getCurrentUser } from "@/server/auth";
 import { getSettings } from "@/server/settings";
 import { tr } from "@/i18n/locales";
@@ -40,6 +42,7 @@ export default async function ProPage({ params, searchParams }: { params: Promis
   const tabs = [["today", t("today")], ["upcoming", t("upcoming")], ["done", t("done")], ["settings", t("settingsTab")]];
   return (
     <div className="container-m pt-4 pb-10">
+      {isVisitTab && <VisitCacheSync endpoint="/api/visits/pro" cacheKey={PRO_CACHE_KEY} />}
       <div className="card flex items-center gap-3 p-3">
         <Img src={master.photo || "/img/master-1.svg"} width={48} className="size-12 rounded-full object-cover" />
         <div className="flex-1">
@@ -90,8 +93,10 @@ export default async function ProPage({ params, searchParams }: { params: Promis
                     {a.intercom && <div className="text-muted">🔔 {a.intercom}</div>}
                     {a.comment && <div className="text-muted">💬 {a.comment}</div>}
                     {v.order.comment && <div className="rounded-lg bg-warn-50 p-2 text-warn">{v.order.comment}</div>}
+                    {v.order.noCall && <div className="rounded-lg bg-warn-50 p-2 font-medium text-warn">📵 {t("noCall")}</div>}
                     <div>👤 {v.order.user.name || "—"} · {formatPhone(v.order.user.phone)}</div>
                     {v.order.paymentMethod === "CASH" && <div className="font-semibold">💵 {t("toCollect")}: {amd(v.price)}</div>}
+                    {v.order.tipAmount > 0 && <div className="text-ok">✨ {t("tipAmount")}: {amd(v.order.tipAmount)}</div>}
                   </div>
                   <ProVisitActions visit={{ id: v.id, status: v.status, cashCollected: v.cashCollected, price: v.price, isCash: v.order.paymentMethod === "CASH" }} phone={v.order.user.phone} mapQuery={`${a.street} ${a.building}, Yerevan`} />
                 </li>

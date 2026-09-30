@@ -76,7 +76,10 @@ export default async function AdminOrder({ params }: { params: Promise<{ locale:
             <p>{[a.district, `${a.street} ${a.building}`, a.apartment && ta("aptShort", { n: a.apartment }), a.entrance && ta("entranceShort", { n: a.entrance }), a.floor && ta("floorShort", { n: a.floor })].filter(Boolean).join(", ")}</p>
             {a.intercom && <p className="text-muted">🔔 {a.intercom}</p>}
             {a.comment && <p className="text-muted">{a.comment}</p>}
+            {o.noCall && <p className="mt-2 rounded-lg bg-warn-50 px-2 py-1 font-medium text-warn">📵 {t("orders.noCall")}</p>}
             {o.comment && <><h3 className="mt-4 mb-1 font-semibold">{t("orders.comment")}</h3><p className="rounded-lg bg-warn-50 p-2">{o.comment}</p></>}
+            {o.tipAmount > 0 && <><h3 className="mt-4 mb-1 font-semibold">{t("orders.tipAmount")}</h3><p className="text-ok font-semibold">{amd(o.tipAmount)}</p></>}
+            {o.cancelPenalty > 0 && <><h3 className="mt-4 mb-1 font-semibold text-bad">{t("orders.cancelPenalty")}</h3><p className="text-bad font-semibold">{amd(o.cancelPenalty)}</p></>}
           </section>
           <AdminOrderControls order={{ id: o.id, status: o.status, kind: o.kind, paymentStatus: o.paymentStatus, preferredMasterId: o.preferredMasterId, pausedUntil: o.pausedUntil?.toISOString().slice(0, 10) || null }} masters={mList} />
           <OrderMessages orderId={o.id} locale={locale} />

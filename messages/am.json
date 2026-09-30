@@ -566,6 +566,7 @@
       "assignMaster": "",
       "cancelConfirm": "",
       "cancelOrder": "",
+      "cancelPenalty": "",
       "cancelReason": "",
       "cash": "",
       "changeStatus": "",
@@ -597,6 +598,7 @@
       },
       "msgNotDelivered": "",
       "nextVisit": "",
+      "noCall": "",
       "noMaster": "",
       "noMessages": "",
       "number": "",
@@ -624,6 +626,7 @@
         "plan+promo": "",
         "promo": ""
       },
+      "tipAmount": "",
       "title": "",
       "total": "",
       "visitStatus": "",
@@ -878,6 +881,7 @@
       "horizon": "",
       "instagram": "",
       "langRu": "",
+      "lateCancelFee": "",
       "leadHours": "",
       "locales": "",
       "localesHint": "",
@@ -1125,6 +1129,7 @@
       "slot_taken": ""
     },
     "freeCancel": "",
+    "lateCancelFee": "",
     "loginToContinue": "",
     "master": "",
     "masterBusy": "",
@@ -1365,6 +1370,15 @@
       "rescheduled": ""
     }
   },
+  "offline": {
+    "backOnline": "",
+    "cachedAt": "",
+    "clientTitle": "",
+    "noCache": "",
+    "noVisits": "",
+    "proTitle": "",
+    "viewOnly": ""
+  },
   "operator": {
     "all": "",
     "assignMaster": "",
@@ -1390,6 +1404,7 @@
     "address": "",
     "cancelConfirm": "",
     "cancelOrder": "",
+    "cancelPenalty": "",
     "cancelSubscription": "",
     "cancelVisit": "",
     "card": "",
@@ -1399,6 +1414,7 @@
     "everyWeeks": "",
     "lateCancel": "",
     "leaveReview": "",
+    "noCall": "",
     "number": "",
     "pause": "",
     "pauseUntil": "",
@@ -1426,6 +1442,7 @@
       "COMPLETED": "Ավարտված",
       "PAUSED": "Կասեցված"
     },
+    "tipAmount": "",
     "unscheduled": "",
     "validUntil": "",
     "visitN": "",
@@ -1451,6 +1468,7 @@
     "client": "",
     "done": "Կատարված",
     "finish": "Ավարտել",
+    "noCall": "",
     "noVisits": "",
     "notLinked": "",
     "note": "",
@@ -1468,6 +1486,7 @@
     "settingsTab": "Կարգավորումներ",
     "start": "սկսել",
     "stats": "",
+    "tipAmount": "",
     "title": "",
     "toCollect": "",
     "today": "Այսոր",

@@ -97,6 +97,7 @@ export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardInte
           <NumInput label={t("leadHours")} value={bk.leadHours} onChange={(v) => set("booking", { leadHours: v ?? 0 })} />
           <NumInput label={t("horizon")} value={bk.horizonDays} onChange={(v) => set("booking", { horizonDays: v ?? 14 })} />
           <NumInput label={t("freeCancel")} value={bk.freeCancelHours} onChange={(v) => set("booking", { freeCancelHours: v ?? 24 })} />
+          <NumInput label={t("lateCancelFee")} value={bk.lateCancelFeeAmd} onChange={(v) => set("booking", { lateCancelFeeAmd: v ?? 0 })} />
           <NumInput label={t("subHorizon")} value={bk.subscriptionHorizonDays} onChange={(v) => set("booking", { subscriptionHorizonDays: v ?? 28 })} />
           <div className="md:col-span-2"><Toggle label={t("allowChooseMaster")} checked={bk.allowChooseMaster} onChange={(v) => set("booking", { allowChooseMaster: v })} /></div>
           <div className="md:col-span-2"><label className="label">{t("districts")}</label><textarea className="input min-h-32 py-2" value={bk.districts.join("\n")} onChange={(e) => set("booking", { districts: e.target.value.split("\n").map((x) => x.trim()).filter(Boolean) })} /></div>

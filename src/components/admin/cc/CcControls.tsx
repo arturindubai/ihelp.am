@@ -318,31 +318,32 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
             {hasDraft && !sent && <p className="mt-1 rounded-lg bg-warn-50 px-3 py-1.5 text-xs text-warn">{t("draftRestored")}</p>}
             {listening && <p className="mt-1 text-xs text-muted">🎙 {interim || t("listening")}</p>}
             {voiceError && <p className="mt-1 rounded-lg bg-warn-50 px-3 py-1.5 text-xs text-warn">{voiceError}</p>}
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              {speech ? (
-                <button type="button" className={cn("btn-sm gap-1.5", listening ? "btn-danger" : "btn-outline")} onClick={toggleVoice}>
-                  {listening ? <MicOff size={15} /> : <Mic size={15} />} {listening ? t("voiceStop") : t("voice")}
-                </button>
-              ) : (
-                <span className="flex items-center gap-1 text-xs text-muted" title={t("voiceErrors.unsupported")}>
-                  <Mic size={13} className="opacity-50" />
-                  {t("voiceUnsupported")}
-                </span>
-              )}
-              <label className="btn-outline btn-sm cursor-pointer gap-1.5">
-                <Paperclip size={15} /> {t("attach")}
-                <input type="file" multiple className="hidden" accept="image/*,application/pdf" onChange={(e) => setFiles([...files, ...Array.from(e.target.files ?? [])].slice(0, 6))} />
-              </label>
-              {files.map((f, i) => (
-                <span key={i} className="chip bg-surface text-xs">
-                  {f.name}
-                  <button className="ml-1 text-muted" onClick={() => setFiles(files.filter((_, j) => j !== i))} aria-label={t("remove")}>
-                    ×
+            <div className="mt-2 flex items-end gap-2">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                {speech ? (
+                  <button type="button" className={cn("btn-sm gap-1.5", listening ? "btn-danger" : "btn-outline")} onClick={toggleVoice}>
+                    {listening ? <MicOff size={15} /> : <Mic size={15} />} {listening ? t("voiceStop") : t("voice")}
                   </button>
-                </span>
-              ))}
-              <span className="flex-1" />
-              <button className="btn-primary btn-sm" disabled={pending || text.trim().length < 10} onClick={send}>
+                ) : (
+                  <span className="flex items-center gap-1 text-xs text-muted" title={t("voiceErrors.unsupported")}>
+                    <Mic size={13} className="opacity-50" />
+                    {t("voiceUnsupported")}
+                  </span>
+                )}
+                <label className="btn-outline btn-sm cursor-pointer gap-1.5">
+                  <Paperclip size={15} /> {t("attach")}
+                  <input type="file" multiple className="hidden" accept="image/*,application/pdf" onChange={(e) => setFiles([...files, ...Array.from(e.target.files ?? [])].slice(0, 6))} />
+                </label>
+                {files.map((f, i) => (
+                  <span key={i} className="chip bg-surface text-xs">
+                    {f.name}
+                    <button className="ml-1 text-muted" onClick={() => setFiles(files.filter((_, j) => j !== i))} aria-label={t("remove")}>
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <button className="btn-primary btn-sm shrink-0" disabled={pending || text.trim().length < 10} onClick={send}>
                 {pending ? (retryAttempt > 1 ? t("retrying", { n: retryAttempt }) : t("sending")) : t("send")}
               </button>
             </div>
