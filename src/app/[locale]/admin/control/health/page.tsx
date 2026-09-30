@@ -1,15 +1,18 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { pageUser } from "@/server/adminPage";
-import { boardAudit, healthStatus, staleTasksList } from "@/server/services/ccBoard";
+import { boardAudit, depChainsStatus, healthStatus, mergeConflictStats, staleTasksList } from "@/server/services/ccBoard";
 import { otpStats } from "@/server/services/otpStats";
+import { workerDenials24 } from "@/server/services/ccHealth";
 import { Forbidden } from "@/components/admin/ui";
 import { CcHeader } from "@/components/admin/cc/CcHeader";
 import { SystemPanel } from "@/components/admin/cc/SystemPanel";
 import { ErrorLogPanel } from "@/components/admin/cc/ErrorLogPanel";
 import { HealthPanel } from "@/components/admin/cc/HealthPanel";
+import { DenialsPanel } from "@/components/admin/cc/DenialsPanel";
 import { Card } from "@/components/admin/fields";
 import { ago } from "@/components/admin/cc/tabs/shared";
+import { BLOCKED_ON_LABELS } from "@/lib/backlog-labels";
 import { cn, dateLabel, timeLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +44,7 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
   const { locale } = await params;
   setRequestLocale(locale);
   if (!(await pageUser("control"))) return <Forbidden />;
-  const [t, th, h, audit, otp, staleTasks] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.healthPage"), healthStatus(), boardAudit(), otpStats(), staleTasksList()]);
+  const [t, th, h, audit, otp, staleTasks, mergeStats, denials, chains] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.healthPage"), healthStatus(), boardAudit(), otpStats(), staleTasksList(), mergeConflictStats(), workerDenials24(), depChainsStatus()]);
   const uptime = h.uptimeSec >= 86400 ? th("uptimeD", { d: Math.floor(h.uptimeSec / 86400), h: Math.floor((h.uptimeSec % 86400) / 3600) }) : th("uptimeH", { h: Math.floor(h.uptimeSec / 3600), m: Math.floor((h.uptimeSec % 3600) / 60) });
   const tickTone: Tone = h.tickAgeMin == null ? "warn" : h.tickAgeMin > 3 ? "bad" : "ok";
   const workersValue = h.workers.state === "stopped" ? th("workersStopped") : h.workers.state === "planned" ? th("workersPlanned", { when: `${dateLabel(new Date(h.workers.pausedUntil!), locale, { day: "numeric", month: "short" })}, ${timeLabel(new Date(h.workers.pausedUntil!))}` }) : h.workers.state === "paused" ? th("workersPaused") : h.workers.enabled ? (h.workers.dryRun ? th("workersDry") : th("workersOn")) : th("workersOff");
@@ -80,6 +83,12 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2">
         <Metric
+          label={th("mergeConflicts")}
+          value={`${mergeStats.conflicts} / ${mergeStats.total}`}
+          hint={th("mergeConflictsHint", { pct: mergeStats.pct, days: mergeStats.days, total: mergeStats.total })}
+          tone={mergeStats.pct >= 20 ? "bad" : mergeStats.pct >= 10 ? "warn" : "ok"}
+        />
+        <Metric
           label={th("otp24h")}
           value={otp.requests24h}
           hint={otp.byChannel.length > 0 ? otp.byChannel.map((c) => th("otpByChannel", { channel: c.channel, n: c.count })).join(" · ") : th("otp24hHint")}
@@ -91,6 +100,10 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
           hint={otp.errorChannels.length > 0 ? otp.errorChannels.map((e) => `${e.channel} ×${e.count}`).join(", ") : th("otpErrorsHint")}
           tone={otp.errorChannels.length === 0 ? "ok" : "bad"}
         />
+      </div>
+
+      <div className="mb-4">
+        <DenialsPanel stats={denials} />
       </div>
 
       <Card title={`${th("audit.title")} · ${audit.total}`} className="mb-4">
@@ -131,6 +144,35 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
           </ul>
         </Card>
       </div>
+
+      {chains.length > 0 && (
+        <Card title={`🔗 ${th("depChains")} · ${chains.length}`} className="mb-4">
+          <ul className="divide-y divide-line">
+            {chains.map((chain) => (
+              <li key={chain.rootKey} className="py-2 text-sm">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <Link href={`/admin/control?task=${chain.rootKey}`} scroll={false} className="font-mono font-bold hover:underline">
+                    {chain.rootKey}
+                  </Link>
+                  <span className="text-xs text-muted">
+                    {BLOCKED_ON_LABELS[chain.blockedOn ?? ""] ?? chain.blockedOn ?? th("depChainsBacklog")}
+                    {" · "}
+                    {ago(t, chain.since)}
+                  </span>
+                </div>
+                <div className="mt-0.5 flex flex-wrap gap-x-1 gap-y-0.5 text-xs text-muted sm:pl-4">
+                  <span className="shrink-0">{th("depChainsWaiting")}:</span>
+                  {chain.waitingKeys.map((k) => (
+                    <Link key={k} href={`/admin/control?task=${k}`} scroll={false} className="font-mono hover:underline">
+                      {k}
+                    </Link>
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <ErrorLogPanel errors={h.errors} />
     </div>

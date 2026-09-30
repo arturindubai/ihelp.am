@@ -66,7 +66,8 @@ check "API воркеров: список задач (200, не пуст)" cc_ap
 db_schema_ok() {
   # Проверяет, что все поля Task, Epic, WorkerRun из schema.prisma реально есть в базе.
   # Если миграция добавила столбец с неверным именем, запрос упадёт с ERROR: column "..." does not exist.
-  node scripts/check-migrations.mjs --db >/dev/null 2>&1
+  # stdout (✓-строки) скрыт; stderr (имя отсутствующей таблицы/колонки) виден в логе smoke.
+  node scripts/check-migrations.mjs --db >/dev/null
 }
 check "схема Prisma и база согласованы (Task, Epic, WorkerRun)" db_schema_ok
 
@@ -102,7 +103,22 @@ if [ -n "$counts_file" ] && [ -f "$counts_file" ]; then
     rm -f "$counts_file"
     if [ -n "$mismatches" ]; then
       echo "  ⚠ счётчики изменились: возможно клиент зарегистрировался во время выкладки или seed создал записи"
-      echo "  ⚠ тех-алерт: проверьте вручную (отправка алерта через приложение — отдельная задача)"
+      cc_key="$(env_val CC_AGENT_KEY)"
+      if [ -n "$cc_key" ]; then
+        alert_msg="⚠ Счётчики данных изменились при выкладке: ${mismatches%%; }"
+        alert_json="{\"message\":\"${alert_msg}\"}"
+        if curl -s -m 20 -X POST \
+            -H "Content-Type: application/json" \
+            -H "x-cc-key: ${cc_key}" \
+            --data-binary "$alert_json" \
+            "$BASE/api/internal/alert" | grep -q '"ok":true'; then
+          echo "  ✓ тех-алерт отправлен"
+        else
+          echo "  ⚠ тех-алерт не отправлен (API недоступно или ключ неверен)"
+        fi
+      else
+        echo "  ⚠ тех-алерт не отправлен (CC_AGENT_KEY не задан)"
+      fi
     fi
   fi
 else

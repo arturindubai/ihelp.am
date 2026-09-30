@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { ExternalLink } from "lucide-react";
 import { Link } from "@/i18n/navigation";
-import { designApproved, mockupPendingApprovals, mockupWaitingDesign } from "@/server/services/ccBoard";
+import { designApproved, mockupPendingApprovals, mockupWaitingDesign, mockupWaitingRequirements } from "@/server/services/ccBoard";
 import { mockupHold, type MockupHold } from "@/lib/cc-design";
 import { workersOverview } from "@/server/services/workers";
 import { PRIORITIES } from "@/lib/backlog-labels";
@@ -17,7 +17,7 @@ import { cn, dateLabel, timeLabel } from "@/lib/format";
  * дизайны на согласовании у владельца и утверждённые за две недели
  */
 export async function DesignTab({ locale, taskHref }: { locale: string; taskHref: (key: string) => string }) {
-  const [t, tb, tw, pending, waiting, approved, w] = await Promise.all([
+  const [t, tb, tw, pending, waiting, approved, w, waitingReqs] = await Promise.all([
     getTranslations("admin.cc.designTab"),
     getTranslations("admin.cc.backlog"),
     getTranslations("admin.cc.workers"),
@@ -25,13 +25,57 @@ export async function DesignTab({ locale, taskHref }: { locale: string; taskHref
     mockupWaitingDesign(),
     designApproved(),
     workersOverview(),
+    mockupWaitingRequirements(),
   ]);
   const queue = w.queues.designer;
   const when = (d: Date) => `${dateLabel(d, locale, { day: "numeric", month: "short" })}, ${timeLabel(d)}`;
 
+  const chainSteps = ["requirements", "mockup", "approval"] as const;
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted">{t("subtitle")}</p>
+
+      {/* Цепочка шагов макета */}
+      <div className="flex items-center gap-2 text-sm">
+        {chainSteps.map((step, i) => (
+          <span key={step} className="flex items-center gap-2">
+            {i > 0 && <span className="text-muted">→</span>}
+            <span className={
+              step === "requirements" && waitingReqs.length > 0 ? "font-semibold text-brand" :
+              step === "mockup" && queue.length > 0 && waitingReqs.length === 0 ? "font-semibold text-brand" :
+              step === "approval" && pending.length > 0 ? "font-semibold text-brand" :
+              "text-muted"
+            }>
+              {t(`chainStep.${step}` as "chainStep.requirements")}
+            </span>
+          </span>
+        ))}
+      </div>
+
+      {/* Шаг 1: задачи, ждущие требований от продакта */}
+      <Card title={t("requirementsSection")}>
+        <p className="mb-2 text-xs text-muted">{t("requirementsHint")}</p>
+        {waitingReqs.length === 0 ? (
+          <p className="py-2 text-xs text-muted">{t("requirementsEmpty")}</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {waitingReqs.slice(0, 8).map((x) => (
+              <li key={x.key} className="flex items-baseline gap-2 py-1.5 text-sm">
+                <Link href={taskHref(x.key)} scroll={false} className="flex min-w-0 flex-1 items-baseline gap-2 hover:underline">
+                  <span className="w-20 shrink-0 font-mono text-xs text-muted">{x.key}</span>
+                  <span className="min-w-0 truncate">{x.title}</span>
+                </Link>
+                <span className={cn("chip shrink-0 text-[10px]", PRIORITY_TONE[x.priority])} title={x.priority}>
+                  {x.priority.toUpperCase()}
+                </span>
+                <span className="chip shrink-0 bg-warn-50 text-[10px] text-warn">{tw("reasons.requirements" as "reasons.question", { detail: "" })}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {waitingReqs.length > 8 && <p className="pt-1 text-xs text-muted">{tw("more", { n: waitingReqs.length - 8 })}</p>}
+      </Card>
 
       <Card
         title={
@@ -104,7 +148,7 @@ export async function DesignTab({ locale, taskHref }: { locale: string; taskHref
         )}
       </Card>
 
-      <Card title={`${t("pending", { n: pending.length })}`}>
+      <Card title={`${t("approvalSection")} · ${t("pending", { n: pending.length })}`}>
         <p className="mb-2 text-xs text-muted">{t("pendingHint")}</p>
         {pending.length === 0 ? (
           <p className="text-sm text-muted">{t("pendingEmpty")}</p>

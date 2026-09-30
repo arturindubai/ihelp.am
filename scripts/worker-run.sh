@@ -17,8 +17,12 @@ CLAUDE_CODE_OAUTH_TOKEN=$(grep -E '^CLAUDE_CODE_OAUTH_TOKEN=' "$root/.env" 2> /d
 export CLAUDE_CODE_OAUTH_TOKEN
 [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] || { echo '{"is_error":true,"result":"Not logged in: нет токена подписки, нужен scripts/claude-login.sh"}'; exit 2; }
 
-# Команды в обычных формах: «cd папка && …», «bash scripts/check.sh 2>&1», полный путь к скрипту.
-# Составная команда проходит, только если разрешена каждая её часть: cd сам по себе ничего не меняет
+# Команды в обычных формах: «bash scripts/check.sh», полный путь к скрипту. Единая форма команды доски для всех ролей —
+# «node /opt/ihelp.am/scripts/cc.mjs команда КЛЮЧ … --agent имя»: без cd, по одной команде за вызов (DEV-79).
+# Составная команда проходит, только если разрешена каждая её часть. Правило «Bash(cd *)» разрешает переход только
+# внутри рабочей папки запуска: cd, ls, cat, grep с путём вне неё Claude Code отклоняет сам, независимо от этого списка.
+# Поэтому «cd /opt/ihelp.am && …» у разработчика и тестировщика (они запущены в .claude/worktrees/…) не проходит.
+# После правки этого файла и docs/roles/ — сверка: node scripts/check-role-commands.mjs
 common=("Bash(cd *)" "Bash(node scripts/cc.mjs *)" "Bash(node */scripts/cc.mjs *)")
 check=("Bash(scripts/check.sh*)" "Bash(bash scripts/check.sh*)" "Bash(*/scripts/check.sh*)" "Bash(bash */scripts/check.sh*)"
   "Bash(scripts/stand.sh *)" "Bash(bash scripts/stand.sh *)" "Bash(*/scripts/stand.sh *)" "Bash(bash */scripts/stand.sh *)" "Bash(node scripts/stand-shot.mjs *)" "Bash(node */scripts/stand-shot.mjs *)")
@@ -40,7 +44,8 @@ case "$role" in
   deployer)
     # Деплоер ничего не правит руками: только проверка и одна команда выкладки
     allow=(Read Glob Grep TodoWrite "${common[@]}" "Bash(git log *)" "Bash(git diff *)" "Bash(git show *)" "Bash(git status)" "Bash(git fetch *)" "Bash(git rev-parse *)"
-      "Bash(scripts/deploy-task.sh *)" "Bash(bash scripts/deploy-task.sh *)" "Bash(/opt/ihelp.am/scripts/deploy-task.sh *)"
+      "Bash(scripts/deploy-task.sh *)" "Bash(bash scripts/deploy-task.sh *)" "Bash(/opt/ihelp.am/scripts/deploy-task.sh *)" "Bash(bash /opt/ihelp.am/scripts/deploy-task.sh *)"
+      "Bash(scripts/deploy-batch.sh *)" "Bash(bash scripts/deploy-batch.sh *)" "Bash(/opt/ihelp.am/scripts/deploy-batch.sh *)" "Bash(bash /opt/ihelp.am/scripts/deploy-batch.sh *)"
       "Bash(deploy/smoke.sh*)" "Bash(bash deploy/smoke.sh*)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(ls *)"
       "Write(//opt/ihelp.am/data/tmp/deployer/**)" "Edit(//opt/ihelp.am/data/tmp/deployer/**)")
     deny+=("Bash(git merge *)" "Bash(git checkout *)" "Bash(git reset *)" "Bash(git commit *)" "Bash(git push *)")
@@ -89,9 +94,17 @@ case "$role" in
     deny+=("NotebookEdit" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(cat >*)" "Bash(cat *>*)" "Bash(curl *)")
     ;;
   dev)
-    # Разработчик пишет в свою рабочую копию; tmp-папка на случай --text-file
-    # lock-update.sh разрешён явно: он нужен при изменении package.json (обновляет lock в образе сборки)
-    allow+=("Write(//opt/ihelp.am/data/tmp/dev/**)" "Edit(//opt/ihelp.am/data/tmp/dev/**)" "${lockupdate[@]}")
+    # Разработчик пишет только в свою рабочую копию (.claude/worktrees/**) и data/tmp/dev/.
+    # Незащищённые Edit/Write из базового массива убраны: запись в корень /opt/ihelp.am
+    # и в .claude/worktrees/ напрямую запрещена (именно так однажды возник .claire/ в корне).
+    # lock-update.sh разрешён явно: он нужен при изменении package.json.
+    allow=(Read Glob Grep TodoWrite "${common[@]}" "${check[@]}" "${lockupdate[@]}"
+      "Bash(git *)"
+      "Bash(ls *)" "Bash(ls)" "Bash(pwd)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(jq *)"
+      "Bash(diff *)" "Bash(sort *)" "Bash(sed -n *)" "Bash(node --check *)" "Bash(bash -n *)" "Bash(python3 -c *)" "Bash(mkdir *)" "Bash(date)"
+      "Bash(curl -s http://127.0.0.1:*)"
+      "Write(//opt/ihelp.am/.claude/worktrees/**)" "Edit(//opt/ihelp.am/.claude/worktrees/**)"
+      "Write(//opt/ihelp.am/data/tmp/dev/**)" "Edit(//opt/ihelp.am/data/tmp/dev/**)")
     ;;
   *) echo '{"is_error":true,"result":"неизвестная роль"}'; exit 2 ;;
 esac

@@ -22,23 +22,37 @@
 
 ## Требования
 
-1. Каждое действие отражено в Control Center. «Задел для карточки» — это ещё не карточка. Проверка — через `node scripts/cc.mjs show КЛЮЧ`.
+1. Каждое действие отражено в Control Center. «Задел для карточки» — это ещё не карточка. Проверка — через `node /opt/ihelp.am/scripts/cc.mjs show КЛЮЧ`.
 2. У задачи в «В очереди»: понятно зачем, критерии проверяемы, решения получены, для интерфейса есть дизайн, заполнены зависимости и затрагиваемые файлы.
 3. Вопрос владельцу — одним сообщением: варианты, плюсы и минусы, своя рекомендация.
 4. Брошенная задача не висит дольше суток: она возвращена, перехвачена или отменена с причиной.
 5. В конце сессии пишется передача (раздел ниже).
+6. Сообщения роли `cto` читаются в течение 2 часов: иначе тех-алерт. Открыть: `/ru/admin/control?tab=notify`.
+
+## Алерты системы (автоматические)
+
+Сторож раз в 15 минут проверяет и шлёт тех-алерт в чат команды:
+
+| Ситуация | Порог | Алерт-ключ |
+|---|---|---|
+| Задача заблокирована на технике | > 4 часов | `cc:blocked-tech:КЛЮЧ` |
+| Непрочитанное сообщение роли cto | > 2 часов | `cc:cto-unread:ID` |
+
+**Если пришёл алерт о блокировке на технике:** найти задачу, разобраться в причине, сменить адресата через `reblock` или разблокировать. Блокировка на `external` требует `--until YYYY-MM-DD`.
+
+**Если пришёл алерт о сообщении cto:** прочитать через `/ru/admin/control?tab=notify` или `node scripts/cc.mjs inbox --agent cto`.
 
 ## Распорядок
 
 ```bash
-node scripts/cc.mjs attention --agent cto        # что стоит и почему
-node scripts/cc.mjs list backlog                 # кандидаты на «В очереди»
-node scripts/cc.mjs show КЛЮЧ                    # карточка, готовность, лента
-node scripts/cc.mjs ready КЛЮЧ --agent cto       # в очередь разработчикам (если чек-лист пройден)
-node scripts/cc.mjs block КЛЮЧ "вопрос" --on product --agent cto
-node scripts/cc.mjs create --file задача.json --agent cto
-node scripts/cc.mjs update КЛЮЧ --file поля.json --agent cto
-node scripts/cc.mjs cancel КЛЮЧ "дубль DEV-7" --agent cto
+node /opt/ihelp.am/scripts/cc.mjs attention --agent cto        # что стоит и почему
+node /opt/ihelp.am/scripts/cc.mjs list backlog                 # кандидаты на «В очереди»
+node /opt/ihelp.am/scripts/cc.mjs show КЛЮЧ                    # карточка, готовность, лента
+node /opt/ihelp.am/scripts/cc.mjs ready КЛЮЧ --agent cto       # в очередь разработчикам (если чек-лист пройден)
+node /opt/ihelp.am/scripts/cc.mjs block КЛЮЧ "вопрос" --on product --agent cto
+node /opt/ihelp.am/scripts/cc.mjs create --file задача.json --agent cto
+node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --file поля.json --agent cto
+node /opt/ihelp.am/scripts/cc.mjs cancel КЛЮЧ "дубль DEV-7" --agent cto
 ```
 
 Интерфейс: Control Center → карточка → «Перевести» и «Редактировать задачу».

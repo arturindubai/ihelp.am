@@ -1,21 +1,31 @@
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { MessageCircle, CalendarClock } from "lucide-react";
+import { CalendarClock } from "lucide-react";
 import { getCategory, getCategories } from "@/server/services/catalog";
-import { getSettings } from "@/server/settings";
-import { contactLink } from "@/lib/contacts";
 import { ServiceCard } from "@/components/ServiceCard";
 import { FormatCards } from "@/components/FormatCards";
 import { Link } from "@/i18n/navigation";
+import { NotifyForm } from "@/components/catalog/NotifyForm";
 import { cn } from "@/lib/format";
+import { PromoSlot } from "@/components/PromoSlot";
 
 export default async function CategoryPage({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
-  const [c, cats, s, t] = await Promise.all([getCategory(slug, locale), getCategories(locale), getSettings(), getTranslations("catalog")]);
+  const [c, cats, t] = await Promise.all([getCategory(slug, locale), getCategories(locale), getTranslations("catalog")]);
   if (!c) notFound();
 
-  const wa = contactLink(s.brand, "whatsapp");
+  const notifyStrings = {
+    notifyTitle: t("notifyTitle"),
+    notifySubtitle: t("notifySubtitle"),
+    notifyPlaceholder: t("notifyPlaceholder"),
+    notifyHint: t("notifyHint"),
+    notifyButton: t("notifyButton"),
+    notifySuccess: t("notifySuccess"),
+    notifyAlready: t("notifyAlready"),
+    notifyInvalid: t("notifyInvalid"),
+    notifyTooMany: t("notifyTooMany"),
+  };
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-4 pt-4">
@@ -42,22 +52,26 @@ export default async function CategoryPage({ params }: { params: Promise<{ local
       <FormatCards showFormats={c.showFormats} formats={c.formats} />
 
       {c.comingSoon ? (
-        <div className="mt-16 flex flex-col items-center gap-4 pb-16 text-center">
-          <CalendarClock size={64} className="text-brand opacity-40" />
-          <h2 className="text-xl font-semibold">{t("comingSoonTitle")}</h2>
-          <p className="max-w-xs text-sm text-muted">{t("comingSoonText")}</p>
-          {wa && (
-            <a href={wa.href} target="_blank" rel="noopener noreferrer" className="btn-primary mt-2 inline-flex items-center gap-2">
-              <MessageCircle size={18} />
-              {t("writeWhatsApp")}
-            </a>
-          )}
+        <div className="mt-10 pb-16">
+          <div className="md:grid md:grid-cols-2 md:items-start md:gap-8">
+            <div className="flex flex-col items-center gap-4 text-center md:items-start md:text-left">
+              <CalendarClock size={64} className="opacity-35 text-brand" />
+              <h2 className="text-xl font-semibold">{t("comingSoonTitle")}</h2>
+              <p className="text-sm text-muted">{t("comingSoonText")}</p>
+            </div>
+            <div className="md:mt-0">
+              <NotifyForm serviceSlug={c.slug} t={notifyStrings} />
+            </div>
+          </div>
         </div>
       ) : (
-        <div className="mt-4 space-y-3">
-          {c.services.map((svc) => (
-            <ServiceCard key={svc.slug} s={svc} />
-          ))}
+        <div className="mt-4">
+          <PromoSlot placement="CATALOG" locale={locale} />
+          <div className="mt-4 space-y-3">
+            {c.services.map((svc) => (
+              <ServiceCard key={svc.slug} s={svc} />
+            ))}
+          </div>
         </div>
       )}
     </div>

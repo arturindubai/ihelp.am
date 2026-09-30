@@ -61,6 +61,27 @@ describe("isWaitingMockup — блок «Ждёт макета»", () => {
   });
 });
 
+describe("isPendingApproval — возврат дизайнеру (DEV-111)", () => {
+  it("заблокирована на дизайне без макета → НЕ на согласовании (возврат из блокировки на владельце)", () => {
+    expect(isPendingApproval({ status: "blocked", blockedOn: "design", mockupApprovedBy: null, mockupUrl: null, imageAttachments: [] })).toBe(false);
+  });
+  it("заблокирована на дизайне без макета → НЕ на согласовании (возврат из «В очереди»)", () => {
+    expect(isPendingApproval({ status: "blocked", blockedOn: "design", mockupApprovedBy: null })).toBe(false);
+  });
+  it("заблокирована на дизайне без макета → НЕ на согласовании (возврат из «В работе»)", () => {
+    expect(isPendingApproval({ status: "blocked", blockedOn: "design", mockupApprovedBy: null, mockupUrl: null })).toBe(false);
+  });
+  it("заблокирована на дизайне с новым mockupUrl → на согласовании (дизайнер прислал новый макет)", () => {
+    expect(isPendingApproval({ status: "blocked", blockedOn: "design", mockupApprovedBy: null, mockupUrl: "https://figma.com/new" })).toBe(true);
+  });
+  it("заблокирована на дизайне с новой картинкой → на согласовании (дизайнер загрузил изображение)", () => {
+    expect(isPendingApproval({ status: "blocked", blockedOn: "design", mockupApprovedBy: null, mockupUrl: null, imageAttachments: [{}] })).toBe(true);
+  });
+  it("заблокирована на владельце с макетом → на согласовании", () => {
+    expect(isPendingApproval({ status: "blocked", blockedOn: "owner", mockupApprovedBy: null, mockupUrl: "https://figma.com/x" })).toBe(true);
+  });
+});
+
 describe("mockupHold — что держит дизайн задачи", () => {
   it("заблокирована на владельце → owner", () => {
     expect(mockupHold({ status: "blocked", blockedOn: "owner" })).toBe("owner");
