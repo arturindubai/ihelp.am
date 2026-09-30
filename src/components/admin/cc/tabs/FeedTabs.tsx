@@ -2,11 +2,11 @@ import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { activityFeed, doneFeed } from "@/server/services/ccBoard";
 import { listEpics } from "@/server/services/epics";
-import { autoMarkQuestionMessages, convertOrphanQuestions, listMessages, MESSAGE_ROLES } from "@/server/services/ccMessages";
-import { roleOf } from "@/lib/cc-flow";
+import { autoMarkQuestionMessages, convertOrphanQuestions, listOwnerInbox } from "@/server/services/ccMessages";
 import { BLOCKED_ON_LABELS, COMMENT_KIND_LABELS, EPIC_STATUSES, PRIORITIES, STAGES, STATUSES } from "@/lib/backlog-labels";
 import { Card } from "@/components/admin/fields";
 import { MarkAllReadButton, MessageActions } from "@/components/admin/cc/CcControls";
+import { MarkdownText } from "@/components/admin/cc/Markdown";
 import { Empty, RUN_TONE, ago } from "./shared";
 import { cn, dateLabel, timeLabel } from "@/lib/format";
 
@@ -88,7 +88,7 @@ export async function ActivityTab({ locale, taskHref }: { locale: string; taskHr
   );
 }
 
-/** «Сделано»: закрытое за две недели по дням — с коммитом и тем, что проверено после выкладки */
+/** «Сделано»: закрытое за две недели по дням — с коммитом, что проверено и незакрытыми ручными шагами */
 export async function DoneTab({ locale, taskHref }: { locale: string; taskHref: Href }) {
   const [td, data] = await Promise.all([getTranslations("admin.cc.doneTab"), doneFeed(14)]);
   return (
@@ -113,6 +113,17 @@ export async function DoneTab({ locale, taskHref }: { locale: string; taskHref: 
                 ) : (
                   <span className="chip bg-surface text-[10px] text-muted">{td("noCode")}</span>
                 )}
+                {x.pendingFollowUps.map((k) => (
+                  <Link
+                    key={k}
+                    href={taskHref(k)}
+                    scroll={false}
+                    title={td("pendingStepTitle")}
+                    className="chip bg-warn-50 text-warn text-[10px] hover:underline"
+                  >
+                    {td("pendingStep", { key: k })}
+                  </Link>
+                ))}
                 <span className="text-xs text-muted">{timeLabel(x.doneAt!)}</span>
               </li>
             ))}
@@ -134,13 +145,12 @@ export async function NotifyTab({ locale, taskHref }: { locale: string; taskHref
   // Шаг 2: сообщения-вопросы (содержат «?») без карточки → задача блокируется на owner (только backlog/ready)
   await convertOrphanQuestions("system");
 
-  const [tn, messages] = await Promise.all([getTranslations("admin.cc.notify"), listMessages(80)]);
+  const [tn, ownerMsgs] = await Promise.all([getTranslations("admin.cc.notify"), listOwnerInbox(100)]);
   const when = (d: Date) => `${dateLabel(d, locale, { day: "numeric", month: "short" })}, ${timeLabel(d)}`;
 
-  // Показываем только уведомления владельцу (не вопросы, не сообщения воркеров техдиректору)
-  const inbox = messages.filter((m) => m.toRole === "owner" && !m.isQuestion);
+  // Показываем только уведомления владельцу (не вопросы)
+  const inbox = ownerMsgs.filter((m) => !m.isQuestion);
   const unreadCount = inbox.filter((m) => !m.readAt).length;
-
   return (
     <div className="space-y-4">
       <Card
@@ -167,9 +177,11 @@ export async function NotifyTab({ locale, taskHref }: { locale: string; taskHref
                     </Link>
                   </>
                 )}
-                {m.readAt && ` · ${tn("readBy", { who: m.readBy ?? "" })}`}
+                {m.readAt && m.readBy && !m.readBy.startsWith("auto:") && ` · ${tn("readBy", { who: m.readBy })}`}
               </div>
-              <p className="mt-1 line-clamp-4 whitespace-pre-line">{m.text}</p>
+              <div className="mt-1 line-clamp-4 text-sm">
+                <MarkdownText text={m.text} />
+              </div>
               <MessageActions id={m.id} unread={!m.readAt} replyTo={null} notifyOnly />
             </li>
           ))}

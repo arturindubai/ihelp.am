@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
+import { stripMd } from "@/lib/markdown";
 import type { listEpics } from "@/server/services/epics";
 import type { BoardTask } from "@/server/services/ccBoard";
 import { EPIC_STATUSES } from "@/lib/backlog-labels";
@@ -28,7 +29,7 @@ export async function EpicsView({
   sp: CcSearch;
   taskHref: (key: string) => string;
 }) {
-  const tb = await getTranslations("admin.cc.backlog");
+  const [t, tb] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.backlog")]);
 
   const epicStatusMap = new Map(epics.map((e) => [e.key, e.status]));
 
@@ -64,12 +65,21 @@ export async function EpicsView({
     );
   }
 
+  const isFiltered = !!(sp.q || sp.priority || sp.size || sp.epicKey || sp.lane || sp.flow);
+
+  // Проверяем, остались ли видимые блоки после фильтрации
+  const hasVisibleEpics = epics.some((e) => (byEpic.get(e.key) ?? []).length > 0);
+  const hasVisibleNoEpic = noEpicTasks.length > 0;
+  if (isFiltered && !hasVisibleEpics && !hasVisibleNoEpic) {
+    return <p className="card py-10 text-center text-muted">{t("empty")}</p>;
+  }
+
   return (
     <div className="space-y-3">
       {epics.map((epic) => {
         const epicTasks = byEpic.get(epic.key) ?? [];
         // Фильтр сузил до 0 задач — скрываем блок эпика
-        if (epicTasks.length === 0 && (sp.q || sp.priority || sp.size)) return null;
+        if (epicTasks.length === 0 && isFiltered) return null;
 
         const epicTaskKeys = new Set(epicTasks.map((t) => t.key));
         const epicBlockers = blockers(epic);
@@ -125,7 +135,7 @@ export async function EpicsView({
                     >
                       <Link href={taskHref(task.key)} scroll={false} className="flex min-w-0 flex-1 items-baseline gap-2">
                         <span className="w-20 shrink-0 font-mono text-xs text-muted">{task.key}</span>
-                        <span className="min-w-0 flex-1 truncate font-medium">{task.title}</span>
+                        <span className="min-w-0 flex-1 truncate font-medium">{stripMd(task.title)}</span>
                       </Link>
                       <span className="flex shrink-0 flex-wrap items-center gap-1.5">
                         <span className={cn("chip text-[10px]", FLOW_TONE[task.flow])}>

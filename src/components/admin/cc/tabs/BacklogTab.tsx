@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
+import { stripMd } from "@/lib/markdown";
 import { boardTasks, type BoardTask } from "@/server/services/ccBoard";
 import { readyForAutoDev } from "@/server/services/workers";
 import { listEpics } from "@/server/services/epics";
@@ -53,13 +54,16 @@ export async function BacklogTab({ sp, taskHref }: { sp: CcSearch; taskHref: (ke
   const here = (patch: CcSearch) => ccHref({ ...sp, task: "" }, patch);
   const flows = FLOWS.filter((f) => sp.closed || !["done", "cancelled"].includes(f));
 
-  // Задачи для вида «Эпики»: все задачи (с закрытыми), с фильтрами q/priority/size
+  // Задачи для вида «Эпики»: применяем все активные фильтры (closed, q, priority, size, epicKey, lane, flow)
   let epicTasks: BoardTask[] | null = null;
   if (view === "epics" && allWithClosed) {
-    epicTasks = allWithClosed;
+    epicTasks = sp.closed ? allWithClosed : allWithClosed.filter((x) => !["done", "cancelled"].includes(x.status));
     if (q) epicTasks = epicTasks.filter((x) => `${x.key} ${x.title} ${x.summary} ${x.details ?? ""}`.toLowerCase().includes(q));
     if (sp.priority) epicTasks = epicTasks.filter((x) => x.priority === sp.priority);
     if (sp.size) epicTasks = epicTasks.filter((x) => x.size === sp.size);
+    if (sp.epicKey) epicTasks = epicTasks.filter((x) => (sp.epicKey === "none" ? !x.epicKey : x.epicKey === sp.epicKey));
+    if (sp.lane) epicTasks = epicTasks.filter((x) => x.lane === sp.lane);
+    if (sp.flow) epicTasks = epicTasks.filter((x) => x.flow === sp.flow);
   }
 
   const groups: { id: string; title: React.ReactNode; items: BoardTask[] }[] =
@@ -170,11 +174,11 @@ export async function BacklogTab({ sp, taskHref }: { sp: CcSearch; taskHref: (ke
                         <Link href={taskHref(task.key)} scroll={false} className="flex min-w-0 flex-1 gap-3">
                           <span className="w-24 shrink-0 pt-0.5 font-mono text-xs text-muted">{task.key}</span>
                           <span className="min-w-0 flex-1">
-                            <span className="block font-medium">{task.title}</span>
+                            <span className="block font-medium">{stripMd(task.title)}</span>
                             <span className="block text-xs text-muted">
                               {STAGES[task.stage]} · {AREAS[task.area]}
                               {task.epic ? ` · ${task.epic}` : ""}
-                              {task.blockedReason ? ` · ${task.blockedReason}` : ""}
+                              {task.blockedReason ? ` · ${stripMd(task.blockedReason)}` : ""}
                             </span>
                             <span className="mt-1 block">
                               <TaskBadges task={task} />
