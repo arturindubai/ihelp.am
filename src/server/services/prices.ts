@@ -13,6 +13,57 @@ export type PriceRow = {
   price: number;
 };
 
+export type PriceAuditRow = {
+  id: string;
+  userId: string | null;
+  userName: string | null;
+  optionId: string;
+  optionTitle: string;
+  serviceId: string;
+  serviceTitle: string;
+  oldPrice: number;
+  newPrice: number;
+  createdAt: Date;
+};
+
+export type PriceAuditFilter = {
+  serviceId?: string;
+  from?: Date;
+  to?: Date;
+};
+
+export type ServiceOption = { id: string; title: string };
+
+export async function getPriceAuditLog(
+  filter: PriceAuditFilter = {},
+): Promise<{ rows: PriceAuditRow[]; total: number }> {
+  const where = {
+    ...(filter.serviceId ? { serviceId: filter.serviceId } : {}),
+    ...(filter.from || filter.to
+      ? {
+          createdAt: {
+            ...(filter.from ? { gte: filter.from } : {}),
+            ...(filter.to ? { lte: filter.to } : {}),
+          },
+        }
+      : {}),
+  };
+  const [rows, total] = await Promise.all([
+    db.priceAudit.findMany({ where, orderBy: { createdAt: "desc" }, take: 100 }),
+    db.priceAudit.count({ where }),
+  ]);
+  return { rows, total };
+}
+
+export async function getPriceAuditServices(): Promise<ServiceOption[]> {
+  const rows = await db.priceAudit.findMany({
+    select: { serviceId: true, serviceTitle: true },
+    distinct: ["serviceId"],
+    orderBy: { serviceTitle: "asc" },
+  });
+  return rows.map((r) => ({ id: r.serviceId, title: r.serviceTitle }));
+}
+
 export async function getPricesData(locale: string): Promise<{ rows: PriceRow[]; serviceCount: number }> {
   const cats = await db.category.findMany({
     orderBy: { sort: "asc" },

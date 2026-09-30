@@ -58,6 +58,7 @@ model User {
   master      Master?
   redemptions PromoRedemption[]
   auditLogs   AuditLog[]
+  priceAudits PriceAudit[]
 }
 
 model Session {
@@ -897,6 +898,27 @@ model AppError {
   taskKey     String?
 
   @@index([lastSeenAt])
+}
+
+/// Журнал изменений цен (ADMIN-11): кто, когда, какой тариф изменён с какой на какую цену
+model PriceAudit {
+  id           String   @id @default(cuid())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// Имя пользователя в момент изменения (снимок)
+  userName     String?
+  optionId     String
+  /// Название тарифа в момент изменения (снимок, ru)
+  optionTitle  String
+  serviceId    String
+  /// Название услуги в момент изменения (снимок, ru)
+  serviceTitle String
+  oldPrice     Int
+  newPrice     Int
+  createdAt    DateTime @default(now())
+
+  @@index([serviceId, createdAt])
+  @@index([createdAt])
 }
 
 /// Заявки «Уведомить меня» для категорий-заглушек
