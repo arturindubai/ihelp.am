@@ -232,6 +232,7 @@
         "toTest": "Waiting for tester"
       },
       "designTab": {
+        "approvalSection": "Step 3 · Awaiting approval",
         "approved": "Approved in the last two weeks · {n}",
         "approvedAgent": "by {agent}",
         "approvedEmpty": "Nothing approved yet",
@@ -245,6 +246,9 @@
         "pool": "Designer",
         "queue": "Designer queue · {n}",
         "queueEmpty": "No UI tasks without design",
+        "requirementsEmpty": "No tasks awaiting requirements",
+        "requirementsHint": "Product manager must describe: who uses this screen, what they see, available actions, empty/error states, and what's out of scope.",
+        "requirementsSection": "Step 1 · Awaiting requirements from product",
         "subtitle": "Design of UI tasks: designer queue, what awaits your approval, what's approved. Approved design goes to Library — that's the canon developers build from.",
         "waiting": "Waiting for designer mockup · {n}",
         "waitingEmpty": "All tasks marked «mockup required» already have a mockup",
@@ -1011,6 +1015,7 @@
           "ok": "claimable",
           "people": "for humans — not code",
           "question": "question: {detail}",
+          "requirements": "requirements",
           "retest": "new commit — test again",
           "returned": "Returned",
           "scope": "conflicts with {detail}",
@@ -1737,11 +1742,36 @@
     "title": "Admin panel",
     "toSite": "To website",
     "translations": {
+      "colLang": "Language",
+      "colMissing": "Missing",
+      "colTotal": "Total",
+      "colTranslated": "Translated",
+      "exportJson": "Export JSON",
+      "externalDb": "Service and master content is translated in the corresponding admin sections",
+      "externalMail": "Customer emails: subjects and content from messages/notify.order.*, HTML wrapper in mail-template.ts",
+      "externalNotify": "Telegram team messages (notify.ts etc.) — {n} templates, internal use, no translation needed",
+      "externalTitle": "Texts outside translation files",
       "hint": "Any interface text can be changed. An empty field uses the default text (for EN and AM — Russian).",
+      "importBtn": "Import",
+      "importError": "Invalid file format — expected JSON with flat keys",
+      "importedN": "Imported {n} keys",
       "key": "Key",
+      "langAm": "AM — Armenian",
+      "langEn": "EN — English",
+      "langRu": "RU — Russian",
+      "missingKeys": "Missing keys",
       "onlyMissing": "Untranslated only",
+      "placeholderIssues": "Skipped {n} keys with invalid placeholders {{…}}",
+      "reportTitle": "Translation readiness",
       "reset": "Reset",
       "section": "Section",
+      "showingOf": "Showing {n} of {total}",
+      "skippedN": "Skipped {n} unknown keys",
+      "statusEmpty": "Not translated",
+      "statusPartial": "Partial",
+      "statusReady": "Ready",
+      "tabEditor": "Editor",
+      "tabReport": "Translation report",
       "title": "Texts & translations"
     },
     "version": {
@@ -1910,12 +1940,11 @@
   },
   "cart": {
     "checkout": "Book",
-    "itemsCount": "{count, plural, one {# service} other {# services}}",
-    "total": "{amount} ֏"
+    "itemsCount": "{count, plural, one {# service} other {# services}}"
   },
   "catalog": {
-    "comingSoonText": "We're launching this service. Leave your contact — we'll be the first to let you know when booking opens.",
-    "comingSoonTitle": "Coming soon in Yerevan",
+    "comingSoonText": "We're preparing services and pros. Write to us — we'll answer your questions",
+    "comingSoonTitle": "Opening soon",
     "newService": "New service",
     "notifyAlready": "We already have your contact",
     "notifyButton": "Notify me",
@@ -2041,6 +2070,14 @@
     "title": "404"
   },
   "notify": {
+    "bot": {
+      "blocked": "This phone number is blocked in iHelp.",
+      "existingUser": "Sign in to iHelp — one-time link, valid 10 minutes:\n{link}",
+      "greeting": "Hello! Tap the button below: Telegram will verify your phone number and you'll sign in to iHelp or register.",
+      "newUser": "This number isn't registered in iHelp yet. Your number has been verified — complete registration via the link (you'll need your name and email; link valid 10 minutes):\n{link}",
+      "sharePhone": "📱 Share phone number",
+      "wrongContact": "Please send your own phone number using the «📱 Share phone number» button below — Telegram verifies it belongs to you. Forwarded or others' contacts are not accepted."
+    },
     "client": {
       "confirmation": {
         "address": "Address: {address}",
@@ -2079,8 +2116,8 @@
       "unsubscribeButton": "Unsubscribe from reminders",
       "unsubscribeConfirmBody": "Visit reminders and review requests will no longer be sent. Order emails — confirmation, reschedule, and cancellation — will always be delivered.",
       "unsubscribeConfirmTitle": "Unsubscribe from reminders?",
-      "unsubscribeLink": "unsubscribe",
-      "unsubscribeText": "Don't want visit reminders — {link}.",
+      "unsubscribeLink": "Unsubscribe from emails",
+      "unsubscribeText": "This email was sent by iHelp. To unsubscribe, follow the link: {link}",
       "unsubscribedBody": "Visit reminders and review requests will no longer be sent. Order emails — confirmation, reschedule, and cancellation — are always delivered.",
       "unsubscribedTitle": "You have unsubscribed from reminders"
     },
@@ -2100,7 +2137,13 @@
       "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}",
       "created": "✅ Order confirmed\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}\nTotal: {price}\nThank you for choosing iHelp! We will assign a master soon.",
       "masterAssigned": "👷 Master assigned\nService: {serviceName}, {date} at {time}\nMaster: {masterName}\nFeel free to contact us with any questions.",
-      "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}"
+      "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}",
+      "subjectCancelled": "Order #{n} cancelled",
+      "subjectCompleted": "How was your visit? — order #{n}",
+      "subjectCreated": "Order #{n} confirmed",
+      "subjectMasterAssigned": "Master assigned — order #{n}",
+      "subjectRescheduled": "Visit rescheduled — order #{n}",
+      "subjectVisitCancelled": "Visit {date} cancelled — order #{n}"
     }
   },
   "operator": {
