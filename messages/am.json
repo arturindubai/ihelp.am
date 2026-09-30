@@ -899,6 +899,8 @@
       "google_failed": "",
       "google_not_linked": "",
       "google_off": "",
+      "google_signup_phone_taken": "",
+      "google_signup_ticket_expired": "",
       "google_state": "",
       "name": "",
       "phone": "",
@@ -913,6 +915,9 @@
     "getCodeVia": "",
     "google": "",
     "googleHint": "",
+    "googleSignupEmailConfirmed": "",
+    "googleSignupPhoneHint": "",
+    "googleSignupTitle": "",
     "method": {
       "email": "",
       "phone": ""

@@ -1731,6 +1731,8 @@
       "google_failed": "Google did not confirm sign-in. Please try again",
       "google_not_linked": "This Google account is not linked. Sign in with your phone and add this email in your profile",
       "google_off": "Google sign-in is currently disabled",
+      "google_signup_phone_taken": "This phone number is already linked to another account",
+      "google_signup_ticket_expired": "Registration link expired — please sign in with Google again",
       "google_state": "Sign-in session expired, please try again",
       "name": "Please enter your name",
       "phone": "Please check the phone number",
@@ -1745,6 +1747,9 @@
     "getCodeVia": "Get code via",
     "google": "Sign in with Google",
     "googleHint": "For staff: sign in with your work email listed in your profile",
+    "googleSignupEmailConfirmed": "Email {email} confirmed by Google",
+    "googleSignupPhoneHint": "Enter your phone number to complete registration",
+    "googleSignupTitle": "Sign up with Google",
     "method": {
       "email": "By email",
       "phone": "By phone number"

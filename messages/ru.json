@@ -1827,6 +1827,8 @@
       "google_failed": "Google не подтвердил вход. Попробуйте ещё раз",
       "google_not_linked": "Этот Google-аккаунт не привязан. Войдите по номеру телефона и укажите эту почту в профиле",
       "google_off": "Вход через Google сейчас выключен",
+      "google_signup_phone_taken": "Этот телефон уже привязан к другому аккаунту",
+      "google_signup_ticket_expired": "Ссылка на регистрацию устарела — войдите через Google ещё раз",
       "google_state": "Сессия входа устарела, попробуйте ещё раз",
       "name": "Укажите имя",
       "phone": "Проверьте номер телефона",
@@ -1841,6 +1843,9 @@
     "getCodeVia": "Получить код через",
     "google": "Войти через Google",
     "googleHint": "Для сотрудников: вход по рабочей почте, указанной в профиле",
+    "googleSignupEmailConfirmed": "Email {email} подтверждён Google",
+    "googleSignupPhoneHint": "Введите номер телефона, чтобы завершить регистрацию",
+    "googleSignupTitle": "Регистрация через Google",
     "method": {
       "email": "По email",
       "phone": "По номеру телефона"
