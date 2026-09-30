@@ -247,6 +247,20 @@ describe.skipIf(!existsSync(RUN_SH))("настоящий scripts/worker-run.sh",
     }
   });
 
+  it("разработчик пишет только в .claude/worktrees/ и data/tmp/dev/, не в корень проекта", () => {
+    // ✓ разрешено: внутри рабочей копии
+    expect(checkTool("Write", "/opt/ihelp.am/.claude/worktrees/DEV-137/src/lib/x.ts", real.dev).ok).toBe(true);
+    expect(checkTool("Write", "/opt/ihelp.am/.claude/worktrees/DEV-137/prisma/migrations/m.sql", real.dev).ok).toBe(true);
+    expect(checkTool("Write", "/opt/ihelp.am/data/tmp/dev/note.md", real.dev).ok).toBe(true);
+    // ✗ запрещено: корень и src основной копии
+    expect(checkTool("Write", "/opt/ihelp.am/src/lib/x.ts", real.dev).ok).toBe(false);
+    expect(checkTool("Write", "/opt/ihelp.am/scripts/worker-run.sh", real.dev).ok).toBe(false);
+    // ✗ запрещено: опечатка в имени папки (.claire вместо .claude) — именно это привело к DEV-137
+    expect(checkTool("Write", "/opt/ihelp.am/.claire/worktrees/AUTH-17/file.ts", real.dev).ok).toBe(false);
+    // ✗ запрещено: tmp другой роли
+    expect(checkTool("Write", "/opt/ihelp.am/data/tmp/tester/note.md", real.dev).ok).toBe(false);
+  });
+
   it("единая форма команды доски проходит у каждой роли", () => {
     for (const role of ROLES) {
       expect(checkCommand(`node /opt/ihelp.am/scripts/cc.mjs note КЛЮЧ --text-file /opt/ihelp.am/data/tmp/${role}/note.md --agent ${role}`, real[role], role), role).toEqual({ ok: true });
