@@ -2054,6 +2054,46 @@
     "back": "Go home"
   },
   "notify": {
+    "client": {
+      "confirmation": {
+        "address": "Address: {address}",
+        "button": "My bookings",
+        "date": "Date and time: {date} at {time}",
+        "service": "Service: {service}",
+        "subject": "Order #{number} confirmed",
+        "title": "Your order is confirmed!",
+        "total": "Total: {total}"
+      },
+      "reminder": {
+        "address": "Address: {address}",
+        "button": "View booking",
+        "date": "Date and time: {date} at {time}",
+        "master": "Pro: {master}",
+        "service": "Service: {service}",
+        "subject": "Reminder: visit tomorrow",
+        "title": "Your visit is tomorrow"
+      },
+      "reminder2h": {
+        "address": "Address: {address}",
+        "button": "View booking",
+        "date": "Date and time: {date} at {time}",
+        "master": "Pro: {master}",
+        "service": "Service: {service}",
+        "subject": "Your visit is in 2 hours",
+        "title": "Your visit is in 2 hours"
+      },
+      "review": {
+        "button": "Leave a review",
+        "line1": "We hope you're satisfied! Leave a review — it takes just a minute.",
+        "line2": "Your feedback helps us improve.",
+        "subject": "How did your visit go?",
+        "title": "How was the visit?"
+      },
+      "unsubscribeLink": "unsubscribe here",
+      "unsubscribeText": "To stop receiving emails — {link}.",
+      "unsubscribedBody": "You will no longer receive emails from iHelp.",
+      "unsubscribedTitle": "You have unsubscribed"
+    },
     "master": {
       "assigned": "📋 New visit\nClient: {clientName}\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}",
       "rescheduled": "🔄 Visit rescheduled\n{serviceName}\nNew date: {date}, {time}",
