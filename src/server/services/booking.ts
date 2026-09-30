@@ -17,6 +17,46 @@ import { checkPromo } from "./promo";
 
 export const BUSY_STATUSES: VisitStatus[] = ["SCHEDULED", "CONFIRMED", "ON_WAY", "IN_PROGRESS"];
 
+/** Черновик оформления, собранный из последнего заказа клиента */
+export interface OrderDraft {
+  serviceSlug: string;
+  optionIds: string[];
+  planId: string | null;
+  addressId: string | null;
+  paymentMethod: PaymentMethod;
+  comment: string | null;
+  noCall: boolean;
+}
+
+/** Возвращает черновик оформления на основе последнего заказа клиента; null если заказов нет */
+export async function getLastOrderDraft(userId: string): Promise<OrderDraft | null> {
+  const order = await db.order.findFirst({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    select: { config: true, planId: true, addressId: true, paymentMethod: true, comment: true, noCall: true },
+  });
+  if (!order) return null;
+
+  const config = order.config as Record<string, unknown> | null;
+  const serviceSlug = (config?.service as Record<string, unknown> | undefined)?.slug;
+  if (typeof serviceSlug !== "string") return null;
+
+  const rawOptions = config?.options;
+  const optionIds = Array.isArray(rawOptions)
+    ? (rawOptions as Record<string, unknown>[]).map((o) => o.optionId).filter((id): id is string => typeof id === "string")
+    : [];
+
+  return {
+    serviceSlug,
+    optionIds,
+    planId: order.planId,
+    addressId: order.addressId,
+    paymentMethod: order.paymentMethod,
+    comment: order.comment,
+    noCall: order.noCall,
+  };
+}
+
 type Tx = Prisma.TransactionClient | typeof db;
 
 /** Скидка на первый заказ доступна, если ни один заказ клиента её не потратил — в том числе отменённый (src/lib/firstOrder.ts) */

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { getCurrentUser } from "../auth";
 import { getSettings } from "../settings";
-import { BookingError, createOrder, getSlots, isFirstOrder } from "../services/booking";
+import { BookingError, createOrder, getLastOrderDraft, getSlots, isFirstOrder } from "../services/booking";
 import { loadServiceRaw, localizeService, resolveSelection } from "../services/catalog";
 import { checkPromo } from "../services/promo";
 import { calculatePrice } from "@/lib/pricing";
@@ -84,6 +84,13 @@ const orderSchema = z.object({
   paymentMethod: z.enum(["CASH", "CARD"]),
   locale: z.string().max(5),
 });
+
+/** Черновик оформления из последнего заказа клиента — для предвыбора адреса и способа оплаты */
+export async function lastOrderDraftAction() {
+  const u = await getCurrentUser();
+  if (!u) return null;
+  return getLastOrderDraft(u.id);
+}
 
 export async function createOrderAction(input: z.infer<typeof orderSchema>) {
   const u = await getCurrentUser();
