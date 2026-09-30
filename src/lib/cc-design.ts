@@ -36,15 +36,18 @@ export function isWaitingMockup(task: {
 }
 
 /** Что держит дизайн задачи в блоке «Ждёт макета» */
-export type MockupHold = "owner" | "product" | "active" | "queue";
+export type MockupHold = "owner" | "product" | "active" | "queue" | "none";
 
-export function mockupHold(task: {
-  status: string;
-  blockedOn?: string | null;
-  claimedBy?: string | null;
-}): MockupHold {
+/**
+ * inDesignerQueue — задача присутствует в текущей очереди дизайнера (w.queues.designer);
+ * без этого флага «очередь дизайнера» не показывается, чтобы не вводить в заблуждение при пустой очереди.
+ */
+export function mockupHold(
+  task: { status: string; blockedOn?: string | null; claimedBy?: string | null },
+  inDesignerQueue = false,
+): MockupHold {
   if (task.status === "blocked" && task.blockedOn === "owner") return "owner";
   if (task.status === "blocked" && task.blockedOn === "product") return "product";
   if (task.status === "in_progress" && task.claimedBy) return "active";
-  return "queue";
+  return inDesignerQueue ? "queue" : "none";
 }

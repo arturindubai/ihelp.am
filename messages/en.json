@@ -159,6 +159,12 @@
       "backlog": {
         "allFlows": "All stages",
         "allLanes": "All lanes",
+        "epicNoEpics": "No epics",
+        "epicNoTasks": "No tasks in epic",
+        "epicNoTasksLink": "create the first one",
+        "epicProgress": "{done} of {total}",
+        "epicWaits": "Waits: {key}",
+        "epicWithout": "No epic · {n}",
         "executor": "Assignee: which worker does the next step",
         "flows": {
           "backlog": "Backlog",
@@ -196,6 +202,7 @@
         },
         "views": {
           "board": "Board",
+          "epics": "Epics",
           "flat": "List",
           "flow": "By stage",
           "lanes": "By lane"
@@ -261,8 +268,6 @@
         "empty": "Nothing closed in the last two weeks",
         "hint": "closed in the last two weeks, newest first",
         "noCode": "no code",
-        "pendingStep": "↗ {key}",
-        "pendingStepTitle": "Manual step not closed",
         "today": "Closed today: {n}"
       },
       "doneTasks": "Done",
@@ -403,8 +408,6 @@
         "branch_required": "A branch with work is required",
         "children_open": "Epic has open tasks",
         "conflict": "Task was just changed by someone else — refresh the page",
-        "criteria_incomplete": "Check each criterion or specify a card key",
-        "followup_not_found": "Card not found or already closed",
         "forbidden_transition": "This transition is not allowed",
         "invalid": "Check the fields",
         "mockup_not_required": "Task does not have 'mockup required' flag",
@@ -481,8 +484,6 @@
         "lastDeploy": "Last deploy",
         "mb": "{n} MB",
         "memory": "Memory (RSS)",
-        "mergeConflicts": "Merge conflicts (30 d.)",
-        "mergeConflictsHint": "{pct}% of returns · total {total} · last {days} days",
         "ms": "{n} ms",
         "orders": "Orders",
         "ordersHint": "per day / per week",
@@ -752,12 +753,7 @@
         "blockedOn": "Unblocked by",
         "cancel": "Cancel",
         "claimHint": "Task is claimed by the assignee: node scripts/cc.mjs take {key} --agent dev-1",
-        "criteriaCardPlaceholder": "IN-7",
-        "criteriaLabel": "Criteria met",
-        "criteriaSpawnedCard": "↗ spawned card",
-        "criteriaWillCreate": "↗ create card",
         "force": "Bypass check — with reason, will be recorded in history",
-        "incompleteGate": "Check each criterion or specify a card key",
         "noMoves": "Task is moved by the assignee or deployer from here",
         "proof": "What was tested after deploy",
         "quickReady": "To queue",
@@ -765,9 +761,7 @@
         "report": "Report: what was done, how it was tested, how to test",
         "sha": "Commit in main",
         "submit": "Move",
-        "title": "Move",
-        "whatChangedLabel": "What changed for people",
-        "whatChangedPlaceholder": "Describe in one sentence what now works differently for clients or the team"
+        "title": "Move"
       },
       "needs": "Product needs",
       "never": "never",
@@ -890,7 +884,6 @@
         "done": "Done",
         "notify": "Messages",
         "plans": "Plans",
-        "product": "Product",
         "workers": "Workers",
         "you": "Needs you"
       },
@@ -1109,6 +1102,7 @@
         "postponePh": "Reason (optional)…",
         "postponedSectionHint": "Tasks with external blocks: postponed by owner and waiting for external events.",
         "postponedUntil": "returns {date}",
+        "replyOrWritePh": "or write your answer",
         "replyPh": "Your answer…",
         "replySend": "Reply",
         "returnedRuns": "Returned for revision",
@@ -1201,6 +1195,7 @@
       "today": "Today",
       "tomorrow": "Tomorrow",
       "total": "Total",
+      "unsaved": "Unsaved",
       "up": "Up",
       "upload": "Upload photo",
       "uploadErrBroken": "File is corrupted or image dimensions are too large",
@@ -1266,6 +1261,7 @@
     },
     "nav": {
       "banners": "Banners",
+      "catalog": "Catalog",
       "clients": "Clients",
       "control": "Control Center",
       "dashboard": "Dashboard",
@@ -1274,6 +1270,7 @@
       "menu": "Menu",
       "orders": "Orders",
       "pages": "Pages",
+      "prices": "Prices",
       "promos": "Promo codes",
       "reviews": "Reviews",
       "schedule": "Schedule",
@@ -1357,6 +1354,27 @@
       "newPage": "New page",
       "title": "Pages"
     },
+    "prices": {
+      "bulkApply": "Apply",
+      "bulkCancel": "Cancel",
+      "bulkConfirm": "Apply changes",
+      "bulkFlat": "± ֏ to price",
+      "bulkPercent": "+% to price",
+      "bulkPreview": "Preview",
+      "bulkZeroError": "One or more prices would become zero — reduce the value.",
+      "colNewPrice": "→ New price",
+      "colOption": "Option / plan",
+      "colParam": "Parameter",
+      "colPrice": "Price, ֏",
+      "colService": "Service",
+      "confirmMsg": "Prices of {count} options will change by {value}{unit}. This action cannot be undone automatically.",
+      "empty": "No options with a price — add services.",
+      "saved": "Saved",
+      "selected": "{count, plural, one {# option selected} other {# options selected}}",
+      "sub": "{count, plural, one {# option} other {# options}} · {services, plural, one {# service} other {# services}}",
+      "title": "Prices",
+      "unchanged": "unchanged"
+    },
     "promos": {
       "anyService": "All services",
       "code": "Code",
@@ -1403,6 +1421,7 @@
       "unassigned": "No pro"
     },
     "services": {
+      "addCategory": "Add category",
       "addFirstService": "+ Add service",
       "addGroup": "Add step",
       "addItem": "Add item",
@@ -1452,13 +1471,17 @@
         "PACKAGE": "Visit package",
         "SUBSCRIPTION": "Subscription"
       },
+      "masterSearch": "Search masters…",
       "masters": "Pros performing this service",
+      "mastersSelected": "{n, plural, one {# selected} other {# selected}}",
       "minPrice": "from {price} ֏",
       "minutes": "Min",
       "multi": "Multiple choice",
       "newCategory": "+ Category",
       "newService": "+ Service",
+      "noMasters": "No assigned masters",
       "noServicesInCategory": "No services in category",
+      "noVariants": "No variants — clients won't be able to choose",
       "note": "Note block",
       "noteBody": "Text",
       "noteTitle": "Title",
@@ -1470,6 +1493,8 @@
       "planKind": "Plan type",
       "plans": "Plans (frequency & packages)",
       "policy": "Terms",
+      "previewOptions": "{groups} {groups, plural, one {group} other {groups}}, {variants} {variants, plural, one {variant} other {variants}}",
+      "previewStep": "Step {n}",
       "pricePreview": "Visit price for '{option}': {price}",
       "question": "Question",
       "rating": "Rating",
@@ -1479,6 +1504,7 @@
       "searchPlaceholder": "Search services and categories…",
       "services": "Services",
       "single": "Single choice",
+      "slugFromTitle": "From title",
       "stepBody": "Description",
       "stepTitle": "Step",
       "tabs": {
@@ -1488,7 +1514,11 @@
         "plans": "Plans"
       },
       "title": "Services & categories",
+      "unsavedLeave": "Leave",
+      "unsavedStay": "Stay",
+      "unsavedTitle": "Changes not saved. Leave without saving?",
       "validityDays": "Validity period, days",
+      "visitsNextWeek": "{n} vis./week",
       "visitsPerWeek": "Visits per week (client chooses days)"
     },
     "settings": {
@@ -1717,6 +1747,8 @@
       "google_failed": "Google did not confirm sign-in. Please try again",
       "google_not_linked": "This Google account is not linked. Sign in with your phone and add this email in your profile",
       "google_off": "Google sign-in is currently disabled",
+      "google_signup_phone_taken": "This phone number is already linked to another account",
+      "google_signup_ticket_expired": "Registration link expired — please sign in with Google again",
       "google_state": "Sign-in session expired, please try again",
       "name": "Please enter your name",
       "phone": "Please check the phone number",
@@ -1731,6 +1763,9 @@
     "getCodeVia": "Get code via",
     "google": "Sign in with Google",
     "googleHint": "For staff: sign in with your work email listed in your profile",
+    "googleSignupEmailConfirmed": "Email {email} confirmed by Google",
+    "googleSignupPhoneHint": "Enter your phone number to complete registration",
+    "googleSignupTitle": "Sign up with Google",
     "method": {
       "email": "By email",
       "phone": "By phone number"
@@ -1761,6 +1796,10 @@
     "anyMasterSub": "We'll assign the best available",
     "availableTime": "Available times",
     "base": "Price",
+    "calMonthNav": {
+      "next": "Next month",
+      "prev": "Previous month"
+    },
     "cancelRules": "Cancellation policy",
     "card": "Card online",
     "cardSoon": "Coming soon",
@@ -1807,6 +1846,7 @@
     "promoNotBetter": "This promo code is not better than your current discount",
     "promoPlaceholder": "Enter promo code",
     "savings": "Save {first} ֏ on the first visit and {regular} ֏ on each following",
+    "selectedDate": "{date}",
     "serviceLabel": "Service",
     "startDate": "First visit date",
     "success": "Order placed!",
@@ -1821,6 +1861,7 @@
     "summary": "Summary",
     "title": "Checkout",
     "toOrder": "Go to my orders",
+    "weekdaysMin": "Mo,Tu,We,Th,Fr,Sa,Su",
     "weekdaysShort": "Mon,Tue,Wed,Thu,Fri,Sat,Sun",
     "whoComes": "Who's coming",
     "wishes": "Preferences"
@@ -1926,7 +1967,6 @@
     "reviewsTitle": "Client reviews",
     "slogan": "Apartment cleaning in Yerevan — price calculated instantly. Subscription: same master every time.",
     "stickyOrder": "Book a service",
-    "subCatClose": "Close",
     "title": "What service do you need?",
     "whatsapp": "Have questions?",
     "whatsappSub": "Write to us — we'll reply quickly",
@@ -2012,7 +2052,7 @@
     },
     "order": {
       "cancelled": "❌ Visit cancelled\nService: {serviceName}, {date}\nWant to reschedule? Place a new order on the website.",
-      "completed": "⭐ Visit complete\n{masterName} has finished the work. Thank you for choosing iHelp!",
+      "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}",
       "created": "✅ Order confirmed\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}\nTotal: {price}\nThank you for choosing iHelp! We will assign a master soon.",
       "masterAssigned": "👷 Master assigned\nService: {serviceName}, {date} at {time}\nMaster: {masterName}\nFeel free to contact us with any questions.",
       "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}"
@@ -2165,6 +2205,7 @@
     "noReviews": "No reviews yet",
     "notFound": "Service not found",
     "packTotal": "for {count} visits",
+    "packageSaving": "Save {amount}",
     "perVisitSaving": "−{amount} per visit",
     "policy": "Terms",
     "reviews": "Reviews",

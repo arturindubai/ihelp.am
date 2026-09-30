@@ -4,11 +4,14 @@ import { getCurrentUser } from "@/server/auth";
 import { loginMethods } from "@/server/otp";
 import { getSettings } from "@/server/settings";
 import { unpackSignupTicket } from "@/lib/signupTicket";
+import { unpackGoogleSignupTicket } from "@/lib/googleSignupTicket";
 import { LoginClient } from "./LoginClient";
 
-export default async function LoginPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ next?: string; error?: string; complete?: string }> }) {
+export default async function LoginPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ next?: string; error?: string; complete?: string; "google-complete"?: string }> }) {
   const { locale } = await params;
-  const { next, error, complete } = await searchParams;
+  const sp = await searchParams;
+  const { next, error, complete } = sp;
+  const googleComplete = sp["google-complete"];
   setRequestLocale(locale);
   const user = await getCurrentUser();
   const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : null;
@@ -16,6 +19,19 @@ export default async function LoginPage({ params, searchParams }: { params: Prom
   // Пришли из Telegram-бота с подтверждённым номером нового клиента: остаётся имя и email (AUTH-11)
   const ticket = complete ? unpackSignupTicket(complete, process.env.SESSION_SECRET || "dev") : null;
   const signup = complete && ticket ? { ticket: complete, phone: ticket.phone } : undefined;
+  // Пришли из Google callback: email подтверждён, нужен телефон для завершения регистрации (IN-29)
+  if (googleComplete) {
+    const gTicket = unpackGoogleSignupTicket(googleComplete, process.env.SESSION_SECRET || "dev");
+    if (!gTicket) redirect({ href: "/login?error=google_failed", locale });
+    const [{ channels, email: emailEnabled }, s, t] = await Promise.all([loginMethods(), getSettings(), getTranslations("auth")]);
+    const googleSignup = { ticket: googleComplete, email: gTicket!.email, name: gTicket!.name };
+    return (
+      <div className="container-m pt-6">
+        <h1 className="h1 mb-5">{t("title")}</h1>
+        <LoginClient channels={channels} emailEnabled={emailEnabled} telegramBot={s.notify.telegramBotUsername || null} googleSignup={googleSignup} next={safeNext} />
+      </div>
+    );
+  }
   const [{ channels, email: emailEnabled }, s, t] = await Promise.all([loginMethods(), getSettings(), getTranslations("auth")]);
   const google = s.google.enabled && !!s.google.clientId;
   const apple = s.apple.enabled && !!s.apple.clientId;
