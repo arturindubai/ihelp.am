@@ -326,16 +326,33 @@ export async function activityFeed(take = 150) {
   return items.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, take);
 }
 
-/** Готово за последние дни: по дням (Ереван), новое сверху */
+/** Готово за последние дни: по дням (Ереван), новое сверху; для каждой задачи — незакрытые follow-up */
 export async function doneFeed(days = 14) {
   const tasks = await db.task.findMany({
     where: { status: "done", doneAt: { gte: new Date(Date.now() - days * 24 * 3600_000) } },
     orderBy: { doneAt: "desc" },
-    select: { key: true, title: true, layer: true, deployedSha: true, proof: true, doneAt: true },
+    select: { key: true, title: true, layer: true, deployedSha: true, proof: true, doneAt: true, followUps: true },
   });
+  // Все ключи follow-up задач из закрытых задач
+  const allFollowUpKeys = [...new Set(tasks.flatMap(t => t.followUps))];
+  const followUpStatuses = allFollowUpKeys.length
+    ? new Map(
+        (await db.task.findMany({ where: { key: { in: allFollowUpKeys } }, select: { key: true, status: true } }))
+          .map(t => [t.key, t.status]),
+      )
+    : new Map<string, string>();
+
+  const withPending = tasks.map(t => ({
+    ...t,
+    pendingFollowUps: t.followUps.filter(k => {
+      const s = followUpStatuses.get(k);
+      return s && s !== "done" && s !== "cancelled";
+    }),
+  }));
+
   const day = (d: Date) => new Date(d.getTime() + 4 * 3600_000).toISOString().slice(0, 10);
-  const groups = new Map<string, typeof tasks>();
-  for (const t of tasks) {
+  const groups = new Map<string, typeof withPending>();
+  for (const t of withPending) {
     const k = day(t.doneAt!);
     groups.set(k, [...(groups.get(k) ?? []), t]);
   }
