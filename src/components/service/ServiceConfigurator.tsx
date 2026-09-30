@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Check, Info } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
-import { calculatePrice, type PricingRules } from "@/lib/pricing";
+import { calculatePrice, calculatePlanSavings, type PricingRules } from "@/lib/pricing";
 import { amd, durationLabel, cn } from "@/lib/format";
 import type { ServiceView } from "@/server/services/catalog";
 import { Sheet } from "@/components/ui/Sheet";
@@ -41,8 +41,6 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy }: { s: Ser
   const plan = s.plans.find((p) => p.id === planId);
   const priceFor = (p?: (typeof s.plans)[number]) => calculatePrice({ lines, plan: p ? { kind: p.kind, discountPercent: p.discountPercent, packageVisits: p.packageVisits } : null, isFirstOrder, rules });
   const price = priceFor(plan);
-  // Базовая цена без тарифного дисконта — для расчёта экономии в карточках тарифов
-  const basePrice = priceFor();
 
   function toggle(groupId: string, optionId: string) {
     const g = s.groups.find((x) => x.id === groupId)!;
@@ -239,10 +237,7 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy }: { s: Ser
             {s.plans.map((p) => {
               const pr = priceFor(p);
               const on = p.id === planId;
-              // Для пакета — экономия на весь пакет; для подписки — экономия за один визит
-              const saving = p.kind === "PACKAGE"
-                ? pr.payNowBase - pr.payNow
-                : basePrice.regular.price - pr.regular.price;
+              const saving = calculatePlanSavings({ lines, plan: { kind: p.kind, discountPercent: p.discountPercent, packageVisits: p.packageVisits }, isFirstOrder, rules });
               return (
                 <button key={p.id} data-on={on} onClick={() => setPlanId(p.id)} className={cn("w-full flex-row items-center gap-3 rounded-xl border border-line bg-paper px-3 py-3 text-left transition", on && "border-action bg-brand-50 ring-1 ring-action")}>
                   <div className="flex items-center gap-3">
