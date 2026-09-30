@@ -2288,6 +2288,7 @@
     "noReviews": "Отзывов пока нет",
     "notFound": "Услуга не найдена",
     "packTotal": "за {count} визита",
+    "packageSaving": "Экономия {amount}",
     "perVisitSaving": "−{amount} с визита",
     "policy": "Условия",
     "reviews": "Отзывы",

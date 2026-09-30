@@ -2190,6 +2190,7 @@
     "noReviews": "No reviews yet",
     "notFound": "Service not found",
     "packTotal": "for {count} visits",
+    "packageSaving": "Save {amount}",
     "perVisitSaving": "−{amount} per visit",
     "policy": "Terms",
     "reviews": "Reviews",
