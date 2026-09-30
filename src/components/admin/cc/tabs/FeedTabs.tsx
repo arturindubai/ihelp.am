@@ -88,7 +88,7 @@ export async function ActivityTab({ locale, taskHref }: { locale: string; taskHr
   );
 }
 
-/** «Сделано»: закрытое за две недели по дням — с коммитом и тем, что проверено после выкладки */
+/** «Сделано»: закрытое за две недели по дням — с коммитом, что проверено и незакрытыми ручными шагами */
 export async function DoneTab({ locale, taskHref }: { locale: string; taskHref: Href }) {
   const [td, data] = await Promise.all([getTranslations("admin.cc.doneTab"), doneFeed(14)]);
   return (
@@ -113,6 +113,17 @@ export async function DoneTab({ locale, taskHref }: { locale: string; taskHref: 
                 ) : (
                   <span className="chip bg-surface text-[10px] text-muted">{td("noCode")}</span>
                 )}
+                {x.pendingFollowUps.map((k) => (
+                  <Link
+                    key={k}
+                    href={taskHref(k)}
+                    scroll={false}
+                    title={td("pendingStepTitle")}
+                    className="chip bg-warn-50 text-warn text-[10px] hover:underline"
+                  >
+                    {td("pendingStep", { key: k })}
+                  </Link>
+                ))}
                 <span className="text-xs text-muted">{timeLabel(x.doneAt!)}</span>
               </li>
             ))}

@@ -3,12 +3,13 @@ import { db } from "../db";
 import { tr } from "@/i18n/locales";
 import type { PriceLine, PricePlan } from "@/lib/pricing";
 import { selectBanners } from "@/lib/banner-select";
+import { incrementCarouselViews } from "./banners";
 
 export type LText = string;
 
 export async function getHome(locale: string, userId?: string | null) {
   const [categories, banners, services, features, faq, reviews] = await Promise.all([
-    db.category.findMany({ where: { active: true, archived: false }, orderBy: { sort: "asc" }, include: { services: { where: { active: true }, orderBy: { sort: "asc" }, select: { slug: true } } } }),
+    db.category.findMany({ where: { active: true, archived: false }, orderBy: { sort: "asc" }, include: { services: { where: { active: true }, orderBy: { sort: "asc" }, select: { slug: true, title: true, subtitle: true, image: true } } } }),
     db.banner.findMany({ where: { placement: "CAROUSEL_HOME" }, orderBy: { sort: "asc" } }),
     db.service.findMany({ where: { active: true, category: { active: true, archived: false } }, orderBy: { sort: "asc" }, include: { groups: { where: { active: true, isDuration: true }, include: { options: { where: { active: true } } } }, plans: { where: { active: true } } } }),
     db.siteFeature.findMany({ where: { active: true }, orderBy: { sort: "asc" } }),
@@ -22,15 +23,31 @@ export async function getHome(locale: string, userId?: string | null) {
     isNew = completedCount === 0;
   }
   const filteredBanners = selectBanners(banners, { placement: "CAROUSEL_HOME", isLoggedIn, isNew, now: new Date() });
+  await incrementCarouselViews(filteredBanners.map((b) => b.id));
   return {
-    categories: categories.map((c) => ({
-      slug: c.slug,
-      title: tr(c.title, locale),
-      image: c.image,
-      comingSoon: c.comingSoon,
-      // если в категории одна услуга — ведём сразу в неё
-      href: c.comingSoon ? null : c.services.length === 1 ? `/s/${c.services[0].slug}` : `/c/${c.slug}`,
-    })),
+    categories: categories.map((c) => {
+      const isComposite = !c.comingSoon && c.services.length > 1;
+      return {
+        slug: c.slug,
+        title: tr(c.title, locale),
+        image: c.image,
+        comingSoon: c.comingSoon,
+        // если в категории одна услуга — ведём сразу в неё
+        href: c.comingSoon ? null : c.services.length === 1 ? `/s/${c.services[0].slug}` : `/c/${c.slug}`,
+        subcategories: isComposite
+          ? [{
+              section: null as string | null,
+              items: c.services.map((s) => ({
+                slug: s.slug,
+                title: tr(s.title, locale),
+                subtitle: tr(s.subtitle, locale) || null,
+                image: s.image,
+                href: `/s/${s.slug}`,
+              })),
+            }]
+          : [] as { section: string | null; items: { slug: string; title: string; subtitle: string | null; image: string | null; href: string }[] }[],
+      };
+    }),
     banners: filteredBanners.map((b) => ({ id: b.id, title: tr(b.title, locale), subtitle: tr(b.subtitle, locale), image: b.image, link: b.link, bg: b.bg, promoCode: b.promoCode })),
     services: services.map((s) => serviceCard(s, locale)),
     features: features.map((f) => ({ id: f.id, icon: f.icon, title: tr(f.title, locale) as string, body: tr(f.body, locale) as string })),

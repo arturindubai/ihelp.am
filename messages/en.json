@@ -115,6 +115,7 @@
     "loginToContinue": "Sign in to place an order",
     "address": "Address",
     "addAddress": "New address",
+    "dateAndMaster": "Date & pro",
     "dateTime": "Date and time",
     "availableTime": "Available times",
     "startDate": "First visit date",
@@ -123,6 +124,7 @@
     "pickDaysHint": "Choose at least {count} {count, plural, one {day} other {days}}",
     "weekdaysShort": "Mon,Tue,Wed,Thu,Fri,Sat,Sun",
     "master": "Pro",
+    "whoComes": "Who's coming",
     "anyMaster": "Any available pro",
     "anyMasterSub": "We'll assign the best available",
     "masterBusy": "Busy at this time",
@@ -377,10 +379,24 @@
     "newMaster": "New pro",
     "services": "Services"
   },
+  "cart": {
+    "checkout": "Book now",
+    "itemsCount": "{count, plural, one {# item} other {# items}}"
+  },
   "catalog": {
     "newService": "New service",
     "comingSoonTitle": "Opening soon",
     "comingSoonText": "We're preparing services and pros. Write to us — we'll answer your questions",
+    "notifyAlready": "We already have your contact",
+    "notifyButton": "Notify me",
+    "notifyConsent": "By clicking the button, you agree to your contact being processed to notify you at launch. <privacy>Privacy policy</privacy>",
+    "notifyHint": "We'll send only one message when we launch",
+    "notifyInvalid": "Enter a phone number or e-mail",
+    "notifyPlaceholder": "+374 … or name@mail.com",
+    "notifySubtitle": "Phone or e-mail — your choice",
+    "notifySuccess": "You're on the list! We'll message you when booking opens.",
+    "notifyTitle": "Notify me at launch",
+    "notifyTooMany": "Too many requests, please try again later",
     "writeWhatsApp": "Write on WhatsApp"
   },
   "pro": {
@@ -1087,6 +1103,26 @@
       "area": "Area",
       "layer": "Layer",
       "priority": "Priority",
+      "productTab": {
+        "allByStatus": "All lane tasks · {n}",
+        "allEmpty": "No product lane tasks",
+        "doneLink": "Showing last {n} · view all",
+        "groups": {
+          "backlog": "Backlog",
+          "done": "Done",
+          "in_progress": "In progress",
+          "ready": "Queued",
+          "review": "In review"
+        },
+        "pending": "Awaiting approval · {n}",
+        "pendingEmpty": "No tasks awaiting approval",
+        "pendingHint": "Non-code product lane tasks awaiting your review",
+        "queue": "Worker queue · {n}",
+        "queueEmpty": "Product worker has nothing queued",
+        "queueHint": "Tasks the product worker will do next",
+        "subtitle": "Product lane tasks: what the worker is working on, what awaits your decision",
+        "workersLink": "Configure pool"
+      },
       "owner": "Owner",
       "status": "Status",
       "epic": "Epic",
@@ -1250,7 +1286,14 @@
         "cancel": "Cancel",
         "quickReady": "To queue",
         "noMoves": "Task is moved by the assignee or deployer from here",
-        "claimHint": "Task is claimed by the assignee: node scripts/cc.mjs take {key} --agent dev-1"
+        "claimHint": "Task is claimed by the assignee: node scripts/cc.mjs take {key} --agent dev-1",
+        "whatChangedLabel": "What changed for people",
+        "whatChangedPlaceholder": "Describe in one sentence what now works differently for clients or the team",
+        "criteriaLabel": "Criteria met",
+        "criteriaSpawnedCard": "↗ spawned card",
+        "criteriaWillCreate": "↗ create card",
+        "criteriaCardPlaceholder": "IN-7",
+        "incompleteGate": "Check each criterion or specify a card key"
       },
       "feed": {
         "title": "Task feed",
@@ -1419,7 +1462,8 @@
           "question": "question: {detail}",
           "nodesign": "no design description",
           "returned": "Returned",
-          "deploy": "tested"
+          "deploy": "tested",
+          "requirements": "requirements"
         },
         "more": "and {n} more — in Backlog tab",
         "tokens": "{in}k→{out}k tokens",
@@ -1583,7 +1627,11 @@
         "canon": "Library record",
         "designSnippet": "Design: {text}",
         "files": "files: {n}",
-        "approvedAgent": "by {agent}"
+        "approvedAgent": "by {agent}",
+        "requirementsSection": "Step 1 · Awaiting requirements from product",
+        "requirementsHint": "Product manager must describe: who uses this screen, what they see, available actions, empty/error states, and what's out of scope.",
+        "requirementsEmpty": "No tasks awaiting requirements",
+        "approvalSection": "Step 3 · Awaiting approval"
       },
       "backlog": {
         "strip": {
@@ -1740,7 +1788,9 @@
         "today": "Closed today: {n}",
         "hint": "closed in the last two weeks, newest first",
         "empty": "Nothing closed in the last two weeks",
-        "noCode": "no code"
+        "noCode": "no code",
+        "pendingStepTitle": "Manual step not closed",
+        "pendingStep": "↗ {key}"
       },
       "notify": {
         "inbox": "Notifications",
@@ -1835,6 +1885,8 @@
         "ms": "{n} ms",
         "memory": "Memory (RSS)",
         "mb": "{n} MB",
+        "mergeConflicts": "Merge conflicts (30 d.)",
+        "mergeConflictsHint": "{pct}% of returns · total {total} · last {days} days",
         "heap": "heap {n} MB · Node {node}",
         "errors": "Errors per hour",
         "errorsHint": "in application log",
@@ -2100,6 +2152,46 @@
       "subjectMasterAssigned": "Master assigned — order #{n}",
       "subjectRescheduled": "Visit rescheduled — order #{n}",
       "subjectVisitCancelled": "Visit {date} cancelled — order #{n}"
+    },
+    "client": {
+      "confirmation": {
+        "address": "Address: {address}",
+        "button": "My bookings",
+        "date": "Date and time: {date} at {time}",
+        "service": "Service: {service}",
+        "subject": "Order #{number} confirmed",
+        "title": "Your order is confirmed!",
+        "total": "Total: {total}"
+      },
+      "reminder": {
+        "address": "Address: {address}",
+        "button": "View booking",
+        "date": "Date and time: {date} at {time}",
+        "master": "Pro: {master}",
+        "service": "Service: {service}",
+        "subject": "Reminder: visit tomorrow",
+        "title": "Your visit is tomorrow"
+      },
+      "reminder2h": {
+        "address": "Address: {address}",
+        "button": "View booking",
+        "date": "Date and time: {date} at {time}",
+        "master": "Pro: {master}",
+        "service": "Service: {service}",
+        "subject": "Your visit is in 2 hours",
+        "title": "Your visit is in 2 hours"
+      },
+      "review": {
+        "button": "Leave a review",
+        "line1": "We hope you're satisfied! Leave a review — it takes just a minute.",
+        "line2": "Your feedback helps us improve.",
+        "subject": "How did your visit go?",
+        "title": "How was the visit?"
+      },
+      "unsubscribeLink": "Unsubscribe from emails",
+      "unsubscribeText": "This email was sent by iHelp. To unsubscribe, follow the link: {link}",
+      "unsubscribedBody": "You will no longer receive emails from iHelp.",
+      "unsubscribedTitle": "You have unsubscribed"
     }
   },
   "review": {

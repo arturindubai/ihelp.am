@@ -115,6 +115,7 @@
     "loginToContinue": "Войдите, чтобы оформить заказ",
     "address": "Адрес",
     "addAddress": "Новый адрес",
+    "dateAndMaster": "Дата и мастер",
     "dateTime": "Дата и время",
     "availableTime": "Доступное время",
     "startDate": "Дата первого визита",
@@ -123,6 +124,7 @@
     "pickDaysHint": "Выберите минимум {count} {count, plural, one {день} few {дня} other {дней}}",
     "weekdaysShort": "Пн,Вт,Ср,Чт,Пт,Сб,Вс",
     "master": "Мастер",
+    "whoComes": "Кто приедет",
     "anyMaster": "Любой свободный",
     "anyMasterSub": "Назначим лучшего из доступных",
     "masterBusy": "Занят в это время",
@@ -377,10 +379,24 @@
     "newMaster": "Новый мастер",
     "services": "Услуги"
   },
+  "cart": {
+    "checkout": "Оформить",
+    "itemsCount": "{count, plural, one {# позиция} few {# позиции} other {# позиций}}"
+  },
   "catalog": {
     "newService": "Новая услуга",
     "comingSoonTitle": "Скоро откроем",
     "comingSoonText": "Готовим услуги и мастеров. Напишите нам — ответим на вопросы",
+    "notifyAlready": "Мы уже получили ваш контакт",
+    "notifyButton": "Уведомить меня",
+    "notifyConsent": "Нажимая кнопку, вы соглашаетесь на обработку контакта для уведомления о запуске. <privacy>Политика конфиденциальности</privacy>",
+    "notifyHint": "Передадим только одно сообщение о запуске",
+    "notifyInvalid": "Введите телефон или e-mail",
+    "notifyPlaceholder": "+374 … или name@mail.com",
+    "notifySubtitle": "Телефон или e-mail — на выбор",
+    "notifySuccess": "Записаны! Сообщим, когда откроем запись.",
+    "notifyTitle": "Уведомить меня о запуске",
+    "notifyTooMany": "Слишком много заявок, попробуйте позже",
     "writeWhatsApp": "Написать в WhatsApp"
   },
   "pro": {
@@ -1118,6 +1134,26 @@
       "area": "Область",
       "layer": "Слой",
       "priority": "Приоритет",
+      "productTab": {
+        "allByStatus": "Все задачи дорожки · {n}",
+        "allEmpty": "Задач дорожки «Продакт» нет",
+        "doneLink": "Показаны последние {n} · посмотреть все",
+        "groups": {
+          "backlog": "Бэклог",
+          "done": "Сделано",
+          "in_progress": "В работе",
+          "ready": "В очереди",
+          "review": "На проверке"
+        },
+        "pending": "На согласовании · {n}",
+        "pendingEmpty": "Нет задач на согласовании",
+        "pendingHint": "Некод-задачи дорожки «Продакт» на проверке у вас",
+        "queue": "Очередь воркера · {n}",
+        "queueEmpty": "Воркер-продакт ничего не ждёт",
+        "queueHint": "Задачи, которые воркер-продакт сделает следующими",
+        "subtitle": "Задачи дорожки «Продакт»: что у воркера, что ждёт вашего решения",
+        "workersLink": "Настроить пул"
+      },
       "owner": "Кто делает",
       "status": "Статус",
       "epic": "Направление",
@@ -1284,7 +1320,14 @@
         "cancel": "Отмена",
         "quickReady": "В очередь",
         "noMoves": "Отсюда задачу переводит исполнитель или деплоер",
-        "claimHint": "В работу задачу берёт исполнитель: node scripts/cc.mjs take {key} --agent dev-1"
+        "claimHint": "В работу задачу берёт исполнитель: node scripts/cc.mjs take {key} --agent dev-1",
+        "whatChangedLabel": "Что изменилось для людей",
+        "whatChangedPlaceholder": "Опишите одним предложением, что теперь работает иначе для клиента или команды",
+        "criteriaLabel": "Критерии выполнены",
+        "criteriaSpawnedCard": "↗ вынесен в карточку",
+        "criteriaWillCreate": "↗ создать карточку",
+        "criteriaCardPlaceholder": "IN-7",
+        "incompleteGate": "Отметьте каждый критерий или укажите карточку"
       },
       "feed": {
         "title": "Лента задачи",
@@ -1469,7 +1512,8 @@
           "nodesign": "нужно описание дизайна",
           "mockup": "нужен макет",
           "returned": "Возвращено",
-          "deploy": "протестировано"
+          "deploy": "протестировано",
+          "requirements": "требования"
         },
         "capWaiting": "{n, plural, one {# задача} few {# задачи} other {# задач}} ждут из-за суточного лимита",
         "more": "и ещё {n} — во вкладке «Бэклог»",
@@ -1637,7 +1681,11 @@
         "designSnippet": "Дизайн: {text}",
         "files": "файлов: {n}",
         "workersLink": "Пуск и настройки пула — вкладка «Воркеры» →",
-        "approvedAgent": "у {agent}"
+        "approvedAgent": "у {agent}",
+        "requirementsSection": "Шаг 1 · Ждут требований от продакта",
+        "requirementsHint": "Продакт должен описать: кто использует экран, что видит, какие действия, пустое/ошибочное состояние и что не входит.",
+        "requirementsEmpty": "Нет задач, ждущих требований",
+        "approvalSection": "Шаг 3 · На утверждении"
       },
       "backlog": {
         "strip": {
@@ -1803,7 +1851,9 @@
         "today": "Сегодня закрыто: {n}",
         "hint": "закрытое за две недели, новое сверху",
         "empty": "За две недели ничего не закрыто",
-        "noCode": "не код"
+        "noCode": "не код",
+        "pendingStepTitle": "Ручной шаг не закрыт",
+        "pendingStep": "↗ {key}"
       },
       "notify": {
         "inbox": "Уведомления",
@@ -1902,6 +1952,8 @@
         "ms": "{n} мс",
         "memory": "Память (RSS)",
         "mb": "{n} МБ",
+        "mergeConflicts": "Конфликты слияния (30 дн.)",
+        "mergeConflictsHint": "{pct}% возвратов · всего {total} · за {days} дней",
         "heap": "heap {n} МБ · Node {node}",
         "errors": "Ошибки за час",
         "errorsHint": "в журнале приложения",
@@ -2185,6 +2237,46 @@
       "subjectMasterAssigned": "Мастер назначен — заказ №{n}",
       "subjectRescheduled": "Визит перенесён — заказ №{n}",
       "subjectVisitCancelled": "Визит {date} отменён — заказ №{n}"
+    },
+    "client": {
+      "confirmation": {
+        "address": "Адрес: {address}",
+        "button": "Мои заказы",
+        "date": "Дата и время: {date} в {time}",
+        "service": "Услуга: {service}",
+        "subject": "Заказ №{number} подтверждён",
+        "title": "Ваш заказ принят!",
+        "total": "Стоимость: {total}"
+      },
+      "reminder": {
+        "address": "Адрес: {address}",
+        "button": "Посмотреть заказ",
+        "date": "Дата и время: {date} в {time}",
+        "master": "Мастер: {master}",
+        "service": "Услуга: {service}",
+        "subject": "Напоминание о визите завтра",
+        "title": "Напоминаем о визите завтра"
+      },
+      "reminder2h": {
+        "address": "Адрес: {address}",
+        "button": "Посмотреть заказ",
+        "date": "Дата и время: {date} в {time}",
+        "master": "Мастер: {master}",
+        "service": "Услуга: {service}",
+        "subject": "Через 2 часа — ваш мастер",
+        "title": "Напоминаем: через 2 часа визит"
+      },
+      "review": {
+        "button": "Оставить отзыв",
+        "line1": "Надеемся, вам понравилось! Оставьте отзыв — это занимает одну минуту.",
+        "line2": "Ваше мнение помогает нам становиться лучше.",
+        "subject": "Как прошёл визит?",
+        "title": "Как прошёл визит?"
+      },
+      "unsubscribeLink": "Отписаться от писем",
+      "unsubscribeText": "Письмо отправлено сервисом iHelp. Чтобы отписаться, перейдите по ссылке: {link}",
+      "unsubscribedBody": "Письма от iHelp больше не будут приходить на ваш адрес.",
+      "unsubscribedTitle": "Вы отписались от писем"
     }
   },
   "review": {

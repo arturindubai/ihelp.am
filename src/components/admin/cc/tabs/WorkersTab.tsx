@@ -27,6 +27,7 @@ const QUEUE_TONE: Record<string, string> = {
   question: "bg-brand-50 text-brand",
   nodesign: "bg-warn-50 text-warn",
   mockup: "bg-bad-50 text-bad",
+  requirements: "bg-warn-50 text-warn",
 };
 
 const SHOW = 8;
