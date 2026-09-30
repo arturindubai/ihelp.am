@@ -11,6 +11,7 @@ export type AdminCatalogCategory = {
   active: boolean;
   comingSoon: boolean;
   archived: boolean;
+  showFormats: boolean;
   services: AdminCatalogService[];
 };
 
@@ -60,6 +61,7 @@ export async function getAdminCatalog(locale: string): Promise<AdminCatalogCateg
     active: c.active,
     comingSoon: c.comingSoon,
     archived: c.archived,
+    showFormats: c.showFormats,
     services: c.services.map((s) => {
       const prices = s.groups.flatMap((g) => g.options.map((o) => o.price));
       const minPrice = prices.length ? Math.min(...prices) : null;

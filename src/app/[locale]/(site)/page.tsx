@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { MessageCircle } from "lucide-react";
 import { getHome } from "@/server/services/catalog";
@@ -5,6 +6,11 @@ import { getSettings } from "@/server/settings";
 import { contactLink } from "@/lib/contacts";
 import { getCurrentUser } from "@/server/auth";
 import { tr } from "@/i18n/locales";
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  return { alternates: { canonical: `/${locale}` } };
+}
 import { HeroSection } from "@/components/home/HeroSection";
 import { PromoCarousel } from "@/components/home/PromoCarousel";
 import { PromoSlot } from "@/components/PromoSlot";
