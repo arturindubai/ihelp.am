@@ -46,4 +46,20 @@ describe("cart storage", () => {
       expect.objectContaining({ type: CART_EVENT }),
     );
   });
+
+  it("после успешного заказа clearCart очищает корзину и диспатчит событие", async () => {
+    const { readCart, writeCart, clearCart } = await import("./cart");
+    writeCart(SAMPLE);
+    clearCart();
+    expect(readCart()).toBeNull();
+    expect((window as unknown as { dispatchEvent: ReturnType<typeof vi.fn> }).dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: CART_EVENT }),
+    );
+  });
+
+  it("writeCart сохраняет count=1 при любом количестве опций", async () => {
+    const { readCart, writeCart } = await import("./cart");
+    writeCart({ ...SAMPLE, count: 1 });
+    expect(readCart()?.count).toBe(1);
+  });
 });

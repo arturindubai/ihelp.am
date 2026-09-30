@@ -16,7 +16,7 @@ const revalidateAll = () => revalidatePath("/", "layout");
 
 export async function saveCategoryAction(input: unknown) {
   const u = await requireSection("services");
-  const p = z.object({ id: z.string().optional(), slug, title: i18nReq, description: i18n.nullable().optional(), image: img, sort: z.number().int(), active: z.boolean(), comingSoon: z.boolean(), archived: z.boolean().optional() }).safeParse(input);
+  const p = z.object({ id: z.string().optional(), slug, title: i18nReq, description: i18n.nullable().optional(), image: img, sort: z.number().int(), active: z.boolean(), comingSoon: z.boolean(), archived: z.boolean().optional(), showFormats: z.boolean().optional().default(false) }).safeParse(input);
   if (!p.success) return { ok: false as const, error: p.error.issues[0]?.path.join(".") };
   const { id, ...d } = p.data;
   const data = { ...d, description: J(d.description) };
@@ -92,6 +92,7 @@ const groupSchema = z.object({ id: z.string().optional(), title: i18nReq, hint: 
 const planSchema = z.object({ id: z.string().optional(), kind: z.enum(["ONE_TIME", "SUBSCRIPTION", "PACKAGE"]), title: i18nReq, subtitle: i18n.nullable().optional(), badge: i18n.nullable().optional(), discountPercent: z.number().min(0).max(100), intervalDays: z.number().int().min(1).max(365).nullable(), visitsPerWeek: z.number().int().min(1).max(7).nullable(), packageVisits: z.number().int().min(1).max(100).nullable(), validityDays: z.number().int().min(1).max(3650).nullable(), active: z.boolean(), isDefault: z.boolean() });
 const serviceSchema = z.object({
   slug, categoryId: z.string(), title: i18nReq, subtitle: i18n.nullable().optional(), description: i18n.nullable().optional(), badge: i18n.nullable().optional(), image: img, bannerImage: img, active: z.boolean(), sort: z.number().int(),
+  isNew: z.boolean().default(false), arrivalHours: z.number().int().min(0).max(168).nullable().optional(),
   includesText: i18n.nullable().optional(),
   excludesText: i18n.nullable().optional(),
   groups: z.array(groupSchema).max(20), plans: z.array(planSchema).max(20),
@@ -109,7 +110,7 @@ export async function saveServiceAction(id: string, input: ServicePayload) {
     await db.$transaction(async (tx) => {
       await tx.service.update({
         where: { id },
-        data: { slug: d.slug, categoryId: d.categoryId, title: d.title, subtitle: J(d.subtitle), description: J(d.description), badge: J(d.badge), image: d.image ?? null, bannerImage: d.bannerImage ?? null, active: d.active, sort: d.sort, content: d.content as Prisma.InputJsonValue, includesText: J(d.includesText), excludesText: J(d.excludesText), masters: { set: d.masterIds.map((m) => ({ id: m })) } },
+        data: { slug: d.slug, categoryId: d.categoryId, title: d.title, subtitle: J(d.subtitle), description: J(d.description), badge: J(d.badge), image: d.image ?? null, bannerImage: d.bannerImage ?? null, active: d.active, sort: d.sort, isNew: d.isNew, arrivalHours: d.arrivalHours ?? null, content: d.content as Prisma.InputJsonValue, includesText: J(d.includesText), excludesText: J(d.excludesText), masters: { set: d.masterIds.map((m) => ({ id: m })) } },
       });
       // Группы и варианты
       const keepGroups = d.groups.map((g) => g.id).filter(Boolean) as string[];

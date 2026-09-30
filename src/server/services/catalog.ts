@@ -32,8 +32,8 @@ export async function getHome(locale: string, userId?: string | null) {
         title: tr(c.title, locale),
         image: c.image,
         comingSoon: c.comingSoon,
-        // если в категории одна услуга — ведём сразу в неё
-        href: c.comingSoon ? null : c.services.length === 1 ? `/s/${c.services[0].slug}` : `/c/${c.slug}`,
+        // comingSoon → /c/<slug> (форма «Уведомить меня»); одна услуга → /s/<slug>; иначе /c/<slug>
+        href: c.comingSoon ? `/c/${c.slug}` : c.services.length === 1 ? `/s/${c.services[0].slug}` : `/c/${c.slug}`,
         subcategories: isComposite
           ? [{
               section: null as string | null,
@@ -49,7 +49,7 @@ export async function getHome(locale: string, userId?: string | null) {
       };
     }),
     banners: filteredBanners.map((b) => ({ id: b.id, title: tr(b.title, locale), subtitle: tr(b.subtitle, locale), image: b.image, link: b.link, bg: b.bg, promoCode: b.promoCode })),
-    services: services.map((s) => serviceCard(s, locale)),
+    services: services.filter((s) => !s.comingSoon).map((s) => serviceCard(s, locale)),
     features: features.map((f) => ({ id: f.id, icon: f.icon, title: tr(f.title, locale) as string, body: tr(f.body, locale) as string })),
     faq: faq.map((f) => ({ id: f.id, q: tr(f.q, locale) as string, a: tr(f.a, locale) as string })),
     reviews: reviews.map((r) => ({
@@ -69,6 +69,9 @@ type SvcCardInput = {
   image: string | null;
   rating: number;
   reviewsCount: number;
+  comingSoon?: boolean;
+  isNew: boolean;
+  arrivalHours: number | null;
   groups: { options: { price: number; durationMin: number }[] }[];
   plans: { discountPercent: number }[];
 };
@@ -83,6 +86,9 @@ export function serviceCard(s: SvcCardInput, locale: string) {
     image: s.image,
     rating: s.rating,
     reviewsCount: s.reviewsCount,
+    comingSoon: s.comingSoon ?? false,
+    isNew: s.isNew,
+    arrivalHours: s.arrivalHours,
     fromPrice: prices.length ? Math.min(...prices) : 0,
     maxDiscount: Math.max(0, ...s.plans.map((p) => p.discountPercent)),
     minDuration: durations.length ? Math.min(...durations) : 0,
@@ -99,7 +105,8 @@ export async function getCategories(locale: string) {
     slug: c.slug,
     title: tr(c.title, locale) as string,
     comingSoon: c.comingSoon,
-    href: c.services.length === 1 && !c.comingSoon ? `/s/${c.services[0].slug}` : `/c/${c.slug}`,
+    // comingSoon → /c/<slug> (форма «Уведомить меня»), одна услуга → /s/<slug>, иначе /c/<slug>
+    href: c.comingSoon ? `/c/${c.slug}` : c.services.length === 1 ? `/s/${c.services[0].slug}` : `/c/${c.slug}`,
   }));
 }
 
@@ -109,7 +116,25 @@ export async function getCategory(slug: string, locale: string) {
     include: { services: { where: { active: true }, orderBy: { sort: "asc" }, include: { groups: { where: { active: true, isDuration: true }, include: { options: { where: { active: true } } } }, plans: { where: { active: true } } } } },
   });
   if (!c) return null;
-  return { slug: c.slug, title: tr(c.title, locale), description: tr(c.description, locale), comingSoon: c.comingSoon, services: c.services.map((s) => serviceCard(s, locale)) };
+
+  // Собираем доступные форматы: по одному слагу первой услуги каждого типа плана
+  const kindToSlug = new Map<string, string>();
+  for (const svc of c.services) {
+    for (const plan of svc.plans) {
+      if (!kindToSlug.has(plan.kind)) kindToSlug.set(plan.kind, svc.slug);
+    }
+  }
+  const formats = Array.from(kindToSlug.entries()).map(([kind, serviceSlug]) => ({ kind, serviceSlug }));
+
+  return {
+    slug: c.slug,
+    title: tr(c.title, locale),
+    description: tr(c.description, locale),
+    comingSoon: c.comingSoon,
+    showFormats: c.showFormats,
+    formats,
+    services: c.services.map((s) => serviceCard(s, locale)),
+  };
 }
 
 export async function loadServiceRaw(slug: string) {

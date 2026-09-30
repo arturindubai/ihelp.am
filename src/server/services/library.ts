@@ -13,9 +13,15 @@ export const contentHash = (s: string) => crypto.createHash("sha256").update(s).
 
 export class LibraryError extends Error {}
 
-export async function listLibrary(f: { q?: string; kind?: string; archived?: boolean } = {}) {
+export async function listLibrary(f: { q?: string; kinds?: string[]; kind?: string; archived?: boolean } = {}) {
+  let kindFilter: object = {};
+  if (f.kinds !== undefined) {
+    kindFilter = f.kinds.length > 0 ? { kind: { in: f.kinds } } : { kind: { notIn: [...LIBRARY_KINDS] } };
+  } else if (f.kind && (LIBRARY_KINDS as readonly string[]).includes(f.kind)) {
+    kindFilter = { kind: f.kind };
+  }
   const docs = await db.libraryDoc.findMany({
-    where: { archived: f.archived ?? false, ...(f.kind && (LIBRARY_KINDS as readonly string[]).includes(f.kind) ? { kind: f.kind } : {}) },
+    where: { archived: f.archived ?? false, ...kindFilter },
     orderBy: [{ kind: "asc" }, { title: "asc" }],
     include: { versions: { orderBy: { n: "desc" }, take: 1, select: { content: true, author: true, createdAt: true } } },
   });

@@ -7,7 +7,12 @@ import { KEYS } from "@/lib/keys";
 
 export interface Settings {
   brand: { name: string; tagline: Record<string, string>; phone: string; whatsapp: string; telegram: string; email: string; instagram: string; city: Record<string, string> };
-  locales: { enabled: string[] };
+  locales: {
+    /** Языки в переключателе UI */
+    enabled: string[];
+    /** Языки, открытые для индексации поисковиками (независимо от enabled) */
+    indexable: string[];
+  };
   booking: {
     slotStepMin: number;
     bufferMin: number;
@@ -30,7 +35,7 @@ export interface Settings {
     telegram: { enabled: boolean; gatewayToken: string };
   };
   /** telegramBotUsername — имя бота без @ (для кнопки «Войти через Telegram»); заполняется при подключении входа через бота */
-  notify: { telegramBotToken: string; telegramChatId: string; techChatId: string; telegramBotUsername: string; teamChatId: string; telegramOrderThreadId: string; telegramTechThreadId: string; telegramTasksThreadId: string; quietHourStart: number; quietHourEnd: number };
+  notify: { telegramBotToken: string; telegramChatId: string; techChatId: string; telegramBotUsername: string; teamChatId: string; telegramOrderThreadId: string; telegramTechThreadId: string; telegramTasksThreadId: string; quietHourStart: number; quietHourEnd: number; onWayEtaMin: number };
   /** Вход через Google (OAuth). Адрес возврата: <APP_URL>/api/auth/google/callback — работает только по https */
   google: { enabled: boolean; clientId: string; clientSecret: string };
   /** Вход через Apple (Sign in with Apple). Адрес возврата: <APP_URL>/api/auth/apple/callback — работает только по https.
@@ -42,6 +47,8 @@ export interface Settings {
   auth: { clientSessionDays: number; staffSessionDays: number };
   /** Вход через Telegram Login Widget на странице входа. Требует /setdomain в @BotFather для ihelp.am */
   telegramWidget: { enabled: boolean };
+  /** ИИ-помощник в форме баннеров: ключи Anthropic (текст) и Higgsfield (изображения) */
+  ai: { anthropicKey: string; higgsfieldKey: string };
   /**
    * Бот команды в Telegram (как бот LIA): задачи владельца → входящие IN-N, «статус», сообщения «Нужен ты».
    * Отдельный от бота входа клиентов (notify.telegramBotToken). Токен вставляется в Control Center → «Ключи»
@@ -68,7 +75,7 @@ export const DEFAULT_SETTINGS: Settings = {
     instagram: "",
     city: { ru: "Ереван", en: "Yerevan", am: "Երևան" },
   },
-  locales: { enabled: ["ru"] },
+  locales: { enabled: ["ru"], indexable: ["ru", "en"] },
   booking: {
     slotStepMin: 30,
     bufferMin: 30,
@@ -90,12 +97,13 @@ export const DEFAULT_SETTINGS: Settings = {
     whatsapp: { enabled: false, phoneNumberId: "", accessToken: "", templateName: "", templateLang: "ru" },
     telegram: { enabled: false, gatewayToken: "" },
   },
-  notify: { telegramBotToken: "", telegramChatId: "", techChatId: "", telegramBotUsername: "", teamChatId: "", telegramOrderThreadId: "", telegramTechThreadId: "", telegramTasksThreadId: "", quietHourStart: 21, quietHourEnd: 9 },
+  notify: { telegramBotToken: "", telegramChatId: "", techChatId: "", telegramBotUsername: "", teamChatId: "", telegramOrderThreadId: "", telegramTechThreadId: "", telegramTasksThreadId: "", quietHourStart: 21, quietHourEnd: 9, onWayEtaMin: 30 },
   google: { enabled: false, clientId: "", clientSecret: "" },
   apple: { enabled: false, teamId: "", keyId: "", clientId: "", privateKey: "" },
   mail: { enabled: false, apiKey: "", from: "", replyTo: "" },
   auth: { clientSessionDays: 60, staffSessionDays: 7 },
   telegramWidget: { enabled: false },
+  ai: { anthropicKey: "", higgsfieldKey: "" },
   team: { botToken: "", botUsername: "", members: [], linkCode: "", linkCodeAt: "" },
 };
 

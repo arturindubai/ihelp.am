@@ -56,7 +56,7 @@ export async function notifyMasterAssigned(visitId: string): Promise<void> {
   });
   if (!v?.master?.staffChatId || !v.master.notifyEnabled || !v.scheduledAt) return;
   const text = fill(tmpl.assigned, {
-    clientName: v.order.user.name || v.order.user.phone,
+    clientName: v.order.user.name || v.order.user.phone || "—",
     serviceName: serviceTitle(v.order.config),
     date: ymd(v.scheduledAt),
     time: hm(v.scheduledAt),
@@ -144,7 +144,7 @@ export async function sendMasterTomorrowSchedule(now: Date): Promise<number> {
       fill(tmpl.tomorrowItem, {
         time: v.scheduledAt ? hm(v.scheduledAt) : "—",
         serviceName: serviceTitle(v.order.config),
-        clientName: v.order.user.name || v.order.user.phone,
+        clientName: v.order.user.name || v.order.user.phone || "—",
         address: addrLine(v.order.addressSnapshot),
       }),
     );

@@ -2,6 +2,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { pageUser } from "@/server/adminPage";
 import { keysOverview } from "@/server/services/keys";
 import { teamBotStatus } from "@/server/services/teamBot";
+import { getVapidStatus } from "@/server/services/vapidKeys";
 import { Forbidden } from "@/components/admin/ui";
 import { CcHeader } from "@/components/admin/cc/CcHeader";
 import { KeysPanel } from "@/components/admin/cc/KeysPanel";
@@ -14,7 +15,12 @@ export default async function KeysPage({ params }: { params: Promise<{ locale: s
   const { locale } = await params;
   setRequestLocale(locale);
   if (!(await pageUser("control"))) return <Forbidden />;
-  const [t, rows, team] = await Promise.all([getTranslations("admin.cc.keys"), keysOverview(), teamBotStatus()]);
+  const [t, rows, team, vapidStatus] = await Promise.all([
+    getTranslations("admin.cc.keys"),
+    keysOverview(),
+    teamBotStatus(),
+    getVapidStatus().catch(() => ({ present: false, createdAt: null, noEncKey: false })),
+  ]);
   const when = (d: Date) => `${dateLabel(d, locale, { day: "numeric", month: "short", year: "numeric" })}, ${timeLabel(d)}`;
   return (
     <div className="max-w-4xl">
@@ -23,6 +29,7 @@ export default async function KeysPage({ params }: { params: Promise<{ locale: s
       <KeysPanel
         rows={rows.map(({ changedAt, ...r }) => ({ ...r, changedLabel: changedAt ? when(changedAt) : null }))}
         team={{ ...team, members: team.members.map((m) => ({ telegramId: m.telegramId, name: m.name, addedLabel: when(new Date(m.addedAt)) })) }}
+        vapidStatus={{ present: vapidStatus.present, createdLabel: vapidStatus.createdAt ? when(new Date(vapidStatus.createdAt)) : null, noEncKey: vapidStatus.noEncKey }}
       />
     </div>
   );

@@ -27,7 +27,7 @@ enum OtpChannel {
 
 model User {
   id          String    @id @default(cuid())
-  phone       String    @unique
+  phone       String?   @unique
   name        String?
   email       String?   @unique
   /// Когда владелец подтвердил email кодом из письма. Войти по email можно только с подтверждённым адресом: иначе вписанной в профиль чужой почтой перехватывается вход её владельца
@@ -51,13 +51,27 @@ model User {
   /// Поправка прав по конкретному человеку поверх роли: { added: string[], removed: string[] }
   sectionDelta     Json?
 
-  sessions    Session[]
-  addresses   Address[]
-  orders      Order[]
-  reviews     Review[]
-  master      Master?
-  redemptions PromoRedemption[]
-  auditLogs   AuditLog[]
+  sessions          Session[]
+  addresses         Address[]
+  orders            Order[]
+  reviews           Review[]
+  master            Master?
+  redemptions       PromoRedemption[]
+  auditLogs         AuditLog[]
+  pushSubscriptions PushSubscription[]
+}
+
+/// Web Push подписки (VAPID): endpoint + ключи для отправки push-уведомлений без открытого сайта
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Session {
@@ -114,6 +128,7 @@ model Category {
   sort        Int        @default(0)
   active      Boolean    @default(true)
   comingSoon  Boolean    @default(false)
+  showFormats Boolean    @default(false)
   archived    Boolean    @default(false)
   services    Service[]
   createdAt   DateTime   @default(now())
@@ -140,6 +155,8 @@ model Service {
   active        Boolean       @default(true)
   comingSoon    Boolean       @default(false)
   sort          Int           @default(0)
+  isNew         Boolean       @default(false)
+  arrivalHours  Int?
   rating        Float         @default(0)
   reviewsCount  Int           @default(0)
   bookingsCount Int           @default(0)
@@ -370,9 +387,24 @@ model Visit {
   updatedAt       DateTime    @updatedAt
   review          Review?
   reviewToken     ReviewToken?
+  visitEvents     VisitEvent[]
 
   @@index([scheduledAt])
   @@index([masterId, scheduledAt])
+}
+
+/// Лог событий визита: каждое изменение статуса из кабинета мастера, оператора, админки и крона
+model VisitEvent {
+  id        String   @id @default(cuid())
+  visitId   String
+  visit     Visit    @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  orderId   String
+  status    String
+  actor     String
+  createdAt DateTime @default(now())
+
+  @@index([visitId, createdAt])
+  @@index([orderId, createdAt])
 }
 
 /// Одноразовая ссылка для отзыва без повторного входа (NOTIFY-3B)
@@ -449,6 +481,10 @@ model PromoCode {
   planKinds      PlanKind[] @default([])
   active         Boolean   @default(true)
   usedCount      Int       @default(0)
+  /// Персональный промокод: работает только для клиента с этим телефоном
+  forPhone       String?
+  /// Персональный промокод: работает только для клиента с этим email
+  forEmail       String?
   createdAt      DateTime  @default(now())
   orders         Order[]
   redemptions    PromoRedemption[]
@@ -920,12 +956,14 @@ model AiRequest {
   @@index([createdAt])
 }
 
-/// Заявки «Уведомить меня» для категорий-заглушек
+/// Заявки «Уведомить меня»: category — по категории-заглушке, service — по конкретной услуге с comingSoon=true
 model ServiceInterest {
   id          String   @id @default(cuid())
   serviceSlug String
   contact     String
   ip          String?
+  /// Тип: 'category' или 'service'
+  kind        String   @default("category")
   createdAt   DateTime @default(now())
 
   @@unique([serviceSlug, contact])
