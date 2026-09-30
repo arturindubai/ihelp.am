@@ -70,9 +70,14 @@ describe("очередь дизайнера: отбор задач", () => {
     expect(isDesignerTask({ layer: "front", mockupRequired: false, assignee: null })).toBe(true);
     expect(isDesignerTask({ layer: "fullstack", mockupRequired: false, assignee: null })).toBe(true);
   });
-  it("задача с флагом макета — дизайнерская независимо от слоя", () => {
-    expect(isDesignerTask({ layer: "back", mockupRequired: true, assignee: null })).toBe(true);
-    expect(isDesignerTask({ layer: "none", mockupRequired: true, assignee: null })).toBe(true);
+  it("задача с флагом макета и написанными требованиями — дизайнерская независимо от слоя", () => {
+    expect(isDesignerTask({ layer: "back", mockupRequired: true, assignee: null, screenRequirements: "Экран списка" })).toBe(true);
+    expect(isDesignerTask({ layer: "none", mockupRequired: true, assignee: null, screenRequirements: "Экран деталей" })).toBe(true);
+  });
+  it("задача с флагом макета без screenRequirements — НЕ дизайнерская (шаг 1: идёт к продакту)", () => {
+    expect(isDesignerTask({ layer: "back", mockupRequired: true, assignee: null })).toBe(false);
+    expect(isDesignerTask({ layer: "none", mockupRequired: true, assignee: null, screenRequirements: null })).toBe(false);
+    expect(isDesignerTask({ layer: "front", mockupRequired: true, assignee: null, screenRequirements: "" })).toBe(false);
   });
   it("дизайн-исследование (assignee=designer) — тоже задача дизайнера", () => {
     expect(isDesignerTask({ layer: "none", mockupRequired: false, assignee: "designer" })).toBe(true);
@@ -90,10 +95,16 @@ describe("очередь дизайнера: отбор задач", () => {
     expect(isDesignerTask({ layer: "front", design: null, mockupRequired: false, assignee: null, hasAttachments: false })).toBe(true);
     expect(isDesignerTask({ layer: "fullstack", design: "", mockupRequired: false, assignee: null, hasAttachments: false })).toBe(true);
   });
-  it("продакт берёт только задачи с открытыми вопросами", () => {
+  it("продакт берёт задачи с открытыми вопросами", () => {
     expect(isProductTask({ needs: [] })).toBe(false);
     expect(isProductTask({ needs: ["Ключ API"] })).toBe(true);
     expect(isProductTask({ needs: ["А", "Б"] })).toBe(true);
+  });
+  it("продакт берёт шаг 1 цепочки: mockupRequired без screenRequirements", () => {
+    expect(isProductTask({ needs: [], mockupRequired: true, screenRequirements: null })).toBe(true);
+    expect(isProductTask({ needs: [], mockupRequired: true, screenRequirements: "" })).toBe(true);
+    expect(isProductTask({ needs: [], mockupRequired: true, screenRequirements: "Экран" })).toBe(false);
+    expect(isProductTask({ needs: [], mockupRequired: false, screenRequirements: null })).toBe(false);
   });
   it("тестировщик не берёт через claim — только через reviewTake", () => {
     expect(canClaimRole("tester")).toBe(false);
