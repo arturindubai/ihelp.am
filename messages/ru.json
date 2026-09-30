@@ -379,6 +379,11 @@
     "newMaster": "Новый мастер",
     "services": "Услуги"
   },
+  "cart": {
+    "checkout": "Оформить",
+    "itemsCount": "{count, plural, one {# позиция} few {# позиции} other {# позиций}}",
+    "total": "{amount} ֏"
+  },
   "catalog": {
     "comingSoonText": "Мы запускаем эту услугу. Оставьте контакт — сообщим первыми, когда откроем запись.",
     "comingSoonTitle": "Скоро в Ереване",
@@ -1300,7 +1305,11 @@
         "noMoves": "Отсюда задачу переводит исполнитель или деплоер",
         "claimHint": "В работу задачу берёт исполнитель: node scripts/cc.mjs take {key} --agent dev-1",
         "whatChangedLabel": "Что изменилось для людей",
-        "whatChangedPlaceholder": "Опишите одним предложением, что теперь работает иначе для клиента или команды"
+        "whatChangedPlaceholder": "Опишите одним предложением, что теперь работает иначе для клиента или команды",
+        "criteriaLabel": "Критерии выполнены",
+        "criteriaSpawnedCard": "↗ вынесен в карточку",
+        "criteriaWillCreate": "↗ создать карточку",
+        "criteriaCardPlaceholder": "IN-7"
       },
       "feed": {
         "title": "Лента задачи",
@@ -1946,6 +1955,8 @@
         "workersStopped": "остановлены",
         "workersPlanned": "старт {when}",
         "workersRunning": "работают: {n}",
+        "mergeConflicts": "Конфликты слияния (30 дн.)",
+        "mergeConflictsHint": "{pct}% возвратов · всего {total} · за {days} дней",
         "runs24": "Запуски за сутки",
         "runs24Hint": "ошибок {failed} · упёрлись в лимит {limit}",
         "orders": "Заказы",
