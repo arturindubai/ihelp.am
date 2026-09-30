@@ -7,7 +7,12 @@ import { KEYS } from "@/lib/keys";
 
 export interface Settings {
   brand: { name: string; tagline: Record<string, string>; phone: string; whatsapp: string; telegram: string; email: string; instagram: string; city: Record<string, string> };
-  locales: { enabled: string[] };
+  locales: {
+    /** Языки в переключателе UI */
+    enabled: string[];
+    /** Языки, открытые для индексации поисковиками (независимо от enabled) */
+    indexable: string[];
+  };
   booking: {
     slotStepMin: number;
     bufferMin: number;
@@ -68,7 +73,7 @@ export const DEFAULT_SETTINGS: Settings = {
     instagram: "",
     city: { ru: "Ереван", en: "Yerevan", am: "Երևան" },
   },
-  locales: { enabled: ["ru"] },
+  locales: { enabled: ["ru"], indexable: ["ru", "en"] },
   booking: {
     slotStepMin: 30,
     bufferMin: 30,
