@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Banknote, CreditCard, Tag, Check, UsersRound, ArrowLeft, Phone } from "lucide-react";
+import { Banknote, CreditCard, Tag, Check, UsersRound, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { useRouter, Link } from "@/i18n/navigation";
 import { calculatePrice, type PricePromo, type PricingRules } from "@/lib/pricing";
 import { amd, cn, dateLabel, durationLabel } from "@/lib/format";
@@ -16,6 +16,22 @@ import { contactLink } from "@/lib/contacts";
 type Line = { groupTitle: string; optionTitle: string; price: number; discountable: boolean; durationMin: number };
 type Plan = { id: string; kind: "ONE_TIME" | "SUBSCRIPTION" | "PACKAGE"; title: string; discountPercent: number; packageVisits: number | null; visitsPerWeek: number | null } | null;
 type MasterCard = { id: string; name: string; photo: string | null; rating: number; reviewsCount: number; experienceYears: number; languages: string[] };
+
+const AVATAR_PALETTES = ["bg-brand-50 text-brand-text", "bg-ok-50 text-ok", "bg-surface text-muted"];
+function masterAvatarBg(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTES[h % AVATAR_PALETTES.length];
+}
+
+function calDaysInMonth(year: number, month: number) {
+  return new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+}
+
+function calFirstWeekday(year: number, month: number) {
+  const d = new Date(Date.UTC(year, month, 1)).getUTCDay();
+  return d === 0 ? 7 : d;
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -54,7 +70,7 @@ export function Checkout(props: {
   const [addressId, setAddressId] = useState(props.addresses.find((a) => a.isDefault)?.id || props.addresses[0]?.id || "");
   const [addrOpen, setAddrOpen] = useState(false);
   const today = ymd(new Date());
-  const days = useMemo(() => Array.from({ length: Math.min(props.horizonDays, 7) }, (_, i) => addDays(today, i)), [today, props.horizonDays]);
+  const days = useMemo(() => Array.from({ length: props.horizonDays }, (_, i) => addDays(today, i)), [today, props.horizonDays]);
   const [date, setDate] = useState(days[0]);
   const [slotsState, setSlotsState] = useState<{ date: string; list: { time: string; masterIds: string[]; available: boolean }[] } | null>(null);
   const slots = slotsState?.date === date ? slotsState.list : null;
@@ -62,6 +78,9 @@ export function Checkout(props: {
   const [time, setTime] = useState<string>();
   const [slotRace, setSlotRace] = useState(false);
   const [masterId, setMasterId] = useState<string | null>(null);
+  const [filterMasterId, setFilterMasterId] = useState<string | null>(null);
+  const [masterSheetSlot, setMasterSheetSlot] = useState<string | null>(null);
+  const [masterSheetChoice, setMasterSheetChoice] = useState<string | null>(null);
   const [weekdays, setWeekdays] = useState<number[]>([]);
   const [payment, setPayment] = useState<"CASH" | "CARD">(props.cashEnabled ? "CASH" : "CARD");
   const [promoInput, setPromoInput] = useState("");
@@ -75,19 +94,29 @@ export function Checkout(props: {
 
   const multiDays = props.plan?.kind === "SUBSCRIPTION" && (props.plan.visitsPerWeek || 0) > 1;
   const wdNames = t("weekdaysShort").split(",");
+  const isCalendarMode = props.horizonDays > 14;
+  const calWdNames = t("weekdaysMin").split(",");
+  const masterById = useMemo(() => new Map(props.masters.map((m) => [m.id, m])), [props.masters]);
+  const [autoSkipped, setAutoSkipped] = useState(0);
+  const [calMonth, setCalMonth] = useState(() => {
+    const [y, m] = today.split("-").map(Number);
+    return { year: y, month: m - 1 };
+  });
+  const [noSlotsDates, setNoSlotsDates] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setTime(undefined);
     setSlotRace(false);
+    setMasterSheetSlot(null);
     const d = date;
     startSlots(async () => {
       const r = await slotsAction(props.service.id, d, props.durationMin);
       setSlots(r, d);
+      if (r.length === 0) setNoSlotsDates((prev) => { const s = new Set(prev); s.add(d); return s; });
     });
     if (multiDays) setWeekdays((w) => (w.includes(isoWeekday(date)) ? w : [...w, isoWeekday(date)].sort()));
   }, [date, props.service.id, props.durationMin, multiDays]);
 
-  const [autoSkipped, setAutoSkipped] = useState(0);
   useEffect(() => {
     if (slots && !slots.some((s) => s.available) && autoSkipped < 7 && date === days[autoSkipped]) {
       setAutoSkipped((n) => n + 1);
@@ -95,7 +124,12 @@ export function Checkout(props: {
     }
   }, [slots, date, days, autoSkipped]);
 
-  const slot = slots?.find((s) => s.time === time);
+  useEffect(() => {
+    if (isCalendarMode) {
+      const [y, m] = date.split("-").map(Number);
+      setCalMonth({ year: y, month: m - 1 });
+    }
+  }, [date, isCalendarMode]);
   const price = calculatePrice({ lines: props.lines, plan: props.plan ? { kind: props.plan.kind, discountPercent: props.plan.discountPercent, packageVisits: props.plan.packageVisits } : null, isFirstOrder: props.isFirstOrder, promo, rules: props.rules });
 
   async function applyPromo() {
@@ -153,6 +187,30 @@ export function Checkout(props: {
   const payNowLabel = props.plan?.kind === "SUBSCRIPTION" ? t("payFirst") : t("payNow");
   const selectedAddress = addresses.find((a) => a.id === addressId);
 
+  const horizonEnd = days.length > 0 ? days[days.length - 1] : today;
+  const calMonthStr = `${calMonth.year}-${String(calMonth.month + 1).padStart(2, "0")}-01`;
+  const calMonthDate = atYerevan(calMonthStr, "12:00");
+  const todayYear = parseInt(today.slice(0, 4));
+  const todayMonthIdx = parseInt(today.slice(5, 7)) - 1;
+  const canPrevMonth = calMonth.year > todayYear || (calMonth.year === todayYear && calMonth.month > todayMonthIdx);
+  const nextMonthYear = calMonth.month === 11 ? calMonth.year + 1 : calMonth.year;
+  const nextMonthIdx = calMonth.month === 11 ? 0 : calMonth.month + 1;
+  const nextMonthFirstStr = `${nextMonthYear}-${String(nextMonthIdx + 1).padStart(2, "0")}-01`;
+  const canNextMonth = nextMonthFirstStr <= horizonEnd;
+  const calCells = useMemo<(string | null)[]>(() => {
+    if (!isCalendarMode) return [];
+    const empties = calFirstWeekday(calMonth.year, calMonth.month) - 1;
+    const total = calDaysInMonth(calMonth.year, calMonth.month);
+    return [
+      ...Array(empties).fill(null),
+      ...Array.from({ length: total }, (_, i) => {
+        const day = String(i + 1).padStart(2, "0");
+        const mo = String(calMonth.month + 1).padStart(2, "0");
+        return `${calMonth.year}-${mo}-${day}`;
+      }),
+    ];
+  }, [calMonth, isCalendarMode]);
+
   return (
     <div>
       {/* Sticky header */}
@@ -185,62 +243,204 @@ export function Checkout(props: {
           )}
         </Section>
 
-        {/* Дата и время */}
-        <Section title={t("dateTime")}>
-          {/* Лента дней */}
-          <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1">
-            {days.map((d) => {
-              const dt = atYerevan(d, "12:00");
-              const on = d === date;
-              return (
+        {/* Дата и мастер */}
+        <Section title={props.allowChooseMaster && props.masters.length > 0 ? t("dateAndMaster") : t("dateTime")}>
+          {/* Лента дней (horizonDays ≤ 14) / Календарь (horizonDays > 14) */}
+          {isCalendarMode ? (
+            <div>
+              <div className="mb-3 flex items-center justify-between">
                 <button
-                  key={d}
-                  ref={(el) => { if (el && on && el.parentElement) el.parentElement.scrollLeft = Math.max(0, el.offsetLeft - 16); }}
-                  onClick={() => setDate(d)}
+                  disabled={!canPrevMonth}
+                  onClick={() => setCalMonth((m) => m.month === 0 ? { year: m.year - 1, month: 11 } : { year: m.year, month: m.month - 1 })}
+                  aria-label={t("calMonthNav.prev")}
+                  className={cn("flex size-8 items-center justify-center rounded-full bg-surface transition", !canPrevMonth && "cursor-not-allowed opacity-40")}
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <span className="text-[15px] font-semibold capitalize">
+                  {dateLabel(calMonthDate, locale, { month: "long", year: "numeric" })}
+                </span>
+                <button
+                  disabled={!canNextMonth}
+                  onClick={() => setCalMonth((m) => m.month === 11 ? { year: m.year + 1, month: 0 } : { year: m.year, month: m.month + 1 })}
+                  aria-label={t("calMonthNav.next")}
+                  className={cn("flex size-8 items-center justify-center rounded-full bg-surface transition", !canNextMonth && "cursor-not-allowed opacity-40")}
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+              <div className="mb-0.5 grid grid-cols-7 py-1 text-center text-xs uppercase text-muted">
+                {calWdNames.map((n) => <div key={n}>{n}</div>)}
+              </div>
+              <div className="grid grid-cols-7 gap-0.5">
+                {calCells.map((d, i) => {
+                  if (!d) return <div key={`e${i}`} />;
+                  const inHorizon = d >= today && d <= horizonEnd;
+                  const isSelected = d === date;
+                  const isToday = d === today;
+                  const hasNoSlots = noSlotsDates.has(d);
+                  return (
+                    <button
+                      key={d}
+                      disabled={!inHorizon}
+                      onClick={() => setDate(d)}
+                      className={cn(
+                        "relative flex aspect-square items-center justify-center rounded-xl text-sm font-medium transition",
+                        isSelected
+                          ? "border border-action bg-action text-on-action"
+                          : !inHorizon
+                          ? "cursor-not-allowed text-muted opacity-40"
+                          : isToday
+                          ? "border border-action bg-paper font-bold"
+                          : hasNoSlots
+                          ? "border border-line bg-paper text-muted"
+                          : "border border-line bg-paper hover:bg-surface",
+                        !isSelected && inHorizon && isToday && hasNoSlots && "text-muted",
+                      )}
+                    >
+                      {parseInt(d.slice(8))}
+                      {hasNoSlots && !isSelected && (
+                        <span className="absolute bottom-1 left-1/2 size-1 -translate-x-1/2 rounded-full bg-muted" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1">
+              {days.map((d) => {
+                const dt = atYerevan(d, "12:00");
+                const on = d === date;
+                const hasNoSlots = noSlotsDates.has(d);
+                return (
+                  <button
+                    key={d}
+                    ref={(el) => { if (el && on && el.parentElement) el.parentElement.scrollLeft = Math.max(0, el.offsetLeft - 16); }}
+                    onClick={() => setDate(d)}
+                    className={cn(
+                      "relative flex min-h-[64px] min-w-[44px] flex-col items-center justify-center rounded-xl border px-2 text-center transition",
+                      on ? "border-action bg-action text-on-action" : "border-line bg-paper"
+                    )}
+                  >
+                    <span className={cn("text-xs capitalize", on ? "text-on-action/80" : "text-muted")}>{dateLabel(dt, locale, { weekday: "short" })}</span>
+                    <span className={cn("text-lg font-bold", !on && hasNoSlots && "text-muted")}>{dateLabel(dt, locale, { day: "numeric" })}</span>
+                    <span className={cn("text-[10px]", on ? "text-on-action/80" : "text-muted")}>{dateLabel(dt, locale, { month: "short" })}</span>
+                    {hasNoSlots && !on && (
+                      <span className="absolute bottom-1 left-1/2 size-1 -translate-x-1/2 rounded-full bg-muted" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Фильтр-чипы мастеров */}
+          {props.allowChooseMaster && props.masters.length > 0 && (
+            <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
+              <button
+                onClick={() => { setFilterMasterId(null); setTime(undefined); setMasterId(null); }}
+                className={cn(
+                  "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition",
+                  filterMasterId === null ? "border-action bg-brand-50 text-brand" : "border-line bg-paper"
+                )}
+              >
+                <span className="grid size-[26px] shrink-0 place-items-center rounded-full bg-brand text-[11px] text-on-action">★</span>
+                <span>{t("anyMaster")}</span>
+              </button>
+              {props.masters.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => { setFilterMasterId(m.id); setTime(undefined); setMasterId(null); }}
                   className={cn(
-                    "flex min-h-[64px] min-w-[44px] flex-col items-center justify-center rounded-xl border px-2 text-center transition",
-                    on ? "border-action bg-action text-on-action" : "border-line bg-paper"
+                    "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition",
+                    filterMasterId === m.id ? "border-action bg-brand-50 text-brand" : "border-line bg-paper"
                   )}
                 >
-                  <span className={cn("text-xs capitalize", on ? "text-on-action/80" : "text-muted")}>{dateLabel(dt, locale, { weekday: "short" })}</span>
-                  <span className="text-lg font-bold">{dateLabel(dt, locale, { day: "numeric" })}</span>
-                  <span className={cn("text-[10px]", on ? "text-on-action/80" : "text-muted")}>{dateLabel(dt, locale, { month: "short" })}</span>
+                  {m.photo ? (
+                    <Img src={m.photo} width={26} className="size-[26px] shrink-0 rounded-full object-cover" />
+                  ) : (
+                    <span className={cn("grid size-[26px] shrink-0 place-items-center rounded-full text-[10px] font-bold", masterAvatarBg(m.name))}>
+                      {m.name.slice(0, 2).toUpperCase()}
+                    </span>
+                  )}
+                  <span>{m.name.split(" ")[0]}</span>
                 </button>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
 
-          {/* Слоты */}
+          {/* Слоты с аватарами */}
           <div className="mt-3">
-            <p className="mb-2 text-sm font-medium text-muted">{t("availableTime")}</p>
+            {isCalendarMode ? (
+              <p className="mb-2 text-sm font-medium">
+                {t("selectedDate", { date: dateLabel(atYerevan(date, "12:00"), locale, { day: "numeric", month: "long", weekday: "long" }) })}
+              </p>
+            ) : (
+              <p className="mb-2 text-sm font-medium text-muted">{t("availableTime")}</p>
+            )}
             {slotRace && (
               <div className="mb-2 rounded-xl bg-bad-50 px-3 py-2 text-sm text-bad">{t("errors.slot_taken")}</div>
             )}
             <div className="min-h-24">
               {loadingSlots || !slots ? (
-                <div className="grid grid-cols-4 gap-1.5">
-                  {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-11 animate-pulse rounded-xl bg-surface" />)}
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-surface" />)}
                 </div>
               ) : slots.length === 0 ? (
                 <p className="text-sm text-muted">{t("noSlots")}</p>
               ) : (
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                   {slots.map((s) => {
                     const on = s.time === time;
                     const occupied = !s.available;
+                    const slotMasters = s.masterIds.map((id) => masterById.get(id)).filter(Boolean) as MasterCard[];
+                    const dimmed = !occupied && props.allowChooseMaster && filterMasterId !== null && !s.masterIds.includes(filterMasterId);
                     return (
                       <button
                         key={s.time}
                         disabled={occupied}
-                        onClick={() => { setTime(s.time); setSlotRace(false); if (masterId && !s.masterIds.includes(masterId)) setMasterId(null); }}
+                        onClick={() => {
+                          setTime(s.time);
+                          setSlotRace(false);
+                          if (!props.allowChooseMaster || props.masters.length === 0) {
+                            setMasterId(null);
+                          } else if (filterMasterId !== null) {
+                            setMasterId(filterMasterId);
+                          } else if (props.masters.length === 1) {
+                            setMasterId(props.masters[0].id);
+                          } else {
+                            setMasterId(null);
+                            setMasterSheetChoice(null);
+                            setMasterSheetSlot(s.time);
+                          }
+                        }}
                         className={cn(
-                          "flex min-h-11 items-center justify-center rounded-xl border text-sm font-semibold transition",
-                          on ? "border-action bg-action text-on-action"
-                            : occupied ? "cursor-not-allowed border-line text-muted line-through"
-                            : "border-line bg-paper"
+                          "flex flex-col items-center gap-1.5 rounded-xl border py-2 text-center transition",
+                          on ? "border-action bg-brand-50 ring-1 ring-action" : "border-line bg-paper",
+                          occupied && "cursor-not-allowed text-muted line-through",
+                          dimmed && "pointer-events-none opacity-35"
                         )}
                       >
-                        {s.time}
+                        <span className="text-sm font-bold">{s.time}</span>
+                        {props.allowChooseMaster && slotMasters.length > 0 && (
+                          <div className="flex items-center">
+                            {slotMasters.slice(0, 3).map((m, idx) => (
+                              m.photo ? (
+                                <Img key={m.id} src={m.photo} width={20} className={cn("size-5 rounded-full border-[1.5px] border-paper object-cover", idx > 0 && "-ml-1")} />
+                              ) : (
+                                <span key={m.id} className={cn("grid size-5 place-items-center rounded-full border-[1.5px] border-paper text-[8px] font-bold", idx > 0 && "-ml-1", masterAvatarBg(m.name))}>
+                                  {m.name.slice(0, 1)}
+                                </span>
+                              )
+                            ))}
+                            {slotMasters.length > 3 && (
+                              <span className="-ml-1 flex size-5 items-center justify-center rounded-full border-[1.5px] border-paper bg-surface text-[8px] font-medium text-muted">
+                                +{slotMasters.length - 3}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </button>
                     );
                   })}
@@ -248,6 +448,12 @@ export function Checkout(props: {
               )}
             </div>
           </div>
+
+          {/* Политика отмены — ненавязчивый намёк при выборе времени */}
+          <p className="mt-2 flex items-center gap-1 text-xs text-muted">
+            <Check size={12} className="shrink-0 text-ok" />
+            {t("freeCancel", { hours: String(props.freeCancelHours) })}
+          </p>
 
           {multiDays && (
             <div className="mt-4">
@@ -276,83 +482,6 @@ export function Checkout(props: {
             </div>
           )}
         </Section>
-
-        {/* Мастер */}
-        {props.allowChooseMaster && props.masters.length > 0 && (
-          <Section title={t("master")}>
-            {!time && <p className="mb-2 text-sm text-muted">{t("chooseTimeFirst")}</p>}
-            <div className="space-y-2">
-              {/* Любой свободный */}
-              <button
-                onClick={() => setMasterId(null)}
-                className={cn(
-                  "flex w-full flex-row items-center gap-3 rounded-xl border p-3 text-left transition",
-                  masterId === null ? "border-action bg-brand-50" : "border-line bg-paper"
-                )}
-              >
-                <span className="grid size-11 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-text">
-                  <UsersRound size={20} />
-                </span>
-                <span className="flex-1">
-                  <span className="block text-sm font-semibold">{t("anyMaster")}</span>
-                  <span className="block text-xs text-muted">{t("anyMasterSub")}</span>
-                </span>
-                <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition", masterId === null ? "border-action bg-action" : "border-line-strong")}>
-                  {masterId === null && <span className="size-2 rounded-full bg-on-action" />}
-                </span>
-              </button>
-
-              {/* Конкретные мастера */}
-              {props.masters.map((m) => {
-                const free = !slot || slot.masterIds.includes(m.id);
-                const on = masterId === m.id;
-                return (
-                  <button
-                    key={m.id}
-                    disabled={!time || !free}
-                    onClick={() => setMasterId(m.id)}
-                    className={cn(
-                      "flex w-full flex-row items-center gap-3 rounded-xl border p-3 text-left transition",
-                      on ? "border-action bg-brand-50" : "border-line bg-paper",
-                      (!time || !free) && "opacity-50"
-                    )}
-                  >
-                    {m.photo ? (
-                      <Img src={m.photo} width={44} className="size-11 shrink-0 rounded-full object-cover" />
-                    ) : (
-                      <span className="grid size-11 shrink-0 place-items-center rounded-full bg-surface text-sm font-bold text-muted">
-                        {m.name.slice(0, 1)}
-                      </span>
-                    )}
-                    <span className="flex-1 min-w-0">
-                      <span className="block text-sm font-semibold">{m.name}</span>
-                      <span className="block text-xs text-muted">
-                        {time && !free
-                          ? t("masterBusy")
-                          : [
-                              m.reviewsCount ? `★ ${m.rating.toFixed(1)} · ${tc("reviews", { count: m.reviewsCount })}` : tc("new"),
-                              m.experienceYears > 0 ? tc("yearsExp", { count: m.experienceYears }) : null,
-                            ].filter(Boolean).join(" · ")}
-                      </span>
-                      {m.languages.length > 0 && (
-                        <span className="mt-1 flex flex-wrap gap-1">
-                          {m.languages.map((lang) => (
-                            <span key={lang} className="rounded-full border border-line bg-surface px-2 py-0.5 text-[10px] text-muted">
-                              {tc(`langNames.${lang}` as Parameters<typeof tc>[0]) || lang}
-                            </span>
-                          ))}
-                        </span>
-                      )}
-                    </span>
-                    <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition", on ? "border-action bg-action" : "border-line-strong")}>
-                      {on && <span className="size-2 rounded-full bg-on-action" />}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </Section>
-        )}
 
         {/* Пожелания */}
         <Section title={t("wishes")}>
@@ -486,7 +615,7 @@ export function Checkout(props: {
       </div>
 
       {/* Sticky footer — кнопка подтвердить */}
-      <div className="h-28" />
+      <div className="h-32" />
       <div className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper">
         <div className="container-m p-3">
           <button
@@ -502,6 +631,79 @@ export function Checkout(props: {
           </button>
         </div>
       </div>
+
+      {/* Sheet выбора мастера — открывается при нажатии на слот когда фильтр «любой» и мастеров > 1 */}
+      <Sheet
+        open={masterSheetSlot !== null}
+        onClose={() => setMasterSheetSlot(null)}
+        title={t("whoComes")}
+        footer={
+          <button
+            className="btn-dark w-full"
+            onClick={() => { setMasterId(masterSheetChoice); setMasterSheetSlot(null); }}
+          >
+            {tc("done")}
+          </button>
+        }
+      >
+        <div className="space-y-2">
+          <button
+            onClick={() => setMasterSheetChoice(null)}
+            className={cn(
+              "flex w-full flex-row items-center gap-3 rounded-xl border p-3 text-left transition",
+              masterSheetChoice === null ? "border-action bg-brand-50" : "border-line bg-paper"
+            )}
+          >
+            <span className="grid size-11 shrink-0 place-items-center rounded-full bg-brand-50 text-brand-text">
+              <UsersRound size={20} />
+            </span>
+            <span className="flex-1">
+              <span className="block text-sm font-semibold">{t("anyMaster")}</span>
+              <span className="block text-xs text-muted">{t("anyMasterSub")}</span>
+            </span>
+            <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition", masterSheetChoice === null ? "border-action bg-action" : "border-line-strong")}>
+              {masterSheetChoice === null && <span className="size-2 rounded-full bg-on-action" />}
+            </span>
+          </button>
+          {props.masters.map((m) => {
+            const slotMasterIds = masterSheetSlot ? (slots?.find((s) => s.time === masterSheetSlot)?.masterIds ?? null) : null;
+            const free = !slotMasterIds || slotMasterIds.includes(m.id);
+            const on = masterSheetChoice === m.id;
+            return (
+              <button
+                key={m.id}
+                disabled={!free}
+                onClick={() => setMasterSheetChoice(m.id)}
+                className={cn(
+                  "flex w-full flex-row items-center gap-3 rounded-xl border p-3 text-left transition disabled:opacity-100",
+                  on ? "border-action bg-brand-50" : "border-line bg-paper",
+                  !free && "cursor-default"
+                )}
+              >
+                {m.photo ? (
+                  <Img src={m.photo} width={44} className={cn("size-11 shrink-0 rounded-full object-cover", !free && "grayscale")} />
+                ) : (
+                  <span className={cn("grid size-11 shrink-0 place-items-center rounded-full text-sm font-bold", masterAvatarBg(m.name), !free && "grayscale")}>
+                    {m.name.slice(0, 2).toUpperCase()}
+                  </span>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">{m.name}</span>
+                  <span className="block text-xs text-muted">
+                    {!free ? t("masterBusy") : (m.reviewsCount ? `★ ${m.rating.toFixed(1)} · ${tc("reviews", { count: m.reviewsCount })}` : tc("new"))}
+                    {free && m.experienceYears > 0 && ` · ${tc("yearsExp", { count: m.experienceYears })}`}
+                  </span>
+                </span>
+                {free && (
+                  <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition", on ? "border-action bg-action" : "border-line-strong")}>
+                    {on && <span className="size-2 rounded-full bg-on-action" />}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </Sheet>
 
       {/* Sheet адреса — список + добавить новый */}
       <Sheet open={addrOpen} onClose={() => setAddrOpen(false)} title={t("address")}>
