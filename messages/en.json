@@ -159,6 +159,12 @@
       "backlog": {
         "allFlows": "All stages",
         "allLanes": "All lanes",
+        "epicNoEpics": "No epics",
+        "epicNoTasks": "No tasks in epic",
+        "epicNoTasksLink": "create the first one",
+        "epicProgress": "{done} of {total}",
+        "epicWaits": "Waits: {key}",
+        "epicWithout": "No epic · {n}",
         "executor": "Assignee: which worker does the next step",
         "flows": {
           "backlog": "Backlog",
@@ -196,6 +202,7 @@
         },
         "views": {
           "board": "Board",
+          "epics": "Epics",
           "flat": "List",
           "flow": "By stage",
           "lanes": "By lane"
@@ -1057,8 +1064,6 @@
         "alertMissing": "⚠️ Tech alerts are not delivered: no recipient configured.",
         "alertMissingLink": "Configure notifications",
         "allDone": "All done — thank you!",
-        "teamChatMissing": "⚠️ Team chat is not set: order, cancellation and reschedule notifications go to log only.",
-        "teamChatMissingLink": "Configure notifications",
         "answer": "reply",
         "answerVariant": "Selected option {id}",
         "collapse": "collapse",
@@ -1105,6 +1110,8 @@
         "since": "waiting {ago}",
         "stale": "Stale or without assignee",
         "stuckReview": "Review stuck",
+        "teamChatMissing": "⚠️ Team chat is not set: order, cancellation and reschedule notifications go to log only.",
+        "teamChatMissingLink": "Configure notifications",
         "techBlocked": "Blocked on tech/external reasons",
         "techBlockedHint": "These tasks are waiting for a technical solution or external service response. When resolved, write in the task feed.",
         "techBlockedUntil": "until {date}",
