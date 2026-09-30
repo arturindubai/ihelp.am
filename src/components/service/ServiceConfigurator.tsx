@@ -11,7 +11,7 @@ import { Icon } from "@/components/Icon";
 import { PriceBar } from "./PriceBar";
 import { writeCart, clearCart } from "@/lib/cart";
 
-export function initialSelection(s: ServiceView) {
+export function initialSelection(s: ServiceView, planKind?: string) {
   const opts: string[] = [];
   for (const g of s.groups) {
     const d = g.options.filter((o) => o.isDefault);
@@ -20,16 +20,17 @@ export function initialSelection(s: ServiceView) {
       if (pick) opts.push(pick.id);
     } else opts.push(...d.map((o) => o.id));
   }
-  const plan = s.plans.find((p) => p.isDefault) || s.plans[0];
+  const byKind = planKind ? s.plans.find((p) => p.kind === planKind.toUpperCase()) : undefined;
+  const plan = byKind || s.plans.find((p) => p.isDefault) || s.plans[0];
   return { opts, planId: plan?.id || null };
 }
 
-export function ServiceConfigurator({ s, rules, isFirstOrder, policy }: { s: ServiceView; rules: PricingRules; isFirstOrder: boolean; policy?: string }) {
+export function ServiceConfigurator({ s, rules, isFirstOrder, policy, initialPlan }: { s: ServiceView; rules: PricingRules; isFirstOrder: boolean; policy?: string; initialPlan?: string }) {
   const t = useTranslations("service");
   const tc = useTranslations("common");
   const locale = useLocale();
   const router = useRouter();
-  const init = useMemo(() => initialSelection(s), [s]);
+  const init = useMemo(() => initialSelection(s, initialPlan), [s, initialPlan]);
   const [opts, setOpts] = useState<string[]>(init.opts);
   const [planId, setPlanId] = useState<string | null>(init.planId);
   const [info, setInfo] = useState<{ title: string; body?: string; schedule?: ServiceView["groups"][number]["options"][number]["schedule"] } | null>(null);
