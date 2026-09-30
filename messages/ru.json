@@ -1298,7 +1298,9 @@
         "cancel": "Отмена",
         "quickReady": "В очередь",
         "noMoves": "Отсюда задачу переводит исполнитель или деплоер",
-        "claimHint": "В работу задачу берёт исполнитель: node scripts/cc.mjs take {key} --agent dev-1"
+        "claimHint": "В работу задачу берёт исполнитель: node scripts/cc.mjs take {key} --agent dev-1",
+        "whatChangedLabel": "Что изменилось для людей",
+        "whatChangedPlaceholder": "Опишите одним предложением, что теперь работает иначе для клиента или команды"
       },
       "feed": {
         "title": "Лента задачи",
@@ -1482,6 +1484,7 @@
           "question": "вопрос: {detail}",
           "nodesign": "нужно описание дизайна",
           "mockup": "нужен макет",
+          "requirements": "требования",
           "returned": "Возвращено",
           "deploy": "протестировано"
         },
@@ -1651,7 +1654,17 @@
         "designSnippet": "Дизайн: {text}",
         "files": "файлов: {n}",
         "workersLink": "Пуск и настройки пула — вкладка «Воркеры» →",
-        "approvedAgent": "у {agent}"
+        "approvedAgent": "у {agent}",
+        "approvalSection": "Шаг 3 · На утверждении",
+        "chainBreadcrumb": "Требования → Макет → Утверждение",
+        "chainStep": {
+          "approval": "Утверждение",
+          "mockup": "Макет",
+          "requirements": "Требования"
+        },
+        "requirementsEmpty": "Нет задач, ждущих требований",
+        "requirementsHint": "Продакт должен описать: кто использует экран, что видит, какие действия, пустое/ошибочное состояние и что не входит.",
+        "requirementsSection": "Шаг 1 · Ждут требований от продакта"
       },
       "backlog": {
         "strip": {
@@ -1817,7 +1830,9 @@
         "today": "Сегодня закрыто: {n}",
         "hint": "закрытое за две недели, новое сверху",
         "empty": "За две недели ничего не закрыто",
-        "noCode": "не код"
+        "noCode": "не код",
+        "pendingStep": "↗ {key}",
+        "pendingStepTitle": "Ручной шаг не закрыт"
       },
       "notify": {
         "inbox": "Уведомления",
