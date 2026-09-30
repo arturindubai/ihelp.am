@@ -9,6 +9,11 @@
     "emailRemindersLabel": "Receive visit reminders and review requests by email",
     "emailRemindersTitle": "Email notifications",
     "emailVerified": "Email verified",
+    "googleConnect": "Connect Google",
+    "googleEmailMismatch": "Your profile already has a different email; change it manually first",
+    "googleLinked": "Google connected",
+    "googleTitle": "Google",
+    "googleUsed": "This Google account is already in use",
     "history": "History",
     "language": "Notification language",
     "locales": {
@@ -53,6 +58,14 @@
   },
   "admin": {
     "banners": {
+      "aiApply": "Apply",
+      "aiError": "Could not get a response — please try again",
+      "aiGenerateImage": "Generate image",
+      "aiImageResults": "Image options",
+      "aiSuggestResults": "Title options",
+      "aiSuggestTitle": "Suggest title",
+      "aiUsageCount": "Requests this month: {count}",
+      "aiUse": "Use",
       "audience": "Audience",
       "audiences": {
         "ALL": "Everyone",
@@ -588,12 +601,23 @@
           "unknown_key": "This key is not in the list."
         },
         "groups": {
+          "ai": "AI assistant",
           "codes": "Login codes",
           "login": "Google and Apple sign-in",
           "mail": "Email",
           "telegram": "Telegram"
         },
         "items": {
+          "ai_anthropicKey": {
+            "how": "console.anthropic.com → Settings → API Keys → Create Key",
+            "purpose": "AI-suggested titles and subtitles for banners.",
+            "title": "Claude AI (Anthropic)"
+          },
+          "ai_higgsfieldKey": {
+            "how": "app.higgsfield.ai → Settings → API Key",
+            "purpose": "AI-generated banner images (Nano Banana Pro model).",
+            "title": "Higgsfield — images"
+          },
           "apple_privateKey": {
             "how": "developer.apple.com → Certificates, IDs & Profiles → Keys → key with Sign in with Apple",
             "purpose": "Sign in with Apple: full .p8 private key.",

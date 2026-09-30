@@ -963,12 +963,14 @@ model CartItem {
   @@index([cartId])
 }
 
-/// Заявки «Уведомить меня» для категорий-заглушек
+/// Заявки «Уведомить меня»: category — по категории-заглушке, service — по конкретной услуге с comingSoon=true
 model ServiceInterest {
   id          String   @id @default(cuid())
   serviceSlug String
   contact     String
   ip          String?
+  /// Тип: 'category' или 'service'
+  kind        String   @default("category")
   createdAt   DateTime @default(now())
 
   @@unique([serviceSlug, contact])
