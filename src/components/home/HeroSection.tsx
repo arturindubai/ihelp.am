@@ -72,7 +72,7 @@ export function HeroSection({ heroTitle, searchPlaceholder, comingSoonLabel, cat
           const wrapperClass = isFirst ? "lg:col-span-2 lg:row-span-2" : undefined;
           const tile = (
             <div
-              className={`relative overflow-hidden rounded-2xl${c.comingSoon ? " opacity-60" : ""}${
+              className={`relative overflow-hidden rounded-2xl${c.comingSoon ? " opacity-75" : ""}${
                 isFirst
                   ? " aspect-square lg:aspect-auto lg:h-full"
                   : " aspect-square"
@@ -86,7 +86,7 @@ export function HeroSection({ heroTitle, searchPlaceholder, comingSoonLabel, cat
               />
               <div className="absolute inset-0 bg-gradient-to-t from-ink/70 to-transparent" />
               {c.comingSoon && (
-                <span className="absolute left-1.5 top-1.5 rounded-full bg-badge px-1.5 py-0.5 text-[10px] font-semibold text-on-badge">
+                <span className="absolute left-1.5 top-1.5 rounded-full bg-badge px-1.5 py-0.5 text-[10px] font-bold text-on-badge">
                   {comingSoonLabel}
                 </span>
               )}
