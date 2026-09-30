@@ -1,9 +1,9 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { ChevronRight } from "lucide-react";
 import { Link, redirect } from "@/i18n/navigation";
-import { db } from "@/server/db";
 import { getCurrentUser } from "@/server/auth";
 import { tr } from "@/i18n/locales";
+import { getUpcomingVisits, getUserOrders } from "@/server/services/pages/account";
 import { amd, dateLabel, cn } from "@/lib/format";
 import { visitWindow } from "@/server/services/booking";
 import { StatusBadge } from "@/components/account/StatusBadge";
@@ -27,12 +27,7 @@ export default async function OrdersPage({ params, searchParams }: { params: Pro
 
   let body: React.ReactNode;
   if (tab === "upcoming") {
-    const visits = await db.visit.findMany({
-      where: { order: { userId: user.id }, status: { in: ["SCHEDULED", "CONFIRMED", "ON_WAY", "IN_PROGRESS"] }, scheduledAt: { gte: now } },
-      orderBy: { scheduledAt: "asc" },
-      take: 50,
-      include: { order: { include: { service: true, plan: true } }, master: true },
-    });
+    const visits = await getUpcomingVisits(user.id, now);
     body = visits.length ? (
       <ul className="space-y-2">
         {visits.map((v) => (
@@ -54,12 +49,7 @@ export default async function OrdersPage({ params, searchParams }: { params: Pro
       </ul>
     ) : null;
   } else {
-    const orders = await db.order.findMany({
-      where: tab === "plans" ? { userId: user.id, kind: { in: ["SUBSCRIPTION", "PACKAGE"] }, status: { in: ["ACTIVE", "PAUSED"] } } : { userId: user.id },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-      include: { service: true, plan: true, visits: { select: { status: true } } },
-    });
+    const orders = await getUserOrders(user.id, tab as "plans" | "history");
     body = orders.length ? (
       <ul className="space-y-2">
         {orders.map((o) => (

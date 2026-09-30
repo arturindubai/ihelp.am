@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { getFinanceStats, getFinanceTransactions, getFinanceMasterOptions, getFinanceServiceOptions } from "@/server/services/finance";
 import { Card } from "@/components/admin/fields";
 import { FinancePeriodPicker } from "@/components/admin/cc/FinancePeriodPicker";
+import { FinanceChart } from "./FinanceChart";
 import { FinanceTransactions } from "./FinanceTransactions";
 import { amd, cn } from "@/lib/format";
 import { ymd, addDays } from "@/lib/time";
@@ -280,6 +281,13 @@ export async function FinanceTab({ sp }: { sp: CcSearch }) {
             <>
               {/* KPI */}
               <StatsSection stats={data.stats} t={t} />
+
+              {/* График выручки */}
+              {data.daily.some((r) => r.total > 0) && (
+                <Card title={t("finance.chartTitle")}>
+                  <FinanceChart daily={data.daily} />
+                </Card>
+              )}
 
               {/* Каналы */}
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-3 lg:gap-4">

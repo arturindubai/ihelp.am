@@ -1,5 +1,5 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { db } from "@/server/db";
+import { getReviewToken } from "@/server/services/pages/catalog";
 import { ReviewForm } from "./ReviewForm";
 
 export default async function ReviewTokenPage({ params }: { params: Promise<{ locale: string; token: string }> }) {
@@ -7,21 +7,7 @@ export default async function ReviewTokenPage({ params }: { params: Promise<{ lo
   setRequestLocale(locale);
   const t = await getTranslations("review");
 
-  const rt = await db.reviewToken.findUnique({
-    where: { token },
-    select: {
-      usedAt: true,
-      expiresAt: true,
-      visit: {
-        select: {
-          id: true,
-          status: true,
-          review: { select: { id: true } },
-          master: { select: { name: true } },
-        },
-      },
-    },
-  });
+  const rt = await getReviewToken(token);
 
   const isInvalid = !rt || !!rt.usedAt || rt.expiresAt < new Date() || rt.visit.status !== "DONE";
   const alreadyLeft = !!rt?.visit.review;
