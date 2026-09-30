@@ -387,7 +387,34 @@
         "revenue": "Revenue",
         "title": "Finance analytics",
         "toCollect": "To collect",
-        "total": "Total"
+        "total": "Total",
+        "tx": {
+          "colAmount": "Amount",
+          "colClient": "Client",
+          "colDate": "Date",
+          "colMaster": "Master",
+          "colPayment": "Payment",
+          "colService": "Service",
+          "colType": "Type",
+          "empty": "No transactions in the selected period",
+          "exportCsv": "Export CSV",
+          "loadMore": "Load more",
+          "loadMoreLoading": "Loading…",
+          "masterAll": "All masters",
+          "paymentCard": "Card",
+          "paymentCash": "Cash",
+          "serviceAll": "All services",
+          "title": "Transactions",
+          "typeAll": "All types",
+          "typeLabel": {
+            "ONE_TIME": "One-time",
+            "PACKAGE": "Package",
+            "SUBSCRIPTION": "Subscription"
+          },
+          "typeOneTime": "One-time",
+          "typePackage": "Packages",
+          "typeSubscription": "Subscriptions"
+        }
       },
       "form": {
         "delete": "Delete",

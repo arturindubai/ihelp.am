@@ -8,8 +8,10 @@ import {
   mapDbRow,
   calcPeriodBounds,
   extractMasterName,
+  transactionsToCsv,
   type FinanceVisit,
   type DbFinanceRow,
+  type TransactionRow,
 } from "./finance";
 
 /** Готовый FinanceVisit для тестов чистых функций расчёта */
@@ -431,5 +433,103 @@ describe("calcMasterRanking", () => {
 describe("noConversionData", () => {
   it("возвращает value=null (данных о посещениях нет)", () => {
     expect(noConversionData().value).toBeNull();
+  });
+});
+
+// ─── transactionsToCsv ───────────────────────────────────────────────────────
+
+function tx(overrides: Partial<TransactionRow> & { visitId: string; date: string; amount: number }): TransactionRow {
+  return {
+    type: "ONE_TIME",
+    clientName: "Иван",
+    masterName: "Анна",
+    serviceName: "Уборка",
+    paymentMethod: "CARD",
+    ...overrides,
+  };
+}
+
+describe("transactionsToCsv", () => {
+  it("файл начинается с UTF-8 BOM (U+FEFF)", () => {
+    const csv = transactionsToCsv([]);
+    expect(csv.charCodeAt(0)).toBe(0xfeff);
+  });
+
+  it("разделитель — точка с запятой", () => {
+    const csv = transactionsToCsv([tx({ visitId: "v1", date: "2026-09-15", amount: 10000 })]);
+    const lines = csv.slice(1).split("\r\n");
+    expect(lines[1]).toContain(";");
+    expect(lines[1].split(";")).toHaveLength(7);
+  });
+
+  it("заголовки в первой строке (после BOM)", () => {
+    const csv = transactionsToCsv([]);
+    const firstLine = csv.slice(1).split("\r\n")[0];
+    expect(firstLine).toContain("Дата");
+    expect(firstLine).toContain("Клиент");
+    expect(firstLine).toContain("Мастер");
+    expect(firstLine).toContain("Услуга");
+    expect(firstLine).toContain("Сумма");
+  });
+
+  it("строки разделены CRLF", () => {
+    const csv = transactionsToCsv([tx({ visitId: "v1", date: "2026-09-15", amount: 10000 })]);
+    expect(csv).toContain("\r\n");
+  });
+
+  it("тип ONE_TIME → «Разовый», SUBSCRIPTION → «Подписка», PACKAGE → «Пакет»", () => {
+    const rows = [
+      tx({ visitId: "v1", date: "2026-09-01", amount: 1000, type: "ONE_TIME" }),
+      tx({ visitId: "v2", date: "2026-09-02", amount: 2000, type: "SUBSCRIPTION" }),
+      tx({ visitId: "v3", date: "2026-09-03", amount: 3000, type: "PACKAGE" }),
+    ];
+    const csv = transactionsToCsv(rows);
+    expect(csv).toContain("Разовый");
+    expect(csv).toContain("Подписка");
+    expect(csv).toContain("Пакет");
+  });
+
+  it("способ оплаты CASH → «Наличными», CARD → «Картой»", () => {
+    const rows = [
+      tx({ visitId: "v1", date: "2026-09-01", amount: 1000, paymentMethod: "CASH" }),
+      tx({ visitId: "v2", date: "2026-09-02", amount: 2000, paymentMethod: "CARD" }),
+    ];
+    const csv = transactionsToCsv(rows);
+    expect(csv).toContain("Наличными");
+    expect(csv).toContain("Картой");
+  });
+
+  it("пустой masterName → пустая ячейка, не undefined/null", () => {
+    const csv = transactionsToCsv([tx({ visitId: "v1", date: "2026-09-01", amount: 5000, masterName: null })]);
+    const dataLine = csv.slice(1).split("\r\n")[1];
+    // Ячейка мастера должна быть в виде ""
+    expect(dataLine).toContain('""');
+  });
+
+  it("имена с кавычками экранируются удвоением", () => {
+    const csv = transactionsToCsv([tx({ visitId: "v1", date: "2026-09-01", amount: 5000, clientName: 'ООО "Тест"' })]);
+    expect(csv).toContain('ООО ""Тест""');
+  });
+
+  it("телефон и email отсутствуют в выгрузке", () => {
+    const csv = transactionsToCsv([tx({ visitId: "v1", date: "2026-09-01", amount: 5000, clientName: "Иван" })]);
+    expect(csv).not.toMatch(/\+\d{10,}/);
+    expect(csv).not.toMatch(/@/);
+  });
+
+  it("пустой список → только заголовок", () => {
+    const csv = transactionsToCsv([]);
+    const lines = csv.slice(1).split("\r\n").filter(Boolean);
+    expect(lines).toHaveLength(1);
+  });
+
+  it("несколько строк — каждая на отдельной строке", () => {
+    const rows = [
+      tx({ visitId: "v1", date: "2026-09-01", amount: 1000 }),
+      tx({ visitId: "v2", date: "2026-09-02", amount: 2000 }),
+    ];
+    const csv = transactionsToCsv(rows);
+    const lines = csv.slice(1).split("\r\n").filter(Boolean);
+    expect(lines).toHaveLength(3); // заголовок + 2 строки
   });
 });

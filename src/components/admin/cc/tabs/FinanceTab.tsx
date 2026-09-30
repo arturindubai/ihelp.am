@@ -1,12 +1,14 @@
 import { getTranslations } from "next-intl/server";
-import { getFinanceStats } from "@/server/services/finance";
+import { getFinanceStats, getFinanceTransactions, getFinanceMasterOptions, getFinanceServiceOptions } from "@/server/services/finance";
 import { Card } from "@/components/admin/fields";
 import { FinancePeriodPicker } from "@/components/admin/cc/FinancePeriodPicker";
+import { FinanceTransactions } from "./FinanceTransactions";
 import { amd, cn } from "@/lib/format";
 import { ymd, addDays } from "@/lib/time";
 import { Link } from "@/i18n/navigation";
 import type { CcSearch } from "./shared";
-import type { MasterRankRow, CashSummary, PeriodStats } from "@/server/services/finance";
+import type { MasterRankRow, CashSummary, PeriodStats, TransactionRow } from "@/server/services/finance";
+import type { PlanKind } from "@/lib/finance";
 
 type Period = "today" | "7d" | "30d" | "custom";
 
@@ -197,19 +199,43 @@ function StatsSection({ stats, t }: { stats: PeriodStats; t: (k: any, v?: any) =
 }
 
 /**
- * Вкладка «Финансы» в Control Center: период, KPI-карточки, каналы, наличные, топ-мастеров.
- * Данные из DEV-133 (finance service). Части 3 (график) и 7 (транзакции) — DEV-135, DEV-136.
+ * Вкладка «Финансы» в Control Center: период, KPI-карточки, каналы, наличные, топ-мастеров, список транзакций.
+ * DEV-133 (stats), DEV-134 (cash/masters), DEV-136 (transactions).
  */
 export async function FinanceTab({ sp }: { sp: CcSearch }) {
   const t = await getTranslations("admin.cc");
   const { period, from, to } = resolvePeriod(sp);
 
+  const validTypes: PlanKind[] = ["ONE_TIME", "SUBSCRIPTION", "PACKAGE"];
+  const txType = (validTypes as string[]).includes(sp.txType ?? "") ? (sp.txType as PlanKind) : undefined;
+  const txMaster = sp.txMaster ?? undefined;
+  const txService = sp.txService ?? undefined;
+
   let data: Awaited<ReturnType<typeof getFinanceStats>> | null = null;
   let error = false;
+  let txPage: { rows: TransactionRow[]; hasMore: boolean; nextCursor: string | null } = { rows: [], hasMore: false, nextCursor: null };
+  let masters: { id: string; name: string }[] = [];
+  let services: { id: string; name: string }[] = [];
+
   try {
-    data = await getFinanceStats(from, to);
+    [data, txPage, masters, services] = await Promise.all([
+      getFinanceStats(from, to),
+      getFinanceTransactions({ from, to, type: txType, masterId: txMaster, serviceId: txService }),
+      getFinanceMasterOptions(),
+      getFinanceServiceOptions(),
+    ]);
   } catch {
     error = true;
+    // Если stats упали, пробуем загрузить хотя бы транзакции
+    try {
+      [txPage, masters, services] = await Promise.all([
+        getFinanceTransactions({ from, to, type: txType, masterId: txMaster, serviceId: txService }),
+        getFinanceMasterOptions(),
+        getFinanceServiceOptions(),
+      ]);
+    } catch {
+      // Транзакции тоже недоступны
+    }
   }
 
   const isEmpty = data && data.stats.ordersCount === 0;
@@ -292,6 +318,19 @@ export async function FinanceTab({ sp }: { sp: CcSearch }) {
           )}
         </>
       )}
+
+      {/* Список операций — показываем всегда (с фильтрами), независимо от isEmpty */}
+      <Card title="">
+        <FinanceTransactions
+          key={`${from}-${to}-${txType ?? ""}-${txMaster ?? ""}-${txService ?? ""}`}
+          from={from}
+          to={to}
+          initial={txPage}
+          masters={masters}
+          services={services}
+          sp={sp}
+        />
+      </Card>
     </div>
   );
 }
