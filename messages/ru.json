@@ -63,6 +63,14 @@
       "to": "Конец периода"
     },
     "banners": {
+      "aiApply": "Применить",
+      "aiError": "Не удалось получить ответ — попробуйте ещё раз",
+      "aiGenerateImage": "Сгенерировать изображение",
+      "aiImageResults": "Варианты изображения",
+      "aiSuggestResults": "Варианты заголовка",
+      "aiSuggestTitle": "Предложить заголовок",
+      "aiUsageCount": "Обращений в этом месяце: {count}",
+      "aiUse": "Использовать",
       "audience": "Аудитория",
       "audiences": {
         "ALL": "Все",
@@ -636,12 +644,23 @@
           "unknown_key": "Такого ключа нет в списке."
         },
         "groups": {
+          "ai": "ИИ-помощник",
           "codes": "Коды входа",
           "login": "Вход через Google и Apple",
           "mail": "Почта",
           "telegram": "Telegram"
         },
         "items": {
+          "ai_anthropicKey": {
+            "how": "console.anthropic.com → Settings → API Keys → Create Key",
+            "purpose": "Подбор заголовков и подзаголовков для баннеров через ИИ.",
+            "title": "Claude AI (Anthropic)"
+          },
+          "ai_higgsfieldKey": {
+            "how": "app.higgsfield.ai → Settings → API Key",
+            "purpose": "Генерация изображений для баннеров (модель Nano Banana Pro).",
+            "title": "Higgsfield — картинки"
+          },
           "apple_privateKey": {
             "how": "developer.apple.com → Certificates, IDs & Profiles → Keys → ключ с Sign in with Apple",
             "purpose": "Sign in with Apple: закрытый ключ .p8 целиком.",

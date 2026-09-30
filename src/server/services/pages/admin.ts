@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/server/db";
+import { getSettings } from "@/server/settings";
 import { BUSY_STATUSES } from "@/server/services/booking";
 import { addDays, atYerevan, isoWeekday, toMin, ymd } from "@/lib/time";
 
@@ -237,6 +238,23 @@ export async function getAdminStaff() {
 /** Баннеры для управления */
 export async function getAdminBanners() {
   return db.banner.findMany({ orderBy: { sort: "asc" } });
+}
+
+/** Статус ИИ-помощника для панели баннеров */
+export async function getAdminAiStatus() {
+  const d = new Date();
+  const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const [settings, usageRow] = await Promise.all([
+    getSettings(),
+    db.setting.findUnique({ where: { key: "_aiUsage" } }),
+  ]);
+  const usageData = (usageRow?.value as Record<string, { text: number; image: number }>) ?? {};
+  const usageMonth = usageData[month] ?? { text: 0, image: 0 };
+  return {
+    hasAnthropicKey: !!settings.ai?.anthropicKey,
+    hasHiggsfieldKey: !!settings.ai?.higgsfieldKey,
+    usageCount: usageMonth.text + usageMonth.image,
+  };
 }
 
 /** Промокоды и список услуг */

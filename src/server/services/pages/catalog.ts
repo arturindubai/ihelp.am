@@ -60,10 +60,10 @@ export async function getReviewToken(token: string) {
   });
 }
 
-/** Данные для sitemap: активные услуги и мастера */
+/** Данные для sitemap: активные услуги (не «скоро») и мастера */
 export async function getSitemapEntries() {
   return Promise.all([
-    db.service.findMany({ where: { active: true }, select: { slug: true, updatedAt: true } }),
+    db.service.findMany({ where: { active: true, comingSoon: false, category: { archived: false } }, select: { slug: true, updatedAt: true } }),
     db.master.findMany({ where: { active: true }, select: { slug: true, updatedAt: true } }),
   ]);
 }

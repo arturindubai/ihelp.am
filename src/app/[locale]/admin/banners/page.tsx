@@ -1,14 +1,15 @@
 import { pageUser } from "@/server/adminPage";
-import { getAdminBanners } from "@/server/services/pages/admin";
+import { getAdminBanners, getAdminAiStatus } from "@/server/services/pages/admin";
 import { Forbidden } from "@/components/admin/ui";
 import { BannerManager } from "@/components/admin/BannerManager";
 
 export default async function AdminBanners() {
   if (!(await pageUser("banners"))) return <Forbidden />;
-  const banners = await getAdminBanners();
+  const [banners, aiStatus] = await Promise.all([getAdminBanners(), getAdminAiStatus()]);
   return (
     <div className="max-w-3xl">
       <BannerManager
+        aiStatus={aiStatus}
         banners={banners.map((b) => ({
           id: b.id,
           data: {
