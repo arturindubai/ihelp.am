@@ -103,6 +103,7 @@
     "loginToContinue": "",
     "address": "",
     "addAddress": "",
+    "dateAndMaster": "",
     "dateTime": "",
     "availableTime": "",
     "startDate": "",
@@ -116,6 +117,7 @@
     "masterBusy": "",
     "chooseTimeFirst": "",
     "serviceLabel": "",
+    "whoComes": "",
     "wishes": "",
     "noCallLabel": "",
     "payment": "",
@@ -359,9 +361,19 @@
     "services": "Ծառայություններ"
   },
   "catalog": {
-    "newService": "Նոր ծառայություն",
+    "comingSoonText": "",
     "comingSoonTitle": "Շուտով կբացենք",
-    "comingSoonText": "Պատրաստում ենք ծառայություններ: Գրեք մեզ՝ ձեր հարցերին կպատասխանենք",
+    "newService": "Նոր ծառայություն",
+    "notifyAlready": "",
+    "notifyButton": "",
+    "notifyConsent": "",
+    "notifyHint": "",
+    "notifyInvalid": "",
+    "notifyPlaceholder": "",
+    "notifySubtitle": "",
+    "notifySuccess": "",
+    "notifyTitle": "",
+    "notifyTooMany": "",
     "writeWhatsApp": "Գրել WhatsApp-ում"
   },
   "pro": {
