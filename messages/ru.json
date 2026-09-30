@@ -1535,6 +1535,7 @@
       "answer": "Ответ",
       "archiveCategory": "В архив",
       "archived": "В архиве",
+      "arrivalHours": "Срок выезда, ч (0 = сегодня, пусто — не показывать)",
       "banner": "Баннер услуги",
       "benefits": "Преимущества",
       "bookings": "Заказов",
@@ -1570,6 +1571,7 @@
       "infoTitle": "Ссылка-пояснение",
       "intervalDays": "Интервал между визитами, дней",
       "isDefault": "Выбран по умолчанию",
+      "isNew": "Бейдж «Новое»",
       "kinds": {
         "ONE_TIME": "Разовый визит",
         "PACKAGE": "Пакет визитов",
@@ -2023,6 +2025,9 @@
     "itemsCount": "{count, plural, one {# услуга} few {# услуги} other {# услуг}}"
   },
   "catalog": {
+    "arrivalToday": "сегодня",
+    "arrivalWithin": "в течение {n} ч",
+    "badgeNew": "Новое",
     "comingSoonText": "Готовим услуги и мастеров. Напишите нам — ответим на вопросы",
     "comingSoonTitle": "Скоро откроем",
     "newService": "Новая услуга",

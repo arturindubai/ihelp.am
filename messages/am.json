@@ -620,6 +620,7 @@
       "answer": "",
       "archiveCategory": "",
       "archived": "",
+      "arrivalHours": "",
       "banner": "",
       "benefits": "",
       "bookings": "",
@@ -655,6 +656,7 @@
       "infoTitle": "",
       "intervalDays": "",
       "isDefault": "",
+      "isNew": "",
       "kinds": {
         "ONE_TIME": "Մեկանգամ այց",
         "PACKAGE": "Այցերի Պակետ",
@@ -1052,6 +1054,9 @@
     "total": ""
   },
   "catalog": {
+    "arrivalToday": "",
+    "arrivalWithin": "",
+    "badgeNew": "",
     "comingSoonText": "",
     "comingSoonTitle": "Շուտով կբացենք",
     "newService": "Նոր ծառայություն",

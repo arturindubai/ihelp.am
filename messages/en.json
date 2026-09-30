@@ -1448,6 +1448,7 @@
       "answer": "Answer",
       "archiveCategory": "Archive",
       "archived": "Archived",
+      "arrivalHours": "Arrival hours (0 = today, empty — don’t show)",
       "banner": "Service banner",
       "benefits": "Benefits",
       "bookings": "Bookings",
@@ -1483,6 +1484,7 @@
       "infoTitle": "Info link",
       "intervalDays": "Interval between visits, days",
       "isDefault": "Selected by default",
+      "isNew": "\"New\" badge",
       "kinds": {
         "ONE_TIME": "One-time visit",
         "PACKAGE": "Visit package",
@@ -1928,6 +1930,9 @@
     "itemsCount": "{count, plural, one {# service} other {# services}}"
   },
   "catalog": {
+    "arrivalToday": "today",
+    "arrivalWithin": "within {n} h",
+    "badgeNew": "New",
     "comingSoonText": "We're preparing services and pros. Write to us — we'll answer your questions",
     "comingSoonTitle": "Opening soon",
     "newService": "New service",
