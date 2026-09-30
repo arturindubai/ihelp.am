@@ -333,6 +333,12 @@ model Order {
   promoCodeId       String?
   promoCode         PromoCode?    @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
   comment           String?
+  /// Клиент попросил не звонить, только мессенджер — отдельное булево поле, не префикс комментария
+  noCall            Boolean       @default(false)
+  /// Чаевые мастеру целыми драмами, 100 % мастеру; 0 = не выбраны
+  tipAmount         Int           @default(0)
+  /// Штраф за позднюю отмену (фиксированная сумма из настроек на момент отмены); 0 = отмены не было или отменили вовремя
+  cancelPenalty     Int           @default(0)
   locale            String        @default("ru")
   source            String        @default("web")
   cancelReason      String?
