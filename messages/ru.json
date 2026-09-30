@@ -1277,6 +1277,7 @@
       "today": "Сегодня",
       "tomorrow": "Завтра",
       "total": "Итого",
+      "unsaved": "Не сохранено",
       "up": "Выше",
       "upload": "Загрузить фото",
       "uploadErrBroken": "Файл повреждён или слишком большой по размерам картинки",
@@ -1492,6 +1493,7 @@
       "unassigned": "Без мастера"
     },
     "services": {
+      "addCategory": "Добавить категорию",
       "addFirstService": "+ Добавить услугу",
       "addGroup": "Добавить шаг",
       "addItem": "Добавить пункт",
@@ -1541,13 +1543,17 @@
         "PACKAGE": "Пакет визитов",
         "SUBSCRIPTION": "Подписка"
       },
+      "masterSearch": "Поиск мастера…",
       "masters": "Мастера, выполняющие услугу",
+      "mastersSelected": "{n, plural, one {# выбран} few {# выбрано} other {# выбрано}}",
       "minPrice": "от {price} ֏",
       "minutes": "Мин",
       "multi": "Несколько вариантов",
       "newCategory": "+ Категория",
       "newService": "+ Услуга",
+      "noMasters": "Нет привязанных мастеров",
       "noServicesInCategory": "Нет услуг в категории",
+      "noVariants": "Нет ни одного варианта — клиент не сможет выбрать",
       "note": "Блок «Обратите внимание»",
       "noteBody": "Текст",
       "noteTitle": "Заголовок",
@@ -1559,6 +1565,8 @@
       "planKind": "Тип тарифа",
       "plans": "Тарифы (частота и пакеты)",
       "policy": "Условия",
+      "previewOptions": "{groups} {groups, plural, one {группа} few {группы} other {групп}}, {variants} {variants, plural, one {вариант} few {варианта} other {вариантов}}",
+      "previewStep": "Шаг {n}",
       "pricePreview": "Цена визита для «{option}»: {price}",
       "question": "Вопрос",
       "rating": "Рейтинг",
@@ -1568,6 +1576,7 @@
       "searchPlaceholder": "Поиск по услугам и категориям…",
       "services": "Услуги",
       "single": "Один вариант",
+      "slugFromTitle": "Из названия",
       "stepBody": "Пояснение",
       "stepTitle": "Шаг",
       "tabs": {
@@ -1577,7 +1586,11 @@
         "plans": "Тарифы"
       },
       "title": "Услуги и категории",
+      "unsavedLeave": "Уйти",
+      "unsavedStay": "Остаться",
+      "unsavedTitle": "Изменения не сохранены. Уйти без сохранения?",
       "validityDays": "Срок действия, дней",
+      "visitsNextWeek": "{n} виз. на нед.",
       "visitsPerWeek": "Визитов в неделю (клиент выбирает дни)"
     },
     "settings": {

@@ -1202,6 +1202,7 @@
       "today": "Today",
       "tomorrow": "Tomorrow",
       "total": "Total",
+      "unsaved": "Unsaved",
       "up": "Up",
       "upload": "Upload photo",
       "uploadErrBroken": "File is corrupted or image dimensions are too large",
@@ -1404,6 +1405,7 @@
       "unassigned": "No pro"
     },
     "services": {
+      "addCategory": "Add category",
       "addFirstService": "+ Add service",
       "addGroup": "Add step",
       "addItem": "Add item",
@@ -1453,13 +1455,17 @@
         "PACKAGE": "Visit package",
         "SUBSCRIPTION": "Subscription"
       },
+      "masterSearch": "Search masters…",
       "masters": "Pros performing this service",
+      "mastersSelected": "{n, plural, one {# selected} other {# selected}}",
       "minPrice": "from {price} ֏",
       "minutes": "Min",
       "multi": "Multiple choice",
       "newCategory": "+ Category",
       "newService": "+ Service",
+      "noMasters": "No assigned masters",
       "noServicesInCategory": "No services in category",
+      "noVariants": "No variants — clients won't be able to choose",
       "note": "Note block",
       "noteBody": "Text",
       "noteTitle": "Title",
@@ -1471,6 +1477,8 @@
       "planKind": "Plan type",
       "plans": "Plans (frequency & packages)",
       "policy": "Terms",
+      "previewOptions": "{groups} {groups, plural, one {group} other {groups}}, {variants} {variants, plural, one {variant} other {variants}}",
+      "previewStep": "Step {n}",
       "pricePreview": "Visit price for '{option}': {price}",
       "question": "Question",
       "rating": "Rating",
@@ -1480,6 +1488,7 @@
       "searchPlaceholder": "Search services and categories…",
       "services": "Services",
       "single": "Single choice",
+      "slugFromTitle": "From title",
       "stepBody": "Description",
       "stepTitle": "Step",
       "tabs": {
@@ -1489,7 +1498,11 @@
         "plans": "Plans"
       },
       "title": "Services & categories",
+      "unsavedLeave": "Leave",
+      "unsavedStay": "Stay",
+      "unsavedTitle": "Changes not saved. Leave without saving?",
       "validityDays": "Validity period, days",
+      "visitsNextWeek": "{n} vis./week",
       "visitsPerWeek": "Visits per week (client chooses days)"
     },
     "settings": {
