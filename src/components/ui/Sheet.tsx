@@ -26,7 +26,7 @@ export function Sheet({ open, onClose, title, children, footer }: { open: boolea
             <X size={18} />
           </button>
         </div>
-        <div className="overflow-y-auto px-4 pb-4">{children}</div>
+        <div className={`overflow-y-auto px-4 ${footer ? "pb-4" : "pb-safe"}`}>{children}</div>
         {footer && <div className="pb-safe border-t border-line px-4 pt-3">{footer}</div>}
       </div>
     </div>
