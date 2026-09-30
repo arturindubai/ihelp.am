@@ -82,6 +82,7 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
     !data.pausedUntil &&
     !data.techBlocked.length &&
     !data.alertMissing &&
+    !data.teamChatMissing &&
     !ownerAnswered.length &&
     !data.waitingDeps.length;
 
@@ -95,6 +96,17 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
             <span className="font-medium">{ty("alertMissing")}</span>{" "}
             <Link href="/admin/settings" className="font-medium underline">
               {ty("alertMissingLink")}
+            </Link>
+          </p>
+        </Card>
+      )}
+
+      {data.teamChatMissing && (
+        <Card>
+          <p className="text-sm text-bad">
+            <span className="font-medium">{ty("teamChatMissing")}</span>{" "}
+            <Link href="/admin/settings#notify" className="font-medium underline">
+              {ty("teamChatMissingLink")}
             </Link>
           </p>
         </Card>
