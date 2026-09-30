@@ -88,8 +88,9 @@ services:
   # Временный второй экземпляр при blue-green выкладке (profiles: deploy).
   # Запускается только deploy/update.sh и deploy/rollback.sh; в нормальном режиме не работает.
   # Caddy видит app-next как второй upstream и переключается на него пока app перезапускается.
+  # image: homecare-app:latest — тот же образ что у app; при деплое/откате он уже собран/переключён.
   app-next:
-    build: { context: ., target: runner }
+    image: homecare-app:latest
     profiles: [deploy]
     restart: "no"
     <<: *logging

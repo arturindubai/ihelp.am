@@ -24,8 +24,8 @@ if [ -z "${ROLLBACK_SKIP_COMPOSE:-}" ]; then
   # Убрать старый app-next если есть (мог остаться от прерванного деплоя),
   # кроме случая когда он запущен и принимает трафик
   _anext_was_running=false
-  if docker inspect homecare-app-next-1 >/dev/null 2>&1; then
-    _anext_was_running="$(docker inspect -f '{{.State.Running}}' homecare-app-next-1 2>/dev/null || echo false)"
+  if docker inspect "${prefix}-app-next-1" >/dev/null 2>&1; then
+    _anext_was_running="$(docker inspect -f '{{.State.Running}}' "${prefix}-app-next-1" 2>/dev/null || echo false)"
     if [ "$_anext_was_running" != "true" ]; then
       docker compose --profile deploy rm -f -s app-next 2>/dev/null || true
       _anext_was_running=false
@@ -40,7 +40,7 @@ if [ -z "${ROLLBACK_SKIP_COMPOSE:-}" ]; then
     docker compose up --no-build --no-deps -d app
     _app_ok=0
     for _ in $(seq 1 15); do
-      [ "$(docker inspect -f '{{.State.Health.Status}}' homecare-app-1 2>/dev/null)" = healthy ] && _app_ok=1 && break
+      [ "$(docker inspect -f '{{.State.Health.Status}}' "${prefix}-app-1" 2>/dev/null)" = healthy ] && _app_ok=1 && break
       sleep 5
     done
     docker compose --profile deploy rm -f -s app-next 2>/dev/null || true
@@ -52,7 +52,7 @@ if [ -z "${ROLLBACK_SKIP_COMPOSE:-}" ]; then
     docker compose --profile deploy up --no-build --no-deps -d app-next
     _anext_ok=0
     for _ in $(seq 1 15); do
-      [ "$(docker inspect -f '{{.State.Health.Status}}' homecare-app-next-1 2>/dev/null)" = healthy ] && _anext_ok=1 && break
+      [ "$(docker inspect -f '{{.State.Health.Status}}' "${prefix}-app-next-1" 2>/dev/null)" = healthy ] && _anext_ok=1 && break
       sleep 5
     done
 
@@ -61,7 +61,7 @@ if [ -z "${ROLLBACK_SKIP_COMPOSE:-}" ]; then
       docker compose stop app
       docker compose up --no-build --no-deps -d app
       for _ in $(seq 1 15); do
-        [ "$(docker inspect -f '{{.State.Health.Status}}' homecare-app-1 2>/dev/null)" = healthy ] && break
+        [ "$(docker inspect -f '{{.State.Health.Status}}' "${prefix}-app-1" 2>/dev/null)" = healthy ] && break
         sleep 5
       done
       docker compose --profile deploy rm -f -s app-next
@@ -73,7 +73,7 @@ if [ -z "${ROLLBACK_SKIP_COMPOSE:-}" ]; then
       # Без migrate: миграции старой версии не запускаем поверх новой схемы
       docker compose up --no-build --no-deps -d app
       for _ in $(seq 1 15); do
-        [ "$(docker inspect -f '{{.State.Health.Status}}' homecare-app-1 2>/dev/null)" = healthy ] && break
+        [ "$(docker inspect -f '{{.State.Health.Status}}' "${prefix}-app-1" 2>/dev/null)" = healthy ] && break
         sleep 5
       done
     fi
