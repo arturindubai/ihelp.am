@@ -1172,6 +1172,8 @@
     "popular": "",
     "reviewsTitle": "",
     "slogan": "",
+    "searchEmpty": "",
+    "searchEmptyHint": "",
     "stickyOrder": "",
     "title": "",
     "whatsapp": "",
@@ -1191,6 +1193,9 @@
   },
   "nav": {
     "account": "Պրոֆիլ",
+    "address": "Երևան",
+    "addressAny": "",
+    "addressSheet": "",
     "admin": "Ադմին",
     "bookings": "Պատվերներ",
     "home": "Գլխավոր",

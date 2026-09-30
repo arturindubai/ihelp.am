@@ -9,6 +9,7 @@ import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { BottomNav } from "@/components/BottomNav";
 import { StickyCartBar } from "@/components/StickyCartBar";
 import { Logo } from "@/components/Logo";
+import { AddressChip } from "@/components/home/AddressChip";
 
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
   const [s, user, t, tf] = await Promise.all([getSettings(), getCurrentUser(), getTranslations("nav"), getTranslations("footer")]);
@@ -19,6 +20,11 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
           <Link href="/" className="flex items-center font-bold tracking-tight">
             <Logo />
           </Link>
+          <AddressChip
+            cityLabel={t("address")}
+            sheetTitle={t("addressSheet")}
+            anyLabel={t("addressAny")}
+          />
           <div className="ml-auto flex items-center gap-2">
             <Suspense>
               <LocaleSwitcher enabled={s.locales.enabled} />
