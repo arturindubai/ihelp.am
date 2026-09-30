@@ -1451,6 +1451,21 @@
       "colService": "Service",
       "confirmMsg": "Prices of {count} options will change by {value}{unit}. This action cannot be undone automatically.",
       "empty": "No options with a price — add services.",
+      "historyAllServices": "All services",
+      "historyColDate": "Date",
+      "historyColNew": "New, ֏",
+      "historyColOld": "Old, ֏",
+      "historyColOption": "Option",
+      "historyColService": "Service",
+      "historyColUser": "User",
+      "historyCount": "{count, plural, one {# record} other {# records}}",
+      "historyEmpty": "No price changes yet.",
+      "historyFilterFrom": "From",
+      "historyFilterService": "Service",
+      "historyFilterTo": "To",
+      "historyReset": "Reset",
+      "historyTab": "History",
+      "pricesTab": "Prices",
       "saved": "Saved",
       "selected": "{count, plural, one {# option selected} other {# options selected}}",
       "sub": "{count, plural, one {# option} other {# options}} · {services, plural, one {# service} other {# services}}",
@@ -2237,6 +2252,15 @@
       "subjectRescheduled": "Visit rescheduled — order #{n}",
       "subjectVisitCancelled": "Visit {date} cancelled — order #{n}"
     }
+  },
+  "offline": {
+    "backOnline": "You're back online — loading page…",
+    "cachedAt": "Data saved: {time}",
+    "clientTitle": "My Visits (offline)",
+    "noCache": "No cached data. Open the visits page while online.",
+    "noVisits": "No upcoming visits",
+    "proTitle": "Visit schedule (offline)",
+    "viewOnly": "Read only"
   },
   "operator": {
     "all": "All",
