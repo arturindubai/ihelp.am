@@ -16,6 +16,7 @@
 | [`subscriptions.md`](subscriptions.md) | Подписки и пакеты: Recurrence, горизонт, пауза, истечение | `src/lib/recurrence.ts`, `src/server/services/booking.ts`, `src/app/api/cron/route.ts` |
 | [`auth.md`](auth.md) | Вход (OTP / Google / Apple / ссылка), роли, сессия, лимиты OTP | `src/server/auth.ts`, `src/server/otp.ts`, `src/server/actions/auth.ts` |
 | [`notifications.md`](notifications.md) | Кому, когда и через что уходят уведомления | `src/server/notify.ts`, `src/server/alerts.ts` |
+| [`finance.md`](finance.md) | Финансовые расчёты: выручка, каналы, наличные (cashCollected), рейтинг мастеров, конверсия | `src/lib/finance.ts`, `src/server/services/finance.ts` |
 
 ## Какие нужны (задача DEV-15)
 
