@@ -139,12 +139,14 @@ export function Card({ title, children, actions, className }: { title?: React.Re
   );
 }
 
-export function SaveBar({ onSave, pending, saved, error, extra }: { onSave: () => void; pending: boolean; saved?: boolean; error?: string; extra?: React.ReactNode }) {
+export function SaveBar({ onSave, pending, saved, error, extra, isDirty, onDiscard }: { onSave: () => void; pending: boolean; saved?: boolean; error?: string; extra?: React.ReactNode; isDirty?: boolean; onDiscard?: () => void }) {
   const t = useTranslations("admin.common");
   return (
     <div className="pb-safe sticky bottom-0 z-20 -mx-4 mt-4 flex items-center gap-2 border-t border-line bg-paper/95 px-4 pt-3 backdrop-blur md:mx-0 md:rounded-xl md:border md:pb-3">
       {extra}
+      {isDirty && !error && !saved && <span className="text-sm text-warn">● {t("unsaved")}</span>}
       <span className="ml-auto text-sm">{error ? <span className="text-bad">{error}</span> : saved ? <span className="text-ok">{t("saved")}</span> : null}</span>
+      {isDirty && onDiscard && <button type="button" className="btn-ghost btn-sm" disabled={pending} onClick={onDiscard}>{t("cancel")}</button>}
       <button type="button" className="btn-primary min-w-32" disabled={pending} onClick={onSave}>{pending ? t("saving") : t("save")}</button>
     </div>
   );

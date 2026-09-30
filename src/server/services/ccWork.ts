@@ -378,9 +378,9 @@ export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Tas
         if (t.status !== "ready" && !takeover) throw new CcError("not_ready_status", t.status);
         // Воркер «Продукт и не-код» берёт только задачи без кода: код пишет разработчик, проверяет тестировщик
         if (actor.role === "nocode" && t.layer !== "none") throw new CcError("forbidden_role", "nocode: code task");
-        // Дизайнер берёт только фронт/бэк+фронт без дизайна и вложений, флаг макета или дизайн-исследование
+        // Дизайнер берёт только фронт/бэк+фронт без дизайна и вложений, флаг макета (с написанными требованиями) или дизайн-исследование
         if (actor.role === "designer" && !isDesignerTask({ ...t, hasAttachments: t._count.attachments > 0 })) throw new CcError("forbidden_role", "designer: not a designer task");
-        // Продакт берёт только задачи с открытыми вопросами к нему
+        // Продакт берёт задачи с открытыми вопросами или шага 1 цепочки макета (mockupRequired без screenRequirements)
         if (actor.role === "product" && !isProductTask(t)) throw new CcError("forbidden_role", "product: no open needs");
         // Родитель с открытыми частями не берётся в работу: части делаются отдельно
         const openParts = await tx.task.count({ where: { parentKey: t.key, status: { notIn: CLOSED_STATUSES } } });
@@ -406,8 +406,8 @@ export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Tas
       if (opts.layer) filter.layer = opts.layer;
       if (opts.priority) filter.priority = opts.priority;
       if (actor.role === "nocode") Object.assign(filter, { layer: "none", needs: { isEmpty: true } });
-      else if (actor.role === "designer") Object.assign(filter, { OR: [{ mockupRequired: true, mockupApprovedBy: null, mockupUrl: null }, { assignee: "designer" }, { needsDesign: true, OR: [{ design: null }, { design: "" }], attachments: { none: {} } }] });
-      else if (actor.role === "product") Object.assign(filter, { needs: { isEmpty: false } });
+      else if (actor.role === "designer") Object.assign(filter, { OR: [{ mockupRequired: true, mockupApprovedBy: null, mockupUrl: null, NOT: [{ screenRequirements: null }, { screenRequirements: "" }] }, { assignee: "designer" }, { needsDesign: true, OR: [{ design: null }, { design: "" }], attachments: { none: {} } }] });
+      else if (actor.role === "product") Object.assign(filter, { OR: [{ needs: { isEmpty: false } }, { mockupRequired: true, mockupApprovedBy: null, OR: [{ screenRequirements: null }, { screenRequirements: "" }] }] });
       else if (opts.auto) Object.assign(filter, { layer: opts.layer ?? { not: "none" }, owner: { not: "product" }, needs: { isEmpty: true } });
       const candidates = await tx.task.findMany({ where: filter, take: 200 });
       const exclude = new Set<string>();

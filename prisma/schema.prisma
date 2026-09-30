@@ -627,6 +627,8 @@ model Task {
   mockupApprovedBy  String?
   /// Когда утвердили макет
   mockupApprovedAt  DateTime?
+  /// Требования к экранам: продакт пишет до того, как дизайнер берёт задачу (шаг 1 цепочки макета)
+  screenRequirements String?  @map("screen_requirements")
   /// Нужно описание дизайна: ставит триаж при разборе; true — задача идёт к дизайнеру, false — разработчик возьмёт без ожидания
   needsDesign       Boolean?
   /// «Что изменилось для людей» — 1–2 предложения простым языком для Release Notes
