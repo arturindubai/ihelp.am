@@ -1177,8 +1177,17 @@
     "wishes": ""
   },
   "cart": {
+    "byPlan": "",
+    "cancelPolicy": "",
+    "change": "",
     "checkout": "",
+    "crossSell": "",
+    "empty": "",
+    "emptyHint": "",
     "itemsCount": "",
+    "savings": "",
+    "title": "",
+    "toCatalog": "",
     "total": ""
   },
   "catalog": {
@@ -1510,6 +1519,7 @@
     "title": ""
   },
   "service": {
+    "addToCart": "",
     "benefits": "",
     "excludes": "",
     "faq": "",
@@ -1544,6 +1554,7 @@
     "selectRequirements": "",
     "startsAt": "",
     "thenPerVisit": "",
+    "toCart": "",
     "total": ""
   }
 }

@@ -64,6 +64,7 @@ export async function getHome(locale: string, userId?: string | null) {
 }
 
 type SvcCardInput = {
+  id: string;
   slug: string;
   title: unknown;
   subtitle: unknown;
@@ -81,6 +82,7 @@ export function serviceCard(s: SvcCardInput, locale: string) {
   const prices = s.groups.flatMap((g) => g.options.map((o) => o.price)).filter((p) => p > 0);
   const durations = s.groups.flatMap((g) => g.options.map((o) => o.durationMin)).filter((d) => d > 0);
   return {
+    id: s.id,
     slug: s.slug,
     title: tr(s.title, locale),
     subtitle: tr(s.subtitle, locale),

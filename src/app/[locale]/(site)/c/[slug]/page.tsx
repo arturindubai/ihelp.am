@@ -77,7 +77,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ local
           <PromoSlot placement="CATALOG" locale={locale} />
           <div className="mt-4 space-y-3">
             {c.services.map((svc) => (
-              <ServiceCard key={svc.slug} s={svc} />
+              <ServiceCard key={svc.slug} s={svc} showAddButton />
             ))}
           </div>
         </div>

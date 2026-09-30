@@ -2,10 +2,12 @@
 import crypto from "crypto";
 import { cookies } from "next/headers";
 import { getCurrentUser } from "../auth";
+import { db } from "../db";
 import {
   ANON_CART_COOKIE,
   upsertCartItem,
   removeCartItem,
+  removeCartItemByService,
   clearCartItems,
   resolveCartEntry,
 } from "../services/cart";
@@ -83,4 +85,50 @@ export async function getCartAction(): Promise<CartEntry | null> {
   const anonId = await getAnonId();
   if (!anonId) return null;
   return resolveCartEntry({ anonId });
+}
+
+/** Удалить услугу из корзины по serviceId; возвращает обновлённый снимок */
+export async function removeServiceFromCartAction(serviceId: string): Promise<CartEntry | null> {
+  const user = await getCurrentUser();
+  if (user) {
+    await removeCartItemByService({ userId: user.id }, serviceId);
+    return resolveCartEntry({ userId: user.id });
+  }
+  const anonId = await getAnonId();
+  if (anonId) {
+    await removeCartItemByService({ anonId }, serviceId);
+    return resolveCartEntry({ anonId });
+  }
+  return null;
+}
+
+/** Добавить услугу с дефолтными опциями (для кнопки «+ Добавить» в каталоге) */
+export async function addServiceDefaultsToCartAction(serviceId: string): Promise<CartEntry | null> {
+  const svc = await db.service.findUnique({
+    where: { id: serviceId },
+    include: {
+      groups: {
+        where: { active: true },
+        orderBy: { sort: "asc" },
+        include: { options: { where: { active: true }, orderBy: { sort: "asc" } } },
+      },
+      plans: { where: { active: true }, orderBy: { sort: "asc" } },
+    },
+  });
+  if (!svc) return null;
+
+  const opts: string[] = [];
+  for (const g of svc.groups) {
+    const d = g.options.filter((o) => o.isDefault);
+    if (g.type === "SINGLE") {
+      const pick = d[0] ?? (g.required ? g.options[0] : undefined);
+      if (pick) opts.push(pick.id);
+    } else {
+      opts.push(...d.map((o) => o.id));
+    }
+  }
+  const plan = svc.plans.find((p) => p.isDefault) ?? svc.plans[0] ?? null;
+  const planId = plan?.id ?? null;
+
+  return addToCartAction(serviceId, opts, planId);
 }

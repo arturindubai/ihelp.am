@@ -22,7 +22,7 @@ export default async function Services({ params }: { params: Promise<{ locale: s
       {data.services.length > 0 && (
         <div className="mt-6 space-y-3">
           {data.services.map((s) => (
-            <ServiceCard key={s.slug} s={s} />
+            <ServiceCard key={s.slug} s={s} showAddButton />
           ))}
         </div>
       )}

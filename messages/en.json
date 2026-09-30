@@ -2028,8 +2028,18 @@
     "wishes": "Preferences"
   },
   "cart": {
+    "byPlan": "By subscription",
+    "cancelPolicy": "Free cancellation within 24 h",
+    "change": "Edit",
     "checkout": "Book",
-    "itemsCount": "{count, plural, one {# service} other {# services}}"
+    "crossSell": "Frequently bought together",
+    "empty": "Your cart is empty",
+    "emptyHint": "Choose a service",
+    "itemsCount": "{count, plural, one {# service} other {# services}}",
+    "savings": "You save {amount}",
+    "title": "Your order",
+    "toCatalog": "Browse services",
+    "total": "Total"
   },
   "catalog": {
     "arrivalToday": "today",
@@ -2418,6 +2428,7 @@
     "title": "Your review of the visit"
   },
   "service": {
+    "addToCart": "+ Add",
     "benefits": "Benefits",
     "excludes": "Not included",
     "faq": "FAQ",
@@ -2452,6 +2463,7 @@
     "selectRequirements": "Choose options",
     "startsAt": "from {price} per visit",
     "thenPerVisit": "then {price} per visit",
+    "toCart": "Add to cart",
     "total": "Total"
   }
 }

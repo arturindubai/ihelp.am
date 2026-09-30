@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { CART_EVENT, type CartEntry } from "./cart";
 
-const SAMPLE: CartEntry = { slug: "cleaning", opts: ["opt1", "opt2"], planId: null, count: 1, total: 5000 };
+const SAMPLE: CartEntry = { slug: "cleaning", opts: ["opt1", "opt2"], planId: null, count: 1, total: 5000, slugs: ["cleaning"] };
 
 // Простой localStorage-стаб для тестирования без браузерного окружения
 function makeLocalStorage() {

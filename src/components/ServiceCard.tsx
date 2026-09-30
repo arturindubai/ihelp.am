@@ -5,8 +5,10 @@ import { amd, durationLabel } from "@/lib/format";
 import { RATING_THRESHOLD } from "@/lib/constants";
 import { Rating } from "./Stars";
 import { Img } from "@/components/Img";
+import { AddToCartButton } from "./AddToCartButton";
 
 type ServiceCardProps = {
+  id: string;
   slug: string;
   title: string;
   subtitle: string;
@@ -21,7 +23,7 @@ type ServiceCardProps = {
   arrivalHours?: number | null;
 };
 
-export async function ServiceCard({ s, showInlinePrice }: { s: ServiceCardProps; showInlinePrice?: boolean }) {
+export async function ServiceCard({ s, showInlinePrice, showAddButton }: { s: ServiceCardProps; showInlinePrice?: boolean; showAddButton?: boolean }) {
   const [t, tc, locale] = await Promise.all([getTranslations("common"), getTranslations("catalog"), getLocale()]);
   const hasRating = s.reviewsCount >= RATING_THRESHOLD;
   const showArrival = s.arrivalHours != null;
@@ -74,6 +76,7 @@ export async function ServiceCard({ s, showInlinePrice }: { s: ServiceCardProps;
             {s.fromPrice > 0 && !(showInlinePrice && hasRating) && <span className="chip">{t("from", { price: amd(s.fromPrice) })}</span>}
             {s.minDuration > 0 && <span className="chip">{durationLabel(s.minDuration, locale)}</span>}
             {s.maxDiscount > 0 && <span className="chip bg-warn-50 text-warn">{t("off", { percent: s.maxDiscount })}</span>}
+            {showAddButton && <AddToCartButton slug={s.slug} serviceId={s.id} className="ml-auto" />}
           </div>
         )}
       </div>
