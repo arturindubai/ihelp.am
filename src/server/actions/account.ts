@@ -15,6 +15,7 @@ import { normalizeEmail } from "@/lib/email";
 import { BookingError, scheduleVisit, BUSY_STATUSES } from "../services/booking";
 import { getMastersForService } from "../services/catalog";
 import { tr } from "@/i18n/locales";
+import { calcCancelPenalty } from "@/lib/cancelPenalty";
 import { atYerevan } from "@/lib/time";
 import { verifyUnsubscribeToken } from "@/lib/emailToken";
 import { redirect } from "next/navigation";
@@ -141,14 +142,21 @@ export async function cancelOrderAction(orderId: string) {
   if (!o || o.status === "CANCELLED" || o.status === "COMPLETED") return { ok: false };
   // Отменяем все будущие визиты: иначе заказ закрыт, а мастер всё равно поедет.
   // Визиты внутри срока бесплатной отмены отмечаем отдельно — команде нужно знать о поздней отмене.
-  const limit = new Date(Date.now() + s.booking.freeCancelHours * 3600_000);
-  const late = o.visits.filter((v) => ["SCHEDULED", "CONFIRMED"].includes(v.status) && v.scheduledAt && v.scheduledAt <= limit).length;
+  const now = new Date();
+  const limit = new Date(now.getTime() + s.booking.freeCancelHours * 3600_000);
+  const lateVisits = o.visits.filter((v) => ["SCHEDULED", "CONFIRMED"].includes(v.status) && v.scheduledAt && v.scheduledAt <= limit);
+  const late = lateVisits.length;
+  // Штраф — берём самый ближайший визит (первый из лейтних); если поздних нет — 0
+  const firstLate = lateVisits.sort((a, b) => (a.scheduledAt?.getTime() ?? 0) - (b.scheduledAt?.getTime() ?? 0))[0];
+  const cancelPenalty = firstLate?.scheduledAt
+    ? calcCancelPenalty(firstLate.scheduledAt, now, s.booking.freeCancelHours, s.booking.lateCancelFeeAmd)
+    : 0;
   // Уведомить мастеров ДО транзакции отмены
   const vsToNotify = o.visits.filter((v) => ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"].includes(v.status) && v.masterId);
   for (const v of vsToNotify) await notifyMasterCancelled(v.id).catch(() => {});
   await db.$transaction([
     db.visit.updateMany({ where: { orderId: o.id, status: { in: ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"] } }, data: { status: "CANCELLED" } }),
-    db.order.update({ where: { id: o.id }, data: { status: "CANCELLED", cancelReason: "client" } }),
+    db.order.update({ where: { id: o.id }, data: { status: "CANCELLED", cancelReason: "client", ...(cancelPenalty > 0 ? { cancelPenalty } : {}) } }),
   ]);
   await notifyCancelOrderTeam(o.id, late, s.booking.freeCancelHours);
   await notifyClientCancelled(o.id).catch(() => {});

@@ -59,6 +59,7 @@ model User {
   redemptions       PromoRedemption[]
   auditLogs         AuditLog[]
   pushSubscriptions PushSubscription[]
+  priceAudits       PriceAudit[]
 }
 
 /// Web Push подписки (VAPID): endpoint + ключи для отправки push-уведомлений без открытого сайта
@@ -332,6 +333,12 @@ model Order {
   promoCodeId       String?
   promoCode         PromoCode?    @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
   comment           String?
+  /// Клиент попросил не звонить, только мессенджер — отдельное булево поле, не префикс комментария
+  noCall            Boolean       @default(false)
+  /// Чаевые мастеру целыми драмами, 100 % мастеру; 0 = не выбраны
+  tipAmount         Int           @default(0)
+  /// Штраф за позднюю отмену (фиксированная сумма из настроек на момент отмены); 0 = отмены не было или отменили вовремя
+  cancelPenalty     Int           @default(0)
   locale            String        @default("ru")
   source            String        @default("web")
   cancelReason      String?
@@ -929,6 +936,27 @@ model AppError {
   taskKey     String?
 
   @@index([lastSeenAt])
+}
+
+/// Журнал изменений цен (ADMIN-11): кто, когда, какой тариф изменён с какой на какую цену
+model PriceAudit {
+  id           String   @id @default(cuid())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// Имя пользователя в момент изменения (снимок)
+  userName     String?
+  optionId     String
+  /// Название тарифа в момент изменения (снимок, ru)
+  optionTitle  String
+  serviceId    String
+  /// Название услуги в момент изменения (снимок, ru)
+  serviceTitle String
+  oldPrice     Int
+  newPrice     Int
+  createdAt    DateTime @default(now())
+
+  @@index([serviceId, createdAt])
+  @@index([createdAt])
 }
 
 /// Заявки «Уведомить меня»: category — по категории-заглушке, service — по конкретной услуге с comingSoon=true
