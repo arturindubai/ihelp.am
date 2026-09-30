@@ -15,10 +15,8 @@ type Props = {
 export function AddressChip({ cityLabel, sheetTitle, anyLabel }: Props) {
   const [district, setDistrict] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) setDistrict(saved);
@@ -33,8 +31,6 @@ export function AddressChip({ cityLabel, sheetTitle, anyLabel }: Props) {
     } catch {}
   }
 
-  if (!mounted) return null;
-
   return (
     <>
       <button
@@ -43,7 +39,7 @@ export function AddressChip({ cityLabel, sheetTitle, anyLabel }: Props) {
         className="flex items-center gap-1.5 rounded-full border border-line bg-paper px-3 py-1.5 text-sm transition hover:bg-surface cursor-pointer"
       >
         <MapPin size={14} className="text-brand shrink-0" />
-        <span className="truncate max-w-[120px]">
+        <span className="truncate max-w-[120px]" suppressHydrationWarning>
           {district ? `${cityLabel} · ${district}` : cityLabel}
         </span>
         <ChevronDown size={14} className="text-muted shrink-0" />
