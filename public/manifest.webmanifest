@@ -1,0 +1,23 @@
+{
+  "name": "iHelp",
+  "short_name": "iHelp",
+  "description": "Бытовые услуги в Ереване",
+  "start_url": "/ru",
+  "display": "standalone",
+  "background_color": "#5B3DF5",
+  "theme_color": "#5B3DF5",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

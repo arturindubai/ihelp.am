@@ -166,7 +166,14 @@ export async function transition(key: string, input: TransitionInput, actor: Act
     // Критерии: если задача протестирована — доверяем тестировщику; иначе требуем явный чек-лист
     const hasTesterReview = !!task.testedAt;
     let criteriaResult = input.criteriaResult ? [...input.criteriaResult] : undefined;
-    if (task.requirements.length > 0 && !criteriaResult && !hasTesterReview && !force) throw new CcError("criteria_incomplete");
+    if (task.requirements.length > 0 && !criteriaResult && !hasTesterReview && !force) {
+      // Не-код задачи тестировщик не проверяет; нажатие «Принять» владельцем = все критерии подтверждены
+      if (actor.role === "owner" && !isCodeTask(task.layer)) {
+        criteriaResult = task.requirements.map(() => ({ done: true as const }));
+      } else {
+        throw new CcError("criteria_incomplete");
+      }
+    }
     if (criteriaResult && task.requirements.length > 0) {
       // Валидация явно введённых ключей: карточка должна существовать и быть открытой
       const CARD_KEY_RE = /^[A-Z]+-\d+$/;
