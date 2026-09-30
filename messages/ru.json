@@ -380,9 +380,19 @@
     "services": "Услуги"
   },
   "catalog": {
+    "comingSoonText": "Мы запускаем эту услугу. Оставьте контакт — сообщим первыми, когда откроем запись.",
+    "comingSoonTitle": "Скоро в Ереване",
     "newService": "Новая услуга",
-    "comingSoonTitle": "Скоро откроем",
-    "comingSoonText": "Готовим услуги и мастеров. Напишите нам — ответим на вопросы",
+    "notifyAlready": "Мы уже получили ваш контакт",
+    "notifyButton": "Уведомить меня",
+    "notifyConsent": "Нажимая кнопку, вы соглашаетесь на обработку контакта для уведомления о запуске. <privacy>Политика конфиденциальности</privacy>",
+    "notifyHint": "Передадим только одно сообщение о запуске",
+    "notifyInvalid": "Введите телефон или e-mail",
+    "notifyPlaceholder": "+374 … или name@mail.com",
+    "notifySubtitle": "Телефон или e-mail — на выбор",
+    "notifySuccess": "Записаны! Сообщим, когда откроем запись.",
+    "notifyTitle": "Уведомить меня о запуске",
+    "notifyTooMany": "Слишком много заявок, попробуйте позже",
     "writeWhatsApp": "Написать в WhatsApp"
   },
   "pro": {
@@ -528,7 +538,8 @@
       "title": "Название",
       "subtitle": "Подзаголовок",
       "description": "Описание",
-      "badge": "Бейдж"
+      "badge": "Бейдж",
+      "unsaved": "Не сохранено"
     },
     "dashboard": {
       "today": "Визиты сегодня",
@@ -720,7 +731,19 @@
       "excludesText": "Что не входит",
       "includesExcludesPlaceholder": "Каждая строка — отдельный пункт",
       "rating": "Рейтинг",
-      "bookings": "Заказов"
+      "bookings": "Заказов",
+      "addCategory": "Добавить категорию",
+      "masterSearch": "Поиск мастера…",
+      "mastersSelected": "{n, plural, one {# выбран} few {# выбрано} other {# выбрано}}",
+      "noMasters": "Нет привязанных мастеров",
+      "noVariants": "Нет ни одного варианта — клиент не сможет выбрать",
+      "previewOptions": "{groups} {groups, plural, one {группа} few {группы} other {групп}}, {variants} {variants, plural, one {вариант} few {варианта} other {вариантов}}",
+      "previewStep": "Шаг {n}",
+      "slugFromTitle": "Из названия",
+      "unsavedLeave": "Уйти",
+      "unsavedStay": "Остаться",
+      "unsavedTitle": "Изменения не сохранены. Уйти без сохранения?",
+      "visitsNextWeek": "{n} виз. на нед."
     },
     "masters": {
       "title": "Мастера",
@@ -1261,7 +1284,13 @@
         "cancel": "Отмена",
         "quickReady": "В очередь",
         "noMoves": "Отсюда задачу переводит исполнитель или деплоер",
-        "claimHint": "В работу задачу берёт исполнитель: node scripts/cc.mjs take {key} --agent dev-1"
+        "claimHint": "В работу задачу берёт исполнитель: node scripts/cc.mjs take {key} --agent dev-1",
+        "criteriaCardPlaceholder": "IN-7",
+        "criteriaLabel": "Критерии выполнены",
+        "criteriaSpawnedCard": "↗ вынесен в карточку",
+        "criteriaWillCreate": "↗ создать карточку",
+        "whatChangedLabel": "Что изменилось для людей",
+        "whatChangedPlaceholder": "Опишите одним предложением, что теперь работает иначе для клиента или команды"
       },
       "feed": {
         "title": "Лента задачи",
@@ -1446,7 +1475,8 @@
           "nodesign": "нужно описание дизайна",
           "mockup": "нужен макет",
           "returned": "Возвращено",
-          "deploy": "протестировано"
+          "deploy": "протестировано",
+          "requirements": "требования"
         },
         "capWaiting": "{n, plural, one {# задача} few {# задачи} other {# задач}} ждут из-за суточного лимита",
         "more": "и ещё {n} — во вкладке «Бэклог»",
@@ -1614,7 +1644,11 @@
         "designSnippet": "Дизайн: {text}",
         "files": "файлов: {n}",
         "workersLink": "Пуск и настройки пула — вкладка «Воркеры» →",
-        "approvedAgent": "у {agent}"
+        "approvedAgent": "у {agent}",
+        "approvalSection": "Шаг 3 · На утверждении",
+        "requirementsSection": "Шаг 1 · Ждут требований от продакта",
+        "requirementsHint": "Продакт должен описать: кто использует экран, что видит, какие действия, пустое/ошибочное состояние и что не входит.",
+        "requirementsEmpty": "Нет задач, ждущих требований"
       },
       "backlog": {
         "strip": {
@@ -1697,6 +1731,7 @@
         "answerVariant": "Выбран вариант {id}",
         "expand": "развернуть",
         "collapse": "свернуть",
+        "replyOrWritePh": "или напишите свой ответ",
         "replyPh": "Ваш ответ…",
         "replySend": "Ответить",
         "postpone": "Отложить",
@@ -1780,7 +1815,29 @@
         "today": "Сегодня закрыто: {n}",
         "hint": "закрытое за две недели, новое сверху",
         "empty": "За две недели ничего не закрыто",
-        "noCode": "не код"
+        "noCode": "не код",
+        "pendingStepTitle": "Ручной шаг не закрыт",
+        "pendingStep": "↗ {key}"
+      },
+      "productTab": {
+        "allByStatus": "Все задачи дорожки · {n}",
+        "allEmpty": "Задач дорожки «Продакт» нет",
+        "doneLink": "Показаны последние {n} · посмотреть все",
+        "groups": {
+          "backlog": "Бэклог",
+          "done": "Сделано",
+          "in_progress": "В работе",
+          "ready": "В очереди",
+          "review": "На проверке"
+        },
+        "pending": "На согласовании · {n}",
+        "pendingEmpty": "Нет задач на согласовании",
+        "pendingHint": "Некод-задачи дорожки «Продакт» на проверке у вас",
+        "queue": "Очередь воркера · {n}",
+        "queueEmpty": "Воркер-продакт ничего не ждёт",
+        "queueHint": "Задачи, которые воркер-продакт сделает следующими",
+        "subtitle": "Задачи дорожки «Продакт»: что у воркера, что ждёт вашего решения",
+        "workersLink": "Настроить пул"
       },
       "notify": {
         "inbox": "Уведомления",
@@ -1928,6 +1985,8 @@
         "otpByChannel": "{channel}: {n}",
         "alertMissing": "Тех-алерты не доставляются: адресат не задан. Критические ошибки, сбои бэкапов и брошенные задачи пишутся только в журнал.",
         "alertMissingLink": "Настроить в Уведомлениях",
+        "mergeConflicts": "Конфликты слияния (30 дн.)",
+        "mergeConflictsHint": "{pct}% возвратов · всего {total} · за {days} дней",
         "depChains": "Цепочки с заблокированным корнем",
         "depChainsBacklog": "в бэклоге",
         "depChainsWaiting": "ждут",

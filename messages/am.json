@@ -364,7 +364,17 @@
     "newService": "Նոր ծառայություն",
     "comingSoonTitle": "Շուտով կբացենք",
     "comingSoonText": "Պատրաստում ենք ծառայություններ: Գրեք մեզ՝ ձեր հարցերին կպատասխանենք",
-    "writeWhatsApp": "Գրել WhatsApp-ում"
+    "writeWhatsApp": "Գрел WhatsApp-ում",
+    "notifyButton": "Ծануцел индз",
+    "notifyConsent": "Кттацнелов кочакы, дуз памаjордвоум ек дзер контакти машакман: <privacy>Гаjтнипетян кагакакануtян</privacy>",
+    "notifyHint": "Куjарканк мияйн мек хагорданагруtян",
+    "notifyInvalid": "Мутказгрек херахос кам e-mail",
+    "notifyPlaceholder": "+374 … кам name@mail.com",
+    "notifySubtitle": "Херахос кам e-mail — дзер кнтруtямб",
+    "notifyAlready": "Менк арден стацел енк дзер контакты",
+    "notifySuccess": "Граíвац ек! Кцануценк, ерп амрагумы бацви:",
+    "notifyTitle": "Цануцел горцаркман масин",
+    "notifyTooMany": "Чафазанc шат хайтер, хнтрум енк брзел авели уш"
   },
   "pro": {
     "title": "",
@@ -507,7 +517,8 @@
       "title": "",
       "subtitle": "",
       "description": "",
-      "badge": ""
+      "badge": "",
+      "unsaved": ""
     },
     "dashboard": {
       "today": "",
@@ -689,7 +700,16 @@
       "excludesText": "",
       "includesExcludesPlaceholder": "",
       "rating": "",
-      "bookings": ""
+      "bookings": "",
+      "addCategory": "",
+      "masterSearch": "",
+      "mastersSelected": "{n} ընտրված",
+      "noMasters": "",
+      "slugFromTitle": "",
+      "unsavedLeave": "",
+      "unsavedStay": "",
+      "unsavedTitle": "",
+      "visitsNextWeek": ""
     },
     "masters": {
       "title": "",

@@ -380,9 +380,19 @@
     "services": "Services"
   },
   "catalog": {
+    "comingSoonText": "We're launching this service. Leave your contact — we'll be the first to let you know when booking opens.",
+    "comingSoonTitle": "Coming soon in Yerevan",
     "newService": "New service",
-    "comingSoonTitle": "Opening soon",
-    "comingSoonText": "We're preparing services and pros. Write to us — we'll answer your questions",
+    "notifyAlready": "We already have your contact",
+    "notifyButton": "Notify me",
+    "notifyConsent": "By clicking the button, you agree to your contact being processed to notify you at launch. <privacy>Privacy policy</privacy>",
+    "notifyHint": "We'll send only one message when we launch",
+    "notifyInvalid": "Enter a phone number or e-mail",
+    "notifyPlaceholder": "+374 … or name@mail.com",
+    "notifySubtitle": "Phone or e-mail — your choice",
+    "notifySuccess": "You're on the list! We'll message you when booking opens.",
+    "notifyTitle": "Notify me at launch",
+    "notifyTooMany": "Too many requests, please try again later",
     "writeWhatsApp": "Write on WhatsApp"
   },
   "pro": {
@@ -526,7 +536,8 @@
       "title": "Title",
       "subtitle": "Subtitle",
       "description": "Description",
-      "badge": "Badge"
+      "badge": "Badge",
+      "unsaved": "Unsaved"
     },
     "dashboard": {
       "today": "Visits today",
@@ -708,7 +719,16 @@
       "excludesText": "What's not included",
       "includesExcludesPlaceholder": "Each line is a separate item",
       "rating": "Rating",
-      "bookings": "Bookings"
+      "bookings": "Bookings",
+      "addCategory": "Add category",
+      "masterSearch": "Search masters…",
+      "mastersSelected": "{n, plural, one {# selected} other {# selected}}",
+      "noMasters": "No assigned masters",
+      "slugFromTitle": "From title",
+      "unsavedLeave": "Leave",
+      "unsavedStay": "Stay",
+      "unsavedTitle": "Changes not saved. Leave without saving?",
+      "visitsNextWeek": "{n} vis./week"
     },
     "masters": {
       "title": "Pros",
@@ -1718,6 +1738,26 @@
         "hint": "closed in the last two weeks, newest first",
         "empty": "Nothing closed in the last two weeks",
         "noCode": "no code"
+      },
+      "productTab": {
+        "allByStatus": "All lane tasks · {n}",
+        "allEmpty": "No product lane tasks",
+        "doneLink": "Showing last {n} · view all",
+        "groups": {
+          "backlog": "Backlog",
+          "done": "Done",
+          "in_progress": "In progress",
+          "ready": "Queued",
+          "review": "In review"
+        },
+        "pending": "Awaiting approval · {n}",
+        "pendingEmpty": "No tasks awaiting approval",
+        "pendingHint": "Non-code product lane tasks awaiting your review",
+        "queue": "Worker queue · {n}",
+        "queueEmpty": "Product worker has nothing queued",
+        "queueHint": "Tasks the product worker will do next",
+        "subtitle": "Product lane tasks: what the worker is working on, what awaits your decision",
+        "workersLink": "Configure pool"
       },
       "notify": {
         "inbox": "Notifications",
