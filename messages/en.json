@@ -1109,6 +1109,7 @@
         "postponePh": "Reason (optional)…",
         "postponedSectionHint": "Tasks with external blocks: postponed by owner and waiting for external events.",
         "postponedUntil": "returns {date}",
+        "replyOrWritePh": "or write your answer",
         "replyPh": "Your answer…",
         "replySend": "Reply",
         "returnedRuns": "Returned for revision",
