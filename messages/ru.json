@@ -1675,6 +1675,8 @@
       "telegram": "Telegram",
       "telegramOrderThreadHint": "Числовой ID топика «Заявки» в группе. Уведомления о заказах пойдут туда. Если пусто — в общий чат",
       "telegramOrderThreadId": "ID топика заявок",
+      "telegramTasksThreadHint": "Числовой ID топика для CC-бота: новые задачи IN-N, /status, уведомления «нужен ты». Если пусто — не отправляется",
+      "telegramTasksThreadId": "ID топика «Задачи портала»",
       "telegramTechThreadHint": "Числовой ID топика для тех-алертов. Если пусто — алерты идут в топик заявок или общий чат",
       "telegramTechThreadId": "ID тех-топика",
       "telegramWidget": "Виджет Telegram",
@@ -1827,6 +1829,8 @@
       "google_failed": "Google не подтвердил вход. Попробуйте ещё раз",
       "google_not_linked": "Этот Google-аккаунт не привязан. Войдите по номеру телефона и укажите эту почту в профиле",
       "google_off": "Вход через Google сейчас выключен",
+      "google_signup_phone_taken": "Этот телефон уже привязан к другому аккаунту",
+      "google_signup_ticket_expired": "Ссылка на регистрацию устарела — войдите через Google ещё раз",
       "google_state": "Сессия входа устарела, попробуйте ещё раз",
       "name": "Укажите имя",
       "phone": "Проверьте номер телефона",
@@ -1841,6 +1845,9 @@
     "getCodeVia": "Получить код через",
     "google": "Войти через Google",
     "googleHint": "Для сотрудников: вход по рабочей почте, указанной в профиле",
+    "googleSignupEmailConfirmed": "Email {email} подтверждён Google",
+    "googleSignupPhoneHint": "Введите номер телефона, чтобы завершить регистрацию",
+    "googleSignupTitle": "Регистрация через Google",
     "method": {
       "email": "По email",
       "phone": "По номеру телефона"
@@ -1871,6 +1878,10 @@
     "anyMasterSub": "Назначим подходящего мастера",
     "availableTime": "Доступное время",
     "base": "Стоимость",
+    "calMonthNav": {
+      "next": "Следующий месяц",
+      "prev": "Предыдущий месяц"
+    },
     "cancelRules": "Правила отмены",
     "card": "Картой онлайн",
     "cardSoon": "Скоро",
@@ -1917,6 +1928,7 @@
     "promoNotBetter": "Промокод не выгоднее текущей скидки",
     "promoPlaceholder": "Введите промокод",
     "savings": "Вы экономите {first} ֏ на первом визите и {regular} ֏ на каждом следующем",
+    "selectedDate": "{date}",
     "serviceLabel": "Услуга",
     "startDate": "Дата первого визита",
     "success": "Заказ оформлен!",
@@ -1931,6 +1943,7 @@
     "summary": "Смета",
     "title": "Оформление заказа",
     "toOrder": "Перейти к моим заказам",
+    "weekdaysMin": "Пн,Вт,Ср,Чт,Пт,Сб,Вс",
     "weekdaysShort": "Пн,Вт,Ср,Чт,Пт,Сб,Вс",
     "whoComes": "Кто приедет",
     "wishes": "Пожелания"
@@ -2275,6 +2288,7 @@
     "noReviews": "Отзывов пока нет",
     "notFound": "Услуга не найдена",
     "packTotal": "за {count} визита",
+    "packageSaving": "Экономия {amount}",
     "perVisitSaving": "−{amount} с визита",
     "policy": "Условия",
     "reviews": "Отзывы",
