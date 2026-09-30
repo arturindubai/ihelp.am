@@ -71,7 +71,7 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy }: { s: Ser
   // Сохраняем выбор в localStorage, чтобы StickyCartBar показывал его на других страницах
   useEffect(() => {
     if (lines.length > 0) {
-      writeCart({ slug: s.slug, opts, planId, count: lines.length, total: barPrice });
+      writeCart({ slug: s.slug, opts, planId, count: 1, total: barPrice });
     } else {
       clearCart();
     }

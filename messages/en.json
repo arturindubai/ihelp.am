@@ -1868,7 +1868,7 @@
   },
   "cart": {
     "checkout": "Book now",
-    "itemsCount": "{count, plural, one {# item} other {# items}}",
+    "itemsCount": "{count, plural, one {# service} other {# services}}",
     "total": "{amount} ֏"
   },
   "catalog": {

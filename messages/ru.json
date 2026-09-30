@@ -1970,7 +1970,7 @@
   },
   "cart": {
     "checkout": "Оформить",
-    "itemsCount": "{count, plural, one {# позиция} few {# позиции} other {# позиций}}",
+    "itemsCount": "{count, plural, one {# услуга} few {# услуги} other {# услуг}}",
     "total": "{amount} ֏"
   },
   "catalog": {
