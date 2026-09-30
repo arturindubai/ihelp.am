@@ -93,7 +93,7 @@ cd /opt/ihelp.am && git worktree remove ../ihelp.am-review
 
 ### 5. Поднять изолированный стенд (если решил, что нужен)
 
-> **Воркер-деплоер:** `deploy/staging.sh` в его разрешениях отсутствует (`scripts/worker-run.sh`) — стенд поднять нельзя. Этот раздел только для ручной сессии техдиректора.
+> **Воркер-деплоер:** доступны подкоманды `up * --no-notify`, `down`, `status` (см. `scripts/worker-run.sh`). Подкоманда `up` — **только с `--no-notify`** (иначе тех-алерты уйдут в реальный Telegram команды). Порт стенда — 8081; после проверки обязательно снести командой `down`.
 
 Тот же `docker-compose.yml`, значит тот же стек 1 к 1, но отдельные тома, отдельная база, отдельные порты — прод и соседи не задеты. Порты: 8080 — прод, 8081 — стенд деплоера, 8082–8099 — стенды разработчиков (перед запуском `ss -ltn`). **Без `COMPOSE_PROJECT_NAME` команда `docker compose` работает с продом**: имя проекта `homecare` зашито в `docker-compose.yml`.
 
@@ -274,6 +274,9 @@ node scripts/cc.mjs return <КЛЮЧ> "…" --agent deployer            # вер
 node scripts/cc.mjs done <КЛЮЧ> --sha <коммит> --live "SMOKE OK, …" "…" --agent deployer   # закрыть с доказательством; --live обязателен для UI-задач
 scripts/deploy-task.sh <КЛЮЧ>                        # выложить одну задачу
 scripts/deploy-batch.sh <КЛЮЧ1> <КЛЮЧ2> …           # пачковая выкладка до 5 задач
+deploy/staging.sh up <ветка> --no-notify             # поднять изолированный стенд (up — только с --no-notify)
+deploy/staging.sh down                               # снести стенд и тома полностью
+deploy/staging.sh status                             # адрес работающего стенда
 
 # — только ручная сессия (техдиректор), воркеру недоступно —
 docker compose ps                                    # состояние контейнеров
@@ -281,9 +284,6 @@ docker compose logs --tail 50 app                    # логи приложен
 docker compose logs app | grep otp                   # код входа, пока каналы не у всех подключены
 docker compose exec -T db psql -U app -d homeservices -tAc 'select count(*) from "Order"'   # запрос к базе
 docker compose exec -T backup sh /backup.sh once     # бэкап прямо сейчас
-deploy/staging.sh up <ветка> [--no-notify]           # поднять изолированный стенд для проверки ветки
-deploy/staging.sh down                               # снести стенд и тома полностью
-deploy/staging.sh status                             # адрес работающего стенда
 deploy/update.sh                                     # мёрдж уже сделан → выложить (не через скрипт выкладки)
 deploy/rollback.sh                                   # откат образа приложения (не базы)
 git worktree list                                    # какие временные копии сейчас подняты — не забывать чистить
