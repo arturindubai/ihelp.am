@@ -571,11 +571,18 @@
       "descr": "",
       "firstOrderOnly": "",
       "fixed": "",
+      "forBothNote": "",
+      "forClient": "",
+      "forEmail": "",
+      "forEmailHint": "",
+      "forPhone": "",
+      "forPhoneHint": "",
       "maxDiscount": "",
       "minOrder": "",
       "newPromo": "",
       "perUserLimit": "",
       "percent": "",
+      "personal": "",
       "planKinds": "",
       "rulesHint": "",
       "services": "",
@@ -1044,9 +1051,13 @@
     "weekdaysShort": "",
     "wishes": ""
   },
-  "cart": {},
+  "cart": {
+    "checkout": "",
+    "itemsCount": "",
+    "total": ""
+  },
   "catalog": {
-    "comingSoonText": "Պատրաստում ենք ծառայություններ: Գրեք մեզ՝ ձեր հարցերին կպատասխանենք",
+    "comingSoonText": "",
     "comingSoonTitle": "Շուտով կբացենք",
     "newService": "Նոր ծառայություն",
     "notifyAlready": "Менк арден стацел енк дзер контакты",
@@ -1163,6 +1174,46 @@
     "services": "Ծառայություններ"
   },
   "notify": {
+    "client": {
+      "confirmation": {
+        "address": "",
+        "button": "",
+        "date": "",
+        "service": "",
+        "subject": "",
+        "title": "",
+        "total": ""
+      },
+      "reminder": {
+        "address": "",
+        "button": "",
+        "date": "",
+        "master": "",
+        "service": "",
+        "subject": "",
+        "title": ""
+      },
+      "reminder2h": {
+        "address": "",
+        "button": "",
+        "date": "",
+        "master": "",
+        "service": "",
+        "subject": "",
+        "title": ""
+      },
+      "review": {
+        "button": "",
+        "line1": "",
+        "line2": "",
+        "subject": "",
+        "title": ""
+      },
+      "unsubscribeLink": "",
+      "unsubscribeText": "",
+      "unsubscribedBody": "",
+      "unsubscribedTitle": ""
+    },
     "order": {
       "cancelled": "",
       "completed": "",

@@ -84,6 +84,8 @@ const promoSchema = z.object({
   serviceIds: z.array(z.string()),
   planKinds: z.array(z.enum(["ONE_TIME", "SUBSCRIPTION", "PACKAGE"])),
   active: z.boolean(),
+  forPhone: z.string().max(30).nullable().optional(),
+  forEmail: z.string().max(200).nullable().optional(),
 });
 export type PromoPayload = z.infer<typeof promoSchema>;
 
@@ -93,7 +95,12 @@ export async function savePromoAction(id: string | null, input: PromoPayload) {
   if (!p.success) return { ok: false as const, error: p.error.issues[0]?.path.join(".") };
   const d = p.data;
   if (d.type === "PERCENT" && d.value > 100) return { ok: false as const, error: "value" };
-  const data = { ...d, validFrom: d.validFrom ? new Date(`${d.validFrom}T00:00:00+04:00`) : null, validTo: d.validTo ? new Date(`${d.validTo}T23:59:59+04:00`) : null };
+  // Нормализуем телефон и email, если они заданы
+  const forPhone = d.forPhone ? (normalizePhone(d.forPhone) || null) : null;
+  if (d.forPhone && !forPhone) return { ok: false as const, error: "forPhone" };
+  const forEmail = d.forEmail ? (normalizeEmail(d.forEmail) || null) : null;
+  if (d.forEmail && !forEmail) return { ok: false as const, error: "forEmail" };
+  const data = { ...d, forPhone, forEmail, validFrom: d.validFrom ? new Date(`${d.validFrom}T00:00:00+04:00`) : null, validTo: d.validTo ? new Date(`${d.validTo}T23:59:59+04:00`) : null };
   try {
     const r = id ? await db.promoCode.update({ where: { id }, data }) : await db.promoCode.create({ data });
     await audit(u.id, id ? "promo.update" : "promo.create", "PromoCode", r.id, { code: d.code });
@@ -284,6 +291,60 @@ export async function saveSettingsAction<K extends keyof Settings>(key: K, value
   await audit(u.id, "settings.save", "Setting", key);
   rAll();
   return { ok: true };
+}
+
+/** Найти чаты и группы, куда бот получал сообщения (через getUpdates). Возвращает список чатов. */
+export async function findTelegramChatsAction() {
+  await requireSection("settings");
+  const s = await getSettings();
+  const token = s.team.botToken || s.notify.telegramBotToken;
+  if (!token) return { ok: false as const, error: "noToken" };
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=100`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    const json = (await r.json().catch(() => null)) as { ok: boolean; result?: { message?: { date: number; chat: { id: number; title?: string; username?: string; first_name?: string; type: string } } }[]; description?: string } | null;
+    if (!r.ok || !json?.ok) {
+      const desc = json?.description ?? "";
+      if (desc.toLowerCase().includes("webhook")) return { ok: false as const, error: "webhook" };
+      return { ok: false as const, error: "telegram" };
+    }
+    const since = Date.now() / 1000 - 86400;
+    const seen = new Map<number, { id: number; title: string; type: string }>();
+    for (const upd of json.result ?? []) {
+      const msg = upd.message;
+      if (!msg || msg.date < since) continue;
+      const c = msg.chat;
+      if (!seen.has(c.id)) {
+        seen.set(c.id, { id: c.id, title: c.title ?? c.username ?? c.first_name ?? String(c.id), type: c.type });
+      }
+    }
+    return { ok: true as const, chats: [...seen.values()] };
+  } catch {
+    return { ok: false as const, error: "network" };
+  }
+}
+
+/** Отправить тестовое сообщение в конкретный чат (по chatId из поля). */
+export async function sendTestNotifyToAction(chatId: string) {
+  await requireSection("settings");
+  if (!chatId) return { ok: false as const, error: "noChatId" };
+  const s = await getSettings();
+  const token = s.team.botToken || s.notify.telegramBotToken;
+  if (!token) return { ok: false as const, error: "noToken" };
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: "✅ Тест iHelp: уведомления настроены", parse_mode: "HTML" }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const json = (await r.json().catch(() => null)) as { ok: boolean; description?: string } | null;
+    if (!r.ok || !json?.ok) return { ok: false as const, error: json?.description ?? "Ошибка Telegram" };
+    return { ok: true as const };
+  } catch {
+    return { ok: false as const, error: "Ошибка сети" };
+  }
 }
 
 export async function testNotifyAction() {
