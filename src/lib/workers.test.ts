@@ -3,9 +3,11 @@ import { POOLS, DAILY_CAP_MAX, capLeft, normalizeDailyCap, controlPatch, DEFAULT
 import { poolPatchSchema, workersPatchSchema } from "./workers-schema";
 import { unblockTarget } from "./cc-flow";
 
-// 12:00 по Еревану — внутри окна выкладки 10–20
+// 12:00 по Еревану (UTC+4) — удобное время для тестов диспетчера
 const noon = new Date("2026-09-24T08:00:00Z");
 const on = { ...DEFAULT_WORKERS, enabled: true };
+// конфиг с явным окном выкладки 10–20 для тестов, проверяющих поведение окна
+const onWindow = { ...on, deployWindow: [10, 20] as [number, number] };
 
 const review = (key: string, patch: Partial<ReviewTask> = {}): ReviewTask => ({ key, branch: `task/${key}`, testedSha: null, claimedBy: null, claimUntil: null, ...patch });
 
@@ -35,6 +37,17 @@ describe("настройки воркеров", () => {
     expect(c.enabled).toBe(false);
     expect(c.pools.dev.max).toBe(2);
     expect(c.pools.deployer.max).toBe(1);
+  });
+  it("deployWindow отсутствует или null — без ограничения (критерий 5)", () => {
+    expect(normalizeWorkers({}).deployWindow).toBeNull();
+    expect(normalizeWorkers({ deployWindow: null }).deployWindow).toBeNull();
+  });
+  it("deployWindow [0, 24] — старый формат «весь день» читается как null (критерий 5)", () => {
+    expect(normalizeWorkers({ deployWindow: [0, 24] }).deployWindow).toBeNull();
+  });
+  it("deployWindow с конкретным окном сохраняется", () => {
+    expect(normalizeWorkers({ deployWindow: [10, 20] }).deployWindow).toEqual([10, 20]);
+    expect(normalizeWorkers({ deployWindow: [9, 18] }).deployWindow).toEqual([9, 18]);
   });
   it("деплоер и триаж всегда по одному, модель, режим и интервал — только из списка", () => {
     const c = normalizeWorkers({ enabled: true, pools: { deployer: { max: 5 }, triage: { max: 3, mode: "сам", everyMin: 7 }, dev: { model: "gpt" } } });
@@ -97,9 +110,26 @@ describe("план диспетчера", () => {
     expect(planDispatch(state({ heads: { "task/B": "ccc333" }, review: [t] }), noon)).toEqual([{ pool: "tester", agent: "tester", key: "B" }]);
   });
   it("деплоер вне окна выкладки и второй деплоер не запускаются", () => {
-    const s = state({ heads: { "task/B": "bbb222" }, review: [review("B", { testedSha: "bbb222" })] });
-    expect(planDispatch(s, new Date("2026-09-24T20:00:00Z"))).toEqual([]);
+    const s = state({ config: onWindow, heads: { "task/B": "bbb222" }, review: [review("B", { testedSha: "bbb222" })] });
+    // 22:00 по Еревану (18:00 UTC) — вне окна 10–20
+    expect(planDispatch(s, new Date("2026-09-24T18:00:00Z"))).toEqual([]);
     expect(planDispatch({ ...s, running: [{ pool: "deployer", agent: "deployer" }] }, noon)).toEqual([]);
+  });
+  it("окно не задано (null) — деплоер планируется в любой час (критерий 5)", () => {
+    const noWindow = { ...on, deployWindow: null } as WorkersConfig;
+    const s = state({ config: noWindow, heads: { "task/B": "bbb" }, review: [review("B", { testedSha: "bbb" })] });
+    // ночь по Еревану — 02:00 UTC = 06:00 Yerevan
+    expect(planDispatch(s, new Date("2026-09-24T22:00:00Z")).some((a) => a.pool === "deployer")).toBe(true);
+    // полдень
+    expect(planDispatch(s, noon).some((a) => a.pool === "deployer")).toBe(true);
+  });
+  it("окно задано — деплоер работает только внутри него (критерий 5)", () => {
+    const withWindow = { ...on, deployWindow: [10, 20] } as WorkersConfig;
+    const s = state({ config: withWindow, heads: { "task/B": "bbb" }, review: [review("B", { testedSha: "bbb" })] });
+    // 12:00 по Еревану (UTC+4) = 08:00 UTC — внутри окна
+    expect(planDispatch(s, new Date("2026-09-24T08:00:00Z")).some((a) => a.pool === "deployer")).toBe(true);
+    // 22:00 по Еревану = 18:00 UTC — вне окна
+    expect(planDispatch(s, new Date("2026-09-24T18:00:00Z")).some((a) => a.pool === "deployer")).toBe(false);
   });
   it("задачу, которую сейчас держит тестировщик или деплоер, никто второй не берёт", () => {
     const busy = review("A", { claimedBy: "tester", claimUntil: new Date(noon.getTime() + 60_000) });
@@ -272,14 +302,18 @@ describe("очереди и выбор пула", () => {
     expect(poolForTask({ status: "review", layer: "none" })).toBe(null);
     expect(poolForTask({ status: "done", layer: "back" })).toBe(null);
   });
-  it("задача с needs_mockup=true без утверждения идёт к дизайнеру", () => {
-    expect(poolForTask({ status: "ready", layer: "front", mockupRequired: true })).toBe("designer");
-    expect(poolForTask({ status: "ready", layer: "front", mockupRequired: true, mockupApprovedBy: null })).toBe("designer");
-    expect(poolForTask({ status: "ready", layer: "none", mockupRequired: true })).toBe("designer");
-    expect(poolForTask({ status: "ready", layer: "front", mockupRequired: true, mockupApprovedBy: "cto" })).toBe("dev");
-    expect(poolForTask({ status: "ready", layer: "none", mockupRequired: true, mockupApprovedBy: "owner" })).toBe("nocode");
+  it("задача с needs_mockup=true и написанными требованиями идёт к дизайнеру (шаг 2)", () => {
+    expect(poolForTask({ status: "ready", layer: "front", mockupRequired: true, screenRequirements: "Экран списка" })).toBe("designer");
+    expect(poolForTask({ status: "ready", layer: "none", mockupRequired: true, screenRequirements: "Детали" })).toBe("designer");
+    expect(poolForTask({ status: "ready", layer: "front", mockupRequired: true, mockupApprovedBy: "cto", screenRequirements: "Экран" })).toBe("dev");
+    expect(poolForTask({ status: "ready", layer: "none", mockupRequired: true, mockupApprovedBy: "owner", screenRequirements: "Экран" })).toBe("nocode");
     expect(poolForTask({ status: "ready", layer: "front", mockupRequired: false })).toBe("dev");
     expect(poolForTask({ status: "backlog", layer: "front", mockupRequired: true })).toBe("triage");
+  });
+  it("задача с needs_mockup=true без screenRequirements идёт к продакту (шаг 1)", () => {
+    expect(poolForTask({ status: "ready", layer: "front", mockupRequired: true })).toBe("product");
+    expect(poolForTask({ status: "ready", layer: "front", mockupRequired: true, mockupApprovedBy: null, screenRequirements: null })).toBe("product");
+    expect(poolForTask({ status: "ready", layer: "none", mockupRequired: true, screenRequirements: "" })).toBe("product");
   });
 });
 
@@ -454,9 +488,14 @@ describe("отбор очереди дизайнера", () => {
   it("задача заблокирована на дизайне, но mockupUrl уже есть — ждёт утверждения, не в очереди", () => {
     expect(inDesignerQueue({ ...base, status: "blocked", blockedOn: "design", mockupUrl: "/uploads/2026-09/abc.png" })).toBe(false);
   });
-  it("задача с needs_mockup без утверждения и без файлов — в очереди", () => {
-    expect(inDesignerQueue({ ...base, status: "ready", mockupRequired: true })).toBe(true);
-    expect(inDesignerQueue({ ...base, status: "in_progress", mockupRequired: true })).toBe(true);
+  it("задача с needs_mockup, написанными требованиями, без файлов — в очереди дизайнера (шаг 2)", () => {
+    expect(inDesignerQueue({ ...base, status: "ready", mockupRequired: true, screenRequirements: "Экран списка заказов" })).toBe(true);
+    expect(inDesignerQueue({ ...base, status: "in_progress", mockupRequired: true, screenRequirements: "Детальный экран" })).toBe(true);
+  });
+  it("задача с needs_mockup без screenRequirements — НЕ в очереди дизайнера (шаг 1: к продакту)", () => {
+    expect(inDesignerQueue({ ...base, status: "ready", mockupRequired: true })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "ready", mockupRequired: true, screenRequirements: null })).toBe(false);
+    expect(inDesignerQueue({ ...base, status: "ready", mockupRequired: true, screenRequirements: "" })).toBe(false);
   });
   it("нужен макет, но mockupUrl или картинки уже есть — ждёт утверждения, не в очереди", () => {
     expect(inDesignerQueue({ ...base, status: "ready", mockupRequired: true, mockupUrl: "/uploads/2026-09/x.png" })).toBe(false);

@@ -41,8 +41,8 @@ export type WorkersConfig = {
   /** Пробный режим: диспетчер считает план и пишет его в журнал, но никого не запускает */
   dryRun: boolean;
   pools: Record<Pool, PoolConfig>;
-  /** Часы выкладки по Еревану: деплоер сам запускается только в этом окне, [с, до) */
-  deployWindow: [number, number];
+  /** Часы выкладки по Еревану: деплоер сам запускается только в этом окне, [с, до); null — без ограничения */
+  deployWindow: [number, number] | null;
   /** Сколько карточек триаж разбирает за один запуск */
   triageBatch: number;
   /** Размер пачки выкладки: сколько протестированных задач деплоер сливает и собирает за один раз; 1 — по одной (старое поведение), максимум 5 */
@@ -81,7 +81,7 @@ export const DEFAULT_WORKERS: WorkersConfig = {
     tester: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: null, mode: "auto", everyMin: 30 },
     deployer: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: null, mode: "auto", everyMin: 30 },
   },
-  deployWindow: [10, 20],
+  deployWindow: null,
   triageBatch: 6,
   deployBatch: 1,
   sweepEveryH: 24,
@@ -130,14 +130,19 @@ export function normalizeWorkers(raw: unknown): WorkersConfig {
       everyMin: (EVERY_MIN as readonly number[]).includes(Number(src.everyMin)) ? Number(src.everyMin) : d.everyMin,
     };
   }
-  const w = Array.isArray(r.deployWindow) ? r.deployWindow.map(Number) : DEFAULT_WORKERS.deployWindow;
-  const from = clamp(w[0], 0, 23, 10);
-  const to = Math.max(from + 1, clamp(w[1], 1, 24, 20));
+  let deployWindow: [number, number] | null = null;
+  if (Array.isArray(r.deployWindow)) {
+    const w = r.deployWindow.map(Number);
+    const from = clamp(w[0], 0, 23, 0);
+    const to = Math.max(from + 1, clamp(w[1], 1, 24, 24));
+    // [0, 24] — полный день, это старый способ задать «без окна» — читаем как null
+    deployWindow = from === 0 && to === 24 ? null : [from, to];
+  }
   return {
     enabled: r.enabled === true,
     dryRun: r.dryRun === true,
     pools,
-    deployWindow: [from, to],
+    deployWindow,
     triageBatch: clamp(r.triageBatch ?? DEFAULT_WORKERS.triageBatch, 1, 15, DEFAULT_WORKERS.triageBatch),
     deployBatch: clamp(r.deployBatch ?? DEFAULT_WORKERS.deployBatch, 1, 5, DEFAULT_WORKERS.deployBatch),
     sweepEveryH: clamp(r.sweepEveryH ?? DEFAULT_WORKERS.sweepEveryH, 0, 168, DEFAULT_WORKERS.sweepEveryH),
@@ -369,7 +374,8 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
   };
 
   const hour = yerevanHour(now);
-  if (due("deployer") && hour >= config.deployWindow[0] && hour < config.deployWindow[1]) {
+  const inWindow = config.deployWindow === null || (hour >= config.deployWindow[0] && hour < config.deployWindow[1]);
+  if (due("deployer") && inWindow) {
     const batchSize = config.deployBatch ?? 1;
     if (batchSize <= 1) {
       const t = nextDeploy();
@@ -478,12 +484,14 @@ export function executorOf(t: { status: string; layer: string; blockedOn?: strin
   return null;
 }
 
-export function poolForTask(t: { status: string; layer: string; testedSha?: string | null; blockedOn?: string | null; mockupRequired?: boolean | null; mockupApprovedBy?: string | null }): Pool | null {
+export function poolForTask(t: { status: string; layer: string; testedSha?: string | null; blockedOn?: string | null; mockupRequired?: boolean | null; mockupApprovedBy?: string | null; screenRequirements?: string | null }): Pool | null {
   if (t.status === "blocked" && t.blockedOn === "product") return "product";
   if (t.status === "blocked" && t.blockedOn === "design") return "designer";
   if (t.status === "backlog" || t.status === "blocked") return "triage";
-  // Задачи с флагом «нужен макет» без утверждения — к дизайнеру, пока макет не утверждён
-  if (t.mockupRequired && !t.mockupApprovedBy) return "designer";
+  if (t.mockupRequired && !t.mockupApprovedBy) {
+    // Шаг 1 цепочки: требования к экранам не написаны → к продакту; написаны → к дизайнеру
+    return t.screenRequirements?.trim() ? "designer" : "product";
+  }
   if (t.status === "ready") return t.layer === "none" ? "nocode" : "dev";
   if (t.status === "review" && t.layer !== "none") return t.testedSha ? "deployer" : "tester";
   return null;
@@ -507,12 +515,15 @@ export function inDesignerQueue(t: {
   hasAnyAttachments: boolean;
   /** Нужно описание дизайна: ставит триаж при разборе. true — задача идёт к дизайнеру */
   needsDesign?: boolean | null;
+  /** Требования к экранам (шаг 1 цепочки): без них задача идёт к продакту, не к дизайнеру */
+  screenRequirements?: string | null;
 }): boolean {
   // Заблокирована на дизайне, но макет ещё не подан (нет mockupUrl)
   if (t.status === "blocked" && t.blockedOn === "design" && !t.mockupUrl) return true;
   // Нужен макет, не утверждён и не подан: бэклог, очередь или в работе
+  // Гейт шага 1: без screenRequirements задача сначала идёт к продакту (шаг 1)
   const open = ["backlog", "ready", "in_progress"];
-  if (open.includes(t.status) && t.mockupRequired && !t.mockupApprovedBy && !t.mockupUrl && !t.hasImageAttachments) return true;
+  if (open.includes(t.status) && t.mockupRequired && !t.mockupApprovedBy && !t.mockupUrl && !t.hasImageAttachments && t.screenRequirements?.trim()) return true;
   // Задача с флагом «нужно описание дизайна» без описания, без файлов и без утверждённого макета
   if (["backlog", "ready"].includes(t.status) && t.needsDesign === true && !t.design?.trim() && !t.hasAnyAttachments && !t.mockupApprovedBy && !t.mockupUrl) return true;
   return false;

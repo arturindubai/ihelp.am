@@ -98,11 +98,14 @@ export async function needsYou() {
       : [];
   const taskStatusMap = new Map(failedTaskStatuses.map((t) => [t.key, t.status]));
 
+  // «Упавшие запуски»: только сироты — нет ключа задачи или задача не найдена в базе.
+  // Запуски по выложенным (done/cancelled) задачам — не показываем: владельцу с ними делать нечего.
   const failedRuns = allFailedRuns.filter((r) => {
     if (!r.taskKey) return true;
     const s = taskStatusMap.get(r.taskKey);
-    return !s || CLOSED_STATUSES.includes(s as (typeof CLOSED_STATUSES)[number]);
+    return !s; // задача не найдена → сирота
   });
+  // «Возвращено на доработку»: задача жива (не выложена и не отменена) — деплоер вернул из-за конфликта.
   const returnedRuns = allFailedRuns.filter((r) => {
     if (!r.taskKey) return false;
     const s = taskStatusMap.get(r.taskKey);
@@ -193,13 +196,14 @@ const DESIGN_PENDING: Prisma.TaskWhereInput = {
   OR: [{ mockupUrl: { not: null } }, { attachments: { some: { mime: { startsWith: "image/" } } } }],
 };
 
-/** Ждут макета от дизайнера: флаг «нужен макет», но реального макета ещё нет */
+/** Ждут макета от дизайнера: шаг 2 цепочки — требования уже написаны, но макета ещё нет */
 const WAITING_MOCKUP: Prisma.TaskWhereInput = {
   status: { notIn: ["done", "cancelled"] },
   mockupApprovedBy: null,
   mockupRequired: true,
   mockupUrl: null,
   attachments: { none: { mime: { startsWith: "image/" } } },
+  NOT: [{ screenRequirements: null }, { screenRequirements: "" }],
 };
 
 export async function mockupPendingApprovals() {
@@ -212,6 +216,20 @@ export async function mockupPendingApprovals() {
       _count: { select: { attachments: true } },
       attachments: { where: { mime: { startsWith: "image/" } }, select: { url: true, fileName: true }, orderBy: { createdAt: "desc" } },
     },
+  });
+}
+
+/** Задачи шага 1 цепочки: нужен макет, но продакт ещё не написал требования к экранам */
+export async function mockupWaitingRequirements() {
+  return db.task.findMany({
+    where: {
+      status: { notIn: ["done", "cancelled"] },
+      mockupRequired: true,
+      mockupApprovedBy: null,
+      OR: [{ screenRequirements: null }, { screenRequirements: "" }],
+    },
+    orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
+    select: { key: true, title: true, priority: true, status: true },
   });
 }
 
@@ -230,7 +248,7 @@ export async function mockupWaitingDesign() {
 /** Утверждённые дизайны за две недели — со статусом задачи и первым открытым блокером */
 export async function designApproved(days = 14) {
   const tasks = await db.task.findMany({
-    where: { mockupApprovedAt: { gte: new Date(Date.now() - days * 86400_000) } },
+    where: { mockupApprovedAt: { gte: new Date(Date.now() - days * 86400_000) }, status: { not: "cancelled" } },
     orderBy: { mockupApprovedAt: "desc" },
     select: {
       key: true, title: true, status: true, layer: true, mockupApprovedAt: true, mockupApprovedBy: true,
@@ -273,6 +291,39 @@ export async function approvals() {
   return tasks.map((t) => ({ ...t, lane: laneOf({ key: t.key, layer: "none" }) }));
 }
 
+/** Согласования продакта: некод-задачи дорожки product на проверке. Аналог approvals(), но только product-дорожка */
+export async function productApprovals() {
+  const tasks = await db.task.findMany({
+    where: { status: "review", layer: "none" },
+    orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
+    select: { key: true, title: true, priority: true, layer: true, updatedAt: true, ownerSummary: true, source: true, _count: { select: { attachments: true } }, comments: { where: { kind: "report" }, orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, createdAt: true } } },
+  });
+  return tasks.filter((t) => laneOf(t) === "product");
+}
+
+/** Все задачи дорожки product, сгруппированные по статусу. Группа «Сделано» — последние 10 */
+export async function productTasksByStatus() {
+  const tasks = await db.task.findMany({
+    where: { layer: "none" },
+    orderBy: [{ priority: "asc" }, { sort: "asc" }],
+    select: { key: true, title: true, priority: true, status: true, layer: true, source: true, doneAt: true },
+  });
+  const product = tasks.filter((t) => laneOf(t) === "product");
+  const by = (statuses: string[]) => product.filter((t) => statuses.includes(t.status));
+  const done = by(["done"]).sort((a, b) => (b.doneAt?.getTime() ?? 0) - (a.doneAt?.getTime() ?? 0));
+  return {
+    total: product.length,
+    doneTotal: done.length,
+    groups: [
+      { id: "backlog", tasks: by(["backlog"]) },
+      { id: "ready", tasks: by(["ready"]) },
+      { id: "in_progress", tasks: by(["in_progress", "blocked"]) },
+      { id: "review", tasks: by(["review"]) },
+      { id: "done", tasks: done.slice(0, 10) },
+    ].filter((g) => g.tasks.length > 0),
+  };
+}
+
 export type FeedItem = { id: string; at: Date; actor: string; key: string; title: string; kind: string; field?: string; from?: string | null; to?: string | null; text?: string };
 
 /** Активность: изменения задач, записи в лентах и запуски воркеров — одной лентой, новое сверху */
@@ -290,16 +341,33 @@ export async function activityFeed(take = 150) {
   return items.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, take);
 }
 
-/** Готово за последние дни: по дням (Ереван), новое сверху */
+/** Готово за последние дни: по дням (Ереван), новое сверху; для каждой задачи — незакрытые follow-up */
 export async function doneFeed(days = 14) {
   const tasks = await db.task.findMany({
     where: { status: "done", doneAt: { gte: new Date(Date.now() - days * 24 * 3600_000) } },
     orderBy: { doneAt: "desc" },
-    select: { key: true, title: true, layer: true, deployedSha: true, proof: true, doneAt: true },
+    select: { key: true, title: true, layer: true, deployedSha: true, proof: true, doneAt: true, followUps: true },
   });
+  // Все ключи follow-up задач из закрытых задач
+  const allFollowUpKeys = [...new Set(tasks.flatMap(t => t.followUps))];
+  const followUpStatuses = allFollowUpKeys.length
+    ? new Map(
+        (await db.task.findMany({ where: { key: { in: allFollowUpKeys } }, select: { key: true, status: true } }))
+          .map(t => [t.key, t.status]),
+      )
+    : new Map<string, string>();
+
+  const withPending = tasks.map(t => ({
+    ...t,
+    pendingFollowUps: t.followUps.filter(k => {
+      const s = followUpStatuses.get(k);
+      return s && s !== "done" && s !== "cancelled";
+    }),
+  }));
+
   const day = (d: Date) => new Date(d.getTime() + 4 * 3600_000).toISOString().slice(0, 10);
-  const groups = new Map<string, typeof tasks>();
-  for (const t of tasks) {
+  const groups = new Map<string, typeof withPending>();
+  for (const t of withPending) {
     const k = day(t.doneAt!);
     groups.set(k, [...(groups.get(k) ?? []), t]);
   }
@@ -454,6 +522,17 @@ export async function boardAudit() {
   }
   const checks = Object.entries(found).map(([id, keys]) => ({ id, keys })).sort((a, b) => b.keys.length - a.keys.length);
   return { total: tasks.length, byStatus: Object.fromEntries(Object.entries(tasks.reduce<Record<string, number>>((m, t) => ((m[t.status] = (m[t.status] ?? 0) + 1), m), {}))), checks, at: new Date().toISOString() };
+}
+
+/** Доля возвратов задач из-за конфликта слияния за последние N дней */
+export async function mergeConflictStats(days = 30) {
+  const since = new Date(Date.now() - days * 86400_000);
+  const [total, conflicts] = await Promise.all([
+    db.taskComment.count({ where: { kind: "review", createdAt: { gte: since } } }),
+    db.taskComment.count({ where: { kind: "review", text: { contains: "Конфликт при слиянии" }, createdAt: { gte: since } } }),
+  ]);
+  const pct = total > 0 ? Math.round((conflicts / total) * 100) : 0;
+  return { total, conflicts, pct, days };
 }
 
 export async function healthStatus() {

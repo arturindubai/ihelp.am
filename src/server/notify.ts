@@ -89,6 +89,19 @@ export async function notifyTeam(text: string) {
   }
 }
 
+/** Уведомления в топик «Задачи портала»: новые IN-N, /status, «нужен ты». Без топика — тихо ничего */
+export async function notifyTasks(text: string) {
+  try {
+    const s = await getSettings();
+    const threadId = s.notify.telegramTasksThreadId || undefined;
+    if (!threadId) return;
+    const chatId = s.notify.teamChatId || s.notify.telegramChatId;
+    await send(chatId, text, "tasks", "team.botToken", threadId);
+  } catch (e) {
+    console.error("[notify:tasks] не отправлено", e, "|", text);
+  }
+}
+
 /**
  * Технические алерты: ошибки, бэкапы, диск. Отдельный чат, если задан, иначе — чат команды.
  * Если база недоступна и настройки не прочитать, алерт уходит через запасной бот из ALERT_BOT_TOKEN и ALERT_CHAT_ID (.env):
