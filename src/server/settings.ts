@@ -47,6 +47,8 @@ export interface Settings {
   auth: { clientSessionDays: number; staffSessionDays: number };
   /** Вход через Telegram Login Widget на странице входа. Требует /setdomain в @BotFather для ihelp.am */
   telegramWidget: { enabled: boolean };
+  /** ИИ-помощник в форме баннеров: ключи Anthropic (текст) и Higgsfield (изображения) */
+  ai: { anthropicKey: string; higgsfieldKey: string };
   /**
    * Бот команды в Telegram (как бот LIA): задачи владельца → входящие IN-N, «статус», сообщения «Нужен ты».
    * Отдельный от бота входа клиентов (notify.telegramBotToken). Токен вставляется в Control Center → «Ключи»
@@ -101,6 +103,7 @@ export const DEFAULT_SETTINGS: Settings = {
   mail: { enabled: false, apiKey: "", from: "", replyTo: "" },
   auth: { clientSessionDays: 60, staffSessionDays: 7 },
   telegramWidget: { enabled: false },
+  ai: { anthropicKey: "", higgsfieldKey: "" },
   team: { botToken: "", botUsername: "", members: [], linkCode: "", linkCodeAt: "" },
 };
 
