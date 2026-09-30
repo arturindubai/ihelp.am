@@ -2222,6 +2222,7 @@
       "completed": "⭐ Как прошёл визит?\n{masterName} завершил работу. Ваш отзыв помогает другим клиентам и мотивирует мастера.\nОставить отзыв: {reviewLink}",
       "created": "✅ Заказ принят\nУслуга: {serviceName}\nДата: {date}, {time}\nАдрес: {address}\nСтоимость: {price}\nСпасибо, что выбрали iHelp! Ваш заказ уже у нас — скоро назначим мастера.",
       "masterAssigned": "👷 Мастер назначен\nУслуга: {serviceName}, {date} в {time}\nМастер: {masterName}\nЕсли есть вопросы — напишите нам.",
+      "onWay": "🚗 Мастер выехал\n{masterName} уже в пути. Примерное время прибытия: {eta} мин.",
       "rescheduled": "🔄 Визит перенесён\nУслуга: {serviceName}\nНовая дата: {date}, {time}\nАдрес прежний: {address}",
       "subjectCancelled": "Заказ №{n} отменён",
       "subjectCompleted": "Как прошёл визит? — заказ №{n}",
@@ -2294,6 +2295,18 @@
     },
     "unscheduled": "Не запланирован",
     "validUntil": "Действует до {date}",
+    "visitEvents": {
+      "CANCELLED": "Отменён",
+      "CONFIRMED": "Подтверждён",
+      "DONE": "Завершено",
+      "IN_PROGRESS": "Уборка началась",
+      "NO_SHOW": "Визит не состоялся",
+      "ON_WAY": "Мастер выехал",
+      "SCHEDULED": "Запланирован",
+      "SKIPPED": "Пропущен",
+      "UNSCHEDULED": "Не запланирован",
+      "title": "История"
+    },
     "visitN": "Визит {n}",
     "visitStatus": {
       "CANCELLED": "Отменён",

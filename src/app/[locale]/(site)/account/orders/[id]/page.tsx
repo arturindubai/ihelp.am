@@ -6,10 +6,11 @@ import { db } from "@/server/db";
 import { getCurrentUser } from "@/server/auth";
 import { getSettings } from "@/server/settings";
 import { tr } from "@/i18n/locales";
-import { amd, dateLabel, durationLabel } from "@/lib/format";
+import { amd, dateLabel, durationLabel, timeLabel } from "@/lib/format";
 import { hm } from "@/lib/time";
 import { StatusBadge } from "@/components/account/StatusBadge";
 import { OrderActions, VisitActions } from "@/components/account/OrderActions";
+import { getOrderEventFeed } from "@/server/services/orderEvents";
 
 export default async function OrderPage({ params, searchParams }: { params: Promise<{ locale: string; id: string }>; searchParams: Promise<{ new?: string }> }) {
   const { locale, id } = await params;
@@ -22,13 +23,29 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     include: { service: true, plan: true, visits: { orderBy: [{ index: "asc" }], include: { master: true, review: true } } },
   });
   if (!o) notFound();
-  const [settings, t, tb, ts, tc, ta] = await Promise.all([getSettings(), getTranslations("order"), getTranslations("booking"), getTranslations("service"), getTranslations("common"), getTranslations("address")]);
+  const [settings, t, tb, ts, tc, ta, events] = await Promise.all([
+    getSettings(),
+    getTranslations("order"),
+    getTranslations("booking"),
+    getTranslations("service"),
+    getTranslations("common"),
+    getTranslations("address"),
+    getOrderEventFeed(o.id),
+  ]);
   const cfg = o.config as { options: { group: unknown; option: unknown; price: number }[]; plan?: { title?: unknown } | null };
   const a = o.addressSnapshot as Record<string, string | null>;
   const r = o.recurrence as { weekdays: number[]; time: string; intervalDays: number } | null;
   const wd = tb("weekdaysShort").split(",");
   const upcomingVisits = o.visits.filter((v) => v.status !== "SKIPPED" || (v.scheduledAt && v.scheduledAt > new Date()));
   const shown = o.kind === "SUBSCRIPTION" ? upcomingVisits.filter((v) => !v.scheduledAt || v.scheduledAt > new Date(Date.now() - 45 * 86400_000)).slice(-12) : o.visits;
+
+  // Группируем события по визиту
+  const eventsByVisit = new Map<string, typeof events>();
+  for (const e of events) {
+    const list = eventsByVisit.get(e.visitId) ?? [];
+    list.push(e);
+    eventsByVisit.set(e.visitId, list);
+  }
 
   return (
     <div className="container-m pt-3">
@@ -69,23 +86,39 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
 
       <h2 className="h2 mt-6 mb-2">{t("visits")}</h2>
       <ul className="space-y-2">
-        {shown.map((v) => (
-          <li key={v.id} className="card p-3">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="font-semibold">{v.scheduledAt ? `${dateLabel(v.scheduledAt, locale)}, ${hm(v.scheduledAt)}` : t("visitN", { n: v.index })}</div>
-                <div className="text-sm text-muted">{v.master ? tr(v.master.name, locale) : "—"} · {amd(v.price)}</div>
+        {shown.map((v) => {
+          const visitEvents = eventsByVisit.get(v.id) ?? [];
+          return (
+            <li key={v.id} className="card p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="font-semibold">{v.scheduledAt ? `${dateLabel(v.scheduledAt, locale)}, ${hm(v.scheduledAt)}` : t("visitN", { n: v.index })}</div>
+                  <div className="text-sm text-muted">{v.master ? tr(v.master.name, locale) : "—"} · {amd(v.price)}</div>
+                </div>
+                <StatusBadge status={v.status} label={t(`visitStatus.${v.status}`)} className="mt-0" />
               </div>
-              <StatusBadge status={v.status} label={t(`visitStatus.${v.status}`)} className="mt-0" />
-            </div>
-            <VisitActions
-              visit={{ id: v.id, status: v.status, scheduledAt: v.scheduledAt?.toISOString() || null, hasReview: !!v.review }}
-              order={{ kind: o.kind, status: o.status, serviceId: o.serviceId, durationMin: o.durationMin }}
-              freeCancelHours={settings.booking.freeCancelHours}
-              horizonDays={settings.booking.horizonDays}
-            />
-          </li>
-        ))}
+              <VisitActions
+                visit={{ id: v.id, status: v.status, scheduledAt: v.scheduledAt?.toISOString() || null, hasReview: !!v.review }}
+                order={{ kind: o.kind, status: o.status, serviceId: o.serviceId, durationMin: o.durationMin }}
+                freeCancelHours={settings.booking.freeCancelHours}
+                horizonDays={settings.booking.horizonDays}
+              />
+              {visitEvents.length > 0 && (
+                <div className="mt-3 border-t border-line pt-3">
+                  <div className="mb-1.5 text-xs font-medium text-muted">{t("visitEvents.title")}</div>
+                  <ol className="space-y-1">
+                    {visitEvents.map((e) => (
+                      <li key={e.id} className="flex items-center gap-2 text-xs text-muted">
+                        <span className="shrink-0">{timeLabel(e.createdAt)}</span>
+                        <span className="text-ink">{t(`visitEvents.${e.status}` as Parameters<typeof t>[0])}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

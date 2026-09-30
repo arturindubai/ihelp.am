@@ -372,9 +372,24 @@ model Visit {
   updatedAt       DateTime    @updatedAt
   review          Review?
   reviewToken     ReviewToken?
+  visitEvents     VisitEvent[]
 
   @@index([scheduledAt])
   @@index([masterId, scheduledAt])
+}
+
+/// Лог событий визита: каждое изменение статуса из кабинета мастера, оператора, админки и крона
+model VisitEvent {
+  id        String   @id @default(cuid())
+  visitId   String
+  visit     Visit    @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  orderId   String
+  status    String
+  actor     String
+  createdAt DateTime @default(now())
+
+  @@index([visitId, createdAt])
+  @@index([orderId, createdAt])
 }
 
 /// Одноразовая ссылка для отзыва без повторного входа (NOTIFY-3B)
