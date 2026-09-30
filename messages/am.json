@@ -1253,6 +1253,46 @@
     }
   },
   "notify": {
+    "client": {
+      "confirmation": {
+        "address": "",
+        "button": "",
+        "date": "",
+        "service": "",
+        "subject": "",
+        "title": "",
+        "total": ""
+      },
+      "reminder": {
+        "address": "",
+        "button": "",
+        "date": "",
+        "master": "",
+        "service": "",
+        "subject": "",
+        "title": ""
+      },
+      "reminder2h": {
+        "address": "",
+        "button": "",
+        "date": "",
+        "master": "",
+        "service": "",
+        "subject": "",
+        "title": ""
+      },
+      "review": {
+        "button": "",
+        "line1": "",
+        "line2": "",
+        "subject": "",
+        "title": ""
+      },
+      "unsubscribeLink": "",
+      "unsubscribeText": "",
+      "unsubscribedBody": "",
+      "unsubscribedTitle": ""
+    },
     "order": {
       "created": "",
       "masterAssigned": "",

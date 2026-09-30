@@ -2136,6 +2136,46 @@
     "back": "На главную"
   },
   "notify": {
+    "client": {
+      "confirmation": {
+        "address": "Адрес: {address}",
+        "button": "Мои заказы",
+        "date": "Дата и время: {date} в {time}",
+        "service": "Услуга: {service}",
+        "subject": "Заказ №{number} подтверждён",
+        "title": "Ваш заказ принят!",
+        "total": "Стоимость: {total}"
+      },
+      "reminder": {
+        "address": "Адрес: {address}",
+        "button": "Посмотреть заказ",
+        "date": "Дата и время: {date} в {time}",
+        "master": "Мастер: {master}",
+        "service": "Услуга: {service}",
+        "subject": "Напоминание о визите завтра",
+        "title": "Напоминаем о визите завтра"
+      },
+      "reminder2h": {
+        "address": "Адрес: {address}",
+        "button": "Посмотреть заказ",
+        "date": "Дата и время: {date} в {time}",
+        "master": "Мастер: {master}",
+        "service": "Услуга: {service}",
+        "subject": "Через 2 часа — ваш мастер",
+        "title": "Напоминаем: через 2 часа визит"
+      },
+      "review": {
+        "button": "Оставить отзыв",
+        "line1": "Надеемся, вам понравилось! Оставьте отзыв — это занимает одну минуту.",
+        "line2": "Ваше мнение помогает нам становиться лучше.",
+        "subject": "Как прошёл визит?",
+        "title": "Как прошёл визит?"
+      },
+      "unsubscribeLink": "отпишитесь здесь",
+      "unsubscribeText": "Не хотите получать письма — {link}.",
+      "unsubscribedBody": "Письма от iHelp больше не будут приходить на ваш адрес.",
+      "unsubscribedTitle": "Вы отписались от писем"
+    },
     "master": {
       "assigned": "📋 Новый визит\nКлиент: {clientName}\nУслуга: {serviceName}\nДата: {date}, {time}\nАдрес: {address}",
       "rescheduled": "🔄 Визит перенесён\n{serviceName}\nНовая дата: {date}, {time}",
