@@ -10,9 +10,10 @@ type Props = {
   cityLabel: string;
   sheetTitle: string;
   anyLabel: string;
+  districtSearch: string;
 };
 
-export function AddressChip({ cityLabel, sheetTitle, anyLabel }: Props) {
+export function AddressChip({ cityLabel, sheetTitle, anyLabel, districtSearch }: Props) {
   const [district, setDistrict] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
@@ -51,6 +52,7 @@ export function AddressChip({ cityLabel, sheetTitle, anyLabel }: Props) {
         onSelect={handleSelect}
         title={sheetTitle}
         anyLabel={anyLabel}
+        searchPlaceholder={districtSearch}
       />
     </>
   );

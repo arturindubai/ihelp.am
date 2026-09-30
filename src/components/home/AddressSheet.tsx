@@ -25,9 +25,10 @@ type Props = {
   onSelect: (district: string | null) => void;
   title: string;
   anyLabel: string;
+  searchPlaceholder: string;
 };
 
-export function AddressSheet({ open, onClose, selected, onSelect, title, anyLabel }: Props) {
+export function AddressSheet({ open, onClose, selected, onSelect, title, anyLabel, searchPlaceholder }: Props) {
   const [query, setQuery] = useState("");
 
   const filtered = DISTRICTS.filter((d) =>
@@ -52,7 +53,7 @@ export function AddressSheet({ open, onClose, selected, onSelect, title, anyLabe
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск района"
+            placeholder={searchPlaceholder}
             className="w-full rounded-xl bg-surface py-2.5 pl-9 pr-4 text-sm text-ink placeholder:text-muted outline-none focus:ring-2 focus:ring-brand"
           />
         </div>

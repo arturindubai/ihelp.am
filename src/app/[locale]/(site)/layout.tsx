@@ -24,6 +24,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
             cityLabel={t("address")}
             sheetTitle={t("addressSheet")}
             anyLabel={t("addressAny")}
+            districtSearch={t("districtSearch")}
           />
           <div className="ml-auto flex items-center gap-2">
             <Suspense>
