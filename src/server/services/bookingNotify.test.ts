@@ -112,6 +112,7 @@ import { notifyTech } from "../notify";
 import {
   notifyClientOrderCreated,
   notifyClientMasterAssigned,
+  notifyClientMasterOnWay,
   notifyClientRescheduled,
   notifyClientCancelled,
   notifyClientVisitCompleted,
@@ -532,5 +533,36 @@ describe("sendVisit2hReminders", () => {
 
     expect(count).toBe(0);
     expect(vi.mocked(sendTelegramDirect)).not.toHaveBeenCalled();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// notifyClientMasterOnWay
+
+describe("notifyClientMasterOnWay", () => {
+  it("отправляет уведомление с именем мастера и временем", async () => {
+    makeVisit("v-onway");
+    makeUser("u1", "telegram");
+    await notifyClientMasterOnWay("v-onway", 30);
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+    const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
+    expect(text).toContain("Иван Петров");
+    expect(text).toContain("30");
+  });
+
+  it("идемпотентность — повторный вызов не дублирует уведомление", async () => {
+    makeVisit("v-onway2");
+    makeUser("u1", "telegram");
+    await notifyClientMasterOnWay("v-onway2", 30);
+    await notifyClientMasterOnWay("v-onway2", 30);
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+  });
+
+  it("fallback на email если нет Telegram", async () => {
+    makeVisit("v-onway3");
+    makeUser("u1", "email");
+    await notifyClientMasterOnWay("v-onway3", 45);
+    expect(vi.mocked(sendTelegramDirect)).not.toHaveBeenCalled();
+    expect(vi.mocked(sendMail)).toHaveBeenCalledOnce();
   });
 });

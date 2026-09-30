@@ -2077,6 +2077,7 @@
       "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}",
       "created": "✅ Order confirmed\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}\nTotal: {price}\nThank you for choosing iHelp! We will assign a master soon.",
       "masterAssigned": "👷 Master assigned\nService: {serviceName}, {date} at {time}\nMaster: {masterName}\nFeel free to contact us with any questions.",
+      "onWay": "🚗 Your master is on the way\n{masterName} is heading to you. Estimated arrival: {eta} min.",
       "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}"
     }
   },
@@ -2161,6 +2162,18 @@
       "onTime": "on time",
       "scheduled": "Scheduled",
       "started": "Started"
+    },
+    "visitEvents": {
+      "CANCELLED": "Cancelled",
+      "CONFIRMED": "Confirmed",
+      "DONE": "Completed",
+      "IN_PROGRESS": "Cleaning started",
+      "NO_SHOW": "No show",
+      "ON_WAY": "Pro on the way",
+      "SCHEDULED": "Scheduled",
+      "SKIPPED": "Skipped",
+      "UNSCHEDULED": "Unscheduled",
+      "title": "History"
     },
     "visits": "Visits",
     "yourReview": "Your review"

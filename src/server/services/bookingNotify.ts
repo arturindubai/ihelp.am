@@ -407,6 +407,41 @@ export async function notifyClientVisitCancelled(visitId: string): Promise<void>
 }
 
 
+/** 4б. Мастер выехал (статус ON_WAY) — уведомление с примерным временем прибытия */
+export async function notifyClientMasterOnWay(visitId: string, etaMin: number): Promise<void> {
+  const ok = await markVisitEvent(visitId, "onWay");
+  if (!ok) return;
+
+  try {
+    const visit = await db.visit.findUnique({
+      where: { id: visitId },
+      select: {
+        master: { select: { name: true } },
+        order: {
+          select: {
+            id: true,
+            number: true,
+            userId: true,
+          },
+        },
+      },
+    });
+    if (!visit) return;
+
+    const masterName = visit.master ? tr(visit.master.name, "ru") : "—";
+    const tmpl = await getOrderTemplates();
+    const text = fill(tmpl.onWay, { masterName, eta: String(etaMin) });
+
+    await sendToClient(visit.order.userId, text, `Мастер выехал — заказ №${visit.order.number}`, "client:onWay", {
+      orderId: visit.order.id,
+      visitId,
+      event: "onWay",
+    });
+  } catch (e) {
+    console.error("[bookingNotify:onWay] ошибка", e);
+  }
+}
+
 /** 5. Визит завершён (статус DONE) */
 export async function notifyClientVisitCompleted(visitId: string): Promise<void> {
   const ok = await markVisitEvent(visitId, "completed");
