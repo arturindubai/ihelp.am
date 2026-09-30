@@ -19,7 +19,11 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const { locale, slug } = await params;
   const raw = await loadServiceRaw(slug);
   if (!raw) return {};
-  return { title: tr(raw.title, locale), description: tr(raw.subtitle, locale) || tr(raw.description, locale) };
+  return {
+    title: tr(raw.title, locale),
+    description: tr(raw.subtitle, locale) || tr(raw.description, locale),
+    alternates: { canonical: `/${locale}/s/${slug}` },
+  };
 }
 
 export default async function ServicePage({ params }: { params: Promise<{ locale: string; slug: string }> }) {
