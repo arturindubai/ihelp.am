@@ -348,6 +348,42 @@ describe("подстановка переменных", () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
+// Отписка от необязательных писем
+
+describe("отписка от необязательных писем", () => {
+  it("отписавшемуся клиенту подтверждение заказа по email всё равно уходит", async () => {
+    makeOrder("o-unsub");
+    userStore.set("u1", { telegramId: null, email: "user@example.com", name: "Тест", emailUnsubscribedAt: new Date() });
+    await notifyClientOrderCreated("o-unsub");
+    expect(vi.mocked(sendMail)).toHaveBeenCalledOnce();
+    expect(vi.mocked(notifyTech)).not.toHaveBeenCalled();
+  });
+
+  it("отписавшемуся клиенту напоминание о визите по email не уходит", async () => {
+    const remindTime = new Date(ACTIVE_TIME.getTime() + 24 * 3600_000);
+    makeVisit("v-unsub-remind", { id: "v-unsub-remind" });
+    userStore.set("u1", { telegramId: null, email: "user@example.com", name: "Тест", emailUnsubscribedAt: new Date() });
+    const v = {
+      id: "v-unsub-remind",
+      scheduledAt: remindTime,
+      order: {
+        number: 100,
+        config: { service: { title: "Уборка" } },
+        addressSnapshot: { street: "Пушкина", building: "10" },
+        locale: "ru",
+        userId: "u1",
+        user: { id: "u1", telegramId: null, email: "user@example.com", emailUnsubscribedAt: new Date() },
+      },
+      master: { name: "Мастер Тест" },
+    };
+    visitFindManyResult = [v];
+    const count = await sendVisitReminders(ACTIVE_TIME);
+    expect(count).toBe(0);
+    expect(vi.mocked(sendMail)).not.toHaveBeenCalled();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
 // Тихий период (21:00–09:00 Ереван)
 
 // 23:00 Ереван = 19:00 UTC
