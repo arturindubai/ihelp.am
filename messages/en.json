@@ -303,6 +303,8 @@
     "telegramDisconnect": "Disconnect",
     "telegramConflict": "This Telegram account is already linked to another account",
     "telegramTitle": "Telegram",
+    "emailRemindersTitle": "Email notifications",
+    "emailRemindersLabel": "Receive visit reminders and review requests by email",
     "locales": {
       "ru": "Русский",
       "en": "English",
@@ -2115,10 +2117,13 @@
         "line2": "Your feedback helps us improve.",
         "button": "Leave a review"
       },
-      "unsubscribeText": "To stop receiving emails — {link}.",
-      "unsubscribeLink": "unsubscribe here",
-      "unsubscribedTitle": "You have unsubscribed",
-      "unsubscribedBody": "You will no longer receive emails from iHelp."
+      "unsubscribeText": "Don't want visit reminders — {link}.",
+      "unsubscribeLink": "unsubscribe",
+      "unsubscribeConfirmTitle": "Unsubscribe from reminders?",
+      "unsubscribeConfirmBody": "Visit reminders and review requests will no longer be sent. Order emails — confirmation, reschedule, and cancellation — will always be delivered.",
+      "unsubscribeButton": "Unsubscribe from reminders",
+      "unsubscribedTitle": "You have unsubscribed from reminders",
+      "unsubscribedBody": "Visit reminders and review requests will no longer be sent. Order emails — confirmation, reschedule, and cancellation — are always delivered."
     },
     "order": {
       "created": "✅ Order confirmed\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}\nTotal: {price}\nThank you for choosing iHelp! We will assign a master soon.",
