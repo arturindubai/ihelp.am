@@ -35,10 +35,19 @@ export async function getCurrentUser(): Promise<User | null> {
   return s.user;
 }
 
-export async function logout() {
+/**
+ * endpoint — адрес push-подписки этого браузера. Если передан — удаляем только её.
+ * Не передан — подписки не трогаем: иначе выход с компьютера лишит мастера уведомлений на телефоне.
+ */
+export async function logout(endpoint?: string) {
   const c = await cookies();
   const token = c.get(COOKIE)?.value;
-  if (token) await db.session.deleteMany({ where: { tokenHash: hash(token) } });
+  if (token) {
+    if (endpoint) {
+      await db.pushSubscription.deleteMany({ where: { endpoint } });
+    }
+    await db.session.deleteMany({ where: { tokenHash: hash(token) } });
+  }
   c.delete(COOKIE);
 }
 

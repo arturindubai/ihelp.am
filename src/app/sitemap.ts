@@ -12,5 +12,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     db.master.findMany({ where: { active: true }, select: { slug: true, updatedAt: true } }),
   ]);
   const paths = ["", "/services", ...services.map((x) => `/s/${x.slug}`), ...masters.map((x) => `/masters/${x.slug}`)];
-  return s.locales.enabled.flatMap((l) => paths.map((p) => ({ url: `${base}/${l}${p}`, changeFrequency: "weekly" as const })));
+  return s.locales.indexable.flatMap((l) =>
+    paths.map((p) => ({ url: `${base}/${l}${p}`, changeFrequency: "weekly" as const, lastModified: new Date() }))
+  );
 }

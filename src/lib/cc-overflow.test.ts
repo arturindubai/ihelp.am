@@ -28,10 +28,10 @@ describe("buildSummaryText", () => {
     expect(result.startsWith("а".repeat(COMMENT_SUMMARY_LEN))).toBe(true);
   });
 
-  it("заканчивается ссылкой на запись Библиотеки", () => {
+  it("заканчивается ссылкой на запись Канона", () => {
     const slug = "note-abc12";
     const result = buildSummaryText("а".repeat(12_000), slug);
-    expect(result.endsWith(`[Полный текст: Библиотека, ${slug}]`)).toBe(true);
+    expect(result.endsWith(`[Полный текст: Канон, ${slug}]`)).toBe(true);
   });
 
   it("результат укладывается в лимит (5000 символов)", () => {
@@ -42,12 +42,12 @@ describe("buildSummaryText", () => {
   });
 
   it("полный текст 12 000 знаков доступен владельцу через slug", () => {
-    // Полный текст сохраняется под slug в Библиотеке — slug доступен из записи ленты
+    // Полный текст сохраняется под slug в Каноне — slug доступен из записи ленты
     const full = "а".repeat(12_000);
     const slug = "note-1a2b3c4d5e";
     const summary = buildSummaryText(full, slug);
     // Из записи ленты владелец может достать slug
-    expect(summary.includes(`[Полный текст: Библиотека, ${slug}]`)).toBe(true);
+    expect(summary.includes(`[Полный текст: Канон, ${slug}]`)).toBe(true);
   });
 });
 

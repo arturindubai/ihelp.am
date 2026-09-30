@@ -32,7 +32,7 @@ if ! docker image inspect homecare-app:latest > /dev/null 2>&1; then
 else
   secret_pat="POSTGRES_PASSWORD|SESSION_SECRET|CRON_SECRET|SETTINGS_ENCRYPTION_KEY"
   secret_pat="$secret_pat|CC_AGENT_KEY|CLAUDE_CODE_OAUTH_TOKEN|ADMIN_LOGIN_TOKEN"
-  secret_pat="$secret_pat|DATABASE_URL|OTP_DEV_MODE"
+  secret_pat="$secret_pat|DATABASE_URL|OTP_DEV_MODE|VAPID_PRIVATE_KEY"
   secrets=$(docker run --rm homecare-app:latest sh -c \
     "grep -rl \"$secret_pat\" /app/.next/static/ 2>/dev/null" \
     || true)

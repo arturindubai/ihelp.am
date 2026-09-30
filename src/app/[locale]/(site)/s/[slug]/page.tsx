@@ -23,6 +23,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const meta: Record<string, unknown> = {
     title: tr(raw.title, locale),
     description: tr(raw.subtitle, locale) || tr(raw.description, locale),
+    alternates: { canonical: `/${locale}/s/${slug}` },
   };
   if (raw.comingSoon) meta.robots = { index: false, follow: false };
   return meta;

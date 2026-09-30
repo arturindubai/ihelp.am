@@ -16,7 +16,7 @@ export default async function AdminPromos({ params }: { params: Promise<{ locale
       <PageHead title={t("promos.title")} />
       <PromoManager
         services={services.map((s) => ({ id: s.id, name: tr(s.title, locale) }))}
-        promos={promos.map((p) => ({ id: p.id, usedCount: p.usedCount, data: { code: p.code, description: p.description, type: p.type, value: p.value, maxDiscount: p.maxDiscount, minOrder: p.minOrder, validFrom: p.validFrom ? ymd(p.validFrom) : null, validTo: p.validTo ? ymd(p.validTo) : null, usageLimit: p.usageLimit, perUserLimit: p.perUserLimit, firstOrderOnly: p.firstOrderOnly, stackable: p.stackable, serviceIds: p.serviceIds, planKinds: p.planKinds, active: p.active } }))}
+        promos={promos.map((p) => ({ id: p.id, usedCount: p.usedCount, data: { code: p.code, description: p.description, type: p.type, value: p.value, maxDiscount: p.maxDiscount, minOrder: p.minOrder, validFrom: p.validFrom ? ymd(p.validFrom) : null, validTo: p.validTo ? ymd(p.validTo) : null, usageLimit: p.usageLimit, perUserLimit: p.perUserLimit, firstOrderOnly: p.firstOrderOnly, stackable: p.stackable, serviceIds: p.serviceIds, planKinds: p.planKinds, active: p.active, forPhone: p.forPhone ?? null, forEmail: p.forEmail ?? null } }))}
       />
     </div>
   );

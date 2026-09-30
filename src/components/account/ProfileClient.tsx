@@ -91,7 +91,18 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
         <button className="btn-outline mt-2 w-full" onClick={() => setEdit({})}><Plus size={18} /> {ta("saveAddress")}</button>
       </section>
 
-      <button className="btn-ghost mt-4 w-full text-bad" onClick={() => start(async () => { await logoutAction(); router.replace("/"); router.refresh(); })}><LogOut size={18} /> {tn("logout")}</button>
+      <button className="btn-ghost mt-4 w-full text-bad" onClick={() => start(async () => {
+        let endpoint: string | undefined;
+        try {
+          if ("serviceWorker" in navigator) {
+            const reg = await navigator.serviceWorker.ready;
+            endpoint = (await reg.pushManager.getSubscription())?.endpoint;
+          }
+        } catch { /* нет подписки или SW недоступен */ }
+        await logoutAction(endpoint);
+        router.replace("/");
+        router.refresh();
+      })}><LogOut size={18} /> {tn("logout")}</button>
 
       <Sheet open={!!edit} onClose={() => setEdit(null)} title={edit?.id ? tc("edit") : ta("saveAddress")}>
         {edit && (
