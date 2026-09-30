@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Check, Info } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
@@ -10,6 +10,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { Icon } from "@/components/Icon";
 import { PriceBar } from "./PriceBar";
 import { writeCart, clearCart } from "@/lib/cart";
+import { addToCartAction, clearCartAction } from "@/server/actions/cart";
 
 export function initialSelection(s: ServiceView) {
   const opts: string[] = [];
@@ -33,6 +34,7 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy }: { s: Ser
   const [opts, setOpts] = useState<string[]>(init.opts);
   const [planId, setPlanId] = useState<string | null>(init.planId);
   const [info, setInfo] = useState<{ title: string; body?: string; schedule?: ServiceView["groups"][number]["options"][number]["schedule"] } | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const lines = s.groups.flatMap((g) => g.options.filter((o) => opts.includes(o.id)).map((o) => ({ groupTitle: g.title, optionTitle: o.title, price: o.price, discountable: o.discountable, durationMin: o.durationMin })));
   const complete = s.groups.every((g) => !g.required || g.options.some((o) => opts.includes(o.id))) && (!s.plans.length || !!planId);
@@ -68,14 +70,21 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy }: { s: Ser
   const barPrice = plan?.kind === "PACKAGE" ? price.payNow : price.first.price;
   const barStrike = plan?.kind === "PACKAGE" ? price.payNowBase : price.base;
 
-  // Сохраняем выбор в localStorage, чтобы StickyCartBar показывал его на других страницах
+  // Сохраняем выбор в localStorage и дебаунсированно на сервере
   useEffect(() => {
     if (lines.length > 0) {
       writeCart({ slug: s.slug, opts, planId, count: 1, total: barPrice });
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        addToCartAction(s.id, opts, planId).catch(() => null);
+      }, 800);
     } else {
       clearCart();
+      clearTimeout(saveTimerRef.current);
+      clearCartAction().catch(() => null);
     }
-  }, [lines.length, opts, planId, barPrice, s.slug]);
+    return () => clearTimeout(saveTimerRef.current);
+  }, [lines.length, opts, planId, barPrice, s.slug, s.id]);
 
   function go() {
     const q = new URLSearchParams({ o: opts.join(","), ...(planId ? { p: planId } : {}) });

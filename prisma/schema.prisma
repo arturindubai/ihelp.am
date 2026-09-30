@@ -59,6 +59,7 @@ model User {
   redemptions       PromoRedemption[]
   auditLogs         AuditLog[]
   pushSubscriptions PushSubscription[]
+  cart              Cart?
 }
 
 /// Web Push подписки (VAPID): endpoint + ключи для отправки push-уведомлений без открытого сайта
@@ -929,6 +930,37 @@ model AppError {
   taskKey     String?
 
   @@index([lastSeenAt])
+}
+
+/// Серверная корзина покупок (FLOW-3): переживает выход/вход и смену устройства
+model Cart {
+  id        String     @id @default(cuid())
+  /// Пользователь — корзина привязана к аккаунту
+  userId    String?    @unique
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Анонимный идентификатор из cookie cart_anon (до входа)
+  anonId    String?    @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  items     CartItem[]
+
+  @@index([anonId])
+}
+
+/// Позиция в серверной корзине: одна запись на услугу
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  serviceId String
+  optionIds String[] @default([])
+  planId    String?
+  qty       Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cartId, serviceId])
+  @@index([cartId])
 }
 
 /// Заявки «Уведомить меня» для категорий-заглушек
