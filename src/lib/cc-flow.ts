@@ -156,7 +156,11 @@ export const isReady = (items: CheckItem[]) => items.every((i) => i.ok || !i.har
 /** Код-задача: её доказательство готовности — коммит в main, а не слова */
 export const isCodeTask = (layer: string) => layer !== "none";
 
-/** Гейт «На проверке»: у код-задачи есть ветка, у любой — отчёт; если переданы opts — проверяем releaseNote, ownerSummary и nextSteps */
+/**
+ * Гейт «На проверке»: у код-задачи есть ветка, у любой — отчёт.
+ * Если opts переданы — оба поля (releaseNote и ownerSummary) обязательны.
+ * cc.mjs всегда передаёт оба; UI передаёт только releaseNote через отдельное поле — тогда opts не передаётся.
+ */
 export function reviewGate(
   t: { layer: string; branch?: string | null },
   report: string,
@@ -174,6 +178,32 @@ export function reviewGate(
 }
 
 export const SHA_RE = /^[0-9a-f]{7,40}$/i;
+
+export type CriterionResult = { done: boolean; cardKey?: string };
+
+/** Формат ключа follow-up карточки: PREFX-N (например IN-7, RISK-3) */
+const CARD_KEY_RE = /^[A-Z]+-\d+$/;
+
+/**
+ * Гейт критериев при переходе в «Сделано»: каждый критерий должен быть либо отмечен ✓,
+ * либо вынесен в карточку с ключом вида IN-7. Без force — блокирует; с force — пропускает.
+ * Если result не передан и есть требования — блокирует (путь через API/деплоер без тестировщика).
+ * Проверяет все требования по длине массива: короткий result не проходит.
+ */
+export function criteriaGate(requirements: string[], result?: CriterionResult[]): string | null {
+  if (!requirements.length) return null;
+  if (!result || result.length < requirements.length) return "criteria_incomplete";
+  const incomplete = requirements.some((_, i) => !result[i]?.done && !CARD_KEY_RE.test(result[i]?.cardKey?.trim() ?? ""));
+  return incomplete ? "criteria_incomplete" : null;
+}
+
+/** Ключи follow-up карточек из чек-листа критериев: только незакрытые пункты с корректным ключом */
+export function extractFollowUpKeys(requirements: string[], result?: CriterionResult[]): string[] {
+  if (!requirements.length || !result) return [];
+  return result
+    .filter((r, i) => i < requirements.length && !r.done && CARD_KEY_RE.test(r.cardKey?.trim() ?? ""))
+    .map(r => r.cardKey!.trim());
+}
 
 /**
  * Гейт «В очереди»: задача с открытыми вопросами к продукту не идёт разработчику.
