@@ -25,6 +25,7 @@ import {
 } from "@/server/actions/admin/cc";
 import { cn } from "@/lib/format";
 import { parseVariants } from "@/lib/cc-owner-q";
+import type { OwnerCardGroupType } from "@/lib/cc-owner-q";
 
 /** Кнопки и формы пульта Control Center: Intake, запуск и остановка воркеров, согласования, сообщения */
 
@@ -99,6 +100,8 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [dropError, setDropError] = useState<string | null>(null);
   // Черновик живёт в браузере: выкладка, случайное закрытие окна или ошибка не стирают набранное
   const wantStop = useRef(false);
   const [pending, start] = useTransition();
@@ -131,6 +134,33 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
   const edit = (v: string) => {
     setText(v);
     writeDraft(v);
+  };
+
+  const addFiles = (incoming: FileList | File[]) => {
+    setDropError(null);
+    const arr = Array.from(incoming);
+    const valid: File[] = [];
+    let typeRejected = false;
+    let sizeRejected = false;
+    for (const f of arr) {
+      if (!f.type.startsWith("image/") && f.type !== "application/pdf") { typeRejected = true; continue; }
+      if (f.size > 20 * 1024 * 1024) { sizeRejected = true; continue; }
+      valid.push(f);
+    }
+    if (!valid.length) {
+      if (typeRejected) setDropError(t("dropTypeError"));
+      else if (sizeRejected) setDropError(t("dropSizeError"));
+      return;
+    }
+    const merged = [...files, ...valid];
+    if (merged.length > 6) {
+      setDropError(t("dropLimitError", { n: Math.max(0, 6 - files.length) }));
+      setFiles(merged.slice(0, 6));
+    } else {
+      if (typeRejected) setDropError(t("dropTypeError"));
+      else if (sizeRejected) setDropError(t("dropSizeError"));
+      setFiles(merged);
+    }
   };
 
   const toggleVoice = () => {
@@ -246,9 +276,23 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
         {hasDraft && <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-warn" aria-label={t("draftBadge")} />}
       </button>
       {open && (
-        <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" onDragOver={(e) => e.preventDefault()} onDrop={(e) => e.preventDefault()}>
           <button className="absolute inset-0 bg-overlay/40" onClick={() => setOpen(false)} aria-label={t("close")} />
-          <div className="absolute inset-x-0 top-0 mx-auto max-h-dvh w-full max-w-2xl overflow-y-auto bg-paper p-4 shadow-xl sm:top-10 sm:rounded-2xl sm:p-6">
+          <div
+            className={cn(
+              "absolute inset-x-0 top-0 mx-auto max-h-dvh w-full max-w-2xl overflow-y-auto bg-paper p-4 shadow-xl transition-colors sm:top-10 sm:rounded-2xl sm:p-6",
+              dragOver ? "border-2 border-brand bg-brand-50" : "border-2 border-transparent",
+            )}
+            onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(true); }}
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false); }}
+            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(false); addFiles(e.dataTransfer.files); }}
+          >
+            {dragOver && (
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-[inherit]">
+                <p className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-on-action">{t("dropActive")}</p>
+              </div>
+            )}
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
                 <div className="text-lg font-bold">{t("title")}</div>
@@ -258,15 +302,32 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
                 <X size={18} />
               </button>
             </div>
-            <textarea className="input min-h-40 w-full" value={text} onChange={(e) => edit(e.target.value)} placeholder={t("placeholder")} autoFocus />
+            <textarea
+              className="input min-h-40 w-full"
+              value={text}
+              onChange={(e) => edit(e.target.value)}
+              placeholder={t("placeholder")}
+              autoFocus
+              onPaste={(e) => {
+                if (e.clipboardData.files.length > 0 && !e.clipboardData.getData("text/plain")) {
+                  e.preventDefault();
+                  addFiles(e.clipboardData.files);
+                }
+              }}
+            />
             {hasDraft && !sent && <p className="mt-1 rounded-lg bg-warn-50 px-3 py-1.5 text-xs text-warn">{t("draftRestored")}</p>}
             {listening && <p className="mt-1 text-xs text-muted">🎙 {interim || t("listening")}</p>}
             {voiceError && <p className="mt-1 rounded-lg bg-warn-50 px-3 py-1.5 text-xs text-warn">{voiceError}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              {speech && (
+              {speech ? (
                 <button type="button" className={cn("btn-sm gap-1.5", listening ? "btn-danger" : "btn-outline")} onClick={toggleVoice}>
                   {listening ? <MicOff size={15} /> : <Mic size={15} />} {listening ? t("voiceStop") : t("voice")}
                 </button>
+              ) : (
+                <span className="flex items-center gap-1 text-xs text-muted" title={t("voiceErrors.unsupported")}>
+                  <Mic size={13} className="opacity-50" />
+                  {t("voiceUnsupported")}
+                </span>
               )}
               <label className="btn-outline btn-sm cursor-pointer gap-1.5">
                 <Paperclip size={15} /> {t("attach")}
@@ -285,6 +346,8 @@ export function IntakeButton({ history }: { history: IntakeItem[] }) {
                 {pending ? (retryAttempt > 1 ? t("retrying", { n: retryAttempt }) : t("sending")) : t("send")}
               </button>
             </div>
+            <p className="mt-1.5 text-xs text-muted">{t("pasteHint")}</p>
+            {dropError && <p className="mt-2 rounded-lg bg-warn-50 px-3 py-1.5 text-xs text-warn">{dropError}</p>}
             {error && <p className="mt-2 rounded-lg bg-bad-50 px-3 py-2 text-xs text-bad">{error}</p>}
             {sent && (
               <p className="mt-2 rounded-lg bg-ok-50 px-3 py-2 text-sm text-ok">
@@ -870,7 +933,7 @@ export type YouCardTask = { key: string; title: string; href: string; priority: 
 export type YouCard = {
   id: string;
   question: string;
-  groupType: "variant" | "price" | "data" | "auth" | "approve" | "rule" | "other";
+  groupType: OwnerCardGroupType;
   tasks: YouCardTask[];
   variants: { id: string; text: string }[] | null;
   multiQuestion: { question: string; variants: { id: string; text: string }[] | null }[] | null;
@@ -890,6 +953,7 @@ export type YouPostponedTask = {
   priority: string;
   reason: string | null;
   updatedAt: string;
+  blockedUntil?: string | null;
 };
 
 const GROUP_ICONS: Record<YouCard["groupType"], string> = {
@@ -899,8 +963,11 @@ const GROUP_ICONS: Record<YouCard["groupType"], string> = {
   auth: "🔑",
   approve: "✅",
   rule: "📋",
+  do: "⚙️",
   other: "💬",
 };
+
+const QUESTION_COLLAPSE_LINES = 8;
 
 /** Один блок вопроса с вариантами или текстовым вводом */
 function QuestionBlock({
@@ -918,13 +985,30 @@ function QuestionBlock({
 }) {
   const t = useTranslations("admin.cc.you");
   const [replyText, setReplyText] = useState("");
+  const [textExpanded, setTextExpanded] = useState(false);
+
+  const questionLines = block.question ? block.question.split("\n") : [];
+  const isLong = questionLines.length > QUESTION_COLLAPSE_LINES;
+  const visibleText =
+    isLong && !textExpanded
+      ? questionLines.slice(0, QUESTION_COLLAPSE_LINES).join("\n")
+      : block.question;
 
   return (
     <div>
       {block.question && (
         <div className="mb-2 text-sm font-medium">
           {blockCount > 1 && <span className="mr-1 text-muted">{blockIdx + 1}.</span>}
-          {renderOwnerText(block.question, t("devOnly"))}
+          {renderOwnerText(visibleText, t("devOnly"))}
+          {isLong && (
+            <button
+              type="button"
+              className="mt-0.5 text-xs text-brand hover:underline"
+              onClick={() => setTextExpanded(!textExpanded)}
+            >
+              {textExpanded ? t("collapse") : t("expand")}
+            </button>
+          )}
         </div>
       )}
       {block.variants ? (
@@ -1069,6 +1153,14 @@ export function YouQuestionsSection({
   const t = useTranslations("admin.cc.you");
   const [filter, setFilter] = useState<"all" | "urgent" | "postponed">("all");
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [expandedPostponed, setExpandedPostponed] = useState<Set<string>>(new Set());
+
+  const togglePostponed = (key: string) =>
+    setExpandedPostponed((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
 
   const hide = (id: string) => setHidden((prev) => new Set([...prev, id]));
   const visibleCards = cards.filter((c) => !hidden.has(c.id));
@@ -1082,10 +1174,11 @@ export function YouQuestionsSection({
   const byGroup = (
     [
       ["variant", displayCards.filter((c) => c.groupType === "variant")],
+      ["approve", displayCards.filter((c) => c.groupType === "approve")],
+      ["do", displayCards.filter((c) => c.groupType === "do")],
       ["price", displayCards.filter((c) => c.groupType === "price")],
       ["data", displayCards.filter((c) => c.groupType === "data")],
       ["auth", displayCards.filter((c) => c.groupType === "auth")],
-      ["approve", displayCards.filter((c) => c.groupType === "approve")],
       ["rule", displayCards.filter((c) => c.groupType === "rule")],
       ["other", displayCards.filter((c) => c.groupType === "other")],
     ] as [YouCard["groupType"], YouCard[]][]
@@ -1160,15 +1253,38 @@ export function YouQuestionsSection({
             <p className="text-sm text-muted">{t("postponedSectionHint")}</p>
           )}
           <div className="space-y-2">
-            {postponed.map((task) => (
-              <div key={task.key} className="rounded-card border border-line bg-paper p-3 text-sm">
-                <Link href={task.href} scroll={false} className="font-medium hover:underline">
-                  <span className="mr-2 font-mono text-xs text-muted">{task.key}</span>
-                  {task.title}
-                </Link>
-                {task.reason && <p className="mt-1 text-xs text-muted">{task.reason}</p>}
-              </div>
-            ))}
+            {postponed.map((task) => {
+              const lines = (task.reason ?? "").split("\n").filter(Boolean);
+              const firstLine = lines[0] ?? "";
+              const hasMore = lines.length > 1;
+              const isExpanded = expandedPostponed.has(task.key);
+              return (
+                <div key={task.key} className="rounded-card border border-line bg-paper p-3 text-sm">
+                  <Link href={task.href} scroll={false} className="font-medium hover:underline">
+                    <span className="mr-2 font-mono text-xs text-muted">{task.key}</span>
+                    {task.title}
+                  </Link>
+                  {firstLine && (
+                    <p className="mt-1 text-xs text-muted">
+                      {isExpanded ? task.reason : firstLine}
+                    </p>
+                  )}
+                  {hasMore && (
+                    <button
+                      className="mt-0.5 text-xs text-brand hover:underline"
+                      onClick={() => togglePostponed(task.key)}
+                    >
+                      {isExpanded ? t("collapse") : t("expand")}
+                    </button>
+                  )}
+                  {task.blockedUntil && (
+                    <p className="mt-1 text-xs text-muted">
+                      {t("postponedUntil", { date: new Date(task.blockedUntil).toLocaleDateString("ru-RU", { timeZone: "Asia/Yerevan", day: "numeric", month: "short", year: "numeric" }) })}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </>
       )}

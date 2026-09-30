@@ -46,6 +46,8 @@ model User {
   telegramUsername String?
   /// Согласие на рекламные рассылки (LEGAL-2): null — не давал, дата — дал; отзывается в профиле
   adsConsentAt     DateTime?
+  /// Когда клиент отписался от транзакционных писем (ссылка в подвале письма): дата отписки или null
+  emailUnsubscribedAt DateTime?
   /// Поправка прав по конкретному человеку поверх роли: { added: string[], removed: string[] }
   sectionDelta     Json?
 
@@ -112,6 +114,7 @@ model Category {
   sort        Int        @default(0)
   active      Boolean    @default(true)
   comingSoon  Boolean    @default(false)
+  archived    Boolean    @default(false)
   services    Service[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
@@ -135,6 +138,7 @@ model Service {
   /// Что не входит в услугу — мультиязычный текст, строки разделены \n
   excludesText  Json?
   active        Boolean       @default(true)
+  comingSoon    Boolean       @default(false)
   sort          Int           @default(0)
   rating        Float         @default(0)
   reviewsCount  Int           @default(0)
@@ -463,15 +467,30 @@ model PromoRedemption {
 }
 
 model Banner {
-  id        String   @id @default(cuid())
-  title     Json
-  subtitle  Json?
-  image     String?
-  link      String?
-  promoCode String?
-  bg        String?
-  active    Boolean  @default(true)
-  sort      Int      @default(0)
+  id          String    @id @default(cuid())
+  title       Json
+  subtitle    Json?
+  image       String?
+  link        String?
+  promoCode   String?
+  bg          String?
+  active      Boolean   @default(true)
+  sort        Int       @default(0)
+  /// Место размещения: CAROUSEL_HOME | HERO_HOME | CATALOG | SERVICE | CHECKOUT | SUCCESS | EMAIL | CLIENT_CABINET | MASTER_CABINET
+  placement   String    @default("CAROUSEL_HOME")
+  /// Тип: PROMO | ANNOUNCEMENT | UPSELL | CROSS_SELL
+  bannerType  String    @default("PROMO")
+  /// Начало периода показа (включительно); null — без ограничения
+  startsAt    DateTime?
+  /// Конец периода показа (включительно); null — без ограничения
+  endsAt      DateTime?
+  /// Аудитория: ALL | LOGGED_IN | GUESTS
+  audience    String    @default("ALL")
+  /// Сегмент: ALL | NEW | RETURNING
+  segment     String    @default("ALL")
+  /// Счётчики показов и кликов (инкрементируются в ADMIN-6)
+  views       Int       @default(0)
+  clicks      Int       @default(0)
 }
 
 /// Карточки «Обещания» на главной (управляются в AdminKit → Контент)
@@ -538,6 +557,10 @@ model Task {
   /// Ключ эпика (Epic.key). Пусто — простая задача без эпика
   epicKey       String?
   epicRef       Epic?     @relation(fields: [epicKey], references: [key])
+  /// Ключ родительской задачи (если эта задача — часть разбитой крупной). Родитель с открытыми частями не уходит в работу
+  parentKey     String?
+  parentRef     Task?     @relation("TaskParts", fields: [parentKey], references: [key], onDelete: SetNull)
+  parts         Task[]    @relation("TaskParts")
   area          String
   /// back | front | fullstack | infra | none
   layer         String
@@ -631,6 +654,7 @@ model Task {
   @@index([stage])
   @@index([area])
   @@index([epicKey])
+  @@index([parentKey])
 }
 
 /// Эпик — крупная область работы с собственными требованиями, дизайном, статусом проверки и готовности к деплою.
@@ -867,4 +891,18 @@ model AppError {
   taskKey     String?
 
   @@index([lastSeenAt])
+}
+
+/// Заявки «Уведомить меня» для категорий-заглушек
+model ServiceInterest {
+  id          String   @id @default(cuid())
+  serviceSlug String
+  contact     String
+  ip          String?
+  createdAt   DateTime @default(now())
+
+  @@unique([serviceSlug, contact])
+  @@index([serviceSlug])
+  @@index([ip, createdAt])
+  @@map("service_interest")
 }

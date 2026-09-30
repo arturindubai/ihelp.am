@@ -553,7 +553,7 @@ export async function workersOverview() {
         ...q.noBranch.filter((t) => !q.held.some((h) => h.key === t.key)).map((t) => item(t.key, "nobranch")),
       ],
     },
-    deployWindowOpen: hour >= config.deployWindow[0] && hour < config.deployWindow[1],
+    deployWindowOpen: config.deployWindow === null || (hour >= config.deployWindow[0] && hour < config.deployWindow[1]),
     readyDev: takeable(dev),
     readyNocode: takeable(nocode),
   };

@@ -16,7 +16,8 @@ info="$common/cc/stands/$name.json"
 mkdir -p "$(dirname "$info")"
 
 down() {
-  docker rm -f "$name-app" "$name-db" > /dev/null 2>&1
+  docker rm -fv "$name-app" "$name-db" > /dev/null 2>&1
+  docker volume rm "$name-pgdata" > /dev/null 2>&1 || true
   docker network rm "$name" > /dev/null 2>&1
   rm -f "$info"
   echo "✓ Стенд $name снесён"
@@ -44,7 +45,11 @@ db="postgresql://app:stand@$name-db:5432/homeservices"
 mounts=(-v "$root/src:/app/src:ro" -v "$root/prisma:/app/prisma:ro" -v "$root/messages:/app/messages:ro")
 
 docker network create "$name" > /dev/null || exit 1
-docker run -d --name "$name-db" --network "$name" --memory 512m -e POSTGRES_DB=homeservices -e POSTGRES_USER=app -e POSTGRES_PASSWORD=stand postgres:16-alpine > /dev/null || exit 1
+docker volume create --label "com.docker.compose.project=$name" "$name-pgdata" > /dev/null || exit 1
+docker run -d --name "$name-db" --network "$name" --memory 512m \
+  --label "com.docker.compose.project=$name" \
+  -v "$name-pgdata:/var/lib/postgresql/data" \
+  -e POSTGRES_DB=homeservices -e POSTGRES_USER=app -e POSTGRES_PASSWORD=stand postgres:16-alpine > /dev/null || exit 1
 for _ in $(seq 1 30); do docker exec "$name-db" pg_isready -U app -d homeservices > /dev/null 2>&1 && break; sleep 1; done
 
 echo "▶ Миграции и демо-данные ветки"
@@ -52,7 +57,8 @@ docker run --rm --network "$name" "${mounts[@]}" -e DATABASE_URL="$db" -e ADMIN_
   -c 'npx prisma generate > /dev/null 2>&1 && npx prisma migrate deploy 2>&1 | tail -n 2 && npx tsx prisma/seed.ts 2>&1 | tail -n 3' || { echo "✗ Миграции или сид упали"; down > /dev/null; exit 1; }
 
 echo "▶ Приложение (режим разработки)"
-docker run -d --name "$name-app" --network "$name" -p "127.0.0.1:$port:3000" --memory 3g "${mounts[@]}" \
+docker run -d --name "$name-app" --network "$name" -p "127.0.0.1:$port:3000" --memory 3g \
+  --label "com.docker.compose.project=$name" "${mounts[@]}" \
   -e DATABASE_URL="$db" -e SESSION_SECRET="$(openssl rand -hex 32)" -e CRON_SECRET="$(openssl rand -hex 16)" \
   -e CC_AGENT_KEY="$cckey" -e ADMIN_LOGIN_TOKEN="$token" -e ADMIN_PHONE=+37400000099 \
   -e APP_URL="http://127.0.0.1:$port" -e OTP_DEV_MODE=false -e COOKIE_SECURE=false -e UPLOAD_DIR=/tmp/uploads \
