@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Check, Info } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
@@ -9,6 +9,7 @@ import type { ServiceView } from "@/server/services/catalog";
 import { Sheet } from "@/components/ui/Sheet";
 import { Icon } from "@/components/Icon";
 import { PriceBar } from "./PriceBar";
+import { writeCart, clearCart } from "@/lib/cart";
 
 export function initialSelection(s: ServiceView) {
   const opts: string[] = [];
@@ -66,6 +67,15 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy }: { s: Ser
   }
   const barPrice = plan?.kind === "PACKAGE" ? price.payNow : price.first.price;
   const barStrike = plan?.kind === "PACKAGE" ? price.payNowBase : price.base;
+
+  // Сохраняем выбор в localStorage, чтобы StickyCartBar показывал его на других страницах
+  useEffect(() => {
+    if (lines.length > 0) {
+      writeCart({ slug: s.slug, opts, planId, count: lines.length, total: barPrice });
+    } else {
+      clearCart();
+    }
+  }, [lines.length, opts, planId, barPrice, s.slug]);
 
   function go() {
     const q = new URLSearchParams({ o: opts.join(","), ...(planId ? { p: planId } : {}) });

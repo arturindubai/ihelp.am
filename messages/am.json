@@ -66,7 +66,8 @@
     "whatsappSub": "",
     "writeUs": "",
     "reviewsTitle": "",
-    "stickyOrder": ""
+    "stickyOrder": "",
+    "subCatClose": ""
   },
   "service": {
     "startsAt": "",
@@ -95,8 +96,13 @@
     },
     "firstOffer": "",
     "notFound": "",
+    "guarantee1": "",
+    "guarantee2": "",
+    "guarantee3": "",
     "perVisitSaving": "",
     "packageSaving": "",
+    "firstVisitBannerTitle": "",
+    "firstVisitBannerText": "",
     "includes": "",
     "excludes": ""
   },
@@ -106,6 +112,7 @@
     "address": "",
     "addAddress": "",
     "dateTime": "",
+    "dateAndMaster": "",
     "availableTime": "",
     "startDate": "",
     "noSlots": "",
@@ -117,6 +124,7 @@
     "anyMasterSub": "",
     "masterBusy": "",
     "chooseTimeFirst": "",
+    "whoComes": "",
     "serviceLabel": "",
     "wishes": "",
     "noCallLabel": "",
@@ -362,9 +370,19 @@
   },
   "catalog": {
     "newService": "Նոր ծառայություն",
-    "comingSoonTitle": "Շուտով կբացենք",
-    "comingSoonText": "Պատրաստում ենք ծառայություններ: Գրեք մեզ՝ ձեր հարցերին կպատասխանենք",
-    "writeWhatsApp": "Գրել WhatsApp-ում"
+    "comingSoonTitle": "Շուտով Երևանում",
+    "comingSoonText": "Մենք գործարկում ենք այս ծառայությունը: Թողեք կոնտակտ — կծանուցենք, երբ ամրագրումը բացվի:",
+    "writeWhatsApp": "Գրել WhatsApp-ում",
+    "notifyTitle": "Ծանուցել գործարկման մասին",
+    "notifySubtitle": "Հեռախոս կամ e-mail — ձեր ընտրությամբ",
+    "notifyPlaceholder": "+374 … կամ name@mail.com",
+    "notifyHint": "Կուղարկենք միայն մեկ հաղորդագրություն",
+    "notifyButton": "Ծանուցել ինձ",
+    "notifySuccess": "Գրանցված ե՛ք! Կծանուցենք, երբ ամրագրումը բացվի:",
+    "notifyAlready": "Մենք արդեն ստացել ենք ձեր կոնտակտը",
+    "notifyInvalid": "Մուտքագրեք հեռախոս կամ e-mail",
+    "notifyTooMany": "Չափազանց շատ հայտեր, խնդրում ենք փորձել ավելի ուշ",
+    "notifyConsent": "Կտտացնելով կոճակը, դուք համաձայնվում եք ձեր կոնտակտի մշակմանը: <privacy>Գաղտնիության քաղաքականություն</privacy>"
   },
   "pro": {
     "title": "",
@@ -604,12 +622,28 @@
     },
     "services": {
       "title": "",
+      "catalogTitle": "",
       "categories": "",
       "services": "",
       "newCategory": "",
       "newService": "",
       "category": "",
       "comingSoon": "",
+      "comingSoonLabel": "",
+      "archived": "",
+      "archiveCategory": "",
+      "restoreCategory": "",
+      "categoryHiddenBanner": "",
+      "categoryArchivedBanner": "",
+      "filterAll": "",
+      "filterActive": "",
+      "filterHidden": "",
+      "filterSoon": "",
+      "searchPlaceholder": "",
+      "draft": "",
+      "minPrice": "",
+      "noServicesInCategory": "",
+      "addFirstService": "",
       "tabs": {
         "main": "",
         "options": "",
@@ -764,7 +798,55 @@
       "newBanner": "",
       "link": "",
       "promoCode": "",
-      "bg": ""
+      "bg": "",
+      "empty": "",
+      "placement": "",
+      "type": "",
+      "audience": "",
+      "segment": "",
+      "startsAt": "",
+      "endsAt": "",
+      "views": "",
+      "clicks": "",
+      "ctr": "",
+      "generate": "",
+      "stats": "",
+      "placements": {
+        "CAROUSEL_HOME": "",
+        "HERO_HOME": "",
+        "CATALOG": "",
+        "SERVICE": "",
+        "CHECKOUT": "",
+        "SUCCESS": "",
+        "EMAIL": "",
+        "CLIENT_CABINET": "",
+        "MASTER_CABINET": ""
+      },
+      "types": {
+        "PROMO": "",
+        "ANNOUNCEMENT": "",
+        "UPSELL": "",
+        "CROSS_SELL": ""
+      },
+      "audiences": {
+        "ALL": "",
+        "LOGGED_IN": "",
+        "GUESTS": ""
+      },
+      "segments": {
+        "ALL": "",
+        "NEW": "",
+        "RETURNING": ""
+      },
+      "tabs": {
+        "all": ""
+      },
+      "status": {
+        "active": "",
+        "paused": "",
+        "scheduled": "",
+        "expired": ""
+      }
     },
     "pages": {
       "title": "",
@@ -989,7 +1071,15 @@
         "title": "",
         "placeholder": "",
         "submit": "",
-        "hint": ""
+        "hint": "",
+        "dropActive": "",
+        "pasteHint": "",
+        "dropTypeError": "",
+        "dropSizeError": "",
+        "dropLimitError": "",
+        "retrying": "",
+        "draftRestored": "",
+        "draftBadge": ""
       },
       "workers": {
         "title": "",
@@ -1015,6 +1105,9 @@
           "login": "",
           "stop": "",
           "logs": ""
+        },
+        "reasons": {
+          "needs": ""
         }
       },
       "logs": {
@@ -1117,10 +1210,11 @@
         "postponeConfirm": "Հետաձգել",
         "groups": {
           "variant": "",
+          "approve": "",
+          "do": "",
           "price": "",
           "data": "",
           "auth": "",
-          "approve": "",
           "rule": "",
           "other": ""
         },
@@ -1179,5 +1273,10 @@
       "cancelled": "",
       "completed": ""
     }
+  },
+  "cart": {
+    "itemsCount": "{count, plural, one {# ծառայություն} other {# ծառայություն}}",
+    "total": "{amount} ֏",
+    "checkout": "Ձևակերպել"
   }
 }

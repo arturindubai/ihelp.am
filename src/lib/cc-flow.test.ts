@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
+import ruMessages from "../../messages/ru.json";
+import enMessages from "../../messages/en.json";
 import {
   canClaimRole,
   canCreateTask,
   canTransition,
+  criteriaGate,
+  extractFollowUpKeys,
   unblockTarget,
   doneGate,
   inTriageQueue,
@@ -25,6 +29,7 @@ import {
   RETURN_AFTER_STALE_MIN,
   WORKER_ROLES,
   type HealthTask,
+  computeEpicStatus,
 } from "./cc-flow";
 
 const now = new Date("2026-09-24T12:00:00Z");
@@ -259,17 +264,48 @@ describe("гейты сдачи", () => {
     expect(reviewGate({ layer: "back", branch: "task/AUTH-1" }, report)).toBeNull();
     expect(reviewGate({ layer: "none", branch: null }, report)).toBeNull();
   });
-  it("если opts переданы — требует releaseNote и ownerSummary", () => {
+  it("если opts переданы — оба поля (releaseNote и ownerSummary) обязательны", () => {
     const report = "Сделано: вход через бота. Проверено: tsc, vitest, стенд 8082.";
     const note = "Теперь клиент видит статус заказа в кабинете";
     const summary = "Сделано: статус заказа; Проверить: кабинет → мои заказы; Риск: нет";
+    // {} — opts переданы, оба поля пусты — ошибка
     expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, {})).toBe("release_note_required");
+    // releaseNote передан пустым — ошибка
+    expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: "" })).toBe("release_note_required");
+    // releaseNote есть, ownerSummary нет — ошибка
     expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note })).toBe("owner_summary_required");
+    // ownerSummary передан пустым — ошибка
+    expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note, ownerSummary: "" })).toBe("owner_summary_required");
+    // оба переданы — ОК
     expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note, ownerSummary: summary })).toBeNull();
     // Для не-код задачи с opts обязательны nextSteps (даже пустой массив = «ничего дальше»)
     expect(reviewGate({ layer: "none", branch: null }, report, { releaseNote: note, ownerSummary: summary })).toBe("next_steps_required");
     expect(reviewGate({ layer: "none", branch: null }, report, { releaseNote: note, ownerSummary: summary, nextSteps: [] })).toBeNull();
     expect(reviewGate({ layer: "none", branch: null }, report, { releaseNote: note, ownerSummary: summary, nextSteps: ["создать макет"] })).toBeNull();
+  });
+  it("criteriaGate блокирует закрытие при невыполненных и не вынесенных критериях", () => {
+    const reqs = ["Форма показывает чек-лист", "Поле обязательно при Сделано"];
+    // Без результата при наличии требований — блокирует
+    expect(criteriaGate(reqs, undefined)).toBe("criteria_incomplete");
+    // Короткий массив — блокирует (не все критерии охвачены)
+    expect(criteriaGate(reqs, [{ done: true }])).toBe("criteria_incomplete");
+    // Без требований — пропускается всегда
+    expect(criteriaGate([], [{ done: false }])).toBeNull();
+    expect(criteriaGate([], undefined)).toBeNull();
+    // Все выполнены — ОК
+    expect(criteriaGate(reqs, [{ done: true }, { done: true }])).toBeNull();
+    // Один не выполнен, но вынесен в карточку — ОК
+    expect(criteriaGate(reqs, [{ done: true }, { done: false, cardKey: "IN-7" }])).toBeNull();
+    // Один не выполнен без карточки — блокирует
+    expect(criteriaGate(reqs, [{ done: true }, { done: false }])).toBe("criteria_incomplete");
+    expect(criteriaGate(reqs, [{ done: true }, { done: false, cardKey: "плохой ключ" }])).toBe("criteria_incomplete");
+  });
+  it("extractFollowUpKeys собирает ключи вынесенных критериев", () => {
+    const reqs = ["Критерий 1", "Критерий 2", "Критерий 3"];
+    expect(extractFollowUpKeys(reqs, [{ done: true }, { done: false, cardKey: "IN-7" }, { done: false, cardKey: "RISK-3" }])).toEqual(["IN-7", "RISK-3"]);
+    expect(extractFollowUpKeys(reqs, [{ done: true }, { done: true }, { done: false, cardKey: "плохой" }])).toEqual([]);
+    expect(extractFollowUpKeys([], [{ done: false, cardKey: "IN-1" }])).toEqual([]);
+    expect(extractFollowUpKeys(reqs, undefined)).toEqual([]);
   });
   it("noWork — код-задача без ветки проходит проверку", () => {
     const report = "Проверено: поведение уже корректное, изменения не потребовались. Источник: логи и тест.";
@@ -293,7 +329,8 @@ describe("параллельная работа", () => {
   it("папка и файл внутри неё пересекаются, соседние файлы — нет", () => {
     expect(scopeOverlap(["src/server/services/"], ["src/server/services/cc.ts"])).toEqual(["src/server/services"]);
     expect(scopeOverlap(["src/lib/pricing.ts"], ["src/lib/slots.ts"])).toEqual([]);
-    expect(scopeOverlap(["./messages/ru.json"], ["messages/ru.json"])).toEqual(["messages/ru.json"]);
+    // messages/*.json исключены из проверки пересечений — два чата могут параллельно трогать переводы
+    expect(scopeOverlap(["./messages/ru.json"], ["messages/ru.json"])).toEqual([]);
   });
   it("следующей берётся возвращённая на доработку, затем по приоритету, пропуская занятый код и незакрытые зависимости", () => {
     const c = (key: string, patch: Partial<{ priority: string; sort: number; rework: number; depends: string[]; scope: string[] }> = {}) => ({
@@ -451,4 +488,82 @@ describe("фильтр вопросов к владельцу (needsYou)", () =>
     expect(isOwnerQuestion({ status: "blocked", blockedOn: null })).toBe(false);
     expect(isOwnerQuestion({ status: "done", blockedOn: "owner" })).toBe(false);
   });
+});
+
+describe("scopeOverlap: messages/*.json не блокируют очередь", () => {
+  it("два файла перевода не пересекаются с кодом", () => {
+    expect(scopeOverlap(["messages/ru.json"], ["src/app/page.tsx"])).toHaveLength(0);
+    expect(scopeOverlap(["messages/ru.json", "src/lib/auth.ts"], ["messages/en.json", "src/lib/notify.ts"])).toHaveLength(0);
+  });
+  it("два файла перевода между собой тоже не считаются пересечением", () => {
+    expect(scopeOverlap(["messages/ru.json"], ["messages/en.json"])).toHaveLength(0);
+    expect(scopeOverlap(["messages/ru.json"], ["messages/ru.json"])).toHaveLength(0);
+  });
+  it("папка messages целиком пересекается сама с собой (она не является messages/*.json)", () => {
+    expect(scopeOverlap(["messages"], ["messages"])).toHaveLength(1);
+  });
+  it("файл перевода не пересекается с папкой messages целиком — папка исключена как сообщение", () => {
+    // messages/ru.json исключён; messages — нет, но он не соответствует isMsgFile, поэтому участвует в проверке
+    // messages vs messages/ru.json: messages/ru.json исключён, поэтому overlap пустой
+    expect(scopeOverlap(["messages"], ["messages/ru.json"])).toHaveLength(0);
+  });
+  it("обычные пути работают как раньше", () => {
+    expect(scopeOverlap(["src/lib"], ["src/lib/auth.ts"])).toHaveLength(1);
+    expect(scopeOverlap(["src/lib/a.ts"], ["src/lib/b.ts"])).toHaveLength(0);
+  });
+});
+
+describe("readiness: предупреждение про папку messages целиком", () => {
+  const base = {
+    summary: "Нужно добавить ключи переводов для новой страницы",
+    requirements: ["Все строки переведены на три языка", "Нет пропущенных ключей"],
+    needs: [], depends: [], layer: "front", estimate: "S", design: "описание есть",
+  };
+  it("файл перевода в scope не даёт предупреждения", () => {
+    const items = readiness({ ...base, scope: ["src/app/page.tsx", "messages/ru.json"] }, new Set());
+    expect(items.find((i) => i.key === "scope_messages_folder")?.ok).toBe(true);
+  });
+  it("папка messages целиком даёт мягкое предупреждение, но не блокирует", () => {
+    const items = readiness({ ...base, scope: ["src/app/page.tsx", "messages"] }, new Set());
+    const check = items.find((i) => i.key === "scope_messages_folder")!;
+    expect(check.ok).toBe(false);
+    expect(check.hard).toBe(false);
+    expect(isReady(items)).toBe(true);
+  });
+});
+
+describe("переводы: все ключи пунктов готовности покрыты в ru.json и en.json", () => {
+  const base = {
+    summary: "Зачем: клиенты не могут войти без кода",
+    requirements: ["Код приходит в Telegram"],
+    needs: [],
+    depends: [],
+    layer: "back",
+    estimate: "M",
+    scope: ["src/server/otp.ts"],
+  };
+  const keys = readiness(base, new Set()).map((i) => i.key);
+  const ruItems = (ruMessages as unknown as { admin: { cc: { dor: { items: Record<string, string> } } } }).admin.cc.dor.items;
+  const enItems = (enMessages as unknown as { admin: { cc: { dor: { items: Record<string, string> } } } }).admin.cc.dor.items;
+
+  it("все ключи есть в русском переводе (ru.json)", () => {
+    for (const key of keys) {
+      expect(ruItems[key], `ключ admin.cc.dor.items.${key} отсутствует в ru.json`).toBeTruthy();
+    }
+  });
+
+  it("все ключи есть в английском переводе (en.json)", () => {
+    for (const key of keys) {
+      expect(enItems[key], `ключ admin.cc.dor.items.${key} отсутствует в en.json`).toBeTruthy();
+    }
+  });
+});
+
+describe("computeEpicStatus: статус из задач", () => {
+  it("нет задач — planned", () => expect(computeEpicStatus([])).toBe("planned"));
+  it("все done — done", () => expect(computeEpicStatus(["done", "done", "cancelled"])).toBe("done"));
+  it("есть in_progress — in_progress", () => expect(computeEpicStatus(["done", "in_progress", "ready"])).toBe("in_progress"));
+  it("есть review, но нет in_progress — testing", () => expect(computeEpicStatus(["done", "review", "ready"])).toBe("testing"));
+  it("есть ready, нет горячих — in_progress (запланирована работа)", () => expect(computeEpicStatus(["backlog", "ready"])).toBe("in_progress"));
+  it("только backlog — planned", () => expect(computeEpicStatus(["backlog", "backlog"])).toBe("planned"));
 });

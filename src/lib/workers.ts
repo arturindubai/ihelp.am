@@ -41,8 +41,8 @@ export type WorkersConfig = {
   /** Пробный режим: диспетчер считает план и пишет его в журнал, но никого не запускает */
   dryRun: boolean;
   pools: Record<Pool, PoolConfig>;
-  /** Часы выкладки по Еревану: деплоер сам запускается только в этом окне, [с, до) */
-  deployWindow: [number, number];
+  /** Часы выкладки по Еревану: деплоер сам запускается только в этом окне, [с, до); null — без ограничения */
+  deployWindow: [number, number] | null;
   /** Сколько карточек триаж разбирает за один запуск */
   triageBatch: number;
   /** Размер пачки выкладки: сколько протестированных задач деплоер сливает и собирает за один раз; 1 — по одной (старое поведение), максимум 5 */
@@ -81,7 +81,7 @@ export const DEFAULT_WORKERS: WorkersConfig = {
     tester: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: null, mode: "auto", everyMin: 30 },
     deployer: { enabled: true, max: 1, model: "sonnet", modelForL: "sonnet", dailyCap: null, mode: "auto", everyMin: 30 },
   },
-  deployWindow: [10, 20],
+  deployWindow: null,
   triageBatch: 6,
   deployBatch: 1,
   sweepEveryH: 24,
@@ -130,14 +130,19 @@ export function normalizeWorkers(raw: unknown): WorkersConfig {
       everyMin: (EVERY_MIN as readonly number[]).includes(Number(src.everyMin)) ? Number(src.everyMin) : d.everyMin,
     };
   }
-  const w = Array.isArray(r.deployWindow) ? r.deployWindow.map(Number) : DEFAULT_WORKERS.deployWindow;
-  const from = clamp(w[0], 0, 23, 10);
-  const to = Math.max(from + 1, clamp(w[1], 1, 24, 20));
+  let deployWindow: [number, number] | null = null;
+  if (Array.isArray(r.deployWindow)) {
+    const w = r.deployWindow.map(Number);
+    const from = clamp(w[0], 0, 23, 0);
+    const to = Math.max(from + 1, clamp(w[1], 1, 24, 24));
+    // [0, 24] — полный день, это старый способ задать «без окна» — читаем как null
+    deployWindow = from === 0 && to === 24 ? null : [from, to];
+  }
   return {
     enabled: r.enabled === true,
     dryRun: r.dryRun === true,
     pools,
-    deployWindow: [from, to],
+    deployWindow,
     triageBatch: clamp(r.triageBatch ?? DEFAULT_WORKERS.triageBatch, 1, 15, DEFAULT_WORKERS.triageBatch),
     deployBatch: clamp(r.deployBatch ?? DEFAULT_WORKERS.deployBatch, 1, 5, DEFAULT_WORKERS.deployBatch),
     sweepEveryH: clamp(r.sweepEveryH ?? DEFAULT_WORKERS.sweepEveryH, 0, 168, DEFAULT_WORKERS.sweepEveryH),
@@ -369,7 +374,8 @@ export function planDispatch(s: DispatchState, now = new Date()): DispatchAction
   };
 
   const hour = yerevanHour(now);
-  if (due("deployer") && hour >= config.deployWindow[0] && hour < config.deployWindow[1]) {
+  const inWindow = config.deployWindow === null || (hour >= config.deployWindow[0] && hour < config.deployWindow[1]);
+  if (due("deployer") && inWindow) {
     const batchSize = config.deployBatch ?? 1;
     if (batchSize <= 1) {
       const t = nextDeploy();
