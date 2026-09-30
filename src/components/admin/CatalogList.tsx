@@ -208,7 +208,7 @@ export function CatalogList({ categories: initial, pageTitle }: { categories: Ad
         <div className="flex gap-2">
           <button
             className="btn-outline btn-sm"
-            onClick={() => { setEditCatErr(undefined); setEditCat({ slug: "", title: {}, description: null, image: null, sort: categories.length, active: true, comingSoon: false, archived: false }); }}
+            onClick={() => { setEditCatErr(undefined); setEditCat({ slug: "", title: {}, description: null, image: null, sort: categories.length, active: true, comingSoon: false, archived: false, showFormats: false }); }}
           >
             <Plus size={16} /> {t("newCategory")}
           </button>

@@ -1611,12 +1611,6 @@
     "weekdaysShort": "",
     "wishes": ""
   },
-  "catalog": {
-    "comingSoonText": "Պատրաստում ենք ծառայություններ: Գրեք մեզ՝ ձեր հարցերին կպատասխանենք",
-    "comingSoonTitle": "Շուտով կբացենք",
-    "newService": "Նոր ծառայություն",
-    "writeWhatsApp": "Գրել WhatsApp-ում"
-  },
   "common": {
     "add": "Ավելացնել",
     "apply": "Կիրառել",
