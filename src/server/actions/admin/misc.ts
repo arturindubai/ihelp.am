@@ -84,6 +84,8 @@ const promoSchema = z.object({
   serviceIds: z.array(z.string()),
   planKinds: z.array(z.enum(["ONE_TIME", "SUBSCRIPTION", "PACKAGE"])),
   active: z.boolean(),
+  forPhone: z.string().max(30).nullable().optional(),
+  forEmail: z.string().max(200).nullable().optional(),
 });
 export type PromoPayload = z.infer<typeof promoSchema>;
 
@@ -93,7 +95,12 @@ export async function savePromoAction(id: string | null, input: PromoPayload) {
   if (!p.success) return { ok: false as const, error: p.error.issues[0]?.path.join(".") };
   const d = p.data;
   if (d.type === "PERCENT" && d.value > 100) return { ok: false as const, error: "value" };
-  const data = { ...d, validFrom: d.validFrom ? new Date(`${d.validFrom}T00:00:00+04:00`) : null, validTo: d.validTo ? new Date(`${d.validTo}T23:59:59+04:00`) : null };
+  // Нормализуем телефон и email, если они заданы
+  const forPhone = d.forPhone ? (normalizePhone(d.forPhone) || null) : null;
+  if (d.forPhone && !forPhone) return { ok: false as const, error: "forPhone" };
+  const forEmail = d.forEmail ? (normalizeEmail(d.forEmail) || null) : null;
+  if (d.forEmail && !forEmail) return { ok: false as const, error: "forEmail" };
+  const data = { ...d, forPhone, forEmail, validFrom: d.validFrom ? new Date(`${d.validFrom}T00:00:00+04:00`) : null, validTo: d.validTo ? new Date(`${d.validTo}T23:59:59+04:00`) : null };
   try {
     const r = id ? await db.promoCode.update({ where: { id }, data }) : await db.promoCode.create({ data });
     await audit(u.id, id ? "promo.update" : "promo.create", "PromoCode", r.id, { code: d.code });

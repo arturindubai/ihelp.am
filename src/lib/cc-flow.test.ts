@@ -312,6 +312,16 @@ describe("гейты сдачи", () => {
     expect(criteriaGate(reqs, [{ done: true }, { done: false }])).toBe("criteria_incomplete");
     expect(criteriaGate(reqs, [{ done: true }, { done: false, cardKey: "плохой ключ" }])).toBe("criteria_incomplete");
   });
+  it("owner → done для layer=none с критериями и без testedAt: авто-заполненный чек-лист проходит gate", () => {
+    const reqs = ["Форма показывает чек-лист", "Поле ключа необязательно"];
+    // Сервер строит этот результат при приёмке владельцем не-код задачи (layer=none, !testedAt)
+    const ownerApproval = reqs.map(() => ({ done: true as const }));
+    expect(criteriaGate(reqs, ownerApproval)).toBeNull();
+    // Без результата — должно было блокировать (до фикса сервер бросал criteria_incomplete)
+    expect(criteriaGate(reqs, undefined)).toBe("criteria_incomplete");
+    // Владелец может перевести review → done
+    expect(canTransition("review", "done", "owner")).toBe(true);
+  });
   it("extractFollowUpKeys собирает ключи вынесенных критериев", () => {
     const reqs = ["Критерий 1", "Критерий 2", "Критерий 3"];
     expect(extractFollowUpKeys(reqs, [{ done: true }, { done: false, cardKey: "IN-7" }, { done: false, cardKey: "RISK-3" }])).toEqual(["IN-7", "RISK-3"]);
