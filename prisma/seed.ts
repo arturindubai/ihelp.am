@@ -354,6 +354,47 @@ async function main() {
     });
   }
 
+  // Демо-заказ для владельца: нужен на стенде, чтобы проверить кабинет клиента и лист переноса визита
+  const anna = await db.master.findUnique({ where: { slug: "anna" } });
+  const oneTimePlan = await db.plan.findFirst({ where: { serviceId: svc.id, kind: "ONE_TIME" } });
+  const owner = await db.user.findUniqueOrThrow({ where: { phone: ownerPhone } });
+  const demoAddr = await db.address.create({
+    data: { userId: owner.id, street: "ул. Абовяна", building: "15", apartment: "3", isDefault: true },
+  });
+  const addrSnap = { street: "ул. Абовяна", building: "15", apartment: "3", district: null, entrance: null, floor: null, intercom: null, comment: null, label: null };
+  const cfg = {
+    service: { slug: svc.slug, title: svc.title },
+    plan: oneTimePlan ? { id: oneTimePlan.id, kind: "ONE_TIME", title: oneTimePlan.title, discountPercent: 0, packageVisits: null, intervalDays: null, visitsPerWeek: null } : null,
+    options: [{ groupId: "g1", optionId: "o1", group: t("Длительность", "Duration"), option: t("2 ч", "2 h"), price: 16000, durationMin: 120, discountable: false }],
+    promoCode: null,
+    firstOrder: true,
+  };
+  const demoOrder = await db.order.create({
+    data: {
+      id: "demo-reschedule-visit-order",
+      userId: owner.id,
+      serviceId: svc.id,
+      planId: oneTimePlan?.id,
+      kind: "ONE_TIME",
+      addressId: demoAddr.id,
+      addressSnapshot: addrSnap,
+      config: cfg as never,
+      pricing: { base: 16000, discount: 0, total: 16000, regular: { price: 16000 }, first: { price: 16000 }, payNow: 16000 } as never,
+      pricePerVisit: 16000,
+      firstVisitPrice: 16000,
+      total: 16000,
+      durationMin: 120,
+      preferredMasterId: anna?.id ?? null,
+    },
+  });
+  // Визит через 5 дней в 11:00 Ереван (UTC+4)
+  const visitDay = new Date(Date.now() + 5 * 86400_000);
+  visitDay.setUTCHours(7, 0, 0, 0); // 11:00 Asia/Yerevan = 07:00 UTC
+  await db.visit.create({
+    data: { orderId: demoOrder.id, index: 1, scheduledAt: visitDay, durationMin: 120, masterId: anna?.id ?? null, status: "SCHEDULED", price: 16000 },
+  });
+  console.log("Seed: создан демо-заказ для владельца (кабинет клиента).");
+
   if (!(await db.banner.count())) {
     const demoBanners = [
       { placement: "CAROUSEL_HOME", title: t("−25% на первый визит", "−25% off your first visit"), subtitle: t("При подписке или пакете от 4 визитов", "With a subscription or 4+ visit pack"), link: "/s/regular-cleaning", bg: "#1c1917", sort: 0 },

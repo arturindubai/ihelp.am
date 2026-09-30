@@ -1,11 +1,13 @@
 "use client";
 import { useEffect } from "react";
 import { clearCart } from "@/lib/cart";
+import { clearCartAction } from "@/server/actions/cart";
 
-// Очищает localStorage-корзину при монтировании — вызывается на странице успеха заказа
+// После успешного заказа очищает корзину — и в localStorage, и на сервере
 export function ClearCart() {
   useEffect(() => {
     clearCart();
+    clearCartAction().catch(() => null);
   }, []);
   return null;
 }

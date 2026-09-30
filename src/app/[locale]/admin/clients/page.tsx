@@ -1,28 +1,19 @@
 import { getTranslations } from "next-intl/server";
-import type { Prisma } from "@prisma/client";
 import { Link } from "@/i18n/navigation";
-import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
 import { amd, dateLabel } from "@/lib/format";
 import { formatPhone } from "@/lib/phone";
+import { getAdminClients, ADMIN_CLIENTS_PER } from "@/server/services/pages/admin";
 import { PageHead, Forbidden, Table } from "@/components/admin/ui";
 
-const PER = 40;
 export default async function AdminClients({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ q?: string; page?: string }> }) {
   const { locale } = await params;
   const sp = await searchParams;
   if (!(await pageUser("clients"))) return <Forbidden />;
   const t = await getTranslations("admin");
   const page = Math.max(1, Number(sp.page) || 1);
-  const where: Prisma.UserWhereInput = sp.q ? { OR: [{ phone: { contains: sp.q.replace(/[^\d+]/g, "") || sp.q } }, { name: { contains: sp.q, mode: "insensitive" } }] } : {};
-  const [users, count] = await Promise.all([
-    db.user.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * PER, take: PER, include: { _count: { select: { orders: true } }, orders: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } } } }),
-    db.user.count({ where }),
-  ]);
-  const spent = await db.visit.groupBy({ by: ["orderId"], where: { cashCollected: true, order: { userId: { in: users.map((u) => u.id) } } }, _sum: { price: true } });
-  const orderUser = await db.order.findMany({ where: { id: { in: spent.map((s) => s.orderId) } }, select: { id: true, userId: true } });
-  const byUser = new Map<string, number>();
-  for (const s of spent) { const uid = orderUser.find((o) => o.id === s.orderId)!.userId; byUser.set(uid, (byUser.get(uid) || 0) + (s._sum.price || 0)); }
+  const { users, count, byUser } = await getAdminClients(sp.q, page);
+  const PER = ADMIN_CLIENTS_PER;
   return (
     <div>
       <PageHead title={t("clients.title")} sub={count} />

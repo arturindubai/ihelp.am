@@ -26,14 +26,15 @@ export async function getHome(locale: string, userId?: string | null) {
   await incrementCarouselViews(filteredBanners.map((b) => b.id));
   return {
     categories: categories.map((c) => {
-      const isComposite = !c.comingSoon && c.services.length > 1;
+      const effectiveComingSoon = c.comingSoon || c.services.length === 0;
+      const isComposite = !effectiveComingSoon && c.services.length > 1;
       return {
         slug: c.slug,
         title: tr(c.title, locale),
         image: c.image,
-        comingSoon: c.comingSoon,
+        comingSoon: effectiveComingSoon,
         // comingSoon → /c/<slug> (форма «Уведомить меня»); одна услуга → /s/<slug>; иначе /c/<slug>
-        href: c.comingSoon ? `/c/${c.slug}` : c.services.length === 1 ? `/s/${c.services[0].slug}` : `/c/${c.slug}`,
+        href: effectiveComingSoon ? `/c/${c.slug}` : c.services.length === 1 ? `/s/${c.services[0].slug}` : `/c/${c.slug}`,
         subcategories: isComposite
           ? [{
               section: null as string | null,
@@ -101,13 +102,16 @@ export async function getCategories(locale: string) {
     orderBy: { sort: "asc" },
     include: { services: { where: { active: true }, select: { slug: true } } },
   });
-  return cats.map((c) => ({
-    slug: c.slug,
-    title: tr(c.title, locale) as string,
-    comingSoon: c.comingSoon,
-    // comingSoon → /c/<slug> (форма «Уведомить меня»), одна услуга → /s/<slug>, иначе /c/<slug>
-    href: c.comingSoon ? `/c/${c.slug}` : c.services.length === 1 ? `/s/${c.services[0].slug}` : `/c/${c.slug}`,
-  }));
+  return cats.map((c) => {
+    const effectiveComingSoon = c.comingSoon || c.services.length === 0;
+    return {
+      slug: c.slug,
+      title: tr(c.title, locale) as string,
+      comingSoon: effectiveComingSoon,
+      // comingSoon → /c/<slug> (форма «Уведомить меня»), одна услуга → /s/<slug>, иначе /c/<slug>
+      href: effectiveComingSoon ? `/c/${c.slug}` : c.services.length === 1 ? `/s/${c.services[0].slug}` : `/c/${c.slug}`,
+    };
+  });
 }
 
 export async function getCategory(slug: string, locale: string) {
@@ -130,7 +134,7 @@ export async function getCategory(slug: string, locale: string) {
     slug: c.slug,
     title: tr(c.title, locale),
     description: tr(c.description, locale),
-    comingSoon: c.comingSoon,
+    comingSoon: c.comingSoon || c.services.length === 0,
     showFormats: c.showFormats,
     formats,
     services: c.services.map((s) => serviceCard(s, locale)),

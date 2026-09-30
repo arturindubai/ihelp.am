@@ -4,6 +4,7 @@ import { cookies, headers } from "next/headers";
 import { db } from "./db";
 import { getSettings } from "./settings";
 import { sessionDays } from "@/lib/sessionDays";
+import { ANON_CART_COOKIE, mergeAnonCartIntoUser } from "./services/cart";
 import type { Role, User } from "@prisma/client";
 
 const COOKIE = "sid";
@@ -18,7 +19,17 @@ export async function createSession(userId: string, role?: string) {
   const ua = (await headers()).get("user-agent")?.slice(0, 200);
   await db.session.create({ data: { tokenHash: hash(token), userId, expiresAt, userAgent: ua } });
   await db.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } });
-  (await cookies()).set(COOKIE, token, {
+
+  const c = await cookies();
+
+  // Слить анонимную корзину в корзину пользователя при входе (FLOW-3)
+  const anonId = c.get(ANON_CART_COOKIE)?.value;
+  if (anonId) {
+    await mergeAnonCartIntoUser(anonId, userId).catch(() => null);
+    c.delete(ANON_CART_COOKIE);
+  }
+
+  c.set(COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.COOKIE_SECURE === "true",

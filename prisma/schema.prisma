@@ -59,6 +59,8 @@ model User {
   redemptions       PromoRedemption[]
   auditLogs         AuditLog[]
   pushSubscriptions PushSubscription[]
+  cart              Cart?
+  priceAudits       PriceAudit[]
 }
 
 /// Web Push подписки (VAPID): endpoint + ключи для отправки push-уведомлений без открытого сайта
@@ -332,6 +334,12 @@ model Order {
   promoCodeId       String?
   promoCode         PromoCode?    @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
   comment           String?
+  /// Клиент попросил не звонить, только мессенджер — отдельное булево поле, не префикс комментария
+  noCall            Boolean       @default(false)
+  /// Чаевые мастеру целыми драмами, 100 % мастеру; 0 = не выбраны
+  tipAmount         Int           @default(0)
+  /// Штраф за позднюю отмену (фиксированная сумма из настроек на момент отмены); 0 = отмены не было или отменили вовремя
+  cancelPenalty     Int           @default(0)
   locale            String        @default("ru")
   source            String        @default("web")
   cancelReason      String?
@@ -929,6 +937,83 @@ model AppError {
   taskKey     String?
 
   @@index([lastSeenAt])
+}
+
+/// Очередь запросов к ИИ-ассистенту (ROUTE-8): диспетчер берёт queued-записи и выполняет их через claude -p на подписке
+model AiRequest {
+  id          String    @id @default(cuid())
+  /// Тип задачи: echo | schedule — определяет системный промпт в диспетчере
+  kind        String
+  /// Входные данные запроса; данные клиентов — только минимально необходимые (без имён, только id/время/адрес)
+  input       Json
+  /// Ответ модели в виде JSON; null до завершения
+  output      Json?
+  /// queued | running | done | failed
+  status      String    @default("queued")
+  /// Текст ошибки при status=failed
+  error       String?
+  /// Суммарное число токенов запроса (input + output + cache)
+  tokens      Int       @default(0)
+  /// Кто создал запрос: userId или имя агента
+  requestedBy String?
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+}
+
+/// Серверная корзина покупок (FLOW-3): переживает выход/вход и смену устройства
+model Cart {
+  id        String     @id @default(cuid())
+  /// Пользователь — корзина привязана к аккаунту
+  userId    String?    @unique
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Анонимный идентификатор из cookie cart_anon (до входа)
+  anonId    String?    @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  items     CartItem[]
+
+  @@index([anonId])
+}
+
+/// Позиция в серверной корзине: одна запись на услугу
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  serviceId String
+  optionIds String[] @default([])
+  planId    String?
+  qty       Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cartId, serviceId])
+  @@index([cartId])
+}
+
+/// Журнал изменений цен (ADMIN-11): кто, когда, какой тариф изменён с какой на какую цену
+model PriceAudit {
+  id           String   @id @default(cuid())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// Имя пользователя в момент изменения (снимок)
+  userName     String?
+  optionId     String
+  /// Название тарифа в момент изменения (снимок, ru)
+  optionTitle  String
+  serviceId    String
+  /// Название услуги в момент изменения (снимок, ru)
+  serviceTitle String
+  oldPrice     Int
+  newPrice     Int
+  createdAt    DateTime @default(now())
+
+  @@index([serviceId, createdAt])
+  @@index([createdAt])
 }
 
 /// Заявки «Уведомить меня»: category — по категории-заглушке, service — по конкретной услуге с comingSoon=true

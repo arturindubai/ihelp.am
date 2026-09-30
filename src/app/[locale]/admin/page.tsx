@@ -1,11 +1,10 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
-import { BUSY_STATUSES } from "@/server/services/booking";
 import { tr } from "@/i18n/locales";
-import { addDays, atYerevan, hm, isoWeekday, toMin, ymd } from "@/lib/time";
+import { hm } from "@/lib/time";
 import { amd, dateLabel } from "@/lib/format";
+import { getDashboardData } from "@/server/services/pages/admin";
 import { PageHead, Stat, Forbidden } from "@/components/admin/ui";
 import { StatusBadge } from "@/components/account/StatusBadge";
 
@@ -13,32 +12,7 @@ export default async function Dashboard({ params }: { params: Promise<{ locale: 
   const { locale } = await params;
   if (!(await pageUser("dashboard"))) return <Forbidden />;
   const [t, to] = await Promise.all([getTranslations("admin"), getTranslations("order")]);
-  const today = ymd(new Date());
-  const d0 = atYerevan(today, "00:00"), d1 = atYerevan(addDays(today, 1), "00:00"), d2 = atYerevan(addDays(today, 2), "00:00"), d7 = atYerevan(addDays(today, 7), "00:00");
-  const ago7 = new Date(Date.now() - 7 * 86400_000), ago30 = new Date(Date.now() - 30 * 86400_000);
-
-  const [todayCnt, tomorrowCnt, newOrders, revenue, subs, unassigned, pendingReviews, visits30, first30, cashPending, upcoming, recent, masters] = await Promise.all([
-    db.visit.count({ where: { scheduledAt: { gte: d0, lt: d1 }, status: { in: [...BUSY_STATUSES, "DONE"] } } }),
-    db.visit.count({ where: { scheduledAt: { gte: d1, lt: d2 }, status: { in: BUSY_STATUSES } } }),
-    db.order.count({ where: { createdAt: { gte: ago7 } } }),
-    db.visit.aggregate({ where: { status: "DONE", finishedAt: { gte: ago30 } }, _sum: { price: true } }),
-    db.order.count({ where: { kind: "SUBSCRIPTION", status: "ACTIVE" } }),
-    db.visit.count({ where: { masterId: null, scheduledAt: { gte: new Date() }, status: { in: BUSY_STATUSES } } }),
-    db.review.count({ where: { status: "PENDING" } }),
-    db.visit.count({ where: { scheduledAt: { gte: ago30, lt: d1 }, status: { in: [...BUSY_STATUSES, "DONE"] } } }),
-    db.visit.count({ where: { index: 1, scheduledAt: { gte: ago30, lt: d1 }, status: { in: [...BUSY_STATUSES, "DONE"] }, order: { config: { path: ["firstOrder"], equals: true } } } }),
-    db.visit.aggregate({ where: { status: "DONE", cashCollected: false, order: { paymentMethod: "CASH" } }, _sum: { price: true }, _count: true }),
-    db.visit.findMany({ where: { scheduledAt: { gte: new Date() }, status: { in: BUSY_STATUSES } }, orderBy: { scheduledAt: "asc" }, take: 8, include: { master: true, order: { include: { user: true, service: true } } } }),
-    db.order.findMany({ orderBy: { createdAt: "desc" }, take: 8, include: { user: true, service: true, plan: true } }),
-    db.master.findMany({ where: { active: true }, include: { visits: { where: { scheduledAt: { gte: d0, lt: d7 }, status: { in: [...BUSY_STATUSES, "DONE"] } }, select: { durationMin: true } } } }),
-  ]);
-
-  let workMin = 0, busyMin = 0;
-  for (const m of masters) {
-    const wh = (m.workingHours || {}) as Record<string, [string, string][]>;
-    for (let i = 0; i < 7; i++) for (const [f, e] of wh[String(isoWeekday(addDays(today, i)))] || []) workMin += toMin(e) - toMin(f);
-    busyMin += m.visits.reduce((s, v) => s + v.durationMin, 0);
-  }
+  const { todayCnt, tomorrowCnt, newOrders, revenue, subs, unassigned, pendingReviews, visits30, first30, cashPending, upcoming, recent, workMin, busyMin } = await getDashboardData();
   const load = workMin ? Math.round((busyMin / workMin) * 100) : 0;
   const firstShare = visits30 ? Math.round((first30 / visits30) * 100) : 0;
 

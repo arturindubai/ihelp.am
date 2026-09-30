@@ -2,8 +2,8 @@ import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import { Link, redirect } from "@/i18n/navigation";
-import { db } from "@/server/db";
 import { getCurrentUser } from "@/server/auth";
+import { getUserOrderDetail } from "@/server/services/pages/account";
 import { getSettings } from "@/server/settings";
 import { tr } from "@/i18n/locales";
 import { amd, dateLabel, durationLabel, timeLabel } from "@/lib/format";
@@ -18,10 +18,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   setRequestLocale(locale);
   const user = await getCurrentUser();
   if (!user) return redirect({ href: `/login?next=/account/orders/${id}`, locale });
-  const o = await db.order.findFirst({
-    where: { id, userId: user.id },
-    include: { service: true, plan: true, visits: { orderBy: [{ index: "asc" }], include: { master: true, review: true } } },
-  });
+  const o = await getUserOrderDetail(id, user.id);
   if (!o) notFound();
   const [settings, t, tb, ts, tc, ta, events] = await Promise.all([
     getSettings(),

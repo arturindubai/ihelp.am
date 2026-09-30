@@ -1,16 +1,13 @@
 import { getTranslations } from "next-intl/server";
-import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
+import { getAdminContent } from "@/server/services/pages/admin";
 import { PageHead, Forbidden } from "@/components/admin/ui";
 import { FeatureManager, FaqManager } from "@/components/admin/ContentManagers";
 
 export default async function AdminContent() {
   if (!(await pageUser("content"))) return <Forbidden />;
   const t = await getTranslations("admin");
-  const [features, faq] = await Promise.all([
-    db.siteFeature.findMany({ orderBy: { sort: "asc" } }),
-    db.siteFaq.findMany({ orderBy: { sort: "asc" } }),
-  ]);
+  const [features, faq] = await getAdminContent();
   return (
     <div className="max-w-3xl space-y-8">
       <PageHead title={t("content.title")} />

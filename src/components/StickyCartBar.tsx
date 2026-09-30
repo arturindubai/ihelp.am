@@ -2,7 +2,8 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
-import { readCart, CART_EVENT, type CartEntry } from "@/lib/cart";
+import { readCart, writeCart, CART_EVENT, type CartEntry } from "@/lib/cart";
+import { getCartAction } from "@/server/actions/cart";
 import { amd } from "@/lib/format";
 
 // Скрываем плашку там, где PriceBar уже показывает корзину или где оформление не нужно
@@ -18,8 +19,21 @@ export function StickyCartBar() {
   const path = usePathname();
 
   useEffect(() => {
-    setCart(readCart());
+    // Быстрое чтение из localStorage (без задержки)
+    const local = readCart();
+    setCart(local);
     setReady(true);
+
+    // Синхронизация с сервером: поддерживает смену устройства после входа
+    getCartAction()
+      .then((serverCart) => {
+        if (serverCart) {
+          writeCart(serverCart);
+          setCart(serverCart);
+        }
+      })
+      .catch(() => null);
+
     const sync = () => setCart(readCart());
     window.addEventListener(CART_EVENT, sync);
     window.addEventListener("storage", sync);

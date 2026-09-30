@@ -1,6 +1,6 @@
 import { getTranslations } from "next-intl/server";
-import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
+import { getAdminAuditLog } from "@/server/services/pages/admin";
 import { dateLabel } from "@/lib/format";
 import { hm } from "@/lib/time";
 import { PageHead, Forbidden, Table } from "@/components/admin/ui";
@@ -9,7 +9,7 @@ export default async function AdminLog({ params }: { params: Promise<{ locale: s
   const { locale } = await params;
   if (!(await pageUser("log"))) return <Forbidden />;
   const t = await getTranslations("admin");
-  const logs = await db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 200, include: { user: true } });
+  const logs = await getAdminAuditLog();
   return (
     <div className="max-w-5xl">
       <PageHead title={t("log.title")} />

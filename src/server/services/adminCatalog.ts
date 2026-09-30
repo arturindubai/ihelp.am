@@ -12,6 +12,7 @@ export type AdminCatalogCategory = {
   comingSoon: boolean;
   archived: boolean;
   showFormats: boolean;
+  demandCount: number;
   services: AdminCatalogService[];
 };
 
@@ -27,29 +28,43 @@ export type AdminCatalogService = {
   rating: number;
   reviews: number;
   minPrice: number | null;
+  demandCount: number;
 };
 
 export async function getAdminCatalog(locale: string): Promise<AdminCatalogCategory[]> {
-  const cats = await db.category.findMany({
-    orderBy: { sort: "asc" },
-    include: {
-      services: {
-        orderBy: { sort: "asc" },
-        include: {
-          groups: {
-            where: { active: true },
-            include: {
-              options: {
-                where: { active: true },
-                orderBy: { price: "asc" },
-                take: 1,
+  const [cats, demandRows] = await Promise.all([
+    db.category.findMany({
+      orderBy: { sort: "asc" },
+      include: {
+        services: {
+          orderBy: { sort: "asc" },
+          include: {
+            groups: {
+              where: { active: true },
+              include: {
+                options: {
+                  where: { active: true },
+                  orderBy: { price: "asc" },
+                  take: 1,
+                },
               },
             },
           },
         },
       },
-    },
-  });
+    }),
+    db.serviceInterest.groupBy({
+      by: ["serviceSlug", "kind"],
+      _count: { _all: true },
+    }),
+  ]);
+
+  const catDemand = new Map<string, number>();
+  const svcDemand = new Map<string, number>();
+  for (const row of demandRows) {
+    if (row.kind === "category") catDemand.set(row.serviceSlug, row._count._all);
+    else svcDemand.set(row.serviceSlug, row._count._all);
+  }
 
   return cats.map((c) => ({
     id: c.id,
@@ -62,6 +77,7 @@ export async function getAdminCatalog(locale: string): Promise<AdminCatalogCateg
     comingSoon: c.comingSoon,
     archived: c.archived,
     showFormats: c.showFormats,
+    demandCount: catDemand.get(c.slug) ?? 0,
     services: c.services.map((s) => {
       const prices = s.groups.flatMap((g) => g.options.map((o) => o.price));
       const minPrice = prices.length ? Math.min(...prices) : null;
@@ -77,6 +93,7 @@ export async function getAdminCatalog(locale: string): Promise<AdminCatalogCateg
         rating: s.rating,
         reviews: s.reviewsCount,
         minPrice,
+        demandCount: svcDemand.get(s.slug) ?? 0,
       };
     }),
   }));

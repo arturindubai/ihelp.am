@@ -87,6 +87,10 @@ export interface CreateOrderInput {
   masterId: string | null;
   promoCode: string | null;
   comment: string | null;
+  /** Клиент просит не звонить, только мессенджер (FLOW-4) */
+  noCall: boolean;
+  /** Чаевые мастеру в драмах, 100 % мастеру (FLOW-4) */
+  tipAmount: number;
   paymentMethod: PaymentMethod;
   locale: string;
   source?: string;
@@ -187,6 +191,8 @@ export async function createOrder(user: User, input: CreateOrderInput) {
           paymentMethod: input.paymentMethod,
           promoCodeId: promoId,
           comment: input.comment?.slice(0, 1000) || null,
+          noCall: input.noCall,
+          tipAmount: Math.max(0, Math.round(input.tipAmount || 0)),
           locale: input.locale,
           source: input.source || "web",
           expiresAt: kind === "PACKAGE" && plan?.validityDays ? new Date(Date.now() + plan.validityDays * 86400_000) : null,

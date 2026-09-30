@@ -13,6 +13,9 @@ import { headers } from "next/headers";
 import { sendOtp, verifyOtp } from "../otp";
 import { normalizeEmail } from "@/lib/email";
 import { BookingError, scheduleVisit, BUSY_STATUSES } from "../services/booking";
+import { getMastersForService } from "../services/catalog";
+import { tr } from "@/i18n/locales";
+import { calcCancelPenalty } from "@/lib/cancelPenalty";
 import { atYerevan } from "@/lib/time";
 import { verifyUnsubscribeToken } from "@/lib/emailToken";
 import { redirect } from "next/navigation";
@@ -89,7 +92,7 @@ export async function cancelVisitAction(visitId: string) {
   return { ok: true };
 }
 
-export async function rescheduleVisitAction(visitId: string, date: string, time: string) {
+export async function rescheduleVisitAction(visitId: string, date: string, time: string, masterId: string | null = null) {
   const { v } = await ownVisit(visitId);
   const s = await getSettings();
   if (!["UNSCHEDULED", "SCHEDULED", "CONFIRMED"].includes(v.status)) return { ok: false, error: "state" };
@@ -100,7 +103,7 @@ export async function rescheduleVisitAction(visitId: string, date: string, time:
   if (Number.isNaN(start) || start < Date.now() + s.booking.leadHours * 3600_000 - 5 * 60_000 || start > Date.now() + (s.booking.horizonDays + 1) * 86400_000) return { ok: false, error: "slot_taken" };
   if (v.order.expiresAt && new Date(`${date}T00:00:00+04:00`) > v.order.expiresAt) return { ok: false, error: "expired" };
   try {
-    await scheduleVisit(v.id, date, time, v.order.preferredMasterId);
+    await scheduleVisit(v.id, date, time, masterId);
   } catch (e) {
     if (e instanceof BookingError) return { ok: false, error: e.message };
     throw e;
@@ -111,6 +114,27 @@ export async function rescheduleVisitAction(visitId: string, date: string, time:
   return { ok: true };
 }
 
+/** Данные для листа переноса: список мастеров по услуге и текущий мастер визита */
+export async function rescheduleInfoAction(visitId: string) {
+  const { v } = await ownVisit(visitId);
+  const s = await getSettings();
+  if (!s.booking.allowChooseMaster) return { allowChooseMaster: false as const, masters: [], currentMasterId: v.masterId };
+  const raw = await getMastersForService(v.order.serviceId);
+  const locale = v.order.locale || "ru";
+  return {
+    allowChooseMaster: true as const,
+    currentMasterId: v.masterId,
+    masters: raw.map((m) => ({
+      id: m.id,
+      name: tr(m.name, locale),
+      photo: m.photo,
+      rating: m.rating,
+      reviewsCount: m.reviewsCount,
+      experienceYears: m.experienceYears,
+    })),
+  };
+}
+
 export async function cancelOrderAction(orderId: string) {
   const u = await me();
   const s = await getSettings();
@@ -118,14 +142,21 @@ export async function cancelOrderAction(orderId: string) {
   if (!o || o.status === "CANCELLED" || o.status === "COMPLETED") return { ok: false };
   // Отменяем все будущие визиты: иначе заказ закрыт, а мастер всё равно поедет.
   // Визиты внутри срока бесплатной отмены отмечаем отдельно — команде нужно знать о поздней отмене.
-  const limit = new Date(Date.now() + s.booking.freeCancelHours * 3600_000);
-  const late = o.visits.filter((v) => ["SCHEDULED", "CONFIRMED"].includes(v.status) && v.scheduledAt && v.scheduledAt <= limit).length;
+  const now = new Date();
+  const limit = new Date(now.getTime() + s.booking.freeCancelHours * 3600_000);
+  const lateVisits = o.visits.filter((v) => ["SCHEDULED", "CONFIRMED"].includes(v.status) && v.scheduledAt && v.scheduledAt <= limit);
+  const late = lateVisits.length;
+  // Штраф — берём самый ближайший визит (первый из лейтних); если поздних нет — 0
+  const firstLate = lateVisits.sort((a, b) => (a.scheduledAt?.getTime() ?? 0) - (b.scheduledAt?.getTime() ?? 0))[0];
+  const cancelPenalty = firstLate?.scheduledAt
+    ? calcCancelPenalty(firstLate.scheduledAt, now, s.booking.freeCancelHours, s.booking.lateCancelFeeAmd)
+    : 0;
   // Уведомить мастеров ДО транзакции отмены
   const vsToNotify = o.visits.filter((v) => ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"].includes(v.status) && v.masterId);
   for (const v of vsToNotify) await notifyMasterCancelled(v.id).catch(() => {});
   await db.$transaction([
     db.visit.updateMany({ where: { orderId: o.id, status: { in: ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"] } }, data: { status: "CANCELLED" } }),
-    db.order.update({ where: { id: o.id }, data: { status: "CANCELLED", cancelReason: "client" } }),
+    db.order.update({ where: { id: o.id }, data: { status: "CANCELLED", cancelReason: "client", ...(cancelPenalty > 0 ? { cancelPenalty } : {}) } }),
   ]);
   await notifyCancelOrderTeam(o.id, late, s.booking.freeCancelHours);
   await notifyClientCancelled(o.id).catch(() => {});
