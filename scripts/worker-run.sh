@@ -35,8 +35,10 @@ allow=(Read Glob Grep Edit Write TodoWrite "${common[@]}" "${check[@]}"
   "Bash(curl -s http://127.0.0.1:*)")
 deny=("Bash(git push origin main*)" "Bash(git push * main)" "Bash(git push -f*)" "Bash(git push --force*)" "Bash(git push * --force*)"
   "Bash(sudo *)" "Bash(systemctl *)" "Bash(systemd-run *)" "Bash(pm2 *)" "Bash(rm -rf *)" "Bash(docker *)"
-  "Bash(deploy/update.sh*)" "Bash(deploy/rollback.sh*)" "Bash(cat *.env*)" "Bash(grep * .env*)" "Bash(* /opt/ihelp.am/.env*)"
-  "Read(//opt/ihelp.am/.env)" "Read(//var/www/**)" "Read(//etc/**)" "Read(//root/.claude/**)"
+  "Bash(deploy/update.sh*)" "Bash(deploy/rollback.sh*)"
+  "Bash(cat *.env*)" "Bash(head *.env*)" "Bash(tail *.env*)" "Bash(grep * .env*)"
+  "Bash(* /opt/ihelp.am/.env*)" "Bash(* /opt/ihelp.am-staging/.env*)"
+  "Read(//opt/ihelp.am/.env)" "Read(//opt/ihelp.am-staging/.env)" "Read(//var/www/**)" "Read(//etc/**)" "Read(//root/.claude/**)"
   # Субагенты удваивают расход лимита подписки и работают вне этих правил — воркеру они не нужны
   "Agent")
 
@@ -46,7 +48,10 @@ case "$role" in
     allow=(Read Glob Grep TodoWrite "${common[@]}" "Bash(git log *)" "Bash(git diff *)" "Bash(git show *)" "Bash(git status)" "Bash(git fetch *)" "Bash(git rev-parse *)"
       "Bash(scripts/deploy-task.sh *)" "Bash(bash scripts/deploy-task.sh *)" "Bash(/opt/ihelp.am/scripts/deploy-task.sh *)" "Bash(bash /opt/ihelp.am/scripts/deploy-task.sh *)"
       "Bash(scripts/deploy-batch.sh *)" "Bash(bash scripts/deploy-batch.sh *)" "Bash(/opt/ihelp.am/scripts/deploy-batch.sh *)" "Bash(bash /opt/ihelp.am/scripts/deploy-batch.sh *)"
-      "Bash(deploy/smoke.sh*)" "Bash(bash deploy/smoke.sh*)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(ls *)"
+      "Bash(deploy/smoke.sh*)" "Bash(bash deploy/smoke.sh*)"
+      "Bash(deploy/staging.sh up * --no-notify)" "Bash(deploy/staging.sh down)" "Bash(deploy/staging.sh status)"
+      "Bash(bash deploy/staging.sh up * --no-notify)" "Bash(bash deploy/staging.sh down)" "Bash(bash deploy/staging.sh status)"
+      "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(ls *)"
       "Write(//opt/ihelp.am/data/tmp/deployer/**)" "Edit(//opt/ihelp.am/data/tmp/deployer/**)")
     deny+=("Bash(git merge *)" "Bash(git checkout *)" "Bash(git reset *)" "Bash(git commit *)" "Bash(git push *)")
     ;;
@@ -94,17 +99,18 @@ case "$role" in
     deny+=("NotebookEdit" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(cat >*)" "Bash(cat *>*)" "Bash(curl *)")
     ;;
   dev)
-    # Разработчик пишет только в свою рабочую копию (.claude/worktrees/**) и data/tmp/dev/.
-    # Незащищённые Edit/Write из базового массива убраны: запись в корень /opt/ihelp.am
-    # и в .claude/worktrees/ напрямую запрещена (именно так однажды возник .claire/ в корне).
-    # lock-update.sh разрешён явно: он нужен при изменении package.json.
-    allow=(Read Glob Grep TodoWrite "${common[@]}" "${check[@]}" "${lockupdate[@]}"
+    # Разработчик пишет только в свою рабочую копию (.claude/worktrees/) и data/tmp/dev/.
+    # Явный сброс allow: убираем широкие Edit/Write из базового массива, заменяем ограниченными путями.
+    # Это закрывает запись в основную копию /opt/ihelp.am вне worktrees/ и data/tmp/ (DEV-144).
+    # lock-update.sh разрешён явно: он нужен при изменении package.json (обновляет lock в образе сборки).
+    allow=(Read Glob Grep TodoWrite "${common[@]}" "${check[@]}"
       "Bash(git *)"
       "Bash(ls *)" "Bash(ls)" "Bash(pwd)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(jq *)"
       "Bash(diff *)" "Bash(sort *)" "Bash(sed -n *)" "Bash(node --check *)" "Bash(bash -n *)" "Bash(python3 -c *)" "Bash(mkdir *)" "Bash(date)"
       "Bash(curl -s http://127.0.0.1:*)"
       "Write(//opt/ihelp.am/.claude/worktrees/**)" "Edit(//opt/ihelp.am/.claude/worktrees/**)"
-      "Write(//opt/ihelp.am/data/tmp/dev/**)" "Edit(//opt/ihelp.am/data/tmp/dev/**)")
+      "Write(//opt/ihelp.am/data/tmp/dev/**)" "Edit(//opt/ihelp.am/data/tmp/dev/**)"
+      "${lockupdate[@]}")
     ;;
   *) echo '{"is_error":true,"result":"неизвестная роль"}'; exit 2 ;;
 esac
@@ -113,4 +119,5 @@ esac
 mkdir -p "$root/data/tmp/$role"
 
 exec claude -p --model "$model" --output-format json --permission-mode dontAsk --strict-mcp-config \
+  --setting-sources user,project \
   --allowedTools "${allow[@]}" --disallowedTools "${deny[@]}" < "$prompt"

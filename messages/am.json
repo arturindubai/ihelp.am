@@ -7,6 +7,11 @@
     "emailConfirm": "",
     "emailNotVerified": "",
     "emailVerified": "",
+    "googleConnect": "",
+    "googleEmailMismatch": "",
+    "googleLinked": "",
+    "googleTitle": "Google",
+    "googleUsed": "",
     "history": "",
     "language": "",
     "locales": {
@@ -51,6 +56,14 @@
   },
   "admin": {
     "banners": {
+      "aiApply": "Կիրառել",
+      "aiError": "Հնարավոր չեղավ ստանալ պատասխան — կրկին փորձեք",
+      "aiGenerateImage": "Ստեղծել պատկեր",
+      "aiImageResults": "Պատկերի տարբերակներ",
+      "aiSuggestResults": "Վերնագրի տարբերակներ",
+      "aiSuggestTitle": "Առաջարկել վերնագիր",
+      "aiUsageCount": "Հարցումներ այս ամիս: {count}",
+      "aiUse": "Օգտագործել",
       "audience": "",
       "audiences": {
         "ALL": "",
@@ -166,6 +179,15 @@
       },
       "keys": {
         "add": "",
+        "changed": "",
+        "check": "",
+        "checkResult": {
+          "empty": "",
+          "error": "",
+          "no_check": "",
+          "rejected": "",
+          "unreachable": ""
+        },
         "clear": "",
         "clearConfirm": "",
         "errors": {
@@ -173,9 +195,79 @@
           "bad_value": "",
           "unknown_key": ""
         },
+        "groups": {
+          "ai": "ԱԻ օգնական",
+          "codes": "",
+          "login": "",
+          "mail": "",
+          "telegram": "Telegram"
+        },
+        "items": {
+          "ai_anthropicKey": {
+            "how": "console.anthropic.com → Settings → API Keys → Create Key",
+            "purpose": "ԱԻ-ով բանների վերնագրեր և ենթավերնագրեր.",
+            "title": "Claude AI (Anthropic)"
+          },
+          "ai_higgsfieldKey": {
+            "how": "app.higgsfield.ai → Settings → API Key",
+            "purpose": "Բաններների համար ԱԻ պատկերներ (Nano Banana Pro).",
+            "title": "Higgsfield — պատկերներ"
+          },
+          "apple_privateKey": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "google_clientSecret": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "mail_apiKey": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "notify_telegramBotToken": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "otp_sms_authToken": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "otp_telegram_gatewayToken": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "otp_whatsapp_accessToken": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "team_botToken": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          }
+        },
+        "missing": "",
         "no": "Ոչ",
         "note": "",
         "pastePh": "",
+        "present": "",
+        "push": {
+          "createdAt": "",
+          "noEncKey": "",
+          "notReady": "",
+          "purpose": "",
+          "ready": "",
+          "title": "Push ծանուցումներ"
+        },
+        "replace": "",
         "services": {
           "APPLE_SIGNIN": {
             "how": "",
@@ -204,6 +296,7 @@
             "purpose": ""
           }
         },
+        "set": "",
         "status": {
           "active": "Ակտիվ",
           "empty": "",
@@ -213,18 +306,24 @@
         },
         "subtitle": "",
         "title": "",
+        "where": "",
         "yes": "Այո"
       },
       "library": {
         "comparePrev": "",
         "empty": "",
+        "emptySection": "",
         "markdownHint": "",
         "new": "Նոր",
         "repoHint": "",
-        "subtitle": "",
-        "tabs": {
-          "role": ""
+        "sections": {
+          "decisions": "",
+          "design": "",
+          "docs": "",
+          "research": "",
+          "rules": ""
         },
+        "subtitle": "",
         "title": ""
       },
       "logs": {
@@ -551,6 +650,21 @@
       "colService": "",
       "confirmMsg": "",
       "empty": "",
+      "historyAllServices": "",
+      "historyColDate": "",
+      "historyColNew": "",
+      "historyColOld": "",
+      "historyColOption": "",
+      "historyColService": "",
+      "historyColUser": "",
+      "historyCount": "{count}",
+      "historyEmpty": "",
+      "historyFilterFrom": "",
+      "historyFilterService": "",
+      "historyFilterTo": "",
+      "historyReset": "",
+      "historyTab": "",
+      "pricesTab": "",
       "saved": "",
       "selected": "",
       "sub": "{count} · {services}",
@@ -563,11 +677,18 @@
       "descr": "",
       "firstOrderOnly": "",
       "fixed": "",
+      "forBothNote": "",
+      "forClient": "",
+      "forEmail": "",
+      "forEmailHint": "",
+      "forPhone": "",
+      "forPhoneHint": "",
       "maxDiscount": "",
       "minOrder": "",
       "newPromo": "",
       "perUserLimit": "",
       "percent": "",
+      "personal": "",
       "planKinds": "",
       "rulesHint": "",
       "services": "",
@@ -604,6 +725,7 @@
     },
     "services": {
       "addCategory": "",
+      "addDurationOption": "",
       "addFirstService": "",
       "addGroup": "",
       "addItem": "",
@@ -613,6 +735,7 @@
       "answer": "",
       "archiveCategory": "",
       "archived": "",
+      "arrivalHours": "",
       "banner": "",
       "benefits": "",
       "bookings": "",
@@ -622,6 +745,7 @@
       "categoryArchivedBanner": "",
       "categoryHasServices": "",
       "categoryHiddenBanner": "",
+      "clientPriceLabel": "",
       "comingSoon": "",
       "comingSoonLabel": "",
       "deleteCategory": "",
@@ -648,6 +772,7 @@
       "infoTitle": "",
       "intervalDays": "",
       "isDefault": "",
+      "isNew": "",
       "kinds": {
         "ONE_TIME": "Մեկանգամ այց",
         "PACKAGE": "Այցերի Պակետ",
@@ -661,9 +786,10 @@
       "multi": "",
       "newCategory": "",
       "newService": "",
+      "noGroups": "",
       "noMasters": "",
+      "noPlans": "",
       "noServicesInCategory": "",
-      "noVariants": "",
       "note": "",
       "noteBody": "",
       "noteTitle": "",
@@ -675,8 +801,6 @@
       "planKind": "",
       "plans": "",
       "policy": "",
-      "previewOptions": "",
-      "previewStep": "",
       "pricePreview": "",
       "question": "",
       "rating": "",
@@ -687,6 +811,11 @@
       "services": "",
       "single": "",
       "slugFromTitle": "",
+      "stats": {
+        "orders30d": "",
+        "rating": "",
+        "reviews": ""
+      },
       "stepBody": "",
       "stepTitle": "",
       "tabs": {
@@ -1039,11 +1168,46 @@
     "weekdaysShort": "",
     "wishes": ""
   },
+  "cart": {
+    "checkout": "",
+    "itemsCount": "",
+    "total": ""
+  },
   "catalog": {
-    "comingSoonText": "Պատրաստում ենք ծառայություններ: Գրեք մեզ՝ ձեր հարցերին կպատասխանենք",
+    "arrivalToday": "",
+    "arrivalWithin": "",
+    "badgeNew": "",
+    "comingSoonText": "",
     "comingSoonTitle": "Շուտով կբացենք",
+    "formatOnce": {
+      "cta": "Պատվիրել",
+      "desc": "Մեկ այց — երբ անհրաժեշտ է",
+      "title": "Միանվագ այց"
+    },
+    "formatPack": {
+      "cta": "Գնել փաթեթ",
+      "desc": "Մի քանի այց կանխավճարով — ավելի էժան",
+      "title": "Այցերի փաթեթ"
+    },
+    "formatRegular": {
+      "badge": "Ձեռնտու",
+      "cta": "Բաժանորդագրվել",
+      "desc": "Կանոնավոր այցեր բաժանորդագրության զեղչով",
+      "title": "Կանոնավոր մաքրություն"
+    },
+    "formatsTitle": "Ընտրեք մաքրման ձևաչափ",
     "newService": "Նոր ծառայություն",
-    "writeWhatsApp": "Գրել WhatsApp-ում"
+    "notifyAlready": "Менк арден стацел енк дзер контакты",
+    "notifyButton": "Ծануцел индз",
+    "notifyConsent": "Кттацнелов кочакы, дуз памаjордвоум ек дзер контакти машакман: <privacy>Гаjтнипетян кагакакануtян</privacy>",
+    "notifyHint": "Куjарканк мияйн мек хагорданагруtян",
+    "notifyInvalid": "Мутказгрек херахос кам e-mail",
+    "notifyPlaceholder": "+374 … кам name@mail.com",
+    "notifySubtitle": "Херахос кам e-mail — дзер кнтруtямб",
+    "notifySuccess": "Граíвац ек! Кцануценк, ерп амрагумы бацви:",
+    "notifyTitle": "Цануцел горцаркман масин",
+    "notifyTooMany": "Чафазанc шат хайтер, хнтрум енк брзел авели уш",
+    "writeWhatsApp": "Գрел WhatsApp-ում"
   },
   "common": {
     "add": "Ավելացնել",
@@ -1117,6 +1281,8 @@
     "howTitle": "",
     "popular": "",
     "reviewsTitle": "",
+    "searchEmpty": "",
+    "searchEmptyHint": "",
     "slogan": "",
     "stickyOrder": "",
     "title": "",
@@ -1137,8 +1303,12 @@
   },
   "nav": {
     "account": "Պրոֆիլ",
+    "address": "Երևան",
+    "addressAny": "",
+    "addressSheet": "",
     "admin": "Ադմին",
     "bookings": "Պատվերներ",
+    "districtSearch": "",
     "home": "Գլխավոր",
     "language": "Լեզու",
     "login": "Մուտք",
@@ -1147,6 +1317,46 @@
     "services": "Ծառայություններ"
   },
   "notify": {
+    "client": {
+      "confirmation": {
+        "address": "",
+        "button": "",
+        "date": "",
+        "service": "",
+        "subject": "",
+        "title": "",
+        "total": ""
+      },
+      "reminder": {
+        "address": "",
+        "button": "",
+        "date": "",
+        "master": "",
+        "service": "",
+        "subject": "",
+        "title": ""
+      },
+      "reminder2h": {
+        "address": "",
+        "button": "",
+        "date": "",
+        "master": "",
+        "service": "",
+        "subject": "",
+        "title": ""
+      },
+      "review": {
+        "button": "",
+        "line1": "",
+        "line2": "",
+        "subject": "",
+        "title": ""
+      },
+      "unsubscribeLink": "",
+      "unsubscribeText": "",
+      "unsubscribedBody": "",
+      "unsubscribedTitle": ""
+    },
     "order": {
       "cancelled": "",
       "completed": "",
@@ -1154,6 +1364,15 @@
       "masterAssigned": "",
       "rescheduled": ""
     }
+  },
+  "offline": {
+    "backOnline": "",
+    "cachedAt": "",
+    "clientTitle": "",
+    "noCache": "",
+    "noVisits": "",
+    "proTitle": "",
+    "viewOnly": ""
   },
   "operator": {
     "all": "",
@@ -1262,6 +1481,12 @@
     "toCollect": "",
     "today": "Այսոր",
     "upcoming": ""
+  },
+  "push": {
+    "allow": "Թույլ տալ",
+    "body": "Թույլ տվեք ծանուցումները՝ ձեր պատվերների մասին տեղեկանալու համար",
+    "dismiss": "Ոչ հիմա",
+    "title": "Այցելությունների ծանուցումներ"
   },
   "review": {
     "alreadyLeft": "",

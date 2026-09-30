@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { ArrowLeft, ChevronDown, Check } from "lucide-react";
+import { ArrowLeft, ChevronDown, Check, CalendarClock } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { getMastersForService, getServiceReviews, loadServiceRaw, localizeService } from "@/server/services/catalog";
 import { isFirstOrder } from "@/server/services/booking";
@@ -14,16 +14,24 @@ import { Rating, StarRow } from "@/components/Stars";
 import { ServiceConfigurator } from "@/components/service/ServiceConfigurator";
 import { Img } from "@/components/Img";
 import { PromoSlot } from "@/components/PromoSlot";
+import { NotifyForm } from "@/components/catalog/NotifyForm";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;
   const raw = await loadServiceRaw(slug);
   if (!raw) return {};
-  return { title: tr(raw.title, locale), description: tr(raw.subtitle, locale) || tr(raw.description, locale) };
+  const meta: Record<string, unknown> = {
+    title: tr(raw.title, locale),
+    description: tr(raw.subtitle, locale) || tr(raw.description, locale),
+    alternates: { canonical: `/${locale}/s/${slug}` },
+  };
+  if (raw.comingSoon) meta.robots = { index: false, follow: false };
+  return meta;
 }
 
-export default async function ServicePage({ params }: { params: Promise<{ locale: string; slug: string }> }) {
+export default async function ServicePage({ params, searchParams }: { params: Promise<{ locale: string; slug: string }>; searchParams: Promise<{ plan?: string }> }) {
   const { locale, slug } = await params;
+  const { plan } = await searchParams;
   setRequestLocale(locale);
   const raw = await loadServiceRaw(slug);
   if (!raw) notFound();
@@ -31,6 +39,47 @@ export default async function ServicePage({ params }: { params: Promise<{ locale
   const [user, settings, reviews, masters, t, tc] = await Promise.all([getCurrentUser(), getSettings(), getServiceReviews(raw.id), getMastersForService(raw.id), getTranslations("service"), getTranslations("common")]);
   const first = await isFirstOrder(user?.id);
   const minPrice = Math.min(...s.groups.filter((g) => g.isDuration).flatMap((g) => g.options.map((o) => o.price)), Infinity);
+
+  if (raw.comingSoon) {
+    const tcat = await getTranslations("catalog");
+    const notifyStrings = {
+      notifyTitle: tcat("notifyTitle"),
+      notifySubtitle: tcat("notifySubtitle"),
+      notifyPlaceholder: tcat("notifyPlaceholder"),
+      notifyHint: tcat("notifyHint"),
+      notifyButton: tcat("notifyButton"),
+      notifySuccess: tcat("notifySuccess"),
+      notifyAlready: tcat("notifyAlready"),
+      notifyInvalid: tcat("notifyInvalid"),
+      notifyTooMany: tcat("notifyTooMany"),
+    };
+    return (
+      <div className="container-m">
+        <div className="relative -mx-4">
+          {s.bannerImage ? <div className="relative aspect-[16/9] w-full"><Img src={s.bannerImage} fill sizes="(max-width: 768px) 100vw, 768px" className="object-cover" /></div> : <div className="h-14" />}
+          <Link href="/" className="absolute top-3 left-3 grid size-9 place-items-center rounded-full bg-paper shadow" aria-label="back">
+            <ArrowLeft size={18} />
+          </Link>
+        </div>
+
+        <h1 className="h1 mt-3">{s.title}</h1>
+        {s.description && <p className="mt-2 text-[15px] text-muted">{s.description}</p>}
+
+        <div className="mt-10 pb-16">
+          <div className="md:grid md:grid-cols-2 md:items-start md:gap-8">
+            <div className="flex flex-col items-center gap-4 text-center md:items-start md:text-left">
+              <CalendarClock size={64} className="opacity-35 text-brand" />
+              <h2 className="text-xl font-semibold">{tcat("comingSoonTitle")}</h2>
+              <p className="text-sm text-muted">{tcat("comingSoonText")}</p>
+            </div>
+            <div className="md:mt-0">
+              <NotifyForm serviceSlug={s.slug} t={notifyStrings} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container-m">
@@ -91,7 +140,7 @@ export default async function ServicePage({ params }: { params: Promise<{ locale
         </section>
       )}
 
-      <ServiceConfigurator s={s} rules={settings.pricing} isFirstOrder={first} policy={s.policy ?? undefined} />
+      <ServiceConfigurator s={s} rules={settings.pricing} isFirstOrder={first} policy={s.policy ?? undefined} initialPlan={plan} />
 
       {s.note?.body && (
         <div className="mt-2 rounded-2xl bg-ok-50 p-4">

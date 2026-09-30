@@ -12,15 +12,24 @@
 		-Server
 		-X-Powered-By
 	}
+	# Два upstream: app (основной) и app-next (временный при blue-green выкладке).
+	# lb_policy first: Caddy всегда выбирает первый здоровый — app, когда он работает.
+	# При выкладке app-next поднимается с новым образом, Caddy переключается на него пока app
+	# перезапускается, затем возвращается на app. Простоя нет.
+	# health_uri: Caddy сам проверяет здоровье каждые 5 с; несуществующий app-next помечается unhealthy.
+	# lb_try_duration: пассивный фоллбэк — Caddy повторяет запрос на другом upstream при ошибке соединения.
 	# Размер тела запроса: везде 10 МБ, а на загрузку картинок в админке — 16 МБ
 	# (файл до 12 МБ, MAX_UPLOAD_BYTES в src/lib/images.ts, плюс служебные байты multipart)
 	handle /api/upload {
 		request_body {
 			max_size 16MB
 		}
-		# lb_try_duration: Caddy повторяет соединение вместо 502 пока приложение перезапускается при выкладке.
-		# 30s достаточно для типичного рестарта (10–20с); nginx перед Caddy ждёт 60с — не получит 504.
-		reverse_proxy app:3000 {
+		reverse_proxy app:3000 app-next:3000 {
+			lb_policy first
+			health_uri /api/health
+			health_interval 5s
+			health_timeout 3s
+			fail_duration 10s
 			lb_try_duration 30s
 			lb_try_interval 1s
 		}
@@ -29,7 +38,12 @@
 		request_body {
 			max_size 10MB
 		}
-		reverse_proxy app:3000 {
+		reverse_proxy app:3000 app-next:3000 {
+			lb_policy first
+			health_uri /api/health
+			health_interval 5s
+			health_timeout 3s
+			fail_duration 10s
 			lb_try_duration 30s
 			lb_try_interval 1s
 		}

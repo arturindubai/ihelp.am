@@ -3,10 +3,19 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { CalendarClock } from "lucide-react";
 import { getCategory, getCategories } from "@/server/services/catalog";
 import { ServiceCard } from "@/components/ServiceCard";
+import { FormatCards } from "@/components/FormatCards";
 import { Link } from "@/i18n/navigation";
 import { NotifyForm } from "@/components/catalog/NotifyForm";
 import { cn } from "@/lib/format";
 import { PromoSlot } from "@/components/PromoSlot";
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }) {
+  const { slug } = await params;
+  const c = await getCategory(slug, "ru");
+  if (!c) return {};
+  if (c.comingSoon) return { robots: { index: false, follow: false } };
+  return {};
+}
 
 export default async function CategoryPage({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;
@@ -47,6 +56,8 @@ export default async function CategoryPage({ params }: { params: Promise<{ local
           </Link>
         ))}
       </div>
+
+      <FormatCards showFormats={c.showFormats} formats={c.formats} />
 
       {c.comingSoon ? (
         <div className="mt-10 pb-16">

@@ -51,6 +51,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
 Тестировщик (--agent tester):
   test КЛЮЧ                                     взять на проверку + рабочая копия на коммите ветки
   pass КЛЮЧ "что проверено"                     протестировано (отметка на текущий коммит ветки)
+            (задача с интерфейсом: обязателен скриншот attach КЛЮЧ --file, текст «Проверено на стенде: …»)
   fail КЛЮЧ "что не так"                        вернуть разработчику
 
 Триаж (--agent triage; также cto и product):
@@ -61,7 +62,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
 Новая работа (любой чат — вместо того чтобы делать её сразу):
   intake "что нужно и зачем"                    карточка IN-N в очередь триажа; дальше — триаж и воркеры
 
-Библиотека (знания, инструкции, решения — Control Center → «Библиотека»):
+Канон (знания, инструкции, решения — Control Center → «Канон»):
   lib [--kind knowledge|rules|role|process|decision|spec] [--q слово]   список документов
   lib <slug>                                    текущий текст документа (slug — путь в репозитории или note-…)
   lib add --title "…" --kind knowledge --file запись.md   новая запись команды (виды: rules role process decision spec knowledge)
@@ -83,7 +84,8 @@ const HELP = `cc — Control Center из командной строки (docs/D
 
 Деплоер (--agent deployer):
   return КЛЮЧ "что исправить"                   вернуть на доработку
-  done КЛЮЧ --sha КОММИТ "что проверено после выкладки"
+  done КЛЮЧ --sha КОММИТ "что проверено после выкладки" [--live "что видел на сайте"]
+            (задача с интерфейсом: --live обязателен; deploy-task.sh передаёт его из отчёта автоматически)
   lock КЛЮЧ / unlock КЛЮЧ                        держать задачу на время выкладки / отпустить
   (выкладка одной задачи целиком — scripts/deploy-task.sh КЛЮЧ)
 
@@ -245,6 +247,9 @@ function hint(code) {
     triaged_refused: "\n  Запись человека в ленте новее события разбора — задача вернётся в очередь триажа автоматически.",
     not_your_task: "\n  Задачу держит другой исполнитель.",
     no_update_fields: "\n  Укажите поля: --design-file, --details-file, --summary-file или --data '{\"поле\":\"значение\"}'.",
+    screenshot_required: "\n  Задача с интерфейсом: прикрепите скриншот стенда перед вердиктом:\n  node /opt/ihelp.am/scripts/cc.mjs attach КЛЮЧ --file screenshot.png --agent tester",
+    live_stand_required: "\n  Задача с интерфейсом: укажите в тексте вердикта что именно проверено на стенде:\n  «Проверено на стенде: страница /ru/…, форма заказа, адаптив на телефоне.»",
+    site_check_required: "\n  Задача с интерфейсом: укажите что проверено на живом сайте после выкладки:\n  --live \"SMOKE OK, проверен вход и форма заказа на https://ihelp.am\"",
   };
   return h[code] ?? "";
 }
@@ -252,6 +257,14 @@ function hint(code) {
 /* ───── вывод ───── */
 
 const STATUS = { backlog: "Бэклог", ready: "В очереди", in_progress: "В работе", review: "На проверке", blocked: "Заблокирована", done: "Сделано", cancelled: "Отменена" };
+
+/** Задача с интерфейсом — зеркало cc-flow.ts isUiTask без TypeScript */
+const isUiTaskJs = (layer, scope) =>
+  layer === "front" || layer === "fullstack" ||
+  (scope || []).some((s) => {
+    const p = s.trim().replace(/^\.\//, "").replace(/\/+$/, "");
+    return p === "src/app" || p.startsWith("src/app/") || p === "src/components" || p.startsWith("src/components/");
+  });
 const line = (t) =>
   `${t.key.padEnd(10)} ${String(STATUS[t.status] ?? t.status).padEnd(13)} ${t.priority}  ${t.title}${t.claimedBy ? `  · ${t.claimedBy}` : ""}${t.health?.stale ? "  · 🪦 брошена?" : ""}${t.health?.phantom ? "  · 👻 без исполнителя" : ""}${t.rework ? `  · ↩${t.rework}` : ""}`;
 
@@ -274,6 +287,11 @@ function printTask(d) {
   if (t.mockupRequired) {
     const mStatus = t.mockupApprovedBy ? `✓ утверждён (${t.mockupApprovedBy})` : "✗ НЕ утверждён — задачу нельзя взять в работу";
     out.push("", `Макет: ${mStatus}${t.mockupUrl ? ` · ${t.mockupUrl}` : ""}`);
+  }
+  if (isUiTaskJs(t.layer, t.scope)) {
+    const standOk = !!t.testedSha;
+    const siteOk = t.status === "done";
+    out.push("", `Живая проверка: нужна · стенд ${standOk ? "✓" : "✗"} · сайт ${siteOk ? "✓" : "✗"}`);
   }
   if (t.claimedBy) out.push("", `Держит: ${t.claimedBy} до ${new Date(t.claimUntil).toLocaleString("ru-RU", { timeZone: "Asia/Yerevan" })}${d.health?.stale ? " — аренда истекла" : ""}`);
   if (t.branch) out.push(`Ветка: ${t.branch}`);
@@ -467,7 +485,7 @@ async function takeTask(key) {
 ────────────────────────────────────────
 ✓ ${t.key} взята: ${agent}, аренда ${Math.round((new Date(t.claimUntil) - Date.now()) / 60000)} мин, пульс продлевает её сам (хук Claude Code).
   Рабочая копия: ${dir}${created ? " (создана)" : " (уже была)"} — перейди в неё инструментом EnterWorktree (path=${dir})
-  Ветка: ${branch}${ahead ? `\n  В ветке уже есть работа — продолжай с неё:\n${ahead.split("\n").map((l) => `    ${l}`).join("\n")}\n  Нужно подтянуть main: git merge origin/main (не rebase — он запрещён для отправленных веток)` : ""}`);
+  Ветка: ${branch}${ahead ? `\n  В ветке уже есть работа — продолжай с неё:\n${ahead.split("\n").map((l) => `    ${l}`).join("\n")}\n  Если ветка конфликтует с main — перед сдачей: git merge origin/main (не rebase — запрещён для отправленных веток)` : ""}`);
 }
 
 /** Тестировщик: держит задачу «На проверке» и получает рабочую копию ровно на последнем коммите ветки */
@@ -478,15 +496,17 @@ async function testTask(key) {
   tryGit(["fetch", "-q", "origin"], ROOT);
   const sha = tryGit(["rev-parse", "--verify", "-q", `refs/remotes/origin/${branch}`], ROOT);
   if (!sha) die(`ветки ${branch} нет в репозитории — проверять нечего`);
-  // Критерий 2: ветка должна содержать текущий origin/main; тестировщик проверяет merged-result, не изолированную ветку
-  const isUpToDate = tryGit(["merge-base", "--is-ancestor", "origin/main", `refs/remotes/origin/${branch}`], ROOT);
-  if (isUpToDate === null) {
-    const behind = tryGit(["rev-list", "--count", `origin/${branch}..origin/main`], ROOT) ?? "?";
-    const reason = `Ветка ${branch} отстаёт от origin/main на ${behind} коммит(а). Тестирование не начато: тестировщик проверяет merged-result, а не изолированную ветку. Разработчик должен обновить ветку: git merge origin/main && git push, затем сдать задачу снова.`;
-    await api("POST", null, { action: "test-fail", agent, key, text: reason });
-    dropState(key);
-    console.log(`✗ ${key}: ветка не содержит текущий main — возвращена разработчику без тестирования`);
-    return;
+  // Гейт: ветка должна сливаться без конфликтов; отставание от main не блокирует тестирование
+  const behindTest = parseInt(tryGit(["rev-list", "--count", `origin/${branch}..origin/main`], ROOT) ?? "0", 10);
+  if (behindTest > 0) {
+    const conflicts = checkMergeConflicts(branch);
+    if (conflicts.length > 0) {
+      const reason = `Ветка ${branch} конфликтует с origin/main.\nФайлы с конфликтами:\n${conflicts.map((f) => `  ${f}`).join("\n")}\nРазработчик должен разрешить конфликт: git merge origin/main && git push, затем сдать задачу снова.`;
+      await api("POST", null, { action: "test-fail", agent, key, text: reason });
+      dropState(key);
+      console.log(`✗ ${key}: ветка конфликтует с main — возвращена разработчику`);
+      return;
+    }
   }
   const dir = path.join(WT, `test-${key}`);
   const list = tryGit(["worktree", "list", "--porcelain"], ROOT) ?? "";
@@ -500,6 +520,33 @@ async function testTask(key) {
   const d = await api("GET", { key });
   briefing("tester", d, agent, dir);
   console.log(`\n✓ ${key} взята на проверку: ${agent}. Рабочая копия ${dir} на коммите ${sha.slice(0, 10)} — перейди в неё (EnterWorktree path=${dir}).`);
+}
+
+/**
+ * Пробное слияние ветки с origin/main через git merge-tree --write-tree.
+ * Возвращает массив файлов с конфликтами (пустой — если конфликтов нет).
+ * При фатальной ошибке git выбрасывает исключение.
+ */
+function checkMergeConflicts(branch) {
+  try {
+    git(["merge-tree", "--write-tree", "origin/main", `origin/${branch}`], ROOT);
+    return [];
+  } catch (e) {
+    if (e.status === 1) {
+      // git merge-tree по умолчанию пишет CONFLICT-строки в stdout
+      const out = typeof e.stdout === "string" ? e.stdout : String(e.stdout ?? "");
+      const files = [];
+      for (const line of out.split("\n")) {
+        if (!line.includes("CONFLICT")) continue;
+        const inMatch = line.match(/\bMerge conflict in\s+(.+)$/i);
+        if (inMatch) { files.push(inMatch[1].trim()); continue; }
+        const typeMatch = line.match(/CONFLICT[^:]*:\s*(\S+)\s+(?:deleted|modified|renamed)/i);
+        if (typeMatch) files.push(typeMatch[1].trim());
+      }
+      return files.length > 0 ? [...new Set(files)] : ["(файлы с конфликтами)"];
+    }
+    throw e;
+  }
 }
 
 /** Факты для отчёта: коммиты ветки, объём изменений, миграции — деплоер видит их без раскопок */
@@ -519,15 +566,17 @@ function branchFacts(branch) {
   }
   const commits = tryGit(["log", "--oneline", "--no-merges", `origin/main..origin/${branch}`], ROOT) ?? "";
   if (!commits) die(`в ${branch} нет коммитов поверх main — сдавать нечего`);
-  // Критерий 1: ветка должна содержать текущий origin/main, иначе при слиянии деплоер получит конфликт
-  const isUpToDate = tryGit(["merge-base", "--is-ancestor", "origin/main", `origin/${branch}`], ROOT);
-  const behind = tryGit(["rev-list", "--count", `origin/${branch}..origin/main`], ROOT);
-  if (isUpToDate === null) {
-    die(
-      `Ветка ${branch} отстаёт от origin/main на ${behind ?? "?"} коммит(а).\n` +
-      `  Обновите: git merge origin/main\n` +
-      `  Затем:    git push && node scripts/cc.mjs review ${branch.replace("task/", "")} "…"`,
-    );
+  // Гейт: ветка должна сливаться с origin/main без конфликтов; отставание — только справка, не ошибка
+  const behind = parseInt(tryGit(["rev-list", "--count", `origin/${branch}..origin/main`], ROOT) ?? "0", 10);
+  if (behind > 0) {
+    const conflicts = checkMergeConflicts(branch);
+    if (conflicts.length > 0) {
+      die(
+        `Ветка ${branch} конфликтует с origin/main.\n` +
+        `  Файлы с конфликтами:\n${conflicts.map((f) => `    ${f}`).join("\n")}\n` +
+        `  Разрешите конфликт: git merge origin/main, затем git push и сдайте задачу снова.`,
+      );
+    }
   }
   const stat = (tryGit(["diff", "--shortstat", `origin/main...origin/${branch}`], ROOT) ?? "").trim();
   const files = (tryGit(["diff", "--name-only", `origin/main...origin/${branch}`], ROOT) ?? "").split("\n").filter(Boolean);
@@ -536,6 +585,7 @@ function branchFacts(branch) {
     "",
     "— факты из git —",
     `Ветка: ${branch}`,
+    behind > 0 ? `Отставание от main: ${behind} коммит(а) — слияние проверено, конфликтов нет` : null,
     `Коммиты:\n${commits
       .split("\n")
       .slice(0, 20)
@@ -543,17 +593,17 @@ function branchFacts(branch) {
       .join("\n")}`,
     `Изменения: ${stat}`,
     migrations.length ? `⚠ Миграции базы: ${migrations.join(", ")}` : "Миграций базы нет",
-  ].join("\n");
+  ].filter((v) => v !== null).join("\n");
 }
 
 /* ───── команды ───── */
 
 const COMMENT_LIMIT = 5000;
 
-/** Если текст длиннее лимита — сообщить об этом до отправки (полный текст сохранится в Библиотеке) */
+/** Если текст длиннее лимита — сообщить об этом до отправки (полный текст сохранится в Каноне) */
 function warnIfLong(str) {
   if (str.length > COMMENT_LIMIT) {
-    console.log(`ℹ Длина текста: ${str.length} знаков (лимит ${COMMENT_LIMIT}) — полный текст сохранится в Библиотеке, в ленте будет резюме со ссылкой.`);
+    console.log(`ℹ Длина текста: ${str.length} знаков (лимит ${COMMENT_LIMIT}) — полный текст сохранится в Каноне, в ленте будет резюме со ссылкой.`);
   }
 }
 
@@ -858,7 +908,8 @@ async function main() {
           }
         }
       }
-      const r = await api("POST", null, { action: "done", agent: agentFor(k), key: k, sha, text: text() });
+      const liveProof = typeof flags.live === "string" ? flags.live.trim() : undefined;
+      const r = await api("POST", null, { action: "done", agent: agentFor(k), key: k, sha, text: text(), ...(liveProof ? { liveProof } : {}) });
       console.log(`✓ ${k} → ${STATUS[r.status] ?? r.status}`);
       return;
     }
@@ -969,7 +1020,7 @@ async function main() {
         const file = typeof flags.file === "string" ? flags.file : null;
         if (!slug || !file || !fs.existsSync(file)) die("нужны slug записи и файл с текстом: lib update note-… --file запись.md");
         const body = { slug, title: typeof flags.title === "string" ? flags.title : undefined, note: typeof flags.note === "string" ? flags.note : undefined, content: fs.readFileSync(file, "utf8"), agent: typeof flags.agent === "string" ? flags.agent : "cto" };
-        const res = await fetchRetry(base, { method: "PUT", headers: { "x-cc-key": KEY, "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));
+        const res = await fetchRetry(base, { method: "PUT", headers: { "x-cc-key": KEY, "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch((e) => die(`Канон не отвечает: ${e.message}`));
         const d = await res.json().catch(() => ({}));
         if (!res.ok) die(d.error ?? res.status);
         return console.log(d.changed ? `✓ ${slug}: новая версия ${d.version}` : `· ${slug}: текст не изменился, версия та же`);
@@ -978,14 +1029,14 @@ async function main() {
         const file = typeof flags.file === "string" ? flags.file : null;
         if (!file || !fs.existsSync(file)) die("нужен файл с текстом: --file запись.md");
         const body = { title: typeof flags.title === "string" ? flags.title : "", kind: typeof flags.kind === "string" ? flags.kind : "knowledge", content: fs.readFileSync(file, "utf8"), agent: typeof flags.agent === "string" ? flags.agent : "cto" };
-        const res = await fetchRetry(base, { method: "POST", headers: { "x-cc-key": KEY, "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));
+        const res = await fetchRetry(base, { method: "POST", headers: { "x-cc-key": KEY, "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch((e) => die(`Канон не отвечает: ${e.message}`));
         const d = await res.json().catch(() => ({}));
         if (!res.ok) die(d.error ?? res.status);
         return console.log(`✓ запись ${d.slug} · ${d.kind} · ${d.title}`);
       }
       const slug = pos[0];
       const query = new URLSearchParams(slug ? { slug } : { ...(typeof flags.kind === "string" ? { kind: flags.kind } : {}), ...(typeof flags.q === "string" ? { q: flags.q } : {}) });
-      const res = await fetchRetry(`${base}?${query}`, { headers: { "x-cc-key": KEY } }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));
+      const res = await fetchRetry(`${base}?${query}`, { headers: { "x-cc-key": KEY } }).catch((e) => die(`Канон не отвечает: ${e.message}`));
       const d = await res.json().catch(() => ({}));
       if (!res.ok) die(d.error ?? res.status);
       if (flags.json) return console.log(JSON.stringify(d, null, 2));

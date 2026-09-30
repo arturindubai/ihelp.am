@@ -12,6 +12,7 @@ import { findExpiringPackages } from "@/server/services/packages";
 import { runLogWatcher } from "@/server/services/logWatcher";
 import { sendMasterTomorrowSchedule } from "@/server/services/workerNotify";
 import { sendVisitReminders, sendReviewRequests, sendVisit2hReminders } from "@/server/services/bookingNotify";
+import { setVisitStatus } from "@/server/services/visits";
 import { html, notifyTeam } from "@/server/notify";
 import { alertTech } from "@/server/alerts";
 import { ymd } from "@/lib/time";
@@ -91,7 +92,8 @@ export async function GET(req: Request) {
       const rows = await db.order.findMany({ where: { kind: "PACKAGE", status: "ACTIVE", expiresAt: { lt: now } }, select: { id: true, number: true, visits: { select: { status: true } } } });
       for (const o of rows) {
         const unused = o.visits.filter((v) => ["UNSCHEDULED", "SCHEDULED", "CONFIRMED"].includes(v.status)).length;
-        await db.visit.updateMany({ where: { orderId: o.id, status: "UNSCHEDULED" }, data: { status: "CANCELLED" } });
+        const unscheduled = await db.visit.findMany({ where: { orderId: o.id, status: "UNSCHEDULED" }, select: { id: true } });
+        for (const v of unscheduled) await setVisitStatus(v.id, "CANCELLED", "крон").catch(() => {});
         await db.order.update({ where: { id: o.id }, data: { status: "COMPLETED" } });
         if (unused) await notifyTeam(html`📦 Пакет №${o.number} истёк, неиспользованных визитов: ${unused}. Решите вопрос с клиентом`);
       }

@@ -104,6 +104,7 @@ export async function createOrder(user: User, input: CreateOrderInput) {
   const settings = await getSettings();
   const raw = await loadServiceRaw(input.slug);
   if (!raw) throw new BookingError("invalid");
+  if (raw.comingSoon) throw new BookingError("invalid");
   const view = localizeService(raw, "ru");
   const sel = resolveSelection(view, input.optionIds, input.planId);
   if (!sel.ok) throw new BookingError("invalid");
@@ -128,7 +129,7 @@ export async function createOrder(user: User, input: CreateOrderInput) {
   let promoId: string | null = null;
   let promo = null;
   if (input.promoCode) {
-    const pc = await checkPromo({ code: input.promoCode, userId: user.id, phone: user.phone, serviceId: raw.id, planKind: kind, amount: base.first.base, isFirstOrder: first });
+    const pc = await checkPromo({ code: input.promoCode, userId: user.id, phone: user.phone, email: user.emailVerifiedAt ? user.email : null, serviceId: raw.id, planKind: kind, amount: base.first.base, isFirstOrder: first });
     if (pc.ok) {
       promo = pc.promo;
     }
@@ -203,7 +204,7 @@ export async function createOrder(user: User, input: CreateOrderInput) {
         await generateSubscriptionVisits(tx, created.id, settings.booking.subscriptionHorizonDays, buffer);
       }
       if (promoId) {
-        await tx.promoRedemption.create({ data: { promoId, userId: user.id, orderId: created.id, phone: user.phone } });
+        await tx.promoRedemption.create({ data: { promoId, userId: user.id, orderId: created.id, phone: user.phone ?? "" } });
         await tx.promoCode.update({ where: { id: promoId }, data: { usedCount: { increment: 1 } } });
       }
       await tx.service.update({ where: { id: raw.id }, data: { bookingsCount: { increment: 1 } } });

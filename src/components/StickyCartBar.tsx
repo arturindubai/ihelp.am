@@ -35,14 +35,16 @@ export function StickyCartBar() {
 
   // Если BottomNav виден, сдвигаем плашку вверх чтобы не перекрывать навигацию
   const aboveNav = !BOTTOM_NAV_HIDDEN.some((r) => r.test(path));
-  const bottomClass = aboveNav ? "bottom-20 md:bottom-0" : "bottom-0";
+  // Мобильный отступ снизу: над BottomNav или у самого низа
+  const mobileBottom = aboveNav ? "bottom-20" : "bottom-0";
 
   const countLabel = cart.count > 99 ? "99+" : t("itemsCount", { count: cart.count });
   const bookHref = `/book/${cart.slug}?o=${cart.opts.join(",")}${cart.planId ? `&p=${cart.planId}` : ""}`;
 
   return (
-    <div className={`${aboveNav ? "" : "pb-safe"} fixed inset-x-0 ${bottomClass} z-40 border-t border-line bg-paper shadow-[0_-2px_12px_rgba(0,0,0,0.08)]`}>
-      <div className="mx-auto flex max-w-xl items-center gap-3 px-4 py-3">
+    // Мобильно: полная ширина. Десктоп: компактно справа снизу
+    <div className={`${aboveNav ? "" : "pb-safe"} fixed ${mobileBottom} inset-x-0 z-40 border-t border-line bg-paper shadow-[0_-2px_12px_rgba(0,0,0,0.08)] md:inset-x-auto md:left-auto md:right-4 md:bottom-4 md:w-72 md:rounded-2xl md:border md:shadow-lg`}>
+      <div className="mx-auto flex max-w-xl items-center gap-3 px-4 py-3 md:mx-0 md:max-w-none">
         <div className="flex-1">
           <div className="font-medium text-ink">{countLabel}</div>
           <div className="text-sm text-muted">{amd(cart.total)}</div>

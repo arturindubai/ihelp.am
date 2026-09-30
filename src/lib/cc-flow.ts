@@ -157,11 +157,24 @@ export const isReady = (items: CheckItem[]) => items.every((i) => i.ok || !i.har
 /** Код-задача: её доказательство готовности — коммит в main, а не слова */
 export const isCodeTask = (layer: string) => layer !== "none";
 
-/**
- * Гейт «На проверке»: у код-задачи есть ветка, у любой — отчёт.
- * Если opts переданы — оба поля (releaseNote и ownerSummary) обязательны.
- * cc.mjs всегда передаёт оба; UI передаёт только releaseNote через отдельное поле — тогда opts не передаётся.
- */
+/** Задача с интерфейсом: layer front/fullstack или scope содержит src/app или src/components */
+export function isUiTask(layer: string, scope?: string[] | null): boolean {
+  if (layer === "front" || layer === "fullstack") return true;
+  if (!scope) return false;
+  return scope.some((s) => {
+    const p = s.trim().replace(/^\.\//, "").replace(/\/+$/, "");
+    return p === "src/app" || p.startsWith("src/app/") || p === "src/components" || p.startsWith("src/components/");
+  });
+}
+
+/** Гейт «протестировано на стенде»: для задач с интерфейсом требуется вложение (скриншот или файл) и явная отметка в тексте */
+export function standGate(text: string, attachments: number): string | null {
+  if (attachments === 0) return "screenshot_required";
+  if (!/проверено на стенде:/i.test(text)) return "live_stand_required";
+  return null;
+}
+
+/** Гейт «На проверке»: у код-задачи есть ветка, у любой — отчёт; если переданы opts — проверяем releaseNote, ownerSummary и nextSteps */
 export function reviewGate(
   t: { layer: string; branch?: string | null },
   report: string,
@@ -179,6 +192,27 @@ export function reviewGate(
 }
 
 export const SHA_RE = /^[0-9a-f]{7,40}$/i;
+
+/**
+ * Извлекает имена файлов из вывода git merge-tree --write-tree при конфликте.
+ * Вызывается в cc.mjs для показа перечня конфликтных файлов при отказе сдачи.
+ * Поддерживает форматы:
+ *   "CONFLICT (content): Merge conflict in path/to/file"
+ *   "CONFLICT (modify/delete): path/to/file deleted in ..."
+ */
+export function parseConflictFiles(output: string): string[] {
+  const files: string[] = [];
+  for (const line of output.split("\n")) {
+    if (!line.includes("CONFLICT")) continue;
+    // Формат 1: "CONFLICT (...): Merge conflict in path/to/file"
+    const inMatch = line.match(/\bMerge conflict in\s+(.+)$/i);
+    if (inMatch) { files.push(inMatch[1].trim()); continue; }
+    // Формат 2: "CONFLICT (modify/delete): path/to/file deleted/modified/renamed in..."
+    const typeMatch = line.match(/CONFLICT[^:]*:\s*(\S+)\s+(?:deleted|modified|renamed)/i);
+    if (typeMatch) files.push(typeMatch[1].trim());
+  }
+  return [...new Set(files)];
+}
 
 export type CriterionResult = { done: boolean; cardKey?: string };
 

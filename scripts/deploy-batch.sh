@@ -92,18 +92,31 @@ else
   flock -n 9 || stop "Уже идёт другая выкладка — жду своей очереди в следующий раз"
 
   [ "$(git branch --show-current)" = main ] || stop "Основная копия не на main — выкладку не начинаю"
-  # Отслеживаемые изменения — стоп; неотслеживаемые файлы — убрать в data/tmp/stray/ и продолжить
-  _ms=$(git status --short)
-  if [ -n "$_ms" ]; then
-    _ms_tracked=$(echo "$_ms" | grep -v '^??' || true)
-    [ -z "$_ms_tracked" ] || stop "В основной копии незакоммиченные изменения — выкладку не начинаю"
-    _stray="data/tmp/stray/$(date +%Y%m%d-%H%M%S)"
-    mkdir -p "$_stray"
-    echo "⚠ В основной копии неотслеживаемые файлы — перемещаю в ${_stray}/ и продолжаю выкладку"
-    echo "$_ms" | awk '/^\?\?/{print substr($0, 4)}' | while IFS= read -r _sf; do
-      [ -z "$_sf" ] && continue
-      _sf="${_sf%/}"
-      if mv "$_sf" "$_stray/"; then echo "  → $_sf"; else echo "  ✗ не удалось переместить $_sf"; fi
+  # Неотслеживаемые файлы (??) убираем в сторону — они выкладке не мешают.
+  # Изменённые отслеживаемые файлы (M, D и т.п.) останавливают выкладку: это чья-то работа.
+  _porcelain=$(git status --porcelain)
+  if [ -n "$_porcelain" ]; then
+    _tracked=$(printf '%s\n' "$_porcelain" | grep -v '^?? ' || true)
+    [ -n "$_tracked" ] && stop "В основной копии незакоммиченные изменения — выкладку не начинаю"
+    _stray_dir="data/tmp/stray/$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$_stray_dir"
+    _stray_list=""
+    while IFS= read -r _stray_line; do
+      [ -z "$_stray_line" ] && continue
+      _fp="${_stray_line:3}"
+      _fp="${_fp%/}"
+      _dest_dir="$_stray_dir/$(dirname "$_fp")"
+      mkdir -p "$_dest_dir"
+      if mv "$_fp" "$_dest_dir/"; then
+        _stray_list="${_stray_list} ${_fp}"
+        echo "▶ Лишний файл убран в сторону: $_fp → ${_dest_dir}/"
+      else
+        stop "Не удалось убрать лишний файл из основной копии: $_fp"
+      fi
+    done < <(printf '%s\n' "$_porcelain" | grep '^?? ' || true)
+    echo "▶ Лишние файлы перенесены в $_stray_dir:${_stray_list}"
+    for _sk in "${KEYS[@]}"; do
+      cc note "$_sk" "Пачковая выкладка: перед стартом убраны неотслеживаемые файлы в ${_stray_dir}:${_stray_list}" 2>/dev/null || true
     done
   fi
   git fetch -q origin || stop "Нет связи с GitHub"
@@ -235,10 +248,10 @@ if [ ${#VALID_KEYS[@]} -eq 0 ]; then
         KEY="${entry%%:*}"; found_sha="${entry##*:}"
         batch_subj=$(git log -1 --format="%s" "$found_sha" 2>/dev/null || echo "?")
         pm_done="Деплоер: $AGENT. Выложена ранее: ${batch_subj}. Коммит: ${found_sha:0:10}. SMOKE OK. Лог: /opt/ihelp.am/${log}"
-        if ! cc done "$KEY" --sha "$found_sha" "$pm_done" >> "$log" 2>&1; then
+        if ! cc done "$KEY" --sha "$found_sha" --live "$pm_done" "$pm_done" >> "$log" 2>&1; then
           mkdir -p data/tmp
-          printf 'Задача %s уже влита в main (%s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --agent %s\n' \
-            "$KEY" "${found_sha:0:10}" "$KEY" "$found_sha" "$AGENT" > "data/tmp/block-done-$KEY.md"
+          printf 'Задача %s уже влита в main (%s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --live "%s" --agent %s\n' \
+            "$KEY" "${found_sha:0:10}" "$KEY" "$found_sha" "$pm_done" "$AGENT" > "data/tmp/block-done-$KEY.md"
           cc block "$KEY" --on tech --text-file "data/tmp/block-done-$KEY.md" >> "$log" 2>&1 || true
           echo "✗ cc done не прошла для $KEY (уже влита) — заблокирована на технике" | tee -a "$log"
         else
@@ -398,10 +411,10 @@ if [ ${#BATCH_RESULT[@]} -eq 0 ]; then
         KEY="${entry%%:*}"; found_sha="${entry##*:}"
         batch_subj=$(git log -1 --format="%s" "$found_sha" 2>/dev/null || echo "?")
         pm_done="Деплоер: $AGENT. Выложена ранее: ${batch_subj}. Коммит: ${found_sha:0:10}. SMOKE OK. Лог: /opt/ihelp.am/${log}"
-        if ! cc done "$KEY" --sha "$found_sha" "$pm_done" >> "$log" 2>&1; then
+        if ! cc done "$KEY" --sha "$found_sha" --live "$pm_done" "$pm_done" >> "$log" 2>&1; then
           mkdir -p data/tmp
-          printf 'Задача %s уже влита в main (%s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --agent %s\n' \
-            "$KEY" "${found_sha:0:10}" "$KEY" "$found_sha" "$AGENT" > "data/tmp/block-done-$KEY.md"
+          printf 'Задача %s уже влита в main (%s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --live "%s" --agent %s\n' \
+            "$KEY" "${found_sha:0:10}" "$KEY" "$found_sha" "$pm_done" "$AGENT" > "data/tmp/block-done-$KEY.md"
           cc block "$KEY" --on tech --text-file "data/tmp/block-done-$KEY.md" >> "$log" 2>&1 || true
           echo "✗ cc done не прошла для $KEY (уже влита) — заблокирована на технике" | tee -a "$log"
         else
@@ -551,10 +564,10 @@ for KEY in "${BATCH_RESULT[@]}"; do
   # Каждая задача закрывается своим коммитом слияния (BATCH_MERGE_SHAS[$KEY])
   task_sha="${BATCH_MERGE_SHAS[$KEY]:-$merge}"
   task_done_text="Пачковая выкладка ${task_sha:0:10}: SMOKE OK (${checks} проверок, соседних сайтов: ${neighbors}).${migr} ${tested_label} Слияние ${pushed}. Лог: /opt/ihelp.am/${log}"
-  if ! cc done "$KEY" --sha "$task_sha" "$task_done_text" >> "$log" 2>&1; then
+  if ! cc done "$KEY" --sha "$task_sha" --live "$task_done_text" "$task_done_text" >> "$log" 2>&1; then
     cc note "$KEY" "cc done не прошла после выкладки коммита ${task_sha:0:10}: задача выложена, но не закрыта. Лог: /opt/ihelp.am/${log}" --error 2>/dev/null || true
-    printf 'Задача %s выложена (коммит %s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --agent %s "%s"\n' \
-      "$KEY" "${task_sha:0:10}" "$KEY" "$task_sha" "$AGENT" "$task_done_text" > "data/tmp/block-done-$KEY.md"
+    printf 'Задача %s выложена (коммит %s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --live "%s" --agent %s "%s"\n' \
+      "$KEY" "${task_sha:0:10}" "$KEY" "$task_sha" "$task_done_text" "$AGENT" "$task_done_text" > "data/tmp/block-done-$KEY.md"
     cc block "$KEY" --on tech --text-file "data/tmp/block-done-$KEY.md" >> "$log" 2>&1 || true
     echo "✗ cc done не прошла для $KEY — задача заблокирована на технике с готовой командой" | tee -a "$log"
     all_done=false

@@ -20,7 +20,7 @@ export default async function AdminClient({ params }: { params: Promise<{ locale
   const firstUsedBy = firstOrderUsedBy(u.orders);
   return (
     <div className="max-w-4xl">
-      <PageHead title={u.name || formatPhone(u.phone)} sub={`${formatPhone(u.phone)} · ${t(`staff.roles.${u.role}`)} · ${dateLabel(u.createdAt, locale, { day: "numeric", month: "long", year: "numeric" })} · ${u.privacyConsentAt ? t("clients.consentAt", { date: dateLabel(u.privacyConsentAt, locale, { day: "numeric", month: "long", year: "numeric" }) }) : t("clients.noConsent")}`} actions={<a href={`https://wa.me/${u.phone.replace("+", "")}`} target="_blank" className="btn-outline btn-sm">WhatsApp</a>} />
+      <PageHead title={u.name || formatPhone(u.phone)} sub={`${formatPhone(u.phone)} · ${t(`staff.roles.${u.role}`)} · ${dateLabel(u.createdAt, locale, { day: "numeric", month: "long", year: "numeric" })} · ${u.privacyConsentAt ? t("clients.consentAt", { date: dateLabel(u.privacyConsentAt, locale, { day: "numeric", month: "long", year: "numeric" }) }) : t("clients.noConsent")}`} actions={u.phone ? <a href={`https://wa.me/${u.phone.replace("+", "")}`} target="_blank" className="btn-outline btn-sm">WhatsApp</a> : undefined} />
       <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-4 md:col-span-2">
           <section className="card p-4 text-sm">

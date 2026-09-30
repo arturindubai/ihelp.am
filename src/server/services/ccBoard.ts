@@ -134,6 +134,7 @@ export async function needsYou() {
     returnedRuns: returnedRuns.slice(0, 10),
     pausedUntil: config.pausedUntil && Date.parse(config.pausedUntil) > Date.now() ? config.pausedUntil : null,
     alertMissing: !hasAlertRecipient(settings),
+    teamChatMissing: !(settings.notify.teamChatId || settings.notify.telegramChatId),
     /** Задачи, ждущие зависимостей с зависшим корнем */
     waitingDeps: attn.waitingDeps,
     /** Цепочки зависимостей: корень → ждущие задачи */
@@ -248,7 +249,7 @@ export async function mockupWaitingDesign() {
 /** Утверждённые дизайны за две недели — со статусом задачи и первым открытым блокером */
 export async function designApproved(days = 14) {
   const tasks = await db.task.findMany({
-    where: { mockupApprovedAt: { gte: new Date(Date.now() - days * 86400_000) } },
+    where: { mockupApprovedAt: { gte: new Date(Date.now() - days * 86400_000) }, status: { not: "cancelled" } },
     orderBy: { mockupApprovedAt: "desc" },
     select: {
       key: true, title: true, status: true, layer: true, mockupApprovedAt: true, mockupApprovedBy: true,

@@ -9,7 +9,10 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 3
 # Выкладка идёт в собственном юните systemd и не гибнет вместе с вызвавшим её воркером (scripts/deploy-unit.sh)
-[ -f scripts/deploy-unit.sh ] && . scripts/deploy-unit.sh && deploy_in_unit "$0" "$@"
+# --dry-run: сухой прогон без выкладки — в юнит не переносится, чтобы не создавать systemd-юнит для теста
+if ! printf '%s\n' "$@" | grep -qx -- '--dry-run'; then
+  [ -f scripts/deploy-unit.sh ] && . scripts/deploy-unit.sh && deploy_in_unit "$0" "$@"
+fi
 KEY="${1:-}"
 [ -n "$KEY" ] || { echo "Использование: scripts/deploy-task.sh <КЛЮЧ> [--no-test [причина]] [--force-own причина]"; exit 3; }
 shift
@@ -17,10 +20,12 @@ shift
 # --no-test — только для человека или чата-деплоера, который проверил сам; воркеру (CC_WORKER=1) недоступен
 # --no-test причина — при включённом пуле тестировщика причина обязательна и записывается в ленту
 # --force-own причина — обход проверки «автор не выкладывает свою задачу»; только владелец (agentname=owner*)
+# --dry-run — сухой прогон: проверяет условия и переносит лишние файлы, но не мёрджит и не деплоит
 NOTEST=""
 NOTEST_REASON=""
 FORCE_OWN=""
 FORCE_OWN_REASON=""
+DRY_RUN=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-test)
@@ -36,6 +41,7 @@ while [ $# -gt 0 ]; do
         echo "✗ --force-own требует причину: --force-own \"причина\""; exit 3
       fi
       ;;
+    --dry-run) DRY_RUN=1 ;;
   esac
   shift
 done
@@ -52,19 +58,30 @@ exec 9> data/deploy.lock
 flock -n 9 || stop "Уже идёт другая выкладка — жду своей очереди в следующий раз"
 
 [ "$(git branch --show-current)" = main ] || stop "Основная копия не на main — выкладку не начинаю"
-# Отслеживаемые изменения — стоп; неотслеживаемые файлы — убрать в data/tmp/stray/ и продолжить
-_ms=$(git status --short)
-if [ -n "$_ms" ]; then
-  _ms_tracked=$(echo "$_ms" | grep -v '^??' || true)
-  [ -z "$_ms_tracked" ] || stop "В основной копии незакоммиченные изменения в отслеживаемых файлах (чужая работа?) — выкладку не начинаю"
-  _stray="data/tmp/stray/$(date +%Y%m%d-%H%M%S)"
-  mkdir -p "$_stray"
-  echo "⚠ В основной копии неотслеживаемые файлы — перемещаю в ${_stray}/ и продолжаю выкладку"
-  echo "$_ms" | awk '/^\?\?/{print substr($0, 4)}' | while IFS= read -r _sf; do
-    [ -z "$_sf" ] && continue
-    _sf="${_sf%/}"
-    if mv "$_sf" "$_stray/"; then echo "  → $_sf"; else echo "  ✗ не удалось переместить $_sf"; fi
-  done
+# Неотслеживаемые файлы (??) убираем в сторону — они не принадлежат никакой ветке и выкладке не мешают.
+# Изменённые отслеживаемые файлы (M, D и т.п.) останавливают выкладку: это чья-то работа.
+_porcelain=$(git status --porcelain)
+if [ -n "$_porcelain" ]; then
+  _tracked=$(printf '%s\n' "$_porcelain" | grep -v '^?? ' || true)
+  [ -n "$_tracked" ] && stop "В основной копии незакоммиченные изменения (чужая работа?) — выкладку не начинаю"
+  _stray_dir="data/tmp/stray/$(date +%Y%m%d-%H%M%S)"
+  mkdir -p "$_stray_dir"
+  _stray_list=""
+  while IFS= read -r _stray_line; do
+    [ -z "$_stray_line" ] && continue
+    _fp="${_stray_line:3}"
+    _fp="${_fp%/}"
+    _dest_dir="$_stray_dir/$(dirname "$_fp")"
+    mkdir -p "$_dest_dir"
+    if mv "$_fp" "$_dest_dir/"; then
+      _stray_list="${_stray_list} ${_fp}"
+      echo "▶ Лишний файл убран в сторону: $_fp → ${_dest_dir}/"
+    else
+      stop "Не удалось убрать лишний файл из основной копии: $_fp"
+    fi
+  done < <(printf '%s\n' "$_porcelain" | grep '^?? ' || true)
+  echo "▶ Лишние файлы перенесены в $_stray_dir:${_stray_list}"
+  cc note "$KEY" "Перед выкладкой убраны неотслеживаемые файлы в ${_stray_dir}:${_stray_list}" 2>/dev/null || true
 fi
 git fetch -q origin || stop "Нет связи с GitHub"
 declare -F deploy_recover_main > /dev/null && deploy_recover_main
@@ -119,7 +136,7 @@ if [ -z "$head" ] || git merge-base --is-ancestor "$head" "origin/main" 2>/dev/n
     tested_label_pre="Протестирован коммит ${tested:0:10}."
     [ -n "$NOTEST" ] && tested_label_pre="Без отметки тестировщика (--no-test)."
     pm_done_text="Деплоер: $AGENT. Выложена ранее в составе: ${batch_subj}. Коммит слияния: ${found_merge_sha:0:10}. SMOKE OK. Лог: /opt/ihelp.am/${premerged_log}"
-    if ! cc done "$KEY" --sha "$found_merge_sha" "$pm_done_text" >> "$premerged_log" 2>&1; then
+    if ! cc done "$KEY" --sha "$found_merge_sha" --live "$pm_done_text" "$pm_done_text" >> "$premerged_log" 2>&1; then
       cc note "$KEY" "cc done не прошла для уже влитой задачи ${found_merge_sha:0:10}. Лог: /opt/ihelp.am/${premerged_log}" --error 2>/dev/null || true
       printf 'Задача %s уже влита в main (%s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --agent deployer\n' \
         "$KEY" "${found_merge_sha:0:10}" "$KEY" "$found_merge_sha" > "data/tmp/block-done-$KEY.md"
@@ -154,6 +171,14 @@ if [ -n "$NOTEST" ]; then
   else
     tested_label="Без отметки тестировщика (--no-test): проверял деплоер."
   fi
+fi
+
+if [ -n "$DRY_RUN" ]; then
+  echo "▶ [DRY-RUN] Задача $KEY: ветка $branch (${head:0:10}), статус $status"
+  echo "▶ [DRY-RUN] Основная копия чистая, стоит на main — выкладка возможна"
+  echo "▶ [DRY-RUN] Слияние, сборка и smoke не выполняются (--dry-run)"
+  exec 9>&-
+  exit 0
 fi
 
 prev=$(git rev-parse HEAD)
@@ -267,12 +292,12 @@ if grep -q '^prisma/migrations/' <<< "$changed"; then
   fi
 fi
 done_text="Деплоер: $AGENT. Автовыкладка ${merge:0:10}: SMOKE OK (${checks} проверок, соседних сайтов отвечают: ${neighbors}).${migr} ${tested_label} Слияние ${pushed}. Лог: /opt/ihelp.am/${log}"
-if ! cc done "$KEY" --sha "$merge" "$done_text"; then
+if ! cc done "$KEY" --sha "$merge" --live "$done_text" "$done_text"; then
   # Прод уже выложен, но закрыть задачу не удалось — блокируем на технике с готовой командой.
   # Задача уходит из очереди деплоера, повторной выкладки того же кода не будет.
   cc note "$KEY" "cc done не прошла после выкладки коммита ${merge:0:10}: задача выложена, но не закрыта. Лог: /opt/ihelp.am/${log}" --error 2>/dev/null || true
-  printf 'Задача %s выложена (коммит %s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --agent %s "%s"\n' \
-    "$KEY" "${merge:0:10}" "$KEY" "$merge" "$AGENT" "$done_text" > "data/tmp/block-done-$KEY.md"
+  printf 'Задача %s выложена (коммит %s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --live "%s" --agent %s "%s"\n' \
+    "$KEY" "${merge:0:10}" "$KEY" "$merge" "$done_text" "$AGENT" "$done_text" > "data/tmp/block-done-$KEY.md"
   cc block "$KEY" --on tech --text-file "data/tmp/block-done-$KEY.md" 2>/dev/null || true
   echo "✗ cc done не прошла — задача заблокирована на технике с готовой командой закрытия"
   exit 1

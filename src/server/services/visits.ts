@@ -2,7 +2,8 @@ import "server-only";
 import type { VisitStatus } from "@prisma/client";
 import { db } from "../db";
 import { html, notifyTeam } from "../notify";
-import { notifyClientVisitCompleted } from "./bookingNotify";
+import { notifyClientVisitCompleted, notifyClientMasterOnWay } from "./bookingNotify";
+import { getSettings } from "../settings";
 
 /** Смена статуса визита с побочными эффектами (счётчики мастера, закрытие заказа, оплата) */
 export async function setVisitStatus(visitId: string, status: VisitStatus, actor: string) {
@@ -12,12 +13,19 @@ export async function setVisitStatus(visitId: string, status: VisitStatus, actor
   if (status === "IN_PROGRESS" && !v.startedAt) data.startedAt = new Date();
   if (status === "DONE") data.finishedAt = new Date();
   await db.visit.update({ where: { id: v.id }, data });
+  // Записать событие смены статуса в лог
+  await db.visitEvent.create({ data: { visitId: v.id, orderId: v.orderId, status, actor } }).catch(() => {});
   if (status === "DONE" && v.status !== "DONE" && v.masterId) await db.master.update({ where: { id: v.masterId }, data: { jobsCount: { increment: 1 } } });
   if (v.status === "DONE" && status !== "DONE" && v.masterId) await db.master.update({ where: { id: v.masterId }, data: { jobsCount: { decrement: 1 } } });
   await refreshOrderState(v.orderId);
   if (["ON_WAY", "DONE", "NO_SHOW"].includes(status)) {
     const label = { ON_WAY: "🚗 выехал", DONE: "✅ завершил", NO_SHOW: "⚠️ визит не состоялся" }[status as "ON_WAY"];
     await notifyTeam(html`${label} · заказ №${v.order.number} · ${actor}`);
+  }
+  // Уведомить клиента: мастер выехал
+  if (status === "ON_WAY" && v.status !== "ON_WAY") {
+    const s = await getSettings().catch(() => null);
+    await notifyClientMasterOnWay(visitId, s?.notify.onWayEtaMin ?? 30).catch(() => {});
   }
   // Уведомить клиента о завершении визита с просьбой оставить отзыв
   if (status === "DONE" && v.status !== "DONE") {

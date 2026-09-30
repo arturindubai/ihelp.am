@@ -6,7 +6,14 @@
     "emailCodeSent": "We sent a code to this address. Enter it below.",
     "emailConfirm": "Verify email",
     "emailNotVerified": "Email not verified — you can't sign in with a code",
+    "emailRemindersLabel": "Receive visit reminders and review requests by email",
+    "emailRemindersTitle": "Email notifications",
     "emailVerified": "Email verified",
+    "googleConnect": "Connect Google",
+    "googleEmailMismatch": "Your profile already has a different email; change it manually first",
+    "googleLinked": "Google connected",
+    "googleTitle": "Google",
+    "googleUsed": "This Google account is already in use",
     "history": "History",
     "language": "Notification language",
     "locales": {
@@ -51,6 +58,14 @@
   },
   "admin": {
     "banners": {
+      "aiApply": "Apply",
+      "aiError": "Could not get a response — please try again",
+      "aiGenerateImage": "Generate image",
+      "aiImageResults": "Image options",
+      "aiSuggestResults": "Title options",
+      "aiSuggestTitle": "Suggest title",
+      "aiUsageCount": "Requests this month: {count}",
+      "aiUse": "Use",
       "audience": "Audience",
       "audiences": {
         "ALL": "Everyone",
@@ -159,6 +174,12 @@
       "backlog": {
         "allFlows": "All stages",
         "allLanes": "All lanes",
+        "epicNoEpics": "No epics",
+        "epicNoTasks": "No tasks in epic",
+        "epicNoTasksLink": "create the first one",
+        "epicProgress": "{done} of {total}",
+        "epicWaits": "Waits: {key}",
+        "epicWithout": "No epic · {n}",
         "executor": "Assignee: which worker does the next step",
         "flows": {
           "backlog": "Backlog",
@@ -196,6 +217,7 @@
         },
         "views": {
           "board": "Board",
+          "epics": "Epics",
           "flat": "List",
           "flow": "By stage",
           "lanes": "By lane"
@@ -223,10 +245,11 @@
         "toTest": "Waiting for tester"
       },
       "designTab": {
+        "approvalSection": "Step 3 · Awaiting approval",
         "approved": "Approved in the last two weeks · {n}",
         "approvedAgent": "by {agent}",
         "approvedEmpty": "Nothing approved yet",
-        "canon": "Library record",
+        "canon": "Canon record",
         "designSnippet": "Design: {text}",
         "files": "files: {n}",
         "gate": "mockup required",
@@ -236,7 +259,10 @@
         "pool": "Designer",
         "queue": "Designer queue · {n}",
         "queueEmpty": "No UI tasks without design",
-        "subtitle": "Design of UI tasks: designer queue, what awaits your approval, what's approved. Approved design goes to Library — that's the canon developers build from.",
+        "requirementsEmpty": "No tasks awaiting requirements",
+        "requirementsHint": "Product manager must describe: who uses this screen, what they see, available actions, empty/error states, and what's out of scope.",
+        "requirementsSection": "Step 1 · Awaiting requirements from product",
+        "subtitle": "Design of UI tasks: designer queue, what awaits your approval, what's approved. Approved design goes to Canon — that's what developers build from.",
         "waiting": "Waiting for designer mockup · {n}",
         "waitingEmpty": "All tasks marked «mockup required» already have a mockup",
         "waitingHint": "Triage decided these tasks need a mockup before development, but the designer hasn't uploaded one yet.",
@@ -333,6 +359,36 @@
       },
       "filterAttention": "Need attention",
       "filterWorker": "Assignee",
+      "finance": {
+        "apply": "Apply",
+        "avgCheck": "Avg. ticket",
+        "cashHint": "How much masters owe from cash orders",
+        "cashOrders": "Orders",
+        "cashTitle": "Cash to collect",
+        "channel": {
+          "oneTime": "One-time orders",
+          "package": "Visit packages",
+          "subscription": "Subscriptions"
+        },
+        "conversion": "Conversion",
+        "conversionNa": "no data",
+        "empty": "No orders for this period",
+        "loadError": "Failed to load data. Try refreshing the page.",
+        "master": "Master",
+        "mastersTitle": "Top masters by revenue",
+        "noName": "Unnamed master",
+        "ordersCount": "Orders",
+        "period": {
+          "30d": "30 days",
+          "7d": "7 days",
+          "custom": "Custom",
+          "today": "Today"
+        },
+        "revenue": "Revenue",
+        "title": "Finance analytics",
+        "toCollect": "To collect",
+        "total": "Total"
+      },
       "form": {
         "delete": "Delete",
         "deleteConfirm": "Delete? This action is irreversible",
@@ -575,12 +631,23 @@
           "unknown_key": "This key is not in the list."
         },
         "groups": {
+          "ai": "AI assistant",
           "codes": "Login codes",
           "login": "Google and Apple sign-in",
           "mail": "Email",
           "telegram": "Telegram"
         },
         "items": {
+          "ai_anthropicKey": {
+            "how": "console.anthropic.com → Settings → API Keys → Create Key",
+            "purpose": "AI-suggested titles and subtitles for banners.",
+            "title": "Claude AI (Anthropic)"
+          },
+          "ai_higgsfieldKey": {
+            "how": "app.higgsfield.ai → Settings → API Key",
+            "purpose": "AI-generated banner images (Nano Banana Pro model).",
+            "title": "Higgsfield — images"
+          },
           "apple_privateKey": {
             "how": "developer.apple.com → Certificates, IDs & Profiles → Keys → key with Sign in with Apple",
             "purpose": "Sign in with Apple: full .p8 private key.",
@@ -627,6 +694,14 @@
         "note": "Values are write-only: they are not shown in the browser, not written to log, not visible in chats. Stored in database encrypted and included in nightly backup. Log only records who and when changed the key.",
         "pastePh": "Paste key",
         "present": "set",
+        "push": {
+          "createdAt": "Created {when}",
+          "noEncKey": "no encryption key",
+          "notReady": "not created yet",
+          "purpose": "VAPID keys for push notifications on mobile without an open site. Created automatically on first request.",
+          "ready": "keys created",
+          "title": "Push notifications"
+        },
         "replace": "Replace",
         "save": "Save",
         "saving": "Saving…",
@@ -676,7 +751,8 @@
         "diffPrev": "what changed",
         "download": "Download .md",
         "edit": "Edit",
-        "empty": "Library is empty — documents will appear after deploy.",
+        "empty": "Canon is empty — documents will appear after deploy.",
+        "emptySection": "No records in this section yet",
         "fromRepo": "from repository",
         "kinds": {
           "decision": "Decisions",
@@ -690,7 +766,7 @@
         "markdownHint": "Each save is a new version; previous ones can be opened and restored.",
         "new": "New record",
         "newTitle": "New record",
-        "notFound": "Nothing found",
+        "notFound": "No documents found",
         "notFoundDoc": "Document not found",
         "notePh": "What changed (optional)",
         "oldVersion": "version {n} of {total}",
@@ -701,11 +777,19 @@
         "saveVersion": "Save new version",
         "saving": "Saving…",
         "search": "Search text",
+        "sections": {
+          "decisions": "Decisions",
+          "design": "Design",
+          "docs": "Documents",
+          "research": "Research",
+          "rules": "Rules"
+        },
         "showActive": "Show active",
         "showArchived": "Show archive",
         "skipped": "… unchanged: {n} lines",
-        "subtitle": "Instructions, roles, regulations, decisions and knowledge — with version history. Project documents are snapshotted here on each deploy; old versions are not deleted — this is also a backup.",
+        "subtitle": "Team decisions, rules, design, research and documents",
         "teamNote": "team record",
+        "title": "Canon",
         "titlePh": "Title",
         "unarchive": "Restore from archive",
         "versionBy": "{when} · {who}",
@@ -727,10 +811,10 @@
       "minAgo": "{m} min ago",
       "mockup": {
         "approve": "Approve design",
-        "approved": "Design approved — Library record created",
+        "approved": "Design approved — Canon record created",
         "approvedBy": "Design approved by {who} · {date}",
         "cancel": "Cancel",
-        "canon": "Library record",
+        "canon": "Canon record",
         "commentPh": "Comment (optional)",
         "confirm": "Confirm",
         "failed": "Error: {error}",
@@ -807,7 +891,7 @@
         "epics": "Epics",
         "health": "Health",
         "keys": "Keys",
-        "library": "Library",
+        "library": "Canon",
         "logs": "Logs",
         "releases": "Releases"
       },
@@ -817,26 +901,27 @@
       },
       "priority": "Priority",
       "productTab": {
-        "allByStatus": "All lane tasks · {n}",
-        "allEmpty": "No product lane tasks",
-        "doneLink": "Showing last {n} · view all",
+        "allByStatus": "All roadmap tasks · {n}",
+        "allEmpty": "No tasks on the Product roadmap",
+        "doneLink": "Showing last {n} · see all",
         "groups": {
           "backlog": "Backlog",
           "done": "Done",
           "in_progress": "In progress",
-          "ready": "Queued",
+          "ready": "In queue",
           "review": "In review"
         },
-        "pending": "Awaiting approval · {n}",
-        "pendingEmpty": "No tasks awaiting approval",
-        "pendingHint": "Non-code product lane tasks awaiting your review",
+        "pending": "Pending approval · {n}",
+        "pendingEmpty": "No tasks pending approval",
+        "pendingHint": "Non-code Product roadmap tasks in review by you",
         "queue": "Worker queue · {n}",
-        "queueEmpty": "Product worker has nothing queued",
+        "queueEmpty": "Product worker queue is empty",
         "queueHint": "Tasks the product worker will do next",
-        "subtitle": "Product lane tasks: what the worker is working on, what awaits your decision",
+        "subtitle": "Product roadmap tasks: what the worker is doing, what awaits your decision",
         "workersLink": "Configure pool"
       },
       "progress": "Progress by stage",
+      "readFullInLibrary": "Read in full in Canon →",
       "releases": {
         "changes": "{n} changes",
         "empty": "Nothing deployed in the last 12 weeks",
@@ -875,8 +960,10 @@
         "design": "Design",
         "dev": "In development",
         "done": "Done",
+        "finance": "Finance",
         "notify": "Messages",
         "plans": "Plans",
+        "product": "Product",
         "workers": "Workers",
         "you": "Needs you"
       },
@@ -1001,6 +1088,7 @@
           "ok": "claimable",
           "people": "for humans — not code",
           "question": "question: {detail}",
+          "requirements": "requirements",
           "retest": "new commit — test again",
           "returned": "Returned",
           "scope": "conflicts with {detail}",
@@ -1095,7 +1183,6 @@
         "postponePh": "Reason (optional)…",
         "postponedSectionHint": "Tasks with external blocks: postponed by owner and waiting for external events.",
         "postponedUntil": "returns {date}",
-        "replyOrWritePh": "or write your answer",
         "replyPh": "Your answer…",
         "replySend": "Reply",
         "returnedRuns": "Returned for revision",
@@ -1103,6 +1190,8 @@
         "since": "waiting {ago}",
         "stale": "Stale or without assignee",
         "stuckReview": "Review stuck",
+        "teamChatMissing": "⚠️ Team chat is not set: order, cancellation and reschedule notifications go to log only.",
+        "teamChatMissingLink": "Configure notifications",
         "techBlocked": "Blocked on tech/external reasons",
         "techBlockedHint": "These tasks are waiting for a technical solution or external service response. When resolved, write in the task feed.",
         "techBlockedUntil": "until {date}",
@@ -1362,6 +1451,21 @@
       "colService": "Service",
       "confirmMsg": "Prices of {count} options will change by {value}{unit}. This action cannot be undone automatically.",
       "empty": "No options with a price — add services.",
+      "historyAllServices": "All services",
+      "historyColDate": "Date",
+      "historyColNew": "New, ֏",
+      "historyColOld": "Old, ֏",
+      "historyColOption": "Option",
+      "historyColService": "Service",
+      "historyColUser": "User",
+      "historyCount": "{count, plural, one {# record} other {# records}}",
+      "historyEmpty": "No price changes yet.",
+      "historyFilterFrom": "From",
+      "historyFilterService": "Service",
+      "historyFilterTo": "To",
+      "historyReset": "Reset",
+      "historyTab": "History",
+      "pricesTab": "Prices",
       "saved": "Saved",
       "selected": "{count, plural, one {# option selected} other {# options selected}}",
       "sub": "{count, plural, one {# option} other {# options}} · {services, plural, one {# service} other {# services}}",
@@ -1374,11 +1478,18 @@
       "descr": "Description (for internal use)",
       "firstOrderOnly": "First order only",
       "fixed": "Fixed amount",
+      "forBothNote": "If both fields are set, the promo code requires both phone and email to match",
+      "forClient": "Client",
+      "forEmail": "For client (email)",
+      "forEmailHint": "If set, this promo code is only valid for the client with this email address",
+      "forPhone": "For client (phone)",
+      "forPhoneHint": "If set, this promo code is only valid for the client with this phone number",
       "maxDiscount": "Maximum discount, ֏",
       "minOrder": "Minimum order amount, ֏",
       "newPromo": "New promo code",
       "perUserLimit": "Limit per client",
       "percent": "Percentage",
+      "personal": "Personal",
       "planKinds": "For plan types only",
       "rulesHint": "The promo code applies to the first paid visit. Without the 'stackable' flag the client gets the best discount.",
       "services": "For services only",
@@ -1415,6 +1526,7 @@
     },
     "services": {
       "addCategory": "Add category",
+      "addDurationOption": "Add an option with duration to calculate price",
       "addFirstService": "+ Add service",
       "addGroup": "Add step",
       "addItem": "Add item",
@@ -1424,6 +1536,7 @@
       "answer": "Answer",
       "archiveCategory": "Archive",
       "archived": "Archived",
+      "arrivalHours": "Arrival hours (0 = today, empty — don’t show)",
       "banner": "Service banner",
       "benefits": "Benefits",
       "bookings": "Bookings",
@@ -1433,6 +1546,7 @@
       "categoryArchivedBanner": "Category is archived — services are hidden",
       "categoryHasServices": "Category has services — move or delete them first",
       "categoryHiddenBanner": "Category is hidden — {n, plural, one {# service is not shown} other {# services are not shown}} on the site",
+      "clientPriceLabel": "Client price (example)",
       "comingSoon": "Show as 'Coming soon'",
       "comingSoonLabel": "Soon",
       "deleteCategory": "Delete category",
@@ -1459,6 +1573,7 @@
       "infoTitle": "Info link",
       "intervalDays": "Interval between visits, days",
       "isDefault": "Selected by default",
+      "isNew": "\"New\" badge",
       "kinds": {
         "ONE_TIME": "One-time visit",
         "PACKAGE": "Visit package",
@@ -1472,9 +1587,10 @@
       "multi": "Multiple choice",
       "newCategory": "+ Category",
       "newService": "+ Service",
+      "noGroups": "Customer places order without selecting parameters",
       "noMasters": "No assigned masters",
+      "noPlans": "Customer places order without selecting a plan",
       "noServicesInCategory": "No services in category",
-      "noVariants": "No variants — clients won't be able to choose",
       "note": "Note block",
       "noteBody": "Text",
       "noteTitle": "Title",
@@ -1486,8 +1602,6 @@
       "planKind": "Plan type",
       "plans": "Plans (frequency & packages)",
       "policy": "Terms",
-      "previewOptions": "{groups} {groups, plural, one {group} other {groups}}, {variants} {variants, plural, one {variant} other {variants}}",
-      "previewStep": "Step {n}",
       "pricePreview": "Visit price for '{option}': {price}",
       "question": "Question",
       "rating": "Rating",
@@ -1498,6 +1612,11 @@
       "services": "Services",
       "single": "Single choice",
       "slugFromTitle": "From title",
+      "stats": {
+        "orders30d": "Orders in 30 days",
+        "rating": "Rating",
+        "reviews": "Reviews"
+      },
       "stepBody": "Description",
       "stepTitle": "Step",
       "tabs": {
@@ -1548,6 +1667,17 @@
       "email": "Email",
       "enabled": "Enabled",
       "envLocked": "Set on server in .env ({name})",
+      "findChatEmpty": "No messages in the past 24 hours. Add the bot to a group and send any message.",
+      "findChatError": {
+        "network": "Network error — please try again",
+        "noToken": "Bot token is not set",
+        "telegram": "Telegram error — check the bot token",
+        "webhook": "Bot uses a webhook — send a message in the chat and try again"
+      },
+      "findChatHint": "Add the bot to a group, send any message, then press the button",
+      "findChatLoading": "Searching...",
+      "findTeamChat": "Find team chat",
+      "findTechChat": "Find tech chat",
       "firstVisit": "First order discount without commitment, %",
       "firstVisitCommitted": "First visit discount with subscription or package, %",
       "freeCancel": "Free cancellation up to, h",
@@ -1587,6 +1717,10 @@
       "staffSessionDays": "Staff session, days",
       "subHorizon": "Subscription visit creation horizon, days",
       "tagline": "Tagline",
+      "teamChatHint": "Orders, cancellations, reschedules, reviews. Format: -100XXXXXXXXXX",
+      "teamChatId": "Staff group ID",
+      "teamChatMissing": "Team chat is not set — order notifications go to log only.",
+      "teamChatMissingLink": "Find chat",
       "techChatHint": "Site errors, backup failures, code brute-force. If empty — alerts go to team chat",
       "techChatId": "Tech chat ID (alerts)",
       "telegram": "Telegram",
@@ -1688,11 +1822,36 @@
     "title": "Admin panel",
     "toSite": "To website",
     "translations": {
+      "colLang": "Language",
+      "colMissing": "Missing",
+      "colTotal": "Total",
+      "colTranslated": "Translated",
+      "exportJson": "Export JSON",
+      "externalDb": "Service and master content is translated in the corresponding admin sections",
+      "externalMail": "Customer emails: subjects and content from messages/notify.order.*, HTML wrapper in mail-template.ts",
+      "externalNotify": "Telegram team messages (notify.ts etc.) — {n} templates, internal use, no translation needed",
+      "externalTitle": "Texts outside translation files",
       "hint": "Any interface text can be changed. An empty field uses the default text (for EN and AM — Russian).",
+      "importBtn": "Import",
+      "importError": "Invalid file format — expected JSON with flat keys",
+      "importedN": "Imported {n} keys",
       "key": "Key",
+      "langAm": "AM — Armenian",
+      "langEn": "EN — English",
+      "langRu": "RU — Russian",
+      "missingKeys": "Missing keys",
       "onlyMissing": "Untranslated only",
+      "placeholderIssues": "Skipped {n} keys with invalid placeholders {{…}}",
+      "reportTitle": "Translation readiness",
       "reset": "Reset",
       "section": "Section",
+      "showingOf": "Showing {n} of {total}",
+      "skippedN": "Skipped {n} unknown keys",
+      "statusEmpty": "Not translated",
+      "statusPartial": "Partial",
+      "statusReady": "Ready",
+      "tabEditor": "Editor",
+      "tabReport": "Translation report",
       "title": "Texts & translations"
     },
     "version": {
@@ -1723,7 +1882,7 @@
     "emailCodeTitle": "Sign-in code",
     "emailCodeTtl": "The code is valid for {min} min. Do not share it with anyone.",
     "emailGetCode": "Get code by email",
-    "emailOnlyConfirmed": "Email sign-in works for confirmed emails — you can confirm yours in your profile.",
+    "emailOnlyConfirmed": "If you don't have an account yet, it will be created automatically.",
     "emailPlaceholder": "email@example.com",
     "errors": {
       "apple_failed": "Apple did not confirm sign-in. Please try again",
@@ -1802,7 +1961,7 @@
     "comment": "Comment for the pro",
     "commentPlaceholder": "Intercom code, pets, what to do first",
     "confirm": "Confirm order",
-    "dateAndMaster": "Date & pro",
+    "dateAndMaster": "Date and pro",
     "dateTime": "Date and time",
     "discountFirst": "First visit discount",
     "discountPlan": "Plan discount",
@@ -1860,13 +2019,32 @@
     "wishes": "Preferences"
   },
   "cart": {
-    "checkout": "Book now",
-    "itemsCount": "{count, plural, one {# item} other {# items}}",
-    "total": "{amount} ֏"
+    "checkout": "Book",
+    "itemsCount": "{count, plural, one {# service} other {# services}}"
   },
   "catalog": {
-    "comingSoonText": "We're launching this service. Leave your contact — we'll be the first to let you know when booking opens.",
-    "comingSoonTitle": "Coming soon in Yerevan",
+    "arrivalToday": "today",
+    "arrivalWithin": "within {n} h",
+    "badgeNew": "New",
+    "comingSoonText": "We're preparing services and pros. Write to us — we'll answer your questions",
+    "comingSoonTitle": "Opening soon",
+    "formatOnce": {
+      "cta": "Book now",
+      "desc": "A single pro visit — whenever you need it",
+      "title": "One-time visit"
+    },
+    "formatPack": {
+      "cta": "Buy pack",
+      "desc": "Pay for several visits upfront — cheaper per visit",
+      "title": "Visit pack"
+    },
+    "formatRegular": {
+      "badge": "Best value",
+      "cta": "Subscribe",
+      "desc": "Recurring visits with a subscription discount",
+      "title": "Regular cleaning"
+    },
+    "formatsTitle": "Choose a cleaning format",
     "newService": "New service",
     "notifyAlready": "We already have your contact",
     "notifyButton": "Notify me",
@@ -1958,6 +2136,8 @@
     "popular": "Popular",
     "promisesTitle": "Promises we keep",
     "reviewsTitle": "Client reviews",
+    "searchEmpty": "Nothing found for \"{q}\"",
+    "searchEmptyHint": "Try categories",
     "slogan": "Apartment cleaning in Yerevan — price calculated instantly. Subscription: same master every time.",
     "stickyOrder": "Book a service",
     "title": "What service do you need?",
@@ -1978,8 +2158,12 @@
   },
   "nav": {
     "account": "Profile",
+    "address": "Yerevan",
+    "addressAny": "Any district",
+    "addressSheet": "Your district",
     "admin": "Admin",
     "bookings": "Orders",
+    "districtSearch": "Search district",
     "home": "Home",
     "language": "Language",
     "login": "Sign in",
@@ -1992,6 +2176,14 @@
     "title": "404"
   },
   "notify": {
+    "bot": {
+      "blocked": "This phone number is blocked in iHelp.",
+      "existingUser": "Sign in to iHelp — one-time link, valid 10 minutes:\n{link}",
+      "greeting": "Hello! Tap the button below: Telegram will verify your phone number and you'll sign in to iHelp or register.",
+      "newUser": "This number isn't registered in iHelp yet. Your number has been verified — complete registration via the link (you'll need your name and email; link valid 10 minutes):\n{link}",
+      "sharePhone": "📱 Share phone number",
+      "wrongContact": "Please send your own phone number using the «📱 Share phone number» button below — Telegram verifies it belongs to you. Forwarded or others' contacts are not accepted."
+    },
     "client": {
       "confirmation": {
         "address": "Address: {address}",
@@ -2027,10 +2219,13 @@
         "subject": "How did your visit go?",
         "title": "How was the visit?"
       },
-      "unsubscribeLink": "unsubscribe here",
-      "unsubscribeText": "To stop receiving emails — {link}.",
-      "unsubscribedBody": "You will no longer receive emails from iHelp.",
-      "unsubscribedTitle": "You have unsubscribed"
+      "unsubscribeButton": "Unsubscribe from reminders",
+      "unsubscribeConfirmBody": "Visit reminders and review requests will no longer be sent. Order emails — confirmation, reschedule, and cancellation — will always be delivered.",
+      "unsubscribeConfirmTitle": "Unsubscribe from reminders?",
+      "unsubscribeLink": "Unsubscribe from emails",
+      "unsubscribeText": "This email was sent by iHelp. To unsubscribe, follow the link: {link}",
+      "unsubscribedBody": "Visit reminders and review requests will no longer be sent. Order emails — confirmation, reschedule, and cancellation — are always delivered.",
+      "unsubscribedTitle": "You have unsubscribed from reminders"
     },
     "master": {
       "assigned": "📋 New visit\nClient: {clientName}\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}",
@@ -2048,8 +2243,24 @@
       "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}",
       "created": "✅ Order confirmed\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}\nTotal: {price}\nThank you for choosing iHelp! We will assign a master soon.",
       "masterAssigned": "👷 Master assigned\nService: {serviceName}, {date} at {time}\nMaster: {masterName}\nFeel free to contact us with any questions.",
-      "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}"
+      "onWay": "🚗 Your master is on the way\n{masterName} is heading to you. Estimated arrival: {eta} min.",
+      "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}",
+      "subjectCancelled": "Order #{n} cancelled",
+      "subjectCompleted": "How was your visit? — order #{n}",
+      "subjectCreated": "Order #{n} confirmed",
+      "subjectMasterAssigned": "Master assigned — order #{n}",
+      "subjectRescheduled": "Visit rescheduled — order #{n}",
+      "subjectVisitCancelled": "Visit {date} cancelled — order #{n}"
     }
+  },
+  "offline": {
+    "backOnline": "You're back online — loading page…",
+    "cachedAt": "Data saved: {time}",
+    "clientTitle": "My Visits (offline)",
+    "noCache": "No cached data. Open the visits page while online.",
+    "noVisits": "No upcoming visits",
+    "proTitle": "Visit schedule (offline)",
+    "viewOnly": "Read only"
   },
   "operator": {
     "all": "All",
@@ -2114,6 +2325,18 @@
     },
     "unscheduled": "Unscheduled",
     "validUntil": "Valid until {date}",
+    "visitEvents": {
+      "CANCELLED": "Cancelled",
+      "CONFIRMED": "Confirmed",
+      "DONE": "Completed",
+      "IN_PROGRESS": "Cleaning started",
+      "NO_SHOW": "No show",
+      "ON_WAY": "Pro on the way",
+      "SCHEDULED": "Scheduled",
+      "SKIPPED": "Skipped",
+      "UNSCHEDULED": "Unscheduled",
+      "title": "History"
+    },
     "visitN": "Visit {n}",
     "visitStatus": {
       "CANCELLED": "Cancelled",
@@ -2165,6 +2388,12 @@
     "toCollect": "Collect from client",
     "today": "Today",
     "upcoming": "Upcoming"
+  },
+  "push": {
+    "allow": "Allow",
+    "body": "Allow notifications to stay updated on your bookings",
+    "dismiss": "Not now",
+    "title": "Visit notifications"
   },
   "review": {
     "alreadyLeft": "You have already left a review for this visit.",

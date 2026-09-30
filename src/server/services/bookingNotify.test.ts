@@ -62,7 +62,13 @@ vi.mock("../db", () => ({
         Promise.resolve(visitStore.get(where.id) ?? null),
       ),
       update: vi.fn().mockImplementation(
-        ({ where, data }: { where: { id: string }; data: { clientNotifiedEvents?: { push: string } } }) => {
+        ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: { clientNotifiedEvents?: { push: string }; remindedAt?: Date | null; reviewRequestedAt?: Date | null };
+        }) => {
           const v = visitStore.get(where.id);
           if (v && data.clientNotifiedEvents?.push) v.clientNotifiedEvents.push(data.clientNotifiedEvents.push);
           return Promise.resolve(v);
@@ -108,10 +114,12 @@ vi.mock("../settings", () => ({
 import { sendTelegramDirect } from "./notifyQueue";
 import { sendMail } from "./mail";
 import { notifyTech } from "../notify";
+import { db } from "../db";
 
 import {
   notifyClientOrderCreated,
   notifyClientMasterAssigned,
+  notifyClientMasterOnWay,
   notifyClientRescheduled,
   notifyClientCancelled,
   notifyClientVisitCompleted,
@@ -183,6 +191,8 @@ beforeEach(() => {
   vi.mocked(sendTelegramDirect).mockClear().mockResolvedValue(undefined);
   vi.mocked(sendMail).mockClear().mockResolvedValue({ ok: true });
   vi.mocked(notifyTech).mockClear();
+  vi.mocked(db.visit.findMany).mockClear();
+  vi.mocked(db.visit.update).mockClear();
 });
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -339,6 +349,42 @@ describe("подстановка переменных", () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
+// Отписка от необязательных писем
+
+describe("отписка от необязательных писем", () => {
+  it("отписавшемуся клиенту подтверждение заказа по email всё равно уходит", async () => {
+    makeOrder("o-unsub");
+    userStore.set("u1", { telegramId: null, email: "user@example.com", name: "Тест", emailUnsubscribedAt: new Date() });
+    await notifyClientOrderCreated("o-unsub");
+    expect(vi.mocked(sendMail)).toHaveBeenCalledOnce();
+    expect(vi.mocked(notifyTech)).not.toHaveBeenCalled();
+  });
+
+  it("отписавшемуся клиенту напоминание о визите по email не уходит", async () => {
+    const remindTime = new Date(ACTIVE_TIME.getTime() + 24 * 3600_000);
+    makeVisit("v-unsub-remind", { id: "v-unsub-remind" });
+    userStore.set("u1", { telegramId: null, email: "user@example.com", name: "Тест", emailUnsubscribedAt: new Date() });
+    const v = {
+      id: "v-unsub-remind",
+      scheduledAt: remindTime,
+      order: {
+        number: 100,
+        config: { service: { title: "Уборка" } },
+        addressSnapshot: { street: "Пушкина", building: "10" },
+        locale: "ru",
+        userId: "u1",
+        user: { id: "u1", telegramId: null, email: "user@example.com", emailUnsubscribedAt: new Date() },
+      },
+      master: { name: "Мастер Тест" },
+    };
+    visitFindManyResult = [v];
+    const count = await sendVisitReminders(ACTIVE_TIME);
+    expect(count).toBe(0);
+    expect(vi.mocked(sendMail)).not.toHaveBeenCalled();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
 // Тихий период (21:00–09:00 Ереван)
 
 // 23:00 Ереван = 19:00 UTC
@@ -409,6 +455,105 @@ describe("тихий период", () => {
     const count = await sendReviewRequests(ACTIVE_TIME);
     expect(count).toBe(1);
     expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// BUG-17: окно 18 часов — вечерние визиты получают просьбу об отзыве утром
+
+describe("BUG-17: окно 18 часов для sendReviewRequests", () => {
+  it("findMany вызывается с окном 18 часов назад", async () => {
+    // 09:00 Ереван = 05:00 UTC
+    const morning = new Date("2026-09-29T05:00:00Z");
+    makeReviewVisit("v-window");
+    await sendReviewRequests(morning);
+    const arg = vi.mocked(db.visit.findMany).mock.calls[0][0] as {
+      where: { finishedAt: { gte: Date; lte: Date } };
+    };
+    expect(arg.where.finishedAt.gte.getTime()).toEqual(morning.getTime() - 18 * 3600_000);
+    expect(arg.where.finishedAt.lte.getTime()).toEqual(morning.getTime() - 2 * 3600_000);
+  });
+
+  it("визит завершён в 19:30 — в 09:00 следующего дня функция не заблокирована и отправляет", async () => {
+    // 09:00 Ереван = 05:00 UTC; визит 13.5 ч назад входит в окно 2–18 ч
+    const morning = new Date("2026-09-29T05:00:00Z");
+    makeReviewVisit("v-evening");
+    const count = await sendReviewRequests(morning);
+    expect(count).toBe(1);
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+  });
+
+  it("визит завершён в 12:00 — в 14:00 уже в окне и просьба уходит", async () => {
+    // 14:00 Ереван = 10:00 UTC; 2 часа после визита — нижняя граница окна
+    const twoHoursLater = new Date("2026-09-28T10:00:00Z");
+    makeReviewVisit("v-noon");
+    const count = await sendReviewRequests(twoHoursLater);
+    expect(count).toBe(1);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// BUG-17: перенос визита сбрасывает remindedAt
+
+describe("BUG-17: перенос визита сбрасывает remindedAt", () => {
+  it("notifyClientRescheduled вызывает update с remindedAt: null", async () => {
+    makeVisit("v-reschedule");
+    makeUser("u1", "telegram");
+    await notifyClientRescheduled("v-reschedule");
+    const calls = vi.mocked(db.visit.update).mock.calls;
+    const resetCall = calls.find(
+      (c) => (c[0] as { data: { remindedAt?: unknown } }).data.remindedAt === null,
+    );
+    expect(resetCall).toBeDefined();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// BUG-17: отписка от писем
+
+describe("BUG-17: отписка от писем блокирует отправку", () => {
+  it("sendReviewRequests: отписавшемуся клиенту письмо не уходит", async () => {
+    const v = {
+      id: "v-unsub",
+      order: {
+        id: "order-unsub",
+        locale: "ru",
+        userId: "u-unsub",
+        user: { id: "u-unsub", telegramId: null, email: "unsub@example.com", emailUnsubscribedAt: new Date() },
+      },
+    };
+    visitFindManyResult = [v];
+    const count = await sendReviewRequests(ACTIVE_TIME);
+    expect(count).toBe(0);
+    expect(vi.mocked(sendMail)).not.toHaveBeenCalled();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// BUG-17: символ & в Telegram-напоминании не экранируется дважды
+
+describe("BUG-17: одинарное экранирование & в Telegram-напоминании", () => {
+  it("услуга с & приходит как &amp; а не &amp;amp;", async () => {
+    const v = {
+      id: "v-amp",
+      scheduledAt: new Date(ACTIVE_TIME.getTime() + 24 * 3600_000),
+      order: {
+        number: 200,
+        config: { service: { title: "Уборка & мойка" } },
+        addressSnapshot: { street: "Ленина", building: "5" },
+        locale: "ru",
+        userId: "u1",
+        user: { id: "u1", telegramId: "tg-123", email: null, emailUnsubscribedAt: null },
+      },
+      master: { name: "Мастер Тест" },
+    };
+    makeVisit("v-amp", { id: "v-amp" });
+    visitFindManyResult = [v];
+    userStore.set("u1", { telegramId: "tg-123", email: null, name: "Тест" });
+    await sendVisitReminders(ACTIVE_TIME);
+    const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
+    expect(text).toContain("Уборка &amp; мойка");
+    expect(text).not.toContain("&amp;amp;");
   });
 });
 
@@ -496,5 +641,36 @@ describe("sendVisit2hReminders", () => {
 
     expect(count).toBe(0);
     expect(vi.mocked(sendTelegramDirect)).not.toHaveBeenCalled();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// notifyClientMasterOnWay
+
+describe("notifyClientMasterOnWay", () => {
+  it("отправляет уведомление с именем мастера и временем", async () => {
+    makeVisit("v-onway");
+    makeUser("u1", "telegram");
+    await notifyClientMasterOnWay("v-onway", 30);
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+    const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
+    expect(text).toContain("Иван Петров");
+    expect(text).toContain("30");
+  });
+
+  it("идемпотентность — повторный вызов не дублирует уведомление", async () => {
+    makeVisit("v-onway2");
+    makeUser("u1", "telegram");
+    await notifyClientMasterOnWay("v-onway2", 30);
+    await notifyClientMasterOnWay("v-onway2", 30);
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+  });
+
+  it("fallback на email если нет Telegram", async () => {
+    makeVisit("v-onway3");
+    makeUser("u1", "email");
+    await notifyClientMasterOnWay("v-onway3", 45);
+    expect(vi.mocked(sendTelegramDirect)).not.toHaveBeenCalled();
+    expect(vi.mocked(sendMail)).toHaveBeenCalledOnce();
   });
 });

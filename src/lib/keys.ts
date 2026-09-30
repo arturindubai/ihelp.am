@@ -9,7 +9,7 @@ export type KeyCheck = "telegram" | "resend";
 export type KeyDef = {
   /** Путь в настройках: раздел.поле */
   path: string;
-  group: "telegram" | "login" | "mail" | "codes";
+  group: "telegram" | "login" | "mail" | "codes" | "ai";
   /** Как проверить ключ живым запросом к сервису; без проверки — пусто */
   check?: KeyCheck;
   /** Где взять ключ — ссылка на кабинет сервиса */
@@ -25,9 +25,11 @@ export const KEYS: KeyDef[] = [
   { path: "mail.apiKey", group: "mail", check: "resend", url: "https://resend.com/api-keys" },
   { path: "google.clientSecret", group: "login", url: "https://console.cloud.google.com/apis/credentials" },
   { path: "apple.privateKey", group: "login", url: "https://developer.apple.com/account/resources/authkeys/list" },
+  { path: "ai.anthropicKey", group: "ai", url: "https://console.anthropic.com/settings/keys" },
+  { path: "ai.higgsfieldKey", group: "ai", url: "https://app.higgsfield.ai/settings" },
 ];
 
-export const KEY_GROUPS = ["telegram", "codes", "mail", "login"] as const;
+export const KEY_GROUPS = ["telegram", "codes", "mail", "login", "ai"] as const;
 
 export const keyDef = (path: string) => KEYS.find((k) => k.path === path) ?? null;
 

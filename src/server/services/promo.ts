@@ -5,11 +5,14 @@ import type { PricePromo } from "@/lib/pricing";
 
 export type PromoCheck = { ok: true; promo: PricePromo & { id: string } } | { ok: false; error: string; amount?: number };
 
-export async function checkPromo(opts: { code: string; userId?: string | null; phone?: string | null; serviceId: string; planKind: PlanKind; amount: number; isFirstOrder: boolean }): Promise<PromoCheck> {
+export async function checkPromo(opts: { code: string; userId?: string | null; phone?: string | null; email?: string | null; serviceId: string; planKind: PlanKind; amount: number; isFirstOrder: boolean }): Promise<PromoCheck> {
   const code = opts.code.trim().toUpperCase();
   if (!code) return { ok: false, error: "not_found" };
   const p = await db.promoCode.findUnique({ where: { code } });
   if (!p || !p.active) return { ok: false, error: "not_found" };
+  // Персональный промокод: проверяем сразу после active, чтобы не раскрывать факт существования кода чужим клиентам
+  if (p.forPhone && opts.phone !== p.forPhone) return { ok: false, error: "not_found" };
+  if (p.forEmail && opts.email?.toLowerCase() !== p.forEmail) return { ok: false, error: "not_found" };
   const now = new Date();
   if ((p.validFrom && p.validFrom > now) || (p.validTo && p.validTo < now)) return { ok: false, error: "expired" };
   if (p.usageLimit != null && p.usedCount >= p.usageLimit) return { ok: false, error: "limit" };

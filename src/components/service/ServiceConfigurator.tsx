@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Check, Info } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
-import { calculatePrice, type PricingRules } from "@/lib/pricing";
+import { calculatePrice, calculatePlanSavings, type PricingRules } from "@/lib/pricing";
 import { amd, durationLabel, cn } from "@/lib/format";
 import type { ServiceView } from "@/server/services/catalog";
 import { Sheet } from "@/components/ui/Sheet";
@@ -11,7 +11,7 @@ import { Icon } from "@/components/Icon";
 import { PriceBar } from "./PriceBar";
 import { writeCart, clearCart } from "@/lib/cart";
 
-export function initialSelection(s: ServiceView) {
+export function initialSelection(s: ServiceView, planKind?: string) {
   const opts: string[] = [];
   for (const g of s.groups) {
     const d = g.options.filter((o) => o.isDefault);
@@ -20,16 +20,17 @@ export function initialSelection(s: ServiceView) {
       if (pick) opts.push(pick.id);
     } else opts.push(...d.map((o) => o.id));
   }
-  const plan = s.plans.find((p) => p.isDefault) || s.plans[0];
+  const byKind = planKind ? s.plans.find((p) => p.kind === planKind.toUpperCase()) : undefined;
+  const plan = byKind || s.plans.find((p) => p.isDefault) || s.plans[0];
   return { opts, planId: plan?.id || null };
 }
 
-export function ServiceConfigurator({ s, rules, isFirstOrder, policy }: { s: ServiceView; rules: PricingRules; isFirstOrder: boolean; policy?: string }) {
+export function ServiceConfigurator({ s, rules, isFirstOrder, policy, initialPlan }: { s: ServiceView; rules: PricingRules; isFirstOrder: boolean; policy?: string; initialPlan?: string }) {
   const t = useTranslations("service");
   const tc = useTranslations("common");
   const locale = useLocale();
   const router = useRouter();
-  const init = useMemo(() => initialSelection(s), [s]);
+  const init = useMemo(() => initialSelection(s, initialPlan), [s, initialPlan]);
   const [opts, setOpts] = useState<string[]>(init.opts);
   const [planId, setPlanId] = useState<string | null>(init.planId);
   const [info, setInfo] = useState<{ title: string; body?: string; schedule?: ServiceView["groups"][number]["options"][number]["schedule"] } | null>(null);
@@ -39,8 +40,6 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy }: { s: Ser
   const plan = s.plans.find((p) => p.id === planId);
   const priceFor = (p?: (typeof s.plans)[number]) => calculatePrice({ lines, plan: p ? { kind: p.kind, discountPercent: p.discountPercent, packageVisits: p.packageVisits } : null, isFirstOrder, rules });
   const price = priceFor(plan);
-  // Базовая цена без тарифного дисконта — для расчёта экономии в карточках тарифов
-  const basePrice = priceFor();
 
   function toggle(groupId: string, optionId: string) {
     const g = s.groups.find((x) => x.id === groupId)!;
@@ -71,7 +70,7 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy }: { s: Ser
   // Сохраняем выбор в localStorage, чтобы StickyCartBar показывал его на других страницах
   useEffect(() => {
     if (lines.length > 0) {
-      writeCart({ slug: s.slug, opts, planId, count: lines.length, total: barPrice });
+      writeCart({ slug: s.slug, opts, planId, count: 1, total: barPrice });
     } else {
       clearCart();
     }
@@ -230,10 +229,7 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy }: { s: Ser
             {s.plans.map((p) => {
               const pr = priceFor(p);
               const on = p.id === planId;
-              // Для пакета — экономия на весь пакет; для подписки — экономия за один визит
-              const saving = p.kind === "PACKAGE"
-                ? pr.payNowBase - pr.payNow
-                : basePrice.regular.price - pr.regular.price;
+              const saving = calculatePlanSavings({ lines, plan: { kind: p.kind, discountPercent: p.discountPercent, packageVisits: p.packageVisits }, isFirstOrder, rules });
               return (
                 <button key={p.id} data-on={on} onClick={() => setPlanId(p.id)} className={cn("w-full flex-row items-center gap-3 rounded-xl border border-line bg-paper px-3 py-3 text-left transition", on && "border-action bg-brand-50 ring-1 ring-action")}>
                   <div className="flex items-center gap-3">

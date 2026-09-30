@@ -7,6 +7,7 @@ import {
   canTransition,
   criteriaGate,
   extractFollowUpKeys,
+  parseConflictFiles,
   unblockTarget,
   doneGate,
   inTriageQueue,
@@ -14,6 +15,8 @@ import {
   isOwnerQuestion,
   isProductTask,
   isReady,
+  isUiTask,
+  standGate,
   needsReason,
   nextStatuses,
   ownerAnswerTarget,
@@ -311,6 +314,16 @@ describe("гейты сдачи", () => {
     expect(criteriaGate(reqs, [{ done: true }, { done: false }])).toBe("criteria_incomplete");
     expect(criteriaGate(reqs, [{ done: true }, { done: false, cardKey: "плохой ключ" }])).toBe("criteria_incomplete");
   });
+  it("owner → done для layer=none с критериями и без testedAt: авто-заполненный чек-лист проходит gate", () => {
+    const reqs = ["Форма показывает чек-лист", "Поле ключа необязательно"];
+    // Сервер строит этот результат при приёмке владельцем не-код задачи (layer=none, !testedAt)
+    const ownerApproval = reqs.map(() => ({ done: true as const }));
+    expect(criteriaGate(reqs, ownerApproval)).toBeNull();
+    // Без результата — должно было блокировать (до фикса сервер бросал criteria_incomplete)
+    expect(criteriaGate(reqs, undefined)).toBe("criteria_incomplete");
+    // Владелец может перевести review → done
+    expect(canTransition("review", "done", "owner")).toBe(true);
+  });
   it("extractFollowUpKeys собирает ключи вынесенных критериев", () => {
     const reqs = ["Критерий 1", "Критерий 2", "Критерий 3"];
     expect(extractFollowUpKeys(reqs, [{ done: true }, { done: false, cardKey: "IN-7" }, { done: false, cardKey: "RISK-3" }])).toEqual(["IN-7", "RISK-3"]);
@@ -570,6 +583,49 @@ describe("переводы: все ключи пунктов готовност�
   });
 });
 
+describe("гейт живой проверки на стенде (DEV-143)", () => {
+  it("isUiTask: front и fullstack — задачи с интерфейсом", () => {
+    expect(isUiTask("front")).toBe(true);
+    expect(isUiTask("fullstack")).toBe(true);
+    expect(isUiTask("back")).toBe(false);
+    expect(isUiTask("infra")).toBe(false);
+    expect(isUiTask("none")).toBe(false);
+  });
+  it("isUiTask: back с scope src/app или src/components — тоже UI-задача", () => {
+    expect(isUiTask("back", ["src/app/page.tsx"])).toBe(true);
+    expect(isUiTask("back", ["src/app"])).toBe(true);
+    expect(isUiTask("back", ["src/components/Button.tsx"])).toBe(true);
+    expect(isUiTask("back", ["src/components"])).toBe(true);
+    expect(isUiTask("back", ["src/server/services/cc.ts"])).toBe(false);
+    expect(isUiTask("back", [])).toBe(false);
+    expect(isUiTask("back", undefined)).toBe(false);
+  });
+  it("isUiTask: нормализует путь со слешами и ./", () => {
+    expect(isUiTask("back", ["./src/app/"])).toBe(true);
+    expect(isUiTask("back", ["src/app/"])).toBe(true);
+  });
+
+  it("standGate: нет вложения — screenshot_required", () => {
+    expect(standGate("Проверено на стенде: открыл страницу", 0)).toBe("screenshot_required");
+  });
+  it("standGate: вложение есть, но нет метки — live_stand_required", () => {
+    expect(standGate("Проверено: всё работает", 1)).toBe("live_stand_required");
+    expect(standGate("", 1)).toBe("live_stand_required");
+  });
+  it("standGate: вложение есть и метка есть — проходит", () => {
+    expect(standGate("Проверено на стенде: вход, форма заказа, адаптив.", 1)).toBeNull();
+    expect(standGate("ПРОВЕРЕНО НА СТЕНДЕ: страница категорий.", 2)).toBeNull();
+  });
+  it("standGate: back-задача без интерфейса — вызывать не нужно, но функция не зависит от слоя", () => {
+    // standGate — чистая функция без привязки к слою; вызов с 0 вложениями всегда screenshot_required
+    expect(standGate("Проверено на стенде: логи смотрел", 0)).toBe("screenshot_required");
+  });
+  it("standGate: любой файл (не только PNG) считается достаточным вложением — критерий 4", () => {
+    // Для задач без экрана (письма, бот) тестировщик прикладывает файл письма или лога
+    expect(standGate("Проверено на стенде: письмо отображено корректно.", 1)).toBeNull();
+  });
+});
+
 describe("computeEpicStatus: статус из задач", () => {
   it("нет задач — planned", () => expect(computeEpicStatus([])).toBe("planned"));
   it("все done — done", () => expect(computeEpicStatus(["done", "done", "cancelled"])).toBe("done"));
@@ -577,4 +633,40 @@ describe("computeEpicStatus: статус из задач", () => {
   it("есть review, но нет in_progress — testing", () => expect(computeEpicStatus(["done", "review", "ready"])).toBe("testing"));
   it("есть ready, нет горячих — in_progress (запланирована работа)", () => expect(computeEpicStatus(["backlog", "ready"])).toBe("in_progress"));
   it("только backlog — planned", () => expect(computeEpicStatus(["backlog", "backlog"])).toBe("planned"));
+});
+
+describe("parseConflictFiles: гейт сдачи DEV-145", () => {
+  it("пустой вывод — нет файлов", () => {
+    expect(parseConflictFiles("")).toEqual([]);
+  });
+  it("чистое слияние (только tree SHA) — нет файлов", () => {
+    expect(parseConflictFiles("ffffffffffffffffffffffffffffffffffffffff\n")).toEqual([]);
+  });
+  it("строки без CONFLICT игнорируются", () => {
+    expect(parseConflictFiles("Auto-merging scripts/cc.mjs\nSome other message")).toEqual([]);
+  });
+  it("CONFLICT content: Merge conflict in path", () => {
+    const out = [
+      "ffffffffffffffffffffffffffffffffffffffff",
+      "CONFLICT (content): Merge conflict in scripts/cc.mjs",
+    ].join("\n");
+    expect(parseConflictFiles(out)).toEqual(["scripts/cc.mjs"]);
+  });
+  it("CONFLICT modify/delete — берётся имя файла перед 'deleted'", () => {
+    const out = "CONFLICT (modify/delete): docs/DEV_SYSTEM.md deleted in origin/main and modified in origin/task/DEV-99.";
+    expect(parseConflictFiles(out)).toEqual(["docs/DEV_SYSTEM.md"]);
+  });
+  it("несколько конфликтов — все файлы без дублей", () => {
+    const out = [
+      "abc123",
+      "CONFLICT (content): Merge conflict in scripts/cc.mjs",
+      "CONFLICT (content): Merge conflict in src/lib/cc-flow.ts",
+      "CONFLICT (content): Merge conflict in scripts/cc.mjs",
+    ].join("\n");
+    expect(parseConflictFiles(out)).toEqual(["scripts/cc.mjs", "src/lib/cc-flow.ts"]);
+  });
+  it("CONFLICT add/add", () => {
+    const out = "CONFLICT (add/add): Merge conflict in src/lib/new-file.ts";
+    expect(parseConflictFiles(out)).toEqual(["src/lib/new-file.ts"]);
+  });
 });
