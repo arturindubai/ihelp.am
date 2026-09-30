@@ -37,14 +37,14 @@ export async function ServiceCard({ s, showInlinePrice }: { s: ServiceCardProps;
           </span>
         )}
         {s.subtitle && <p className="mt-0.5 line-clamp-2 text-sm text-muted">{s.subtitle}</p>}
-        {showInlinePrice && (s.fromPrice > 0 || s.rating > 0) && (
+        {showInlinePrice && hasRating && (s.fromPrice > 0 || s.rating > 0) && (
           <div className="mt-1 flex items-center gap-2 text-sm">
             {s.fromPrice > 0 && <span className="font-medium text-brand">{t("from", { price: amd(s.fromPrice) })}</span>}
             {s.rating > 0 && <span className="text-muted">⭐ {s.rating.toFixed(1)}</span>}
           </div>
         )}
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          {s.fromPrice > 0 && <span className="chip">{t("from", { price: amd(s.fromPrice) })}</span>}
+          {s.fromPrice > 0 && !(showInlinePrice && hasRating) && <span className="chip">{t("from", { price: amd(s.fromPrice) })}</span>}
           {s.minDuration > 0 && <span className="chip">{durationLabel(s.minDuration, locale)}</span>}
           {s.maxDiscount > 0 && <span className="chip bg-warn-50 text-warn">{t("off", { percent: s.maxDiscount })}</span>}
         </div>
