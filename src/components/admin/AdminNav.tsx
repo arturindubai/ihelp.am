@@ -11,6 +11,7 @@ const ICONS = { control: Gauge, dashboard: LayoutDashboard, orders: ClipboardLis
 const SERVICES_SUBS = [
   { key: "catalog", href: "/admin/services" },
   { key: "prices", href: "/admin/prices" },
+  { key: "demand", href: "/admin/services/demand" },
 ] as const;
 
 export function AdminNav({ sections }: { sections: string[] }) {
@@ -66,9 +67,11 @@ export function AdminNav({ sections }: { sections: string[] }) {
   const currentLabel = currentKey
     ? path.startsWith("/admin/prices")
       ? t("nav.prices")
-      : path.startsWith("/admin/services")
-        ? t("nav.catalog")
-        : t(`nav.${currentKey}`)
+      : path.startsWith("/admin/services/demand")
+        ? t("nav.demand")
+        : path.startsWith("/admin/services")
+          ? t("nav.catalog")
+          : t(`nav.${currentKey}`)
     : t("title");
 
   return (
