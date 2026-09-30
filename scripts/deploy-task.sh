@@ -84,7 +84,43 @@ if [ -n "$review_author" ] && [ "$AGENT" = "$review_author" ]; then
   cc note "$KEY" "⚠ Выкладку делает автор задачи ($AGENT). Обход правила «кто пишет, тот не выкладывает» — причина: $FORCE_OWN_REASON"
 fi
 
-head=$(git rev-parse --verify -q "origin/$branch") || stop "Ветки $branch нет в репозитории"
+head=$(git rev-parse --verify -q "origin/$branch") || true
+
+# Если ветки нет или её голова уже влита в origin/main — ищем существующий коммит слияния
+# (задача выложена раньше в составе пачки, но не была закрыта)
+if [ -z "$head" ] || git merge-base --is-ancestor "$head" "origin/main" 2>/dev/null; then
+  found_merge_sha=$(git log --merges --first-parent --format="%H %s" origin/main \
+    | grep -m1 -E " Слияние (пачки )?task/${KEY}:" | awk '{print $1}')
+  if [ -n "${found_merge_sha:-}" ]; then
+    batch_subj=$(git log -1 --format="%s" "$found_merge_sha" 2>/dev/null || echo "?")
+    echo "▶ $KEY уже влита в origin/main: коммит ${found_merge_sha:0:10} ($batch_subj)"
+    mkdir -p data/deploys data/tmp
+    premerged_log="data/deploys/$KEY-$(date +%Y%m%d-%H%M%S)-premerged.log"
+    echo "▶ Проверяем smoke перед закрытием задачи..." | tee -a "$premerged_log"
+    if ! deploy/smoke.sh >> "$premerged_log" 2>&1; then
+      cc note "$KEY" "Задача уже влита в main (${found_merge_sha:0:10}), но smoke-тест не прошёл — нужна проверка. Лог: /opt/ihelp.am/${premerged_log}" --error 2>/dev/null || true
+      echo "✗ Smoke не прошёл для уже влитой задачи — нужен человек"
+      exec 9>&-
+      exit 1
+    fi
+    tested_label_pre="Протестирован коммит ${tested:0:10}."
+    [ -n "$NOTEST" ] && tested_label_pre="Без отметки тестировщика (--no-test)."
+    pm_done_text="Деплоер: $AGENT. Выложена ранее в составе: ${batch_subj}. Коммит слияния: ${found_merge_sha:0:10}. SMOKE OK. Лог: /opt/ihelp.am/${premerged_log}"
+    if ! cc done "$KEY" --sha "$found_merge_sha" "$pm_done_text" >> "$premerged_log" 2>&1; then
+      cc note "$KEY" "cc done не прошла для уже влитой задачи ${found_merge_sha:0:10}. Лог: /opt/ihelp.am/${premerged_log}" --error 2>/dev/null || true
+      printf 'Задача %s уже влита в main (%s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --agent deployer\n' \
+        "$KEY" "${found_merge_sha:0:10}" "$KEY" "$found_merge_sha" > "data/tmp/block-done-$KEY.md"
+      cc block "$KEY" --on tech --text-file "data/tmp/block-done-$KEY.md" 2>/dev/null || true
+      echo "✗ cc done не прошла — задача заблокирована на технике"
+      exec 9>&-
+      exit 1
+    fi
+    exec 9>&-
+    echo "DEPLOY OK $found_merge_sha (ранее влита)"
+    exit 0
+  fi
+fi
+[ -n "$head" ] || stop "Ветки $branch нет в репозитории и слияния не найдено"
 
 # Проверка тестировщика; если пул тестировщика включён — --no-test требует явной причины
 if [ -n "$NOTEST" ]; then
@@ -108,11 +144,24 @@ if [ -n "$NOTEST" ]; then
 fi
 
 prev=$(git rev-parse HEAD)
+# Регистрируем merge driver для messages/*.json: объединяет ключи обеих сторон без конфликта,
+# сортирует результат. Прописывается в .git/config один раз и сохраняется навсегда.
+git config merge.json-messages.driver "node /opt/ihelp.am/scripts/merge-messages.mjs %O %A %B" 2>/dev/null || true
 if ! git merge --no-ff -q "origin/$branch" -m "Слияние $branch: $title"; then
   files=$(git diff --name-only --diff-filter=U | tr '\n' ' ')
   git merge --abort
   cc return "$KEY" "Конфликт при слиянии с main: ${files}. Обновите ветку от свежего main (git merge origin/main), проверьте и сдайте снова."
   stop "Конфликт при слиянии — задача возвращена" 2
+fi
+# Merge driver сортирует при конфликте обеих сторон; если только одна сторона изменила файл,
+# git берёт её версию без вызова driver. Досортировываем на всякий случай и добавляем в коммит.
+if git diff --name-only "$prev" HEAD | grep -q '^messages/.*\.json$'; then
+  node scripts/sort-messages.mjs 2>/dev/null
+  if [ -n "$(git status --porcelain messages/)" ]; then
+    git add messages/
+    git commit --amend --no-edit -q
+    echo "  ✓ messages/*.json досортированы и включены в merge commit"
+  fi
 fi
 merge=$(git rev-parse HEAD)
 changed=$(git diff --name-only "$prev" "$merge")
@@ -206,11 +255,13 @@ if grep -q '^prisma/migrations/' <<< "$changed"; then
 fi
 done_text="Деплоер: $AGENT. Автовыкладка ${merge:0:10}: SMOKE OK (${checks} проверок, соседних сайтов отвечают: ${neighbors}).${migr} ${tested_label} Слияние ${pushed}. Лог: /opt/ihelp.am/${log}"
 if ! cc done "$KEY" --sha "$merge" "$done_text"; then
-  # Прод уже выложен, но закрыть задачу не удалось — записываем ошибку и уходим с ненулевым кодом.
-  # cc note --error с агентом deployer автоматически отправляет тех-алерт (ccWork.ts).
-  cc note "$KEY" "cc done не прошла после выкладки коммита ${merge:0:10}: задача не закрыта, нужен человек. Лог: /opt/ihelp.am/${log}" --error 2>/dev/null || true
-  echo "✗ cc done не прошла — задача выложена, но не закрыта в Control Center. Нужна ручная команда:"
-  echo "  cc done $KEY --sha $merge \"$done_text\""
+  # Прод уже выложен, но закрыть задачу не удалось — блокируем на технике с готовой командой.
+  # Задача уходит из очереди деплоера, повторной выкладки того же кода не будет.
+  cc note "$KEY" "cc done не прошла после выкладки коммита ${merge:0:10}: задача выложена, но не закрыта. Лог: /opt/ihelp.am/${log}" --error 2>/dev/null || true
+  printf 'Задача %s выложена (коммит %s), cc done не прошла.\nГотовая команда:\n  node /opt/ihelp.am/scripts/cc.mjs done %s --sha %s --agent %s "%s"\n' \
+    "$KEY" "${merge:0:10}" "$KEY" "$merge" "$AGENT" "$done_text" > "data/tmp/block-done-$KEY.md"
+  cc block "$KEY" --on tech --text-file "data/tmp/block-done-$KEY.md" 2>/dev/null || true
+  echo "✗ cc done не прошла — задача заблокирована на технике с готовой командой закрытия"
   exit 1
 fi
 [ "$pushed" = "отправлено в origin/main" ] || cc note "$KEY" "$pushed" --error
