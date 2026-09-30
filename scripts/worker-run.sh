@@ -35,8 +35,10 @@ allow=(Read Glob Grep Edit Write TodoWrite "${common[@]}" "${check[@]}"
   "Bash(curl -s http://127.0.0.1:*)")
 deny=("Bash(git push origin main*)" "Bash(git push * main)" "Bash(git push -f*)" "Bash(git push --force*)" "Bash(git push * --force*)"
   "Bash(sudo *)" "Bash(systemctl *)" "Bash(systemd-run *)" "Bash(pm2 *)" "Bash(rm -rf *)" "Bash(docker *)"
-  "Bash(deploy/update.sh*)" "Bash(deploy/rollback.sh*)" "Bash(cat *.env*)" "Bash(grep * .env*)" "Bash(* /opt/ihelp.am/.env*)"
-  "Read(//opt/ihelp.am/.env)" "Read(//var/www/**)" "Read(//etc/**)" "Read(//root/.claude/**)"
+  "Bash(deploy/update.sh*)" "Bash(deploy/rollback.sh*)"
+  "Bash(cat *.env*)" "Bash(head *.env*)" "Bash(tail *.env*)" "Bash(grep * .env*)"
+  "Bash(* /opt/ihelp.am/.env*)" "Bash(* /opt/ihelp.am-staging/.env*)"
+  "Read(//opt/ihelp.am/.env)" "Read(//opt/ihelp.am-staging/.env)" "Read(//var/www/**)" "Read(//etc/**)" "Read(//root/.claude/**)"
   # Субагенты удваивают расход лимита подписки и работают вне этих правил — воркеру они не нужны
   "Agent")
 
@@ -105,4 +107,5 @@ esac
 mkdir -p "$root/data/tmp/$role"
 
 exec claude -p --model "$model" --output-format json --permission-mode dontAsk --strict-mcp-config \
+  --setting-sources user,project \
   --allowedTools "${allow[@]}" --disallowedTools "${deny[@]}" < "$prompt"
