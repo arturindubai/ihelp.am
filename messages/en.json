@@ -159,6 +159,12 @@
       "backlog": {
         "allFlows": "All stages",
         "allLanes": "All lanes",
+        "epicNoEpics": "No epics",
+        "epicNoTasks": "No tasks in epic",
+        "epicNoTasksLink": "create the first one",
+        "epicProgress": "{done} of {total}",
+        "epicWaits": "Waits: {key}",
+        "epicWithout": "No epic · {n}",
         "executor": "Assignee: which worker does the next step",
         "flows": {
           "backlog": "Backlog",
@@ -196,6 +202,7 @@
         },
         "views": {
           "board": "Board",
+          "epics": "Epics",
           "flat": "List",
           "flow": "By stage",
           "lanes": "By lane"
@@ -666,7 +673,6 @@
         "all": "All",
         "archive": "Archive",
         "archived": "archived",
-        "emptySection": "No records in this section yet",
         "backToList": "Back to list",
         "cancel": "Cancel",
         "closeCompare": "Close comparison",
@@ -678,6 +684,7 @@
         "download": "Download .md",
         "edit": "Edit",
         "empty": "Canon is empty — documents will appear after deploy.",
+        "emptySection": "No records in this section yet",
         "fromRepo": "from repository",
         "kinds": {
           "decision": "Decisions",
@@ -713,8 +720,8 @@
         "showArchived": "Show archive",
         "skipped": "… unchanged: {n} lines",
         "subtitle": "Team decisions, rules, design, research and documents",
-        "title": "Canon",
         "teamNote": "team record",
+        "title": "Canon",
         "titlePh": "Title",
         "unarchive": "Restore from archive",
         "versionBy": "{when} · {who}",
