@@ -1,6 +1,6 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { getHome } from "@/server/services/catalog";
-import { ServiceCard } from "@/components/ServiceCard";
+import { ServiceTileGrid } from "@/components/catalog/ServiceTile";
 import { CategoryTileGrid } from "@/components/catalog/CategoryTileGrid";
 import { PromoSlot } from "@/components/PromoSlot";
 
@@ -8,6 +8,11 @@ export default async function Services({ params }: { params: Promise<{ locale: s
   const { locale } = await params;
   setRequestLocale(locale);
   const [data, t, tc] = await Promise.all([getHome(locale), getTranslations("nav"), getTranslations("common")]);
+
+  // Собираем все услуги из всех категорий одним плоским потоком без разделов
+  const allServiceItems = data.categories.flatMap((cat) =>
+    cat.subcategories.flatMap((g) => g.items),
+  );
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-4 pt-4">
@@ -19,11 +24,12 @@ export default async function Services({ params }: { params: Promise<{ locale: s
         <CategoryTileGrid categories={data.categories} comingSoonLabel={tc("comingSoon")} />
       </div>
 
-      {data.services.length > 0 && (
-        <div className="mt-6 space-y-3">
-          {data.services.map((s) => (
-            <ServiceCard key={s.slug} s={s} />
-          ))}
+      {allServiceItems.length > 0 && (
+        <div className="mt-6">
+          <ServiceTileGrid
+            groups={[{ section: null, items: allServiceItems }]}
+            comingSoonLabel={tc("comingSoon")}
+          />
         </div>
       )}
     </div>

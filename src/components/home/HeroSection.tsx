@@ -15,6 +15,7 @@ type SubcategoryItem = {
   subtitle: string | null;
   image: string | null;
   href: string;
+  comingSoon?: boolean;
 };
 
 type SubcategoryGroup = {
@@ -240,6 +241,7 @@ export function HeroSection({ heroTitle, searchPlaceholder, comingSoonLabel, cat
           onClose={() => setOpenSlug(null)}
           title={openCategory.title}
           groups={openCategory.subcategories}
+          comingSoonLabel={comingSoonLabel}
         />
       )}
     </section>

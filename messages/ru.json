@@ -1729,7 +1729,16 @@
       "unsavedTitle": "Изменения не сохранены. Уйти без сохранения?",
       "validityDays": "Срок действия, дней",
       "visitsNextWeek": "{n} виз. на нед.",
-      "visitsPerWeek": "Визитов в неделю (клиент выбирает дни)"
+      "visitsPerWeek": "Визитов в неделю (клиент выбирает дни)",
+      "newSection": "+ Раздел",
+      "noPricesBadge": "нет цены",
+      "moveToSection": "В раздел",
+      "sectionLabel": "Раздел",
+      "sectionDeleteConfirm": "Удалить раздел? Услуги в нём останутся в категории без раздела.",
+      "sectionEmpty": "пусто",
+      "noSection": "Без раздела",
+      "editSection": "Редактировать раздел",
+      "deleteSection": "Удалить раздел"
     },
     "settings": {
       "accessToken": "Access Token",

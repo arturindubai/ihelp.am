@@ -6,6 +6,8 @@ export type PriceRow = {
   optionId: string;
   categoryId: string;
   categoryTitle: string;
+  sectionId: string | null;
+  sectionTitle: string | null;
   serviceId: string;
   serviceTitle: string;
   groupTitle: string;
@@ -68,8 +70,9 @@ export async function getPricesData(locale: string): Promise<{ rows: PriceRow[];
   const cats = await db.category.findMany({
     orderBy: { sort: "asc" },
     include: {
+      sections: { orderBy: { sort: "asc" } },
       services: {
-        orderBy: { sort: "asc" },
+        orderBy: [{ sectionId: "asc" }, { sort: "asc" }],
         include: {
           groups: {
             orderBy: { sort: "asc" },
@@ -85,8 +88,11 @@ export async function getPricesData(locale: string): Promise<{ rows: PriceRow[];
 
   for (const cat of cats) {
     const catTitle = tr(cat.title, locale);
+    const sectionMap = new Map(cat.sections.map((s) => [s.id, tr(s.title, locale)]));
     for (const svc of cat.services) {
       const svcTitle = tr(svc.title, locale);
+      const sectionId = svc.sectionId ?? null;
+      const sectionTitle = sectionId ? (sectionMap.get(sectionId) ?? null) : null;
       for (const group of svc.groups) {
         const groupTitle = tr(group.title, locale);
         for (const opt of group.options) {
@@ -95,6 +101,8 @@ export async function getPricesData(locale: string): Promise<{ rows: PriceRow[];
             optionId: opt.id,
             categoryId: cat.id,
             categoryTitle: catTitle,
+            sectionId,
+            sectionTitle,
             serviceId: svc.id,
             serviceTitle: svcTitle,
             groupTitle: groupTitle,

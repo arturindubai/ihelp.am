@@ -1638,7 +1638,16 @@
       "unsavedTitle": "Changes not saved. Leave without saving?",
       "validityDays": "Validity period, days",
       "visitsNextWeek": "{n} vis./week",
-      "visitsPerWeek": "Visits per week (client chooses days)"
+      "visitsPerWeek": "Visits per week (client chooses days)",
+      "newSection": "+ Section",
+      "noPricesBadge": "no price",
+      "moveToSection": "Move to section",
+      "sectionLabel": "Section",
+      "sectionDeleteConfirm": "Delete section? Services in it will remain in the category without a section.",
+      "sectionEmpty": "empty",
+      "noSection": "No section",
+      "editSection": "Edit section",
+      "deleteSection": "Delete section"
     },
     "settings": {
       "accessToken": "Access Token",

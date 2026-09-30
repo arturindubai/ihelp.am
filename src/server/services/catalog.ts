@@ -4,12 +4,13 @@ import { tr } from "@/i18n/locales";
 import type { PriceLine, PricePlan } from "@/lib/pricing";
 import { selectBanners } from "@/lib/banner-select";
 import { incrementCarouselViews } from "./banners";
+import { groupBySection } from "@/lib/catalog-sections";
 
 export type LText = string;
 
 export async function getHome(locale: string, userId?: string | null) {
   const [categories, banners, services, features, faq, reviews] = await Promise.all([
-    db.category.findMany({ where: { active: true, archived: false }, orderBy: { sort: "asc" }, include: { services: { where: { active: true }, orderBy: { sort: "asc" }, select: { slug: true, title: true, subtitle: true, image: true } } } }),
+    db.category.findMany({ where: { active: true, archived: false }, orderBy: { sort: "asc" }, include: { sections: { orderBy: { sort: "asc" } }, services: { where: { active: true }, orderBy: { sort: "asc" }, select: { slug: true, title: true, subtitle: true, image: true, comingSoon: true, sectionId: true } } } }),
     db.banner.findMany({ where: { placement: "CAROUSEL_HOME" }, orderBy: { sort: "asc" } }),
     db.service.findMany({ where: { active: true, category: { active: true, archived: false } }, orderBy: { sort: "asc" }, include: { groups: { where: { active: true, isDuration: true }, include: { options: { where: { active: true } } } }, plans: { where: { active: true } } } }),
     db.siteFeature.findMany({ where: { active: true }, orderBy: { sort: "asc" } }),
@@ -28,6 +29,7 @@ export async function getHome(locale: string, userId?: string | null) {
     categories: categories.map((c) => {
       const effectiveComingSoon = c.comingSoon || c.services.length === 0;
       const isComposite = !effectiveComingSoon && c.services.length > 1;
+      const sectionMetas = (c as typeof c & { sections?: { id: string; title: unknown; sort: number }[] }).sections ?? [];
       return {
         slug: c.slug,
         title: tr(c.title, locale),
@@ -36,17 +38,19 @@ export async function getHome(locale: string, userId?: string | null) {
         // comingSoon → /c/<slug> (форма «Уведомить меня»); одна услуга → /s/<slug>; иначе /c/<slug>
         href: effectiveComingSoon ? `/c/${c.slug}` : c.services.length === 1 ? `/s/${c.services[0].slug}` : `/c/${c.slug}`,
         subcategories: isComposite
-          ? [{
-              section: null as string | null,
-              items: c.services.map((s) => ({
+          ? groupBySection(
+              c.services.map((s) => ({
                 slug: s.slug,
                 title: tr(s.title, locale),
                 subtitle: tr(s.subtitle, locale) || null,
                 image: s.image,
                 href: `/s/${s.slug}`,
+                comingSoon: s.comingSoon,
+                sectionId: (s as typeof s & { sectionId?: string | null }).sectionId ?? null,
               })),
-            }]
-          : [] as { section: string | null; items: { slug: string; title: string; subtitle: string | null; image: string | null; href: string }[] }[],
+              sectionMetas.map((sec) => ({ id: sec.id, title: tr(sec.title, locale) as string, sort: sec.sort })),
+            ).map((g) => ({ section: g.sectionTitle, items: g.items }))
+          : [] as { section: string | null; items: { slug: string; title: string; subtitle: string | null; image: string | null; href: string; comingSoon: boolean }[] }[],
       };
     }),
     banners: filteredBanners.map((b) => ({ id: b.id, title: tr(b.title, locale), subtitle: tr(b.subtitle, locale), image: b.image, link: b.link, bg: b.bg, promoCode: b.promoCode })),
@@ -117,7 +121,17 @@ export async function getCategories(locale: string) {
 export async function getCategory(slug: string, locale: string) {
   const c = await db.category.findFirst({
     where: { slug, active: true, archived: false },
-    include: { services: { where: { active: true }, orderBy: { sort: "asc" }, include: { groups: { where: { active: true, isDuration: true }, include: { options: { where: { active: true } } } }, plans: { where: { active: true } } } } },
+    include: {
+      sections: { orderBy: { sort: "asc" } },
+      services: {
+        where: { active: true },
+        orderBy: { sort: "asc" },
+        include: {
+          groups: { where: { active: true, isDuration: true }, include: { options: { where: { active: true } } } },
+          plans: { where: { active: true } },
+        },
+      },
+    },
   });
   if (!c) return null;
 
@@ -130,6 +144,12 @@ export async function getCategory(slug: string, locale: string) {
   }
   const formats = Array.from(kindToSlug.entries()).map(([kind, serviceSlug]) => ({ kind, serviceSlug }));
 
+  const sectionMetas = c.sections.map((s) => ({ id: s.id, title: tr(s.title, locale) as string, sort: s.sort }));
+  const serviceGroups = groupBySection(
+    c.services.map((s) => ({ ...serviceCard(s, locale), sectionId: s.sectionId ?? null })),
+    sectionMetas,
+  ).map((g) => ({ section: g.sectionTitle, items: g.items }));
+
   return {
     slug: c.slug,
     title: tr(c.title, locale),
@@ -138,6 +158,7 @@ export async function getCategory(slug: string, locale: string) {
     showFormats: c.showFormats,
     formats,
     services: c.services.map((s) => serviceCard(s, locale)),
+    serviceGroups,
   };
 }
 

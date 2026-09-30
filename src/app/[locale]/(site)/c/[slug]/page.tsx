@@ -2,10 +2,10 @@ import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { CalendarClock } from "lucide-react";
 import { getCategory, getCategories } from "@/server/services/catalog";
-import { ServiceCard } from "@/components/ServiceCard";
 import { FormatCards } from "@/components/FormatCards";
 import { Link } from "@/i18n/navigation";
 import { NotifyForm } from "@/components/catalog/NotifyForm";
+import { ServiceTileGrid } from "@/components/catalog/ServiceTile";
 import { cn } from "@/lib/format";
 import { PromoSlot } from "@/components/PromoSlot";
 
@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 export default async function CategoryPage({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
-  const [c, cats, t] = await Promise.all([getCategory(slug, locale), getCategories(locale), getTranslations("catalog")]);
+  const [c, cats, t, tc] = await Promise.all([getCategory(slug, locale), getCategories(locale), getTranslations("catalog"), getTranslations("common")]);
   if (!c) notFound();
 
   const notifyStrings = {
@@ -75,10 +75,20 @@ export default async function CategoryPage({ params }: { params: Promise<{ local
       ) : (
         <div className="mt-4">
           <PromoSlot placement="CATALOG" locale={locale} />
-          <div className="mt-4 space-y-3">
-            {c.services.map((svc) => (
-              <ServiceCard key={svc.slug} s={svc} />
-            ))}
+          <div className="mt-4">
+            <ServiceTileGrid
+              groups={c.serviceGroups.map((g) => ({
+                section: g.section,
+                items: g.items.map((s) => ({
+                  slug: s.slug,
+                  title: s.title as string,
+                  image: s.image,
+                  href: `/s/${s.slug}`,
+                  comingSoon: s.comingSoon,
+                })),
+              }))}
+              comingSoonLabel={tc("comingSoon")}
+            />
           </div>
         </div>
       )}
