@@ -948,6 +948,7 @@
         "done": "Сделано",
         "notify": "Сообщения",
         "plans": "Планы",
+        "product": "Продакт",
         "workers": "Воркеры",
         "you": "Нужен ты"
       },
@@ -2244,6 +2245,18 @@
     },
     "unscheduled": "Не запланирован",
     "validUntil": "Действует до {date}",
+    "visitEvents": {
+      "CANCELLED": "Отменён",
+      "CONFIRMED": "Подтверждён",
+      "DONE": "Завершено",
+      "IN_PROGRESS": "Уборка началась",
+      "NO_SHOW": "Визит не состоялся",
+      "ON_WAY": "Мастер выехал",
+      "SCHEDULED": "Запланирован",
+      "SKIPPED": "Пропущен",
+      "UNSCHEDULED": "Не запланирован",
+      "title": "История"
+    },
     "visitN": "Визит {n}",
     "visitStatus": {
       "CANCELLED": "Отменён",
@@ -2262,18 +2275,6 @@
       "onTime": "вовремя",
       "scheduled": "Запланировано",
       "started": "Начато"
-    },
-    "visitEvents": {
-      "CANCELLED": "Отменён",
-      "CONFIRMED": "Подтверждён",
-      "DONE": "Завершено",
-      "IN_PROGRESS": "Уборка началась",
-      "NO_SHOW": "Визит не состоялся",
-      "ON_WAY": "Мастер выехал",
-      "SCHEDULED": "Запланирован",
-      "SKIPPED": "Пропущен",
-      "UNSCHEDULED": "Не запланирован",
-      "title": "История"
     },
     "visits": "Визиты",
     "yourReview": "Ваш отзыв"

@@ -886,6 +886,7 @@
         "done": "Done",
         "notify": "Messages",
         "plans": "Plans",
+        "product": "Product",
         "workers": "Workers",
         "you": "Needs you"
       },
@@ -2144,6 +2145,18 @@
     },
     "unscheduled": "Unscheduled",
     "validUntil": "Valid until {date}",
+    "visitEvents": {
+      "CANCELLED": "Cancelled",
+      "CONFIRMED": "Confirmed",
+      "DONE": "Completed",
+      "IN_PROGRESS": "Cleaning started",
+      "NO_SHOW": "No show",
+      "ON_WAY": "Pro on the way",
+      "SCHEDULED": "Scheduled",
+      "SKIPPED": "Skipped",
+      "UNSCHEDULED": "Unscheduled",
+      "title": "History"
+    },
     "visitN": "Visit {n}",
     "visitStatus": {
       "CANCELLED": "Cancelled",
@@ -2162,18 +2175,6 @@
       "onTime": "on time",
       "scheduled": "Scheduled",
       "started": "Started"
-    },
-    "visitEvents": {
-      "CANCELLED": "Cancelled",
-      "CONFIRMED": "Confirmed",
-      "DONE": "Completed",
-      "IN_PROGRESS": "Cleaning started",
-      "NO_SHOW": "No show",
-      "ON_WAY": "Pro on the way",
-      "SCHEDULED": "Scheduled",
-      "SKIPPED": "Skipped",
-      "UNSCHEDULED": "Unscheduled",
-      "title": "History"
     },
     "visits": "Visits",
     "yourReview": "Your review"
