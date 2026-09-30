@@ -196,13 +196,14 @@ const DESIGN_PENDING: Prisma.TaskWhereInput = {
   OR: [{ mockupUrl: { not: null } }, { attachments: { some: { mime: { startsWith: "image/" } } } }],
 };
 
-/** Ждут макета от дизайнера: флаг «нужен макет», но реального макета ещё нет */
+/** Ждут макета от дизайнера: шаг 2 цепочки — требования уже написаны, но макета ещё нет */
 const WAITING_MOCKUP: Prisma.TaskWhereInput = {
   status: { notIn: ["done", "cancelled"] },
   mockupApprovedBy: null,
   mockupRequired: true,
   mockupUrl: null,
   attachments: { none: { mime: { startsWith: "image/" } } },
+  NOT: [{ screenRequirements: null }, { screenRequirements: "" }],
 };
 
 export async function mockupPendingApprovals() {
@@ -215,6 +216,20 @@ export async function mockupPendingApprovals() {
       _count: { select: { attachments: true } },
       attachments: { where: { mime: { startsWith: "image/" } }, select: { url: true, fileName: true }, orderBy: { createdAt: "desc" } },
     },
+  });
+}
+
+/** Задачи шага 1 цепочки: нужен макет, но продакт ещё не написал требования к экранам */
+export async function mockupWaitingRequirements() {
+  return db.task.findMany({
+    where: {
+      status: { notIn: ["done", "cancelled"] },
+      mockupRequired: true,
+      mockupApprovedBy: null,
+      OR: [{ screenRequirements: null }, { screenRequirements: "" }],
+    },
+    orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
+    select: { key: true, title: true, priority: true, status: true },
   });
 }
 

@@ -8,8 +8,9 @@
 
 1. **Задачи, заблокированные на продукте** (`blockedOn = product`) — в порядке приоритета. Диспетчер даёт их пачкой.
 2. **Страховка: задачи «В очереди» с открытыми вопросами** (`needs != []`) — без ответа разработчик взять их не сможет (жёсткий гейт `needs_open`). Продакт отвечает в ленте, очищает поле `needs`: `node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --data '{"needs":[]}' --agent product`. Такая задача в очереди помечена «ждёт ответа: {первый пункт needs}».
-3. **Обзор требований (по расписанию)** — раз в сутки, когда вопросов нет: бэклог и очередь на качество требований.
-4. По кнопке «Запустить сейчас» или «▶ Запустить воркера» в шторке задачи.
+3. **Шаг 1 цепочки макета: задачи с `mockupRequired=true` и пустым `screenRequirements`** — продакт пишет требования к экранам, после чего задача переходит к дизайнеру (шаг 2). Такая задача в вкладке «Продакт» помечена «требования». Что писать в `screenRequirements`: кто использует экран, что видит, какие действия, пустое/ошибочное состояние и что не входит.
+4. **Обзор требований (по расписанию)** — раз в сутки, когда вопросов нет: бэклог и очередь на качество требований.
+5. По кнопке «Запустить сейчас» или «▶ Запустить воркера» в шторке задачи.
 
 Одну и ту же задачу продакту не выдают повторно **в течение 60 минут**, если с момента последнего запуска задача не изменилась.
 
@@ -79,6 +80,7 @@
 node /opt/ihelp.am/scripts/cc.mjs show КЛЮЧ                                   # карточка и лента
 node /opt/ihelp.am/scripts/cc.mjs note КЛЮЧ "Ответ продакта: …" --agent product
 node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --data '{"summary":"…","requirements":["…"],"details":"…","needs":[]}' --agent product
+node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --data '{"screenRequirements":"Кто использует: …\nЧто видит: …\nДействия: …\nПустое/ошибочное: …\nЧто не входит: …"}' --agent product  # шаг 1 цепочки макета
 node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --details-file /opt/ihelp.am/data/tmp/product/details.md --agent product    # длинный details
 node /opt/ihelp.am/scripts/cc.mjs update КЛЮЧ --summary-file /opt/ihelp.am/data/tmp/product/summary.md --agent product    # длинный summary
 node /opt/ihelp.am/scripts/cc.mjs unblock КЛЮЧ "ответ в ленте, карточка дополнена" --agent product
