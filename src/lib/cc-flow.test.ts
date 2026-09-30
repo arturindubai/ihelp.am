@@ -5,6 +5,8 @@ import {
   canClaimRole,
   canCreateTask,
   canTransition,
+  criteriaGate,
+  extractFollowUpKeys,
   unblockTarget,
   doneGate,
   inTriageQueue,
@@ -70,9 +72,14 @@ describe("очередь дизайнера: отбор задач", () => {
     expect(isDesignerTask({ layer: "front", mockupRequired: false, assignee: null })).toBe(true);
     expect(isDesignerTask({ layer: "fullstack", mockupRequired: false, assignee: null })).toBe(true);
   });
-  it("задача с флагом макета — дизайнерская независимо от слоя", () => {
-    expect(isDesignerTask({ layer: "back", mockupRequired: true, assignee: null })).toBe(true);
-    expect(isDesignerTask({ layer: "none", mockupRequired: true, assignee: null })).toBe(true);
+  it("задача с флагом макета и написанными требованиями — дизайнерская независимо от слоя", () => {
+    expect(isDesignerTask({ layer: "back", mockupRequired: true, assignee: null, screenRequirements: "Экран списка" })).toBe(true);
+    expect(isDesignerTask({ layer: "none", mockupRequired: true, assignee: null, screenRequirements: "Экран деталей" })).toBe(true);
+  });
+  it("задача с флагом макета без screenRequirements — НЕ дизайнерская (шаг 1: идёт к продакту)", () => {
+    expect(isDesignerTask({ layer: "back", mockupRequired: true, assignee: null })).toBe(false);
+    expect(isDesignerTask({ layer: "none", mockupRequired: true, assignee: null, screenRequirements: null })).toBe(false);
+    expect(isDesignerTask({ layer: "front", mockupRequired: true, assignee: null, screenRequirements: "" })).toBe(false);
   });
   it("дизайн-исследование (assignee=designer) — тоже задача дизайнера", () => {
     expect(isDesignerTask({ layer: "none", mockupRequired: false, assignee: "designer" })).toBe(true);
@@ -90,10 +97,16 @@ describe("очередь дизайнера: отбор задач", () => {
     expect(isDesignerTask({ layer: "front", design: null, mockupRequired: false, assignee: null, hasAttachments: false })).toBe(true);
     expect(isDesignerTask({ layer: "fullstack", design: "", mockupRequired: false, assignee: null, hasAttachments: false })).toBe(true);
   });
-  it("продакт берёт только задачи с открытыми вопросами", () => {
+  it("продакт берёт задачи с открытыми вопросами", () => {
     expect(isProductTask({ needs: [] })).toBe(false);
     expect(isProductTask({ needs: ["Ключ API"] })).toBe(true);
     expect(isProductTask({ needs: ["А", "Б"] })).toBe(true);
+  });
+  it("продакт берёт шаг 1 цепочки: mockupRequired без screenRequirements", () => {
+    expect(isProductTask({ needs: [], mockupRequired: true, screenRequirements: null })).toBe(true);
+    expect(isProductTask({ needs: [], mockupRequired: true, screenRequirements: "" })).toBe(true);
+    expect(isProductTask({ needs: [], mockupRequired: true, screenRequirements: "Экран" })).toBe(false);
+    expect(isProductTask({ needs: [], mockupRequired: false, screenRequirements: null })).toBe(false);
   });
   it("тестировщик не берёт через claim — только через reviewTake", () => {
     expect(canClaimRole("tester")).toBe(false);
@@ -264,17 +277,58 @@ describe("гейты сдачи", () => {
     expect(reviewGate({ layer: "back", branch: "task/AUTH-1" }, report)).toBeNull();
     expect(reviewGate({ layer: "none", branch: null }, report)).toBeNull();
   });
-  it("если opts переданы — требует releaseNote и ownerSummary", () => {
+  it("если opts переданы — оба поля (releaseNote и ownerSummary) обязательны", () => {
     const report = "Сделано: вход через бота. Проверено: tsc, vitest, стенд 8082.";
     const note = "Теперь клиент видит статус заказа в кабинете";
     const summary = "Сделано: статус заказа; Проверить: кабинет → мои заказы; Риск: нет";
+    // {} — opts переданы, оба поля пусты — ошибка
     expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, {})).toBe("release_note_required");
+    // releaseNote передан пустым — ошибка
+    expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: "" })).toBe("release_note_required");
+    // releaseNote есть, ownerSummary нет — ошибка
     expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note })).toBe("owner_summary_required");
+    // ownerSummary передан пустым — ошибка
+    expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note, ownerSummary: "" })).toBe("owner_summary_required");
+    // оба переданы — ОК
     expect(reviewGate({ layer: "back", branch: "task/T-1" }, report, { releaseNote: note, ownerSummary: summary })).toBeNull();
     // Для не-код задачи с opts обязательны nextSteps (даже пустой массив = «ничего дальше»)
     expect(reviewGate({ layer: "none", branch: null }, report, { releaseNote: note, ownerSummary: summary })).toBe("next_steps_required");
     expect(reviewGate({ layer: "none", branch: null }, report, { releaseNote: note, ownerSummary: summary, nextSteps: [] })).toBeNull();
     expect(reviewGate({ layer: "none", branch: null }, report, { releaseNote: note, ownerSummary: summary, nextSteps: ["создать макет"] })).toBeNull();
+  });
+  it("criteriaGate блокирует закрытие при невыполненных и не вынесенных критериях", () => {
+    const reqs = ["Форма показывает чек-лист", "Поле обязательно при Сделано"];
+    // Без результата при наличии требований — блокирует
+    expect(criteriaGate(reqs, undefined)).toBe("criteria_incomplete");
+    // Короткий массив — блокирует (не все критерии охвачены)
+    expect(criteriaGate(reqs, [{ done: true }])).toBe("criteria_incomplete");
+    // Без требований — пропускается всегда
+    expect(criteriaGate([], [{ done: false }])).toBeNull();
+    expect(criteriaGate([], undefined)).toBeNull();
+    // Все выполнены — ОК
+    expect(criteriaGate(reqs, [{ done: true }, { done: true }])).toBeNull();
+    // Один не выполнен, но вынесен в карточку — ОК
+    expect(criteriaGate(reqs, [{ done: true }, { done: false, cardKey: "IN-7" }])).toBeNull();
+    // Один не выполнен без карточки — блокирует
+    expect(criteriaGate(reqs, [{ done: true }, { done: false }])).toBe("criteria_incomplete");
+    expect(criteriaGate(reqs, [{ done: true }, { done: false, cardKey: "плохой ключ" }])).toBe("criteria_incomplete");
+  });
+  it("owner → done для layer=none с критериями и без testedAt: авто-заполненный чек-лист проходит gate", () => {
+    const reqs = ["Форма показывает чек-лист", "Поле ключа необязательно"];
+    // Сервер строит этот результат при приёмке владельцем не-код задачи (layer=none, !testedAt)
+    const ownerApproval = reqs.map(() => ({ done: true as const }));
+    expect(criteriaGate(reqs, ownerApproval)).toBeNull();
+    // Без результата — должно было блокировать (до фикса сервер бросал criteria_incomplete)
+    expect(criteriaGate(reqs, undefined)).toBe("criteria_incomplete");
+    // Владелец может перевести review → done
+    expect(canTransition("review", "done", "owner")).toBe(true);
+  });
+  it("extractFollowUpKeys собирает ключи вынесенных критериев", () => {
+    const reqs = ["Критерий 1", "Критерий 2", "Критерий 3"];
+    expect(extractFollowUpKeys(reqs, [{ done: true }, { done: false, cardKey: "IN-7" }, { done: false, cardKey: "RISK-3" }])).toEqual(["IN-7", "RISK-3"]);
+    expect(extractFollowUpKeys(reqs, [{ done: true }, { done: true }, { done: false, cardKey: "плохой" }])).toEqual([]);
+    expect(extractFollowUpKeys([], [{ done: false, cardKey: "IN-1" }])).toEqual([]);
+    expect(extractFollowUpKeys(reqs, undefined)).toEqual([]);
   });
   it("noWork — код-задача без ветки проходит проверку", () => {
     const report = "Проверено: поведение уже корректное, изменения не потребовались. Источник: логи и тест.";

@@ -25,6 +25,7 @@ const visitStore = new Map<
     masterId: string | null;
     master: { name: string } | null;
     clientNotifiedEvents: string[];
+    status: string;
     order: { id: string; number: number; userId: string; config: unknown; addressSnapshot: unknown };
   }
 >();
@@ -117,6 +118,7 @@ import {
   notifyClientVisitCancelled,
   sendVisitReminders,
   sendReviewRequests,
+  sendVisit2hReminders,
 } from "./bookingNotify";
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -149,6 +151,7 @@ function makeVisit(id: string, overrides: Partial<VisitData> = {}) {
     masterId: "master-1",
     master: { name: "Иван Петров" },
     clientNotifiedEvents: [],
+    status: "SCHEDULED",
     order: {
       id: "order-id-1",
       number: 42,
@@ -336,6 +339,42 @@ describe("подстановка переменных", () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
+// Отписка от необязательных писем
+
+describe("отписка от необязательных писем", () => {
+  it("отписавшемуся клиенту подтверждение заказа по email всё равно уходит", async () => {
+    makeOrder("o-unsub");
+    userStore.set("u1", { telegramId: null, email: "user@example.com", name: "Тест", emailUnsubscribedAt: new Date() });
+    await notifyClientOrderCreated("o-unsub");
+    expect(vi.mocked(sendMail)).toHaveBeenCalledOnce();
+    expect(vi.mocked(notifyTech)).not.toHaveBeenCalled();
+  });
+
+  it("отписавшемуся клиенту напоминание о визите по email не уходит", async () => {
+    const remindTime = new Date(ACTIVE_TIME.getTime() + 24 * 3600_000);
+    makeVisit("v-unsub-remind", { id: "v-unsub-remind" });
+    userStore.set("u1", { telegramId: null, email: "user@example.com", name: "Тест", emailUnsubscribedAt: new Date() });
+    const v = {
+      id: "v-unsub-remind",
+      scheduledAt: remindTime,
+      order: {
+        number: 100,
+        config: { service: { title: "Уборка" } },
+        addressSnapshot: { street: "Пушкина", building: "10" },
+        locale: "ru",
+        userId: "u1",
+        user: { id: "u1", telegramId: null, email: "user@example.com", emailUnsubscribedAt: new Date() },
+      },
+      master: { name: "Мастер Тест" },
+    };
+    visitFindManyResult = [v];
+    const count = await sendVisitReminders(ACTIVE_TIME);
+    expect(count).toBe(0);
+    expect(vi.mocked(sendMail)).not.toHaveBeenCalled();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
 // Тихий период (21:00–09:00 Ереван)
 
 // 23:00 Ереван = 19:00 UTC
@@ -406,5 +445,92 @@ describe("тихий период", () => {
     const count = await sendReviewRequests(ACTIVE_TIME);
     expect(count).toBe(1);
     expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// sendVisit2hReminders
+
+describe("sendVisit2hReminders", () => {
+  function make2hVisit(id: string, scheduledAt: Date) {
+    visitStore.set(id, {
+      id,
+      scheduledAt,
+      masterId: "master-1",
+      master: { name: "Мастер Тест" },
+      clientNotifiedEvents: [],
+      status: "SCHEDULED",
+      order: {
+        id: "order-id-1",
+        number: 100,
+        userId: "u1",
+        config: { service: { title: "Уборка" } },
+        addressSnapshot: { street: "Пушкина", building: "10" },
+      },
+    });
+    userStore.set("u1", { telegramId: "tg-123", email: null, name: "Тест" });
+    const v = {
+      id,
+      scheduledAt,
+      clientNotifiedEvents: [] as string[],
+      order: {
+        number: 100,
+        config: { service: { title: "Уборка" } },
+        addressSnapshot: { street: "Пушкина", building: "10" },
+        locale: "ru",
+        userId: "u1",
+        user: { id: "u1", telegramId: "tg-123", email: null, emailUnsubscribedAt: null },
+      },
+      master: { name: "Мастер Тест" },
+    };
+    visitFindManyResult = [v];
+    return v;
+  }
+
+  it("отправляет напоминание за 2 часа", async () => {
+    const now = ACTIVE_TIME;
+    const scheduledAt = new Date(now.getTime() + 2 * 3600_000);
+    make2hVisit("v2h1", scheduledAt);
+
+    const count = await sendVisit2hReminders(now);
+
+    expect(count).toBe(1);
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+    const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
+    expect(text).toContain("2 час");
+  });
+
+  it("не отправляет в тихое время", async () => {
+    const scheduledAt = new Date(QUIET_TIME.getTime() + 2 * 3600_000);
+    make2hVisit("v2h2", scheduledAt);
+
+    const count = await sendVisit2hReminders(QUIET_TIME);
+
+    expect(count).toBe(0);
+    expect(vi.mocked(sendTelegramDirect)).not.toHaveBeenCalled();
+  });
+
+  it("идемпотентность — повторный вызов не дублирует", async () => {
+    const now = ACTIVE_TIME;
+    const scheduledAt = new Date(now.getTime() + 2 * 3600_000);
+    make2hVisit("v2h3", scheduledAt);
+
+    await sendVisit2hReminders(now);
+    await sendVisit2hReminders(now);
+
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+  });
+
+  it("не отправляет отменённому визиту", async () => {
+    const now = ACTIVE_TIME;
+    const scheduledAt = new Date(now.getTime() + 2 * 3600_000);
+    const v = make2hVisit("v2h4", scheduledAt);
+    visitStore.set("v2h4", { ...visitStore.get("v2h4")!, status: "CANCELLED" });
+    visitFindManyResult = [{ ...v, status: "CANCELLED" }];
+
+    const count = await sendVisit2hReminders(now);
+
+    expect(count).toBe(0);
+    expect(vi.mocked(sendTelegramDirect)).not.toHaveBeenCalled();
   });
 });

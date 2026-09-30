@@ -42,6 +42,7 @@ function groupOwnerQuestions(tasks: OwnerTask[], taskHref: Href, waitingDeps: Wa
       groupType: classifyGroup(reason, hasVariants),
       tasks: group.map((t) => ({ key: t.key, title: t.title, href: taskHref(t.key), priority: t.priority })),
       variants: multiQuestion.length === 1 ? (multiQuestion[0].variants ?? null) : null,
+      trailingText: multiQuestion.length === 1 ? multiQuestion[0].trailingText : undefined,
       multiQuestion: multiQuestion.length > 1 ? multiQuestion : null,
       isUrgent: group.some((t) => t.priority === "p0"),
       textMayCut: group.some((t) => t.textMayCut),
@@ -81,6 +82,7 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
     !data.pausedUntil &&
     !data.techBlocked.length &&
     !data.alertMissing &&
+    !data.teamChatMissing &&
     !ownerAnswered.length &&
     !data.waitingDeps.length;
 
@@ -94,6 +96,17 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
             <span className="font-medium">{ty("alertMissing")}</span>{" "}
             <Link href="/admin/settings" className="font-medium underline">
               {ty("alertMissingLink")}
+            </Link>
+          </p>
+        </Card>
+      )}
+
+      {data.teamChatMissing && (
+        <Card>
+          <p className="text-sm text-bad">
+            <span className="font-medium">{ty("teamChatMissing")}</span>{" "}
+            <Link href="/admin/settings#notify" className="font-medium underline">
+              {ty("teamChatMissingLink")}
             </Link>
           </p>
         </Card>

@@ -125,6 +125,7 @@ type TaskShape = {
   scope?: string[];
   mockupRequired?: boolean;
   mockupApprovedBy?: string | null;
+  screenRequirements?: string | null;
 };
 
 export type CheckItem = { key: string; ok: boolean; hard: boolean };
@@ -192,6 +193,32 @@ export function reviewGate(
 
 export const SHA_RE = /^[0-9a-f]{7,40}$/i;
 
+export type CriterionResult = { done: boolean; cardKey?: string };
+
+/** Формат ключа follow-up карточки: PREFX-N (например IN-7, RISK-3) */
+const CARD_KEY_RE = /^[A-Z]+-\d+$/;
+
+/**
+ * Гейт критериев при переходе в «Сделано»: каждый критерий должен быть либо отмечен ✓,
+ * либо вынесен в карточку с ключом вида IN-7. Без force — блокирует; с force — пропускает.
+ * Если result не передан и есть требования — блокирует (путь через API/деплоер без тестировщика).
+ * Проверяет все требования по длине массива: короткий result не проходит.
+ */
+export function criteriaGate(requirements: string[], result?: CriterionResult[]): string | null {
+  if (!requirements.length) return null;
+  if (!result || result.length < requirements.length) return "criteria_incomplete";
+  const incomplete = requirements.some((_, i) => !result[i]?.done && !CARD_KEY_RE.test(result[i]?.cardKey?.trim() ?? ""));
+  return incomplete ? "criteria_incomplete" : null;
+}
+
+/** Ключи follow-up карточек из чек-листа критериев: только незакрытые пункты с корректным ключом */
+export function extractFollowUpKeys(requirements: string[], result?: CriterionResult[]): string[] {
+  if (!requirements.length || !result) return [];
+  return result
+    .filter((r, i) => i < requirements.length && !r.done && CARD_KEY_RE.test(r.cardKey?.trim() ?? ""))
+    .map(r => r.cardKey!.trim());
+}
+
 /**
  * Гейт «В очереди»: задача с открытыми вопросами к продукту не идёт разработчику.
  * Обойти может только владелец или техдиректор с причиной (force=true).
@@ -226,12 +253,17 @@ export function isOwnerQuestion(task: { status: string; blockedOn: string | null
 }
 
 /**
- * Дизайнер берёт: задачи с флагом макета; дизайн-исследования (assignee=designer);
- * фронт/бэк+фронт без описания дизайна и без вложений — задача ждёт дизайна, а не кода.
+ * Дизайнер берёт: задачи с флагом макета (если продакт уже написал требования к экранам);
+ * дизайн-исследования (assignee=designer); фронт/бэк+фронт без описания дизайна и без вложений.
+ * Задача с mockupRequired=true и пустыми screenRequirements сначала идёт к продакту — шаг 1 цепочки.
  * Логика совпадает с designerQueue() в workers.ts.
  */
-export function isDesignerTask(t: { layer: string; mockupRequired?: boolean | null; assignee?: string | null; design?: string | null; hasAttachments?: boolean }): boolean {
-  if (t.mockupRequired) return true;
+export function isDesignerTask(t: { layer: string; mockupRequired?: boolean | null; assignee?: string | null; design?: string | null; hasAttachments?: boolean; screenRequirements?: string | null }): boolean {
+  if (t.mockupRequired) {
+    // Шаг 1 цепочки: требования ещё не написаны → задача идёт к продакту, не к дизайнеру
+    if (!t.screenRequirements?.trim()) return false;
+    return true;
+  }
   if (t.assignee === "designer") return true;
   if (t.layer === "front" || t.layer === "fullstack") {
     return !t.design?.trim() && !t.hasAttachments;
@@ -239,9 +271,11 @@ export function isDesignerTask(t: { layer: string; mockupRequired?: boolean | nu
   return false;
 }
 
-/** Продакт берёт только задачи с открытыми вопросами к нему */
-export function isProductTask(t: { needs: string[] }): boolean {
-  return t.needs.length > 0;
+/** Продакт берёт задачи с открытыми вопросами к нему или задачи шага 1 цепочки макета (mockupRequired без screenRequirements) */
+export function isProductTask(t: { needs: string[]; mockupRequired?: boolean | null; screenRequirements?: string | null }): boolean {
+  if (t.needs.length > 0) return true;
+  if (t.mockupRequired && !t.screenRequirements?.trim()) return true;
+  return false;
 }
 
 /** Роли, которым разрешено брать задачи в работу через claim (deployer, watchdog, triage и tester работают иначе) */
