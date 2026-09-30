@@ -53,6 +53,12 @@ const transitionSchema = z.object({
   sha: z.string().max(40).optional(),
   /** Карта просьб при закрытии входящей (source=intake) */
   intakeClosingMap: z.string().max(4000).optional(),
+  /** «Что изменилось для людей» — для review (опционально) и done (обязательно для код-задач) */
+  releaseNote: z.string().max(500).optional(),
+  /** Резюме для владельца */
+  ownerSummary: z.string().max(800).optional(),
+  /** Результат чек-листа критериев при переходе в «Сделано» */
+  criteriaResult: z.array(z.object({ done: z.boolean(), cardKey: z.string().max(20).optional() })).max(30).optional(),
 });
 
 /**
