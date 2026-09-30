@@ -6,7 +6,7 @@ export type ExpiringPackage = {
   number: number;
   packageName: string;
   clientName: string;
-  clientPhone: string;
+  clientPhone: string | null;
   expiresAt: Date;
   remainingVisits: number;
 };
