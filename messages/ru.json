@@ -2193,6 +2193,15 @@
         "address": "Адрес: {address}",
         "button": "Посмотреть заказ"
       },
+      "reminder2h": {
+        "subject": "Через 2 часа — ваш мастер",
+        "title": "Напоминаем: через 2 часа визит",
+        "service": "Услуга: {service}",
+        "date": "Дата и время: {date} в {time}",
+        "master": "Мастер: {master}",
+        "address": "Адрес: {address}",
+        "button": "Посмотреть заказ"
+      },
       "review": {
         "subject": "Как прошёл визит?",
         "title": "Как прошёл визит?",

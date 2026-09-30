@@ -2108,6 +2108,15 @@
         "address": "Address: {address}",
         "button": "View booking"
       },
+      "reminder2h": {
+        "subject": "Your visit is in 2 hours",
+        "title": "Your visit is in 2 hours",
+        "service": "Service: {service}",
+        "date": "Date and time: {date} at {time}",
+        "master": "Pro: {master}",
+        "address": "Address: {address}",
+        "button": "View booking"
+      },
       "review": {
         "subject": "How did your visit go?",
         "title": "How was the visit?",
