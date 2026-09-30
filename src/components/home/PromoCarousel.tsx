@@ -1,5 +1,5 @@
-import { Link } from "@/i18n/navigation";
 import { Img } from "@/components/Img";
+import { BannerLink } from "@/components/BannerLink";
 
 type Banner = {
   id: string;
@@ -41,9 +41,9 @@ export function PromoCarousel({ banners }: Props) {
           </div>
         );
         return b.link ? (
-          <Link key={b.id} href={b.link}>
+          <BannerLink key={b.id} bannerId={b.id} href={b.link}>
             {inner}
-          </Link>
+          </BannerLink>
         ) : (
           <div key={b.id}>{inner}</div>
         );
