@@ -1010,6 +1010,7 @@
         "dispatcherLate": "— late, check timer on server",
         "dispatcherLog": "Dispatcher log · {ago}",
         "dispatcherNever": "Dispatcher has never run on server — need timer: deploy/systemd/install.sh",
+        "dispatcherStalled": "Dispatcher not running {ago} — on server: journalctl -u ihelp-dispatcher -n 20",
         "dispatcherTick": "Dispatcher: last pass {ago}",
         "dryRun": "Dry run mode",
         "dryRunHint": "Dispatcher calculates the plan and logs it, but doesn't launch anyone",

@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "../db";
 import { html } from "../notify";
 import { alertTech } from "../alerts";
+import { getWorkersConfig, getTick } from "./workers";
 
 const TECH_BLOCK_HOURS = 4;
 const CTO_MSG_HOURS = 2;
@@ -46,4 +47,26 @@ export async function checkCtoMessages(now = new Date()) {
     );
   }
   return messages.length;
+}
+
+const DISPATCHER_STALE_MIN = 10;
+
+/**
+ * Тех-алерт: воркеры включены, но диспетчер не делал проход дольше 10 минут.
+ * Сигнал: таймер systemd упал, скрипт сломан или сервер перегружен.
+ * Вызывается сторожем раз в 15 минут; alertTech не шлёт повторы чаще раза в DISPATCHER_STALE_MIN минут.
+ */
+export async function checkDispatcherWatchdog(now = new Date()) {
+  const config = await getWorkersConfig();
+  if (!config.enabled) return 0;
+  const tick = await getTick();
+  if (!tick) return 0; // никогда не запускался — на вкладке «Воркеры» уже есть предупреждение
+  const staleMin = Math.floor((now.getTime() - Date.parse(tick.at)) / 60_000);
+  if (staleMin < DISPATCHER_STALE_MIN) return 0;
+  await alertTech(
+    "dispatcher:stale",
+    html`⚠️ <b>Диспетчер воркеров не запускался ${staleMin} мин</b>\nПроверить: <code>journalctl -u ihelp-dispatcher -n 20 --no-pager</code>\nПерезапустить: <code>systemctl start ihelp-dispatcher</code>`,
+    DISPATCHER_STALE_MIN,
+  );
+  return 1;
 }
