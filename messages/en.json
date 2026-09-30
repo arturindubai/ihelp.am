@@ -379,6 +379,11 @@
     "newMaster": "New pro",
     "services": "Services"
   },
+  "cart": {
+    "checkout": "Book",
+    "itemsCount": "{count, plural, one {# item} other {# items}}",
+    "total": "{amount} ֏"
+  },
   "catalog": {
     "comingSoonText": "We're launching this service. Leave your contact — we'll be the first to let you know when booking opens.",
     "comingSoonTitle": "Coming soon in Yerevan",

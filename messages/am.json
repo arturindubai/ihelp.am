@@ -360,6 +360,11 @@
     "newMaster": "",
     "services": "Ծառայություններ"
   },
+  "cart": {
+    "checkout": "",
+    "itemsCount": "",
+    "total": ""
+  },
   "catalog": {
     "comingSoonText": "",
     "comingSoonTitle": "Շուտով կբացենք",
