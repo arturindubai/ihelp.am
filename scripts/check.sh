@@ -35,6 +35,7 @@ docker run --rm \
     npx prisma generate >/dev/null 2>&1 || { echo "✗ prisma generate"; exit 1; }
     # Типы маршрутов .next/types в образе собраны с main: в ветке без этих маршрутов они дают ложные ошибки
     rm -rf .next
+    echo "▶ Синтаксис скриптов"; for f in scripts/*.mjs; do node --check "$f" || { echo "  FAIL — синтаксическая ошибка в $f"; exit 1; }; done; echo "  OK — scripts/*.mjs разбираются"
     echo "▶ Проверка типов"; npx tsc --noEmit -p . || exit 1
     echo "▶ Тесты"; npx vitest run --maxWorkers=2 2>&1 | tail -n 25; vitest_exit=${PIPESTATUS[0]}
     echo "▶ Миграции"; if [ -f tools/check-migrations.mjs ]; then node tools/check-migrations.mjs || exit 1; else echo "  ! проверка миграций пропущена: рядом с check.sh нет check-migrations.mjs"; fi
