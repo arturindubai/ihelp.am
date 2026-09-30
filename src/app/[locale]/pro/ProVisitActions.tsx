@@ -6,7 +6,7 @@ import { useRouter } from "@/i18n/navigation";
 import { proCashAction, proStatusAction } from "@/server/actions/pro";
 import { amd } from "@/lib/format";
 
-export function ProVisitActions({ visit, phone, mapQuery }: { visit: { id: string; status: string; cashCollected: boolean; price: number; isCash: boolean }; phone: string; mapQuery: string }) {
+export function ProVisitActions({ visit, phone, mapQuery }: { visit: { id: string; status: string; cashCollected: boolean; price: number; isCash: boolean }; phone: string | null; mapQuery: string }) {
   const t = useTranslations("pro");
   const router = useRouter();
   const [pending, start] = useTransition();

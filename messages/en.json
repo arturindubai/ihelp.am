@@ -1730,7 +1730,7 @@
     "emailCodeTitle": "Sign-in code",
     "emailCodeTtl": "The code is valid for {min} min. Do not share it with anyone.",
     "emailGetCode": "Get code by email",
-    "emailOnlyConfirmed": "Email sign-in works for confirmed emails — you can confirm yours in your profile.",
+    "emailOnlyConfirmed": "If you don't have an account yet, it will be created automatically.",
     "emailPlaceholder": "email@example.com",
     "errors": {
       "apple_failed": "Apple did not confirm sign-in. Please try again",

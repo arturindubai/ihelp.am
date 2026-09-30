@@ -13,7 +13,8 @@ export function normalizePhone(input: string): string | null {
   return "+" + digits;
 }
 
-export function formatPhone(p: string): string {
+export function formatPhone(p: string | null | undefined): string {
+  if (!p) return "";
   if (p.startsWith("+374") && p.length === 12) return `+374 ${p.slice(4, 6)} ${p.slice(6, 9)} ${p.slice(9)}`;
   return p;
 }

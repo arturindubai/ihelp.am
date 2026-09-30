@@ -53,8 +53,8 @@ export async function verifyCodeAction(phoneRaw: string, code: string, locale: s
 }
 
 /** Номер привязан к мастеру без аккаунта — выдаём роль мастера */
-async function linkMasterRole<U extends { id: string; phone: string; role: string }>(user: U): Promise<U> {
-  if (user.role !== "CLIENT") return user;
+async function linkMasterRole<U extends { id: string; phone: string | null; role: string }>(user: U): Promise<U> {
+  if (user.role !== "CLIENT" || !user.phone) return user;
   const m = await db.master.findFirst({ where: { phone: user.phone, userId: null } });
   if (!m) return user;
   await db.master.update({ where: { id: m.id }, data: { userId: user.id } });
@@ -73,36 +73,64 @@ async function verifiedUserByEmail(email: string) {
 
 /**
  * Код входа на email. Ответ одинаков для существующего, неизвестного, неподтверждённого и заблокированного
- * адреса: код и лимиты создаются всегда, письмо уходит только настоящему подтверждённому аккаунту.
+ * адреса: код и лимиты создаются всегда. Письмо уходит подтверждённому аккаунту или совсем незнакомому адресу
+ * (AUTH-19: регистрация); не уходит неподтверждённому и заблокированному.
  */
 export async function sendEmailLoginCodeAction(emailRaw: string, locale = "ru") {
   const email = normalizeEmail(emailRaw);
   if (!email) return { ok: false as const, error: "email" };
   const user = await verifiedUserByEmail(email);
-  if (!user) {
-    // Разделяем два случая: адрес есть в базе (не подтверждён) или адреса нет вообще
-    const unverified = await db.user.findFirst({ where: { email: { equals: email, mode: "insensitive" }, emailVerifiedAt: null } });
-    if (unverified) {
-      alertTech("email-login-unverified", html`⚠️ <b>Вход по почте: адрес не подтверждён</b>\nПопытка входа — адрес в базе, но подтверждение не завершено.`, 60).catch(() => null);
-    } else if (!await db.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } } })) {
-      alertTech("email-login-unknown", html`⚠️ <b>Вход по почте: адрес не найден</b>\nПопытка входа на адрес, не привязанный ни к одному аккаунту. Проверьте раздел «Сотрудники», если это ваш коллега.`, 30).catch(() => null);
+  let skipDelivery = false;
+  if (user) {
+    if (user.blocked) skipDelivery = true;
+  } else {
+    const anyUser = await db.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } } });
+    if (anyUser) {
+      // Адрес в базе, но не подтверждён или заблокирован: код создаётся, письмо не уходит
+      skipDelivery = true;
+      if (!anyUser.emailVerifiedAt) {
+        alertTech("email-login-unverified", html`⚠️ <b>Вход по почте: адрес не подтверждён</b>\nПопытка входа — адрес в базе, но подтверждение не завершено.`, 60).catch(() => null);
+      }
+    } else {
+      // Незнакомый адрес: отправляем код, после подтверждения создастся аккаунт (AUTH-19)
+      alertTech("email-new-registration", html`✉️ <b>Новая регистрация по почте</b>\nЗапрос кода на незнакомый адрес — аккаунт будет создан после подтверждения.`, 30).catch(() => null);
     }
   }
   const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || undefined;
-  const r = await sendOtp(email, "EMAIL", ip, ["ru", "en", "am"].includes(locale) ? locale : "ru", { skipDelivery: !user || user.blocked });
+  const r = await sendOtp(email, "EMAIL", ip, ["ru", "en", "am"].includes(locale) ? locale : "ru", { skipDelivery });
   return { ...r, email };
 }
 
-export async function verifyEmailLoginCodeAction(emailRaw: string, code: string) {
+export async function verifyEmailLoginCodeAction(emailRaw: string, code: string, locale = "ru") {
   const email = normalizeEmail(emailRaw);
   if (!email || !/^\d{4,6}$/.test(code.trim())) return { ok: false as const, error: "code" };
   if (!(await verifyOtp(email, code))) return { ok: false as const, error: "code" };
   const user = await verifiedUserByEmail(email);
-  if (!user || user.blocked) return { ok: false as const, error: "code" };
-  await createSession(user.id, user.role);
-  await audit(user.id, "auth.email", "User", user.id);
-  return { ok: true as const, role: user.role };
+  if (user) {
+    if (user.blocked) return { ok: false as const, error: "code" };
+    await createSession(user.id, user.role);
+    await audit(user.id, "auth.email", "User", user.id);
+    return { ok: true as const, role: user.role };
+  }
+  // Нет подтверждённого аккаунта: если адрес совсем незнакомый — создаём новый аккаунт (AUTH-19)
+  const anyUser = await db.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } } });
+  if (anyUser) {
+    // Адрес занят (неподтверждённый или заблокированный) — дубликат не создаём
+    return { ok: false as const, error: "code" };
+  }
+  try {
+    const now = new Date();
+    const created = await db.user.create({
+      data: { email, emailVerifiedAt: now, locale: ["ru", "en", "am"].includes(locale) ? locale : "ru", privacyConsentAt: now },
+    });
+    await createSession(created.id, created.role);
+    await audit(created.id, "auth.email.signup", "User", created.id);
+    return { ok: true as const, role: created.role };
+  } catch {
+    // Гонка: email успели занять, пока вводили код
+    return { ok: false as const, error: "code" };
+  }
 }
 
 /**
