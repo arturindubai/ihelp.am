@@ -1,10 +1,10 @@
 import { getTranslations } from "next-intl/server";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Link } from "@/i18n/navigation";
-import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
 import { tr } from "@/i18n/locales";
 import { addDays, atYerevan, hm, isoWeekday, ymd } from "@/lib/time";
+import { getAdminSchedule } from "@/server/services/pages/admin";
 import { dateLabel, durationLabel } from "@/lib/format";
 import { DateJump } from "@/components/admin/DateJump";
 import { PageHead, Forbidden } from "@/components/admin/ui";
@@ -17,10 +17,7 @@ export default async function Schedule({ params, searchParams }: { params: Promi
   const [t, to] = await Promise.all([getTranslations("admin"), getTranslations("order")]);
   const date = /^\d{4}-\d{2}-\d{2}$/.test(sp.date || "") ? sp.date! : ymd(new Date());
   const from = atYerevan(date, "00:00"), to_ = atYerevan(addDays(date, 1), "00:00");
-  const [masters, visits] = await Promise.all([
-    db.master.findMany({ where: { active: true }, orderBy: { sort: "asc" }, include: { timeOff: { where: { from: { lt: to_ }, to: { gt: from } } } } }),
-    db.visit.findMany({ where: { scheduledAt: { gte: from, lt: to_ }, status: { notIn: ["CANCELLED", "SKIPPED"] } }, orderBy: { scheduledAt: "asc" }, include: { order: { include: { user: true, service: true } } } }),
-  ]);
+  const [masters, visits] = await getAdminSchedule(from, to_);
   const cols = [{ id: null as string | null, name: t("schedule.unassigned"), hours: "", off: false }, ...masters.map((m) => {
     const wh = ((m.workingHours || {}) as Record<string, [string, string][]>)[String(isoWeekday(date))] || [];
     return { id: m.id, name: tr(m.name, locale), hours: wh.map(([a, b]) => `${a}–${b}`).join(", "), off: !wh.length || m.timeOff.length > 0 };

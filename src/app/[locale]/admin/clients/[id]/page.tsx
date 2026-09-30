@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
+import { getAdminClient } from "@/server/services/pages/admin";
 import { tr } from "@/i18n/locales";
 import { amd, dateLabel } from "@/lib/format";
 import { formatPhone } from "@/lib/phone";
@@ -14,7 +14,7 @@ import { ClientControls } from "@/components/admin/ClientControls";
 export default async function AdminClient({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params;
   if (!(await pageUser("clients"))) return <Forbidden />;
-  const u = await db.user.findUnique({ where: { id }, include: { addresses: true, orders: { orderBy: { createdAt: "desc" }, include: { service: true, plan: true } }, reviews: { orderBy: { createdAt: "desc" } } } });
+  const u = await getAdminClient(id);
   if (!u) notFound();
   const [t, to, ta] = await Promise.all([getTranslations("admin"), getTranslations("order"), getTranslations("address")]);
   const firstUsedBy = firstOrderUsedBy(u.orders);
