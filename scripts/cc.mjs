@@ -51,6 +51,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
 Тестировщик (--agent tester):
   test КЛЮЧ                                     взять на проверку + рабочая копия на коммите ветки
   pass КЛЮЧ "что проверено"                     протестировано (отметка на текущий коммит ветки)
+            (задача с интерфейсом: обязателен скриншот attach КЛЮЧ --file, текст «Проверено на стенде: …»)
   fail КЛЮЧ "что не так"                        вернуть разработчику
 
 Триаж (--agent triage; также cto и product):
@@ -83,7 +84,8 @@ const HELP = `cc — Control Center из командной строки (docs/D
 
 Деплоер (--agent deployer):
   return КЛЮЧ "что исправить"                   вернуть на доработку
-  done КЛЮЧ --sha КОММИТ "что проверено после выкладки"
+  done КЛЮЧ --sha КОММИТ "что проверено после выкладки" [--live "что видел на сайте"]
+            (задача с интерфейсом: --live обязателен; deploy-task.sh передаёт его из отчёта автоматически)
   lock КЛЮЧ / unlock КЛЮЧ                        держать задачу на время выкладки / отпустить
   (выкладка одной задачи целиком — scripts/deploy-task.sh КЛЮЧ)
 
@@ -245,6 +247,9 @@ function hint(code) {
     triaged_refused: "\n  Запись человека в ленте новее события разбора — задача вернётся в очередь триажа автоматически.",
     not_your_task: "\n  Задачу держит другой исполнитель.",
     no_update_fields: "\n  Укажите поля: --design-file, --details-file, --summary-file или --data '{\"поле\":\"значение\"}'.",
+    screenshot_required: "\n  Задача с интерфейсом: прикрепите скриншот стенда перед вердиктом:\n  node /opt/ihelp.am/scripts/cc.mjs attach КЛЮЧ --file screenshot.png --agent tester",
+    live_stand_required: "\n  Задача с интерфейсом: укажите в тексте вердикта что именно проверено на стенде:\n  «Проверено на стенде: страница /ru/…, форма заказа, адаптив на телефоне.»",
+    site_check_required: "\n  Задача с интерфейсом: укажите что проверено на живом сайте после выкладки:\n  --live \"SMOKE OK, проверен вход и форма заказа на https://ihelp.am\"",
   };
   return h[code] ?? "";
 }
@@ -252,6 +257,14 @@ function hint(code) {
 /* ───── вывод ───── */
 
 const STATUS = { backlog: "Бэклог", ready: "В очереди", in_progress: "В работе", review: "На проверке", blocked: "Заблокирована", done: "Сделано", cancelled: "Отменена" };
+
+/** Задача с интерфейсом — зеркало cc-flow.ts isUiTask без TypeScript */
+const isUiTaskJs = (layer, scope) =>
+  layer === "front" || layer === "fullstack" ||
+  (scope || []).some((s) => {
+    const p = s.trim().replace(/^\.\//, "").replace(/\/+$/, "");
+    return p === "src/app" || p.startsWith("src/app/") || p === "src/components" || p.startsWith("src/components/");
+  });
 const line = (t) =>
   `${t.key.padEnd(10)} ${String(STATUS[t.status] ?? t.status).padEnd(13)} ${t.priority}  ${t.title}${t.claimedBy ? `  · ${t.claimedBy}` : ""}${t.health?.stale ? "  · 🪦 брошена?" : ""}${t.health?.phantom ? "  · 👻 без исполнителя" : ""}${t.rework ? `  · ↩${t.rework}` : ""}`;
 
@@ -274,6 +287,11 @@ function printTask(d) {
   if (t.mockupRequired) {
     const mStatus = t.mockupApprovedBy ? `✓ утверждён (${t.mockupApprovedBy})` : "✗ НЕ утверждён — задачу нельзя взять в работу";
     out.push("", `Макет: ${mStatus}${t.mockupUrl ? ` · ${t.mockupUrl}` : ""}`);
+  }
+  if (isUiTaskJs(t.layer, t.scope)) {
+    const standOk = !!t.testedSha;
+    const siteOk = t.status === "done";
+    out.push("", `Живая проверка: нужна · стенд ${standOk ? "✓" : "✗"} · сайт ${siteOk ? "✓" : "✗"}`);
   }
   if (t.claimedBy) out.push("", `Держит: ${t.claimedBy} до ${new Date(t.claimUntil).toLocaleString("ru-RU", { timeZone: "Asia/Yerevan" })}${d.health?.stale ? " — аренда истекла" : ""}`);
   if (t.branch) out.push(`Ветка: ${t.branch}`);
@@ -858,7 +876,8 @@ async function main() {
           }
         }
       }
-      const r = await api("POST", null, { action: "done", agent: agentFor(k), key: k, sha, text: text() });
+      const liveProof = typeof flags.live === "string" ? flags.live.trim() : undefined;
+      const r = await api("POST", null, { action: "done", agent: agentFor(k), key: k, sha, text: text(), ...(liveProof ? { liveProof } : {}) });
       console.log(`✓ ${k} → ${STATUS[r.status] ?? r.status}`);
       return;
     }

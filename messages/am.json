@@ -7,6 +7,11 @@
     "emailConfirm": "",
     "emailNotVerified": "",
     "emailVerified": "",
+    "googleConnect": "",
+    "googleEmailMismatch": "",
+    "googleLinked": "",
+    "googleTitle": "Google",
+    "googleUsed": "",
     "history": "",
     "language": "",
     "locales": {
@@ -26,11 +31,6 @@
     "telegramDisconnect": "",
     "telegramLinked": "",
     "telegramLinkedNoUsername": "",
-    "googleConnect": "",
-    "googleEmailMismatch": "",
-    "googleLinked": "",
-    "googleTitle": "Google",
-    "googleUsed": "",
     "telegramTitle": "Telegram",
     "title": "Պրոֆիլ",
     "upcoming": ""
@@ -625,6 +625,7 @@
       "answer": "",
       "archiveCategory": "",
       "archived": "",
+      "arrivalHours": "",
       "banner": "",
       "benefits": "",
       "bookings": "",
@@ -660,6 +661,7 @@
       "infoTitle": "",
       "intervalDays": "",
       "isDefault": "",
+      "isNew": "",
       "kinds": {
         "ONE_TIME": "Մեկանգամ այց",
         "PACKAGE": "Այցերի Պակետ",
@@ -1057,6 +1059,9 @@
     "total": ""
   },
   "catalog": {
+    "arrivalToday": "",
+    "arrivalWithin": "",
+    "badgeNew": "",
     "comingSoonText": "",
     "comingSoonTitle": "Շուտով կբացենք",
     "newService": "Նոր ծառայություն",

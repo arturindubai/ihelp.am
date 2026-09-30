@@ -11,6 +11,8 @@ type Service = {
   fromPrice: number;
   maxDiscount: number;
   minDuration: number;
+  isNew?: boolean;
+  arrivalHours?: number | null;
 };
 
 export async function PopularServices({ services }: { services: Service[] }) {

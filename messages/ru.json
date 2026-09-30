@@ -9,6 +9,11 @@
     "emailRemindersLabel": "Получать напоминания о визитах и просьбы об отзыве по почте",
     "emailRemindersTitle": "Email-уведомления",
     "emailVerified": "Email подтверждён",
+    "googleConnect": "Привязать Google",
+    "googleEmailMismatch": "В профиле уже указан другой email; сначала измените его вручную",
+    "googleLinked": "Google подключён",
+    "googleTitle": "Google",
+    "googleUsed": "Этот Google-аккаунт уже используется",
     "history": "История",
     "language": "Язык уведомлений",
     "locales": {
@@ -28,11 +33,6 @@
     "telegramDisconnect": "Отвязать",
     "telegramLinked": "Telegram @{username} подключён",
     "telegramLinkedNoUsername": "Telegram подключён",
-    "googleConnect": "Привязать Google",
-    "googleEmailMismatch": "В профиле уже указан другой email; сначала измените его вручную",
-    "googleLinked": "Google подключён",
-    "googleTitle": "Google",
-    "googleUsed": "Этот Google-аккаунт уже используется",
     "telegramTitle": "Telegram",
     "title": "Профиль",
     "upcoming": "Предстоящие"
@@ -1540,6 +1540,7 @@
       "answer": "Ответ",
       "archiveCategory": "В архив",
       "archived": "В архиве",
+      "arrivalHours": "Срок выезда, ч (0 = сегодня, пусто — не показывать)",
       "banner": "Баннер услуги",
       "benefits": "Преимущества",
       "bookings": "Заказов",
@@ -1575,6 +1576,7 @@
       "infoTitle": "Ссылка-пояснение",
       "intervalDays": "Интервал между визитами, дней",
       "isDefault": "Выбран по умолчанию",
+      "isNew": "Бейдж «Новое»",
       "kinds": {
         "ONE_TIME": "Разовый визит",
         "PACKAGE": "Пакет визитов",
@@ -2028,6 +2030,9 @@
     "itemsCount": "{count, plural, one {# услуга} few {# услуги} other {# услуг}}"
   },
   "catalog": {
+    "arrivalToday": "сегодня",
+    "arrivalWithin": "в течение {n} ч",
+    "badgeNew": "Новое",
     "comingSoonText": "Готовим услуги и мастеров. Напишите нам — ответим на вопросы",
     "comingSoonTitle": "Скоро откроем",
     "newService": "Новая услуга",
