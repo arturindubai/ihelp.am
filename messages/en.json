@@ -2296,8 +2296,12 @@
   },
   "order": {
     "address": "Address",
+    "bookAgain": "Book again",
+    "callMaster": "Call",
     "cancelConfirm": "Are you sure you want to cancel?",
+    "cancelFreeUntil": "Free cancellation until {datetime}",
     "cancelOrder": "Cancel order",
+    "cancelPaid": "Late cancellation fee — {amount}",
     "cancelPenalty": "Late cancellation fee",
     "cancelSubscription": "Cancel subscription",
     "cancelVisit": "Cancel visit",
@@ -2308,6 +2312,9 @@
     "everyWeeks": "every {n} wks.",
     "lateCancel": "Less than {hours} hours until the visit — cancellation may be charged. Please contact us.",
     "leaveReview": "Leave a review",
+    "masterCard": "Your pro",
+    "masterNew": "New pro",
+    "masterNotAssigned": "A pro will be assigned after confirmation",
     "noCall": "Do not call, use messenger only",
     "number": "Order #{number}",
     "pause": "Pause",
@@ -2323,7 +2330,7 @@
     "price": "Price",
     "remaining": "Visits remaining: {count}",
     "repeat": "Repeat",
-    "reschedule": "Reschedule",
+    "reschedule": "Reschedule visit",
     "resume": "Resume",
     "reviewPlaceholder": "What did you like, what could be improved?",
     "reviewThanks": "Thank you for your review!",
@@ -2336,12 +2343,15 @@
       "COMPLETED": "Completed",
       "PAUSED": "Paused"
     },
+    "supportLink": "Order support",
+    "timeline": "Timeline",
     "tipAmount": "Tip for the pro",
     "unscheduled": "Unscheduled",
     "validUntil": "Valid until {date}",
     "visitEvents": {
       "CANCELLED": "Cancelled",
       "CONFIRMED": "Confirmed",
+      "CREATED": "Order created",
       "DONE": "Completed",
       "IN_PROGRESS": "Cleaning started",
       "NO_SHOW": "No show",
@@ -2371,6 +2381,7 @@
       "started": "Started"
     },
     "visits": "Visits",
+    "writeMaster": "Message",
     "yourReview": "Your review"
   },
   "pro": {

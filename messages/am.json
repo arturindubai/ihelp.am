@@ -1407,8 +1407,12 @@
   },
   "order": {
     "address": "",
+    "bookAgain": "",
+    "callMaster": "",
     "cancelConfirm": "",
+    "cancelFreeUntil": "",
     "cancelOrder": "",
+    "cancelPaid": "",
     "cancelPenalty": "",
     "cancelSubscription": "",
     "cancelVisit": "",
@@ -1419,6 +1423,9 @@
     "everyWeeks": "",
     "lateCancel": "",
     "leaveReview": "",
+    "masterCard": "",
+    "masterNew": "",
+    "masterNotAssigned": "",
     "noCall": "",
     "number": "",
     "pause": "",
@@ -1447,9 +1454,24 @@
       "COMPLETED": "Ավարտված",
       "PAUSED": "Կասեցված"
     },
+    "supportLink": "",
+    "timeline": "",
     "tipAmount": "",
     "unscheduled": "",
     "validUntil": "",
+    "visitEvents": {
+      "CANCELLED": "Չեղարկված",
+      "CONFIRMED": "Հաստատված",
+      "CREATED": "",
+      "DONE": "Կատարված",
+      "IN_PROGRESS": "Կատարվում է",
+      "NO_SHOW": "Տեղի չի ունեցել",
+      "ON_WAY": "Վարպետը ճամփան է",
+      "SCHEDULED": "Ժամկետ նշված է",
+      "SKIPPED": "Բաց թողված",
+      "UNSCHEDULED": "Ժամկետ չի նշված",
+      "title": ""
+    },
     "visitN": "",
     "visitStatus": {
       "CANCELLED": "Չեղարկված",
@@ -1463,6 +1485,7 @@
       "UNSCHEDULED": "Ժամկետ չի նշված"
     },
     "visits": "",
+    "writeMaster": "",
     "yourReview": ""
   },
   "pro": {
