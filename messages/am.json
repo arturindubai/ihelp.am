@@ -7,6 +7,11 @@
     "emailConfirm": "",
     "emailNotVerified": "",
     "emailVerified": "",
+    "googleConnect": "",
+    "googleEmailMismatch": "",
+    "googleLinked": "",
+    "googleTitle": "Google",
+    "googleUsed": "",
     "history": "",
     "language": "",
     "locales": {
@@ -51,6 +56,14 @@
   },
   "admin": {
     "banners": {
+      "aiApply": "Կիրառել",
+      "aiError": "Հնարավոր չեղավ ստանալ պատասխան — կրկին փորձեք",
+      "aiGenerateImage": "Ստեղծել պատկեր",
+      "aiImageResults": "Պատկերի տարբերակներ",
+      "aiSuggestResults": "Վերնագրի տարբերակներ",
+      "aiSuggestTitle": "Առաջարկել վերնագիր",
+      "aiUsageCount": "Հարցումներ այս ամիս: {count}",
+      "aiUse": "Օգտագործել",
       "audience": "",
       "audiences": {
         "ALL": "",
@@ -166,6 +179,15 @@
       },
       "keys": {
         "add": "",
+        "changed": "",
+        "check": "",
+        "checkResult": {
+          "empty": "",
+          "error": "",
+          "no_check": "",
+          "rejected": "",
+          "unreachable": ""
+        },
         "clear": "",
         "clearConfirm": "",
         "errors": {
@@ -173,9 +195,70 @@
           "bad_value": "",
           "unknown_key": ""
         },
+        "groups": {
+          "ai": "ԱԻ օգնական",
+          "codes": "",
+          "login": "",
+          "mail": "",
+          "telegram": "Telegram"
+        },
+        "items": {
+          "ai_anthropicKey": {
+            "how": "console.anthropic.com → Settings → API Keys → Create Key",
+            "purpose": "ԱԻ-ով բանների վերնագրեր և ենթավերնագրեր.",
+            "title": "Claude AI (Anthropic)"
+          },
+          "ai_higgsfieldKey": {
+            "how": "app.higgsfield.ai → Settings → API Key",
+            "purpose": "Բաններների համար ԱԻ պատկերներ (Nano Banana Pro).",
+            "title": "Higgsfield — պատկերներ"
+          },
+          "apple_privateKey": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "google_clientSecret": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "mail_apiKey": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "notify_telegramBotToken": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "otp_sms_authToken": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "otp_telegram_gatewayToken": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "otp_whatsapp_accessToken": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "team_botToken": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          }
+        },
+        "missing": "",
         "no": "Ոչ",
         "note": "",
         "pastePh": "",
+        "present": "",
         "push": {
           "createdAt": "",
           "noEncKey": "",
@@ -184,6 +267,7 @@
           "ready": "",
           "title": "Push ծանուցումներ"
         },
+        "replace": "",
         "services": {
           "APPLE_SIGNIN": {
             "how": "",
@@ -212,6 +296,7 @@
             "purpose": ""
           }
         },
+        "set": "",
         "status": {
           "active": "Ակտիվ",
           "empty": "",
@@ -221,6 +306,7 @@
         },
         "subtitle": "",
         "title": "",
+        "where": "",
         "yes": "Այո"
       },
       "library": {
@@ -488,8 +574,6 @@
       "comment": "",
       "config": "",
       "created": "",
-      "noCall": "",
-      "tipAmount": "",
       "days": "",
       "detail": "",
       "firstVisit": "",
@@ -514,6 +598,7 @@
       },
       "msgNotDelivered": "",
       "nextVisit": "",
+      "noCall": "",
       "noMaster": "",
       "noMessages": "",
       "number": "",
@@ -541,6 +626,7 @@
         "plan+promo": "",
         "promo": ""
       },
+      "tipAmount": "",
       "title": "",
       "total": "",
       "visitStatus": "",
@@ -771,7 +857,6 @@
       "firstVisit": "",
       "firstVisitCommitted": "",
       "freeCancel": "",
-      "lateCancelFee": "",
       "from": "",
       "gatewayToken": "",
       "google": "",
@@ -781,6 +866,7 @@
       "horizon": "",
       "instagram": "",
       "langRu": "",
+      "lateCancelFee": "",
       "leadHours": "",
       "locales": "",
       "localesHint": "",
@@ -1288,8 +1374,8 @@
     "address": "",
     "cancelConfirm": "",
     "cancelOrder": "",
-    "cancelSubscription": "",
     "cancelPenalty": "",
+    "cancelSubscription": "",
     "cancelVisit": "",
     "card": "",
     "cashNote": "",
@@ -1297,9 +1383,8 @@
     "every": "",
     "everyWeeks": "",
     "lateCancel": "",
-    "noCall": "",
-    "tipAmount": "",
     "leaveReview": "",
+    "noCall": "",
     "number": "",
     "pause": "",
     "pauseUntil": "",
@@ -1327,6 +1412,7 @@
       "COMPLETED": "Ավարտված",
       "PAUSED": "Կասեցված"
     },
+    "tipAmount": "",
     "unscheduled": "",
     "validUntil": "",
     "visitN": "",
@@ -1356,7 +1442,6 @@
     "noVisits": "",
     "notLinked": "",
     "note": "",
-    "tipAmount": "",
     "onWay": "",
     "route": "",
     "schedule": "",
@@ -1371,6 +1456,7 @@
     "settingsTab": "Կարգավորումներ",
     "start": "սկսել",
     "stats": "",
+    "tipAmount": "",
     "title": "",
     "toCollect": "",
     "today": "Այսոր",

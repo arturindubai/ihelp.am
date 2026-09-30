@@ -9,6 +9,11 @@
     "emailRemindersLabel": "Получать напоминания о визитах и просьбы об отзыве по почте",
     "emailRemindersTitle": "Email-уведомления",
     "emailVerified": "Email подтверждён",
+    "googleConnect": "Привязать Google",
+    "googleEmailMismatch": "В профиле уже указан другой email; сначала измените его вручную",
+    "googleLinked": "Google подключён",
+    "googleTitle": "Google",
+    "googleUsed": "Этот Google-аккаунт уже используется",
     "history": "История",
     "language": "Язык уведомлений",
     "locales": {
@@ -63,6 +68,14 @@
       "to": "Конец периода"
     },
     "banners": {
+      "aiApply": "Применить",
+      "aiError": "Не удалось получить ответ — попробуйте ещё раз",
+      "aiGenerateImage": "Сгенерировать изображение",
+      "aiImageResults": "Варианты изображения",
+      "aiSuggestResults": "Варианты заголовка",
+      "aiSuggestTitle": "Предложить заголовок",
+      "aiUsageCount": "Обращений в этом месяце: {count}",
+      "aiUse": "Использовать",
       "audience": "Аудитория",
       "audiences": {
         "ALL": "Все",
@@ -636,12 +649,23 @@
           "unknown_key": "Такого ключа нет в списке."
         },
         "groups": {
+          "ai": "ИИ-помощник",
           "codes": "Коды входа",
           "login": "Вход через Google и Apple",
           "mail": "Почта",
           "telegram": "Telegram"
         },
         "items": {
+          "ai_anthropicKey": {
+            "how": "console.anthropic.com → Settings → API Keys → Create Key",
+            "purpose": "Подбор заголовков и подзаголовков для баннеров через ИИ.",
+            "title": "Claude AI (Anthropic)"
+          },
+          "ai_higgsfieldKey": {
+            "how": "app.higgsfield.ai → Settings → API Key",
+            "purpose": "Генерация изображений для баннеров (модель Nano Banana Pro).",
+            "title": "Higgsfield — картинки"
+          },
           "apple_privateKey": {
             "how": "developer.apple.com → Certificates, IDs & Profiles → Keys → ключ с Sign in with Apple",
             "purpose": "Sign in with Apple: закрытый ключ .p8 целиком.",
@@ -1398,16 +1422,14 @@
       "assignMaster": "Мастер",
       "cancelConfirm": "Отменить заказ и все будущие визиты?",
       "cancelOrder": "Отменить заказ",
+      "cancelPenalty": "Штраф за позднюю отмену",
       "cancelReason": "Причина отмены",
       "cash": "Наличные получены",
       "changeStatus": "Статус заказа",
       "client": "Клиент",
-      "cancelPenalty": "Штраф за позднюю отмену",
       "comment": "Комментарий клиента",
       "config": "Параметры",
       "created": "Создан",
-      "noCall": "Не звонить, использовать мессенджер",
-      "tipAmount": "Чаевые мастеру",
       "days": "дн.",
       "detail": "Заказ №{number}",
       "firstVisit": "Первый визит",
@@ -1432,6 +1454,7 @@
       },
       "msgNotDelivered": "не доставлено",
       "nextVisit": "Ближайший визит",
+      "noCall": "Не звонить, использовать мессенджер",
       "noMaster": "Не назначен",
       "noMessages": "Нет сообщений",
       "number": "№",
@@ -1459,6 +1482,7 @@
         "plan+promo": "тариф + промокод",
         "promo": "промокод"
       },
+      "tipAmount": "Чаевые мастеру",
       "title": "Заказы",
       "total": "Сумма",
       "visitStatus": "Статус визита",
@@ -1706,7 +1730,6 @@
       "firstVisit": "Скидка на первый заказ без обязательства, %",
       "firstVisitCommitted": "Скидка на первый визит при подписке или пакете, %",
       "freeCancel": "Бесплатная отмена не позднее, ч",
-      "lateCancelFee": "Штраф за позднюю отмену, ֏ (0 = без штрафа)",
       "from": "Номер отправителя",
       "gatewayToken": "Gateway API токен",
       "google": "Вход через Google",
@@ -1716,6 +1739,7 @@
       "horizon": "На сколько дней вперёд можно записаться",
       "instagram": "Instagram",
       "langRu": "RU — Русский",
+      "lateCancelFee": "Штраф за позднюю отмену, ֏ (0 = без штрафа)",
       "leadHours": "Минимум часов до визита",
       "locales": "Языки сайта",
       "localesHint": "Русский включён всегда. Включайте ENG и ARM, когда тексты переведены.",
@@ -2306,6 +2330,7 @@
     "address": "Адрес",
     "cancelConfirm": "Точно отменить?",
     "cancelOrder": "Отменить заказ",
+    "cancelPenalty": "Штраф за позднюю отмену",
     "cancelSubscription": "Отменить подписку",
     "cancelVisit": "Отменить визит",
     "card": "Картой онлайн",
@@ -2313,11 +2338,9 @@
     "config": "Параметры",
     "every": "Расписание",
     "everyWeeks": "каждые {n} нед.",
-    "cancelPenalty": "Штраф за позднюю отмену",
     "lateCancel": "До визита меньше {hours} ч — отмена может быть платной. Свяжитесь с нами.",
-    "noCall": "Не звонить, использовать мессенджер",
-    "tipAmount": "Чаевые мастеру",
     "leaveReview": "Оставить отзыв",
+    "noCall": "Не звонить, использовать мессенджер",
     "number": "Заказ №{number}",
     "pause": "Поставить на паузу",
     "pauseUntil": "Пауза до",
@@ -2345,6 +2368,7 @@
       "COMPLETED": "Завершён",
       "PAUSED": "На паузе"
     },
+    "tipAmount": "Чаевые мастеру",
     "unscheduled": "Не запланирован",
     "validUntil": "Действует до {date}",
     "visitEvents": {
@@ -2393,7 +2417,6 @@
     "noVisits": "Визитов нет",
     "notLinked": "Ваш номер не привязан к профилю мастера. Обратитесь к администратору.",
     "note": "Заметка",
-    "tipAmount": "Чаевые",
     "onWay": "Выехал",
     "route": "Маршрут",
     "schedule": "Мой график",
@@ -2408,6 +2431,7 @@
     "settingsTab": "Настройки",
     "start": "Начал",
     "stats": "Моя статистика",
+    "tipAmount": "Чаевые",
     "title": "Кабинет мастера",
     "toCollect": "Получить с клиента",
     "today": "Сегодня",

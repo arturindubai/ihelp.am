@@ -9,6 +9,11 @@
     "emailRemindersLabel": "Receive visit reminders and review requests by email",
     "emailRemindersTitle": "Email notifications",
     "emailVerified": "Email verified",
+    "googleConnect": "Connect Google",
+    "googleEmailMismatch": "Your profile already has a different email; change it manually first",
+    "googleLinked": "Google connected",
+    "googleTitle": "Google",
+    "googleUsed": "This Google account is already in use",
     "history": "History",
     "language": "Notification language",
     "locales": {
@@ -53,6 +58,14 @@
   },
   "admin": {
     "banners": {
+      "aiApply": "Apply",
+      "aiError": "Could not get a response — please try again",
+      "aiGenerateImage": "Generate image",
+      "aiImageResults": "Image options",
+      "aiSuggestResults": "Title options",
+      "aiSuggestTitle": "Suggest title",
+      "aiUsageCount": "Requests this month: {count}",
+      "aiUse": "Use",
       "audience": "Audience",
       "audiences": {
         "ALL": "Everyone",
@@ -588,12 +601,23 @@
           "unknown_key": "This key is not in the list."
         },
         "groups": {
+          "ai": "AI assistant",
           "codes": "Login codes",
           "login": "Google and Apple sign-in",
           "mail": "Email",
           "telegram": "Telegram"
         },
         "items": {
+          "ai_anthropicKey": {
+            "how": "console.anthropic.com → Settings → API Keys → Create Key",
+            "purpose": "AI-suggested titles and subtitles for banners.",
+            "title": "Claude AI (Anthropic)"
+          },
+          "ai_higgsfieldKey": {
+            "how": "app.higgsfield.ai → Settings → API Key",
+            "purpose": "AI-generated banner images (Nano Banana Pro model).",
+            "title": "Higgsfield — images"
+          },
           "apple_privateKey": {
             "how": "developer.apple.com → Certificates, IDs & Profiles → Keys → key with Sign in with Apple",
             "purpose": "Sign in with Apple: full .p8 private key.",
@@ -1320,8 +1344,6 @@
       "comment": "Client comment",
       "config": "Options",
       "created": "Created",
-      "noCall": "Do not call, use messenger",
-      "tipAmount": "Tip for the pro",
       "days": "d.",
       "detail": "Order #{number}",
       "firstVisit": "First visit",
@@ -1346,6 +1368,7 @@
       },
       "msgNotDelivered": "not delivered",
       "nextVisit": "Next visit",
+      "noCall": "Do not call, use messenger",
       "noMaster": "Not assigned",
       "noMessages": "No messages",
       "number": "#",
@@ -1373,6 +1396,7 @@
         "plan+promo": "plan + promo",
         "promo": "promo code"
       },
+      "tipAmount": "Tip for the pro",
       "title": "Orders",
       "total": "Amount",
       "visitStatus": "Visit status",
@@ -1614,7 +1638,6 @@
       "firstVisit": "First order discount without commitment, %",
       "firstVisitCommitted": "First visit discount with subscription or package, %",
       "freeCancel": "Free cancellation up to, h",
-      "lateCancelFee": "Late cancellation fee, AMD (0 = no fee)",
       "from": "Sender number",
       "gatewayToken": "Gateway API token",
       "google": "Google sign-in",
@@ -1624,6 +1647,7 @@
       "horizon": "Days ahead available for booking",
       "instagram": "Instagram",
       "langRu": "RU — Russian",
+      "lateCancelFee": "Late cancellation fee, AMD (0 = no fee)",
       "leadHours": "Min hours before visit",
       "locales": "Website languages",
       "localesHint": "Russian is always on. Enable EN and AM when texts are translated.",
@@ -2207,18 +2231,17 @@
     "address": "Address",
     "cancelConfirm": "Are you sure you want to cancel?",
     "cancelOrder": "Cancel order",
+    "cancelPenalty": "Late cancellation fee",
     "cancelSubscription": "Cancel subscription",
     "cancelVisit": "Cancel visit",
-    "cancelPenalty": "Late cancellation fee",
     "card": "Card online",
     "cashNote": "Cash payment to the pro",
     "config": "Options",
-    "noCall": "Do not call, use messenger only",
-    "tipAmount": "Tip for the pro",
     "every": "Schedule",
     "everyWeeks": "every {n} wks.",
     "lateCancel": "Less than {hours} hours until the visit — cancellation may be charged. Please contact us.",
     "leaveReview": "Leave a review",
+    "noCall": "Do not call, use messenger only",
     "number": "Order #{number}",
     "pause": "Pause",
     "pauseUntil": "Pause until",
@@ -2246,6 +2269,7 @@
       "COMPLETED": "Completed",
       "PAUSED": "Paused"
     },
+    "tipAmount": "Tip for the pro",
     "unscheduled": "Unscheduled",
     "validUntil": "Valid until {date}",
     "visitEvents": {
@@ -2294,7 +2318,6 @@
     "noVisits": "No visits",
     "notLinked": "Your phone is not linked to a pro profile. Please contact admin.",
     "note": "Note",
-    "tipAmount": "Tip",
     "onWay": "On the way",
     "route": "Route",
     "schedule": "My schedule",
@@ -2309,6 +2332,7 @@
     "settingsTab": "Settings",
     "start": "Started",
     "stats": "My stats",
+    "tipAmount": "Tip",
     "title": "Pro cabinet",
     "toCollect": "Collect from client",
     "today": "Today",
