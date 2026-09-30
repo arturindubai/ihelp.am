@@ -10,6 +10,7 @@ import { amd, dateLabel } from "@/lib/format";
 import { contactLink } from "@/lib/contacts";
 import { hm } from "@/lib/time";
 import { PromoSlot } from "@/components/PromoSlot";
+import { ClearCart } from "@/components/ClearCart";
 
 export default async function BookSuccessPage({ params, searchParams }: { params: Promise<{ locale: string; slug: string }>; searchParams: Promise<{ orderId?: string }> }) {
   const { locale, slug } = await params;
@@ -45,6 +46,7 @@ export default async function BookSuccessPage({ params, searchParams }: { params
 
   return (
     <div className="container-m pb-10 pt-6">
+      <ClearCart />
       {/* Заголовок успеха */}
       <div className="flex flex-col items-center gap-3 text-center">
         <span className="flex size-20 items-center justify-center rounded-full bg-ok-50">

@@ -563,11 +563,18 @@
       "descr": "",
       "firstOrderOnly": "",
       "fixed": "",
+      "forBothNote": "",
+      "forClient": "",
+      "forEmail": "",
+      "forEmailHint": "",
+      "forPhone": "",
+      "forPhoneHint": "",
       "maxDiscount": "",
       "minOrder": "",
       "newPromo": "",
       "perUserLimit": "",
       "percent": "",
+      "personal": "",
       "planKinds": "",
       "rulesHint": "",
       "services": "",
@@ -1039,10 +1046,25 @@
     "weekdaysShort": "",
     "wishes": ""
   },
+  "cart": {
+    "checkout": "",
+    "itemsCount": "",
+    "total": ""
+  },
   "catalog": {
-    "comingSoonText": "Պատրաստում ենք ծառայություններ: Գրեք մեզ՝ ձեր հարցերին կպատասխանենք",
+    "comingSoonText": "",
     "comingSoonTitle": "Շուտով կբացենք",
     "newService": "Նոր ծառայություն",
+    "notifyAlready": "",
+    "notifyButton": "",
+    "notifyConsent": "",
+    "notifyHint": "",
+    "notifyInvalid": "",
+    "notifyPlaceholder": "",
+    "notifySubtitle": "",
+    "notifySuccess": "",
+    "notifyTitle": "",
+    "notifyTooMany": "",
     "writeWhatsApp": "Գրել WhatsApp-ում"
   },
   "common": {
@@ -1147,6 +1169,46 @@
     "services": "Ծառայություններ"
   },
   "notify": {
+    "client": {
+      "confirmation": {
+        "address": "",
+        "button": "",
+        "date": "",
+        "service": "",
+        "subject": "",
+        "title": "",
+        "total": ""
+      },
+      "reminder": {
+        "address": "",
+        "button": "",
+        "date": "",
+        "master": "",
+        "service": "",
+        "subject": "",
+        "title": ""
+      },
+      "reminder2h": {
+        "address": "",
+        "button": "",
+        "date": "",
+        "master": "",
+        "service": "",
+        "subject": "",
+        "title": ""
+      },
+      "review": {
+        "button": "",
+        "line1": "",
+        "line2": "",
+        "subject": "",
+        "title": ""
+      },
+      "unsubscribeLink": "",
+      "unsubscribeText": "",
+      "unsubscribedBody": "",
+      "unsubscribedTitle": ""
+    },
     "order": {
       "cancelled": "",
       "completed": "",

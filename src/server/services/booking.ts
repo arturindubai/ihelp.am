@@ -128,7 +128,7 @@ export async function createOrder(user: User, input: CreateOrderInput) {
   let promoId: string | null = null;
   let promo = null;
   if (input.promoCode) {
-    const pc = await checkPromo({ code: input.promoCode, userId: user.id, phone: user.phone, serviceId: raw.id, planKind: kind, amount: base.first.base, isFirstOrder: first });
+    const pc = await checkPromo({ code: input.promoCode, userId: user.id, phone: user.phone, email: user.emailVerifiedAt ? user.email : null, serviceId: raw.id, planKind: kind, amount: base.first.base, isFirstOrder: first });
     if (pc.ok) {
       promo = pc.promo;
     }

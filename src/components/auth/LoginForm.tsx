@@ -132,7 +132,7 @@ function EmailLogin({ onDone, onBack }: { onDone: (role: string) => void; onBack
           <input id="login-email" type="email" className="input" autoComplete="email" inputMode="email" value={email} placeholder={t("emailPlaceholder")} onChange={(e) => setEmail(e.target.value)} />
           <button className="btn-primary mt-3 w-full" disabled={pending || !email.trim()}><Mail size={18} /> {t("emailGetCode")}</button>
           <p className="mt-3 text-xs text-muted">{t("emailOnlyConfirmed")}</p>
-          <p className="mt-2 text-xs text-muted">
+          <p className="mt-3 text-xs text-muted">
             {t.rich("consent", {
               privacy: (c) => <Link href="/p/privacy" target="_blank" className="underline underline-offset-2">{c}</Link>,
               offer: (c) => <Link href="/p/offer" target="_blank" className="underline underline-offset-2">{c}</Link>,
