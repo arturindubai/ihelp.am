@@ -92,7 +92,33 @@ else
   flock -n 9 || stop "Уже идёт другая выкладка — жду своей очереди в следующий раз"
 
   [ "$(git branch --show-current)" = main ] || stop "Основная копия не на main — выкладку не начинаю"
-  [ -z "$(git status --porcelain)" ] || stop "В основной копии незакоммиченные изменения — выкладку не начинаю"
+  # Неотслеживаемые файлы (??) убираем в сторону — они выкладке не мешают.
+  # Изменённые отслеживаемые файлы (M, D и т.п.) останавливают выкладку: это чья-то работа.
+  _porcelain=$(git status --porcelain)
+  if [ -n "$_porcelain" ]; then
+    _tracked=$(printf '%s\n' "$_porcelain" | grep -v '^?? ' || true)
+    [ -n "$_tracked" ] && stop "В основной копии незакоммиченные изменения — выкладку не начинаю"
+    _stray_dir="data/tmp/stray/$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$_stray_dir"
+    _stray_list=""
+    while IFS= read -r _stray_line; do
+      [ -z "$_stray_line" ] && continue
+      _fp="${_stray_line:3}"
+      _fp="${_fp%/}"
+      _dest_dir="$_stray_dir/$(dirname "$_fp")"
+      mkdir -p "$_dest_dir"
+      if mv "$_fp" "$_dest_dir/"; then
+        _stray_list="${_stray_list} ${_fp}"
+        echo "▶ Лишний файл убран в сторону: $_fp → ${_dest_dir}/"
+      else
+        stop "Не удалось убрать лишний файл из основной копии: $_fp"
+      fi
+    done < <(printf '%s\n' "$_porcelain" | grep '^?? ' || true)
+    echo "▶ Лишние файлы перенесены в $_stray_dir:${_stray_list}"
+    for _sk in "${KEYS[@]}"; do
+      cc note "$_sk" "Пачковая выкладка: перед стартом убраны неотслеживаемые файлы в ${_stray_dir}:${_stray_list}" 2>/dev/null || true
+    done
+  fi
   git fetch -q origin || stop "Нет связи с GitHub"
   declare -F deploy_recover_main > /dev/null && deploy_recover_main
   git merge --ff-only -q origin/main || stop "Локальный main разошёлся с origin/main — нужен человек"

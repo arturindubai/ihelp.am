@@ -9,7 +9,10 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 3
 # Выкладка идёт в собственном юните systemd и не гибнет вместе с вызвавшим её воркером (scripts/deploy-unit.sh)
-[ -f scripts/deploy-unit.sh ] && . scripts/deploy-unit.sh && deploy_in_unit "$0" "$@"
+# --dry-run: сухой прогон без выкладки — в юнит не переносится, чтобы не создавать systemd-юнит для теста
+if ! printf '%s\n' "$@" | grep -qx -- '--dry-run'; then
+  [ -f scripts/deploy-unit.sh ] && . scripts/deploy-unit.sh && deploy_in_unit "$0" "$@"
+fi
 KEY="${1:-}"
 [ -n "$KEY" ] || { echo "Использование: scripts/deploy-task.sh <КЛЮЧ> [--no-test [причина]] [--force-own причина]"; exit 3; }
 shift
@@ -17,10 +20,12 @@ shift
 # --no-test — только для человека или чата-деплоера, который проверил сам; воркеру (CC_WORKER=1) недоступен
 # --no-test причина — при включённом пуле тестировщика причина обязательна и записывается в ленту
 # --force-own причина — обход проверки «автор не выкладывает свою задачу»; только владелец (agentname=owner*)
+# --dry-run — сухой прогон: проверяет условия и переносит лишние файлы, но не мёрджит и не деплоит
 NOTEST=""
 NOTEST_REASON=""
 FORCE_OWN=""
 FORCE_OWN_REASON=""
+DRY_RUN=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-test)
@@ -36,6 +41,7 @@ while [ $# -gt 0 ]; do
         echo "✗ --force-own требует причину: --force-own \"причина\""; exit 3
       fi
       ;;
+    --dry-run) DRY_RUN=1 ;;
   esac
   shift
 done
@@ -52,7 +58,31 @@ exec 9> data/deploy.lock
 flock -n 9 || stop "Уже идёт другая выкладка — жду своей очереди в следующий раз"
 
 [ "$(git branch --show-current)" = main ] || stop "Основная копия не на main — выкладку не начинаю"
-[ -z "$(git status --porcelain)" ] || stop "В основной копии незакоммиченные изменения (чужая работа?) — выкладку не начинаю"
+# Неотслеживаемые файлы (??) убираем в сторону — они не принадлежат никакой ветке и выкладке не мешают.
+# Изменённые отслеживаемые файлы (M, D и т.п.) останавливают выкладку: это чья-то работа.
+_porcelain=$(git status --porcelain)
+if [ -n "$_porcelain" ]; then
+  _tracked=$(printf '%s\n' "$_porcelain" | grep -v '^?? ' || true)
+  [ -n "$_tracked" ] && stop "В основной копии незакоммиченные изменения (чужая работа?) — выкладку не начинаю"
+  _stray_dir="data/tmp/stray/$(date +%Y%m%d-%H%M%S)"
+  mkdir -p "$_stray_dir"
+  _stray_list=""
+  while IFS= read -r _stray_line; do
+    [ -z "$_stray_line" ] && continue
+    _fp="${_stray_line:3}"
+    _fp="${_fp%/}"
+    _dest_dir="$_stray_dir/$(dirname "$_fp")"
+    mkdir -p "$_dest_dir"
+    if mv "$_fp" "$_dest_dir/"; then
+      _stray_list="${_stray_list} ${_fp}"
+      echo "▶ Лишний файл убран в сторону: $_fp → ${_dest_dir}/"
+    else
+      stop "Не удалось убрать лишний файл из основной копии: $_fp"
+    fi
+  done < <(printf '%s\n' "$_porcelain" | grep '^?? ' || true)
+  echo "▶ Лишние файлы перенесены в $_stray_dir:${_stray_list}"
+  cc note "$KEY" "Перед выкладкой убраны неотслеживаемые файлы в ${_stray_dir}:${_stray_list}" 2>/dev/null || true
+fi
 git fetch -q origin || stop "Нет связи с GitHub"
 declare -F deploy_recover_main > /dev/null && deploy_recover_main
 git merge --ff-only -q origin/main || stop "Локальный main разошёлся с origin/main — нужен человек"
@@ -141,6 +171,14 @@ if [ -n "$NOTEST" ]; then
   else
     tested_label="Без отметки тестировщика (--no-test): проверял деплоер."
   fi
+fi
+
+if [ -n "$DRY_RUN" ]; then
+  echo "▶ [DRY-RUN] Задача $KEY: ветка $branch (${head:0:10}), статус $status"
+  echo "▶ [DRY-RUN] Основная копия чистая, стоит на main — выкладка возможна"
+  echo "▶ [DRY-RUN] Слияние, сборка и smoke не выполняются (--dry-run)"
+  exec 9>&-
+  exit 0
 fi
 
 prev=$(git rev-parse HEAD)
