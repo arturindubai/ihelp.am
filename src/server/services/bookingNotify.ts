@@ -305,6 +305,9 @@ export async function notifyClientRescheduled(visitId: string): Promise<void> {
     });
     if (!visit?.scheduledAt) return;
 
+    // Сбрасываем напоминание: при переносе клиент должен получить новое
+    await db.visit.update({ where: { id: visitId }, data: { remindedAt: null } });
+
     const eventKey = `rescheduled:${visit.scheduledAt.toISOString()}`;
     const ok = await markVisitEvent(visitId, eventKey);
     if (!ok) return;
@@ -507,12 +510,13 @@ export async function sendVisitReminders(now: Date): Promise<number> {
     try {
       let deliveryOk = false;
       if (ch.channel === "telegram") {
+        // fill() уже экранирует параметры — не оборачивать в html``, иначе экранирование двойное
         const text =
-          html`📅 <b>${fill(tmpl.reminder.title, {})}</b>\n` +
-          html`${fill(tmpl.reminder.service, { service })}\n` +
-          html`${fill(tmpl.reminder.date, { date, time })}\n` +
-          html`${fill(tmpl.reminder.master, { master })}\n` +
-          html`${fill(tmpl.reminder.address, { address })}`;
+          `📅 <b>${fill(tmpl.reminder.title, {})}</b>\n` +
+          `${fill(tmpl.reminder.service, { service })}\n` +
+          `${fill(tmpl.reminder.date, { date, time })}\n` +
+          `${fill(tmpl.reminder.master, { master })}\n` +
+          `${fill(tmpl.reminder.address, { address })}`;
         await sendTelegramDirect(ch.token, ch.telegramId, text);
         deliveryOk = true;
       } else {
@@ -552,13 +556,14 @@ export async function sendVisitReminders(now: Date): Promise<number> {
   return sent;
 }
 
-/** 7. Запросы отзыва: визиты со статусом DONE, finishedAt 2–6 часов назад, reviewRequestedAt=null.
+/** 7. Запросы отзыва: визиты со статусом DONE, finishedAt 2–18 часов назад, reviewRequestedAt=null.
+ *  18 часов (вместо 6) гарантируют, что вечерние визиты дождутся утра и всё равно получат просьбу.
  *  Вызывается из cron каждые 15 минут. В тихий период (по умолчанию 21:00–09:00 Ереван) не отправляет. */
 export async function sendReviewRequests(now: Date): Promise<number> {
   const s0 = await getSettings();
   if (isQuietHour(now, s0.notify.quietHourStart, s0.notify.quietHourEnd)) return 0;
 
-  const from = new Date(now.getTime() - 6 * 3600_000);
+  const from = new Date(now.getTime() - 18 * 3600_000);
   const to = new Date(now.getTime() - 2 * 3600_000);
 
   const visits = await db.visit.findMany({
