@@ -60,6 +60,10 @@ export function Checkout(props: {
   freeCancelHours: number;
   lateCancelFeeAmd: number;
   contacts: Partial<Record<ContactKey, string>>;
+  /** Предвыбранный адрес из последнего заказа */
+  defaultAddressId?: string | null;
+  /** Предвыбранный способ оплаты из последнего заказа */
+  defaultPaymentMethod?: "CASH" | "CARD" | null;
 }) {
   const t = useTranslations("booking");
   const ts = useTranslations("service");
@@ -68,7 +72,10 @@ export function Checkout(props: {
   const locale = useLocale();
   const router = useRouter();
   const [addresses, setAddresses] = useState(props.addresses);
-  const [addressId, setAddressId] = useState(props.addresses.find((a) => a.isDefault)?.id || props.addresses[0]?.id || "");
+  const [addressId, setAddressId] = useState(() => {
+    if (props.defaultAddressId && props.addresses.some((a) => a.id === props.defaultAddressId)) return props.defaultAddressId;
+    return props.addresses.find((a) => a.isDefault)?.id || props.addresses[0]?.id || "";
+  });
   const [addrOpen, setAddrOpen] = useState(false);
   const today = ymd(new Date());
   const days = useMemo(() => Array.from({ length: props.horizonDays }, (_, i) => addDays(today, i)), [today, props.horizonDays]);
@@ -83,7 +90,11 @@ export function Checkout(props: {
   const [masterSheetSlot, setMasterSheetSlot] = useState<string | null>(null);
   const [masterSheetChoice, setMasterSheetChoice] = useState<string | null>(null);
   const [weekdays, setWeekdays] = useState<number[]>([]);
-  const [payment, setPayment] = useState<"CASH" | "CARD">(props.cashEnabled ? "CASH" : "CARD");
+  const [payment, setPayment] = useState<"CASH" | "CARD">(() => {
+    if (props.defaultPaymentMethod === "CARD" && props.cardEnabled) return "CARD";
+    if (props.defaultPaymentMethod === "CASH" && props.cashEnabled) return "CASH";
+    return props.cashEnabled ? "CASH" : "CARD";
+  });
   const [promoInput, setPromoInput] = useState("");
   const [promo, setPromo] = useState<PricePromo | null>(null);
   const [promoMsg, setPromoMsg] = useState<{ ok: boolean; text: string }>();
