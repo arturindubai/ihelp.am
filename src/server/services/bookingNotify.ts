@@ -93,7 +93,9 @@ async function selectClientChannel(user: {
 }
 
 /** Отправить клиентское уведомление по наиболее доступному каналу:
- *  Telegram (прямая отправка, при сбое — fallback) → email → алерт оператору. */
+ *  Telegram (прямая отправка, при сбое — fallback) → email → алерт оператору.
+ *  Проверка emailUnsubscribedAt здесь не производится: письма о заказе приходят всегда.
+ *  Только необязательные письма (напоминания, отзыв) блокируются флагом в selectClientChannel. */
 async function sendToClient(
   userId: string,
   text: string,
@@ -121,7 +123,7 @@ async function sendToClient(
     }
   }
 
-  if (channel === "none" && user?.email && !user.emailUnsubscribedAt) {
+  if (channel === "none" && user?.email) {
     try {
       const s = await getSettings();
       if (s.mail.enabled) {

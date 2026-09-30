@@ -1,10 +1,16 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { saveSettingsAction, testMailAction, testNotifyAction, registerTelegramWebhookAction } from "@/server/actions/admin/misc";
+import { saveSettingsAction, testMailAction, testNotifyAction, registerTelegramWebhookAction, findTelegramChatsAction, sendTestNotifyToAction } from "@/server/actions/admin/misc";
 import type { Settings } from "@/server/settings";
 import type { ContactKey } from "@/lib/contacts";
 import { Card, I18nInput, NumInput, TextInput, Toggle } from "./fields";
+
+type FindChatState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "found"; chats: { id: number; title: string; type: string }[] }
+  | { status: "error"; msg: string };
 
 function Section<K extends keyof Settings>({ k, title, value, children, hint }: { k: K; title: string; value: Settings[K]; children: React.ReactNode; hint?: string }) {
   const t = useTranslations("admin");
@@ -25,7 +31,38 @@ export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardInte
   const [mailTo, setMailTo] = useState("");
   const [mailSent, setMailSent] = useState<string | null>(null);
   const [tgWebhook, setTgWebhook] = useState<string | null>(null);
+  const [findTeam, setFindTeam] = useState<FindChatState>({ status: "idle" });
+  const [findTech, setFindTech] = useState<FindChatState>({ status: "idle" });
+  const [testTeamResult, setTestTeamResult] = useState<string | null>(null);
+  const [testTechResult, setTestTechResult] = useState<string | null>(null);
   const set = <K extends keyof Settings>(k: K, v: Partial<Settings[K]>) => setS((x) => ({ ...x, [k]: { ...x[k], ...v } }));
+
+  async function handleFindChats(setter: (s: FindChatState) => void) {
+    setter({ status: "loading" });
+    const r = await findTelegramChatsAction();
+    if (!r.ok) { setter({ status: "error", msg: t(`findChatError.${r.error}` as "findChatError.noToken") }); return; }
+    if (r.chats.length === 0) { setter({ status: "error", msg: t("findChatEmpty") }); return; }
+    setter({ status: "found", chats: r.chats });
+  }
+
+  function ChatPicker({ state, onSelect }: { state: FindChatState; onSelect: (id: string) => void }) {
+    if (state.status === "loading") return <p className="mt-1 text-xs text-muted">{t("findChatLoading")}</p>;
+    if (state.status === "error") return <p className="mt-1 text-xs text-bad">{state.msg}</p>;
+    if (state.status === "found") return (
+      <ul className="mt-2 divide-y divide-line rounded-xl border border-line text-sm">
+        {state.chats.map((c) => (
+          <li key={c.id}>
+            <button type="button" className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-surface" onClick={() => onSelect(String(c.id))}>
+              <span className="flex-1 font-medium">{c.title}</span>
+              <span className="shrink-0 text-xs text-muted">{c.type} · {c.id}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    );
+    return null;
+  }
+
   const b = s.brand, bk = s.booking, pr = s.pricing, o = s.otp;
   const contact = (k: ContactKey, type = "text") => {
     const env = lockedContacts[k];
@@ -176,9 +213,42 @@ export function SettingsEditor({ initial, devMode, lockedContacts = {}, cardInte
       </Section>
 
       <Section k="notify" title={t("notify")} value={s.notify} hint={t("notifyHint")}>
+        {!s.notify.teamChatId && !s.notify.telegramChatId && (
+          <div className="mb-3 rounded-xl border border-bad bg-bad/10 p-2.5 text-sm text-bad">
+            {t("teamChatMissing")}{" "}
+            <button type="button" className="font-medium underline" onClick={() => handleFindChats(setFindTeam)}>{t("teamChatMissingLink")}</button>
+          </div>
+        )}
         <div className="grid gap-3 md:grid-cols-2">
-          <TextInput label={t("teamChatId")} hint={t("teamChatHint")} value={s.notify.teamChatId} onChange={(v) => set("notify", { teamChatId: v })} />
-          <TextInput label={t("techChatId")} hint={t("techChatHint")} value={s.notify.techChatId} onChange={(v) => set("notify", { techChatId: v })} />
+          <div>
+            <TextInput label={t("teamChatId")} hint={t("teamChatHint")} value={s.notify.teamChatId} onChange={(v) => { set("notify", { teamChatId: v }); setFindTeam({ status: "idle" }); }} />
+            <div className="mt-1 flex flex-wrap gap-2">
+              <button type="button" className="btn-outline btn-sm" disabled={findTeam.status === "loading"} onClick={() => handleFindChats(setFindTeam)}>
+                {findTeam.status === "loading" ? t("findChatLoading") : t("findTeamChat")}
+              </button>
+              {s.notify.teamChatId && (
+                <button type="button" className="btn-outline btn-sm" onClick={async () => { const r = await sendTestNotifyToAction(s.notify.teamChatId); setTestTeamResult(r.ok ? t("testSent") : ("error" in r ? r.error : "error")); }}>
+                  {testTeamResult ?? t("testNotify")}
+                </button>
+              )}
+            </div>
+            <ChatPicker state={findTeam} onSelect={(id) => { set("notify", { teamChatId: id }); setFindTeam({ status: "idle" }); }} />
+            <p className="mt-1 text-xs text-muted">{t("findChatHint")}</p>
+          </div>
+          <div>
+            <TextInput label={t("techChatId")} hint={t("techChatHint")} value={s.notify.techChatId} onChange={(v) => { set("notify", { techChatId: v }); setFindTech({ status: "idle" }); }} />
+            <div className="mt-1 flex flex-wrap gap-2">
+              <button type="button" className="btn-outline btn-sm" disabled={findTech.status === "loading"} onClick={() => handleFindChats(setFindTech)}>
+                {findTech.status === "loading" ? t("findChatLoading") : t("findTechChat")}
+              </button>
+              {s.notify.techChatId && (
+                <button type="button" className="btn-outline btn-sm" onClick={async () => { const r = await sendTestNotifyToAction(s.notify.techChatId); setTestTechResult(r.ok ? t("testSent") : ("error" in r ? r.error : "error")); }}>
+                  {testTechResult ?? t("testNotify")}
+                </button>
+              )}
+            </div>
+            <ChatPicker state={findTech} onSelect={(id) => { set("notify", { techChatId: id }); setFindTech({ status: "idle" }); }} />
+          </div>
           <TextInput label={t("telegramOrderThreadId")} hint={t("telegramOrderThreadHint")} value={s.notify.telegramOrderThreadId} onChange={(v) => set("notify", { telegramOrderThreadId: v })} />
           <TextInput label={t("telegramTechThreadId")} hint={t("telegramTechThreadHint")} value={s.notify.telegramTechThreadId} onChange={(v) => set("notify", { telegramTechThreadId: v })} />
           <TextInput label={t("telegramTasksThreadId")} hint={t("telegramTasksThreadHint")} value={s.notify.telegramTasksThreadId} onChange={(v) => set("notify", { telegramTasksThreadId: v })} />
