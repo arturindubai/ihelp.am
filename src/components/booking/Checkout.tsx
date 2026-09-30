@@ -58,6 +58,7 @@ export function Checkout(props: {
   cashEnabled: boolean;
   cardEnabled: boolean;
   freeCancelHours: number;
+  lateCancelFeeAmd: number;
   contacts: Partial<Record<ContactKey, string>>;
 }) {
   const t = useTranslations("booking");
@@ -154,7 +155,6 @@ export function Checkout(props: {
     if (!addressId) return setError(t("errors.no_address"));
     if (!time) return setError(t("errors.no_slot"));
     if (multiDays && weekdays.length < (props.plan?.visitsPerWeek || 2)) return setError(t("errors.days"));
-    const fullComment = [noCall ? "[Не звонить] " : "", comment.trim()].join("").trim() || null;
     start(async () => {
       const r = await createOrderAction({
         slug: props.service.slug,
@@ -166,7 +166,9 @@ export function Checkout(props: {
         weekdays,
         masterId,
         promoCode: promo?.code || null,
-        comment: fullComment,
+        comment: comment.trim() || null,
+        noCall,
+        tipAmount: 0,
         paymentMethod: payment,
         locale,
       });
@@ -453,6 +455,9 @@ export function Checkout(props: {
           <p className="mt-2 flex items-center gap-1 text-xs text-muted">
             <Check size={12} className="shrink-0 text-ok" />
             {t("freeCancel", { hours: String(props.freeCancelHours) })}
+            {props.lateCancelFeeAmd > 0 && (
+              <span>{" · "}{t("lateCancelFee", { amount: String(props.lateCancelFeeAmd) })}</span>
+            )}
           </p>
 
           {multiDays && (

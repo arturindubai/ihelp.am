@@ -67,6 +67,7 @@ export default async function BookPage({ params, searchParams }: { params: Promi
       cashEnabled={settings.payments.cashEnabled}
       cardEnabled={settings.payments.cardEnabled}
       freeCancelHours={settings.booking.freeCancelHours}
+      lateCancelFeeAmd={settings.booking.lateCancelFeeAmd}
       contacts={envContacts()}
     />
     </>
