@@ -2006,6 +2006,8 @@
     },
     "promoNotBetter": "This promo code is not better than your current discount",
     "promoPlaceholder": "Enter promo code",
+    "sameMaster": "Same pro",
+    "sameMasterSub": "The same specialist as before",
     "savings": "Save {first} ֏ on the first visit and {regular} ֏ on each following",
     "selectedDate": "{date}",
     "serviceLabel": "Service",
