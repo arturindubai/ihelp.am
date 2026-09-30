@@ -27,7 +27,7 @@ enum OtpChannel {
 
 model User {
   id          String    @id @default(cuid())
-  phone       String    @unique
+  phone       String?   @unique
   name        String?
   email       String?   @unique
   /// Когда владелец подтвердил email кодом из письма. Войти по email можно только с подтверждённым адресом: иначе вписанной в профиль чужой почтой перехватывается вход её владельца
@@ -953,12 +953,14 @@ model PriceAudit {
   @@index([createdAt])
 }
 
-/// Заявки «Уведомить меня» для категорий-заглушек
+/// Заявки «Уведомить меня»: category — по категории-заглушке, service — по конкретной услуге с comingSoon=true
 model ServiceInterest {
   id          String   @id @default(cuid())
   serviceSlug String
   contact     String
   ip          String?
+  /// Тип: 'category' или 'service'
+  kind        String   @default("category")
   createdAt   DateTime @default(now())
 
   @@unique([serviceSlug, contact])

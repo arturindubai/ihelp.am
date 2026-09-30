@@ -20,10 +20,10 @@ export default async function AdminStaff() {
     <div className="max-w-5xl">
       <PageHead title={t("staff.title")} sub={t("staff.manageSub")} />
       <StaffManager
-        currentUserPhone={me.phone}
+        currentUserPhone={me.phone ?? ""}
         staff={staff.map((u) => ({
           id: u.id,
-          phone: u.phone,
+          phone: u.phone ?? "",
           email: u.email,
           telegramId: u.telegramId,
           name: u.name ?? null,

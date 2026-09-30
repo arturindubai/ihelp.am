@@ -117,7 +117,7 @@ function EmailLogin({ onDone, onBack }: { onDone: (role: string) => void; onBack
     verifying.current = value;
     setError(undefined);
     start(async () => {
-      const r = await verifyEmailLoginCodeAction(email, value);
+      const r = await verifyEmailLoginCodeAction(email, value, locale);
       if (!r.ok) { verifying.current = ""; return setError(errText(r.error)); }
       onDone(r.role);
     });

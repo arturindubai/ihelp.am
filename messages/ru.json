@@ -1926,7 +1926,7 @@
     "emailCodeTitle": "Код для входа",
     "emailCodeTtl": "Код действует {min} мин. Никому его не сообщайте.",
     "emailGetCode": "Получить код на email",
-    "emailOnlyConfirmed": "Вход по email работает для подтверждённой почты — подтвердить её можно в профиле.",
+    "emailOnlyConfirmed": "Если аккаунта нет — он будет создан автоматически.",
     "emailPlaceholder": "почта@пример.com",
     "errors": {
       "apple_failed": "Apple не подтвердил вход. Попробуйте ещё раз",

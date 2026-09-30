@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calculatePrice, PriceLine } from "./pricing";
+import { calculatePrice, calculatePlanSavings, PriceLine } from "./pricing";
 
 const dur = (h: number, price: number): PriceLine => ({ groupTitle: "d", optionTitle: `${h}h`, price, discountable: true, durationMin: h * 60 });
 const mat: PriceLine = { groupTitle: "m", optionTitle: "materials", price: 1000, discountable: false, durationMin: 0 };
@@ -54,6 +54,67 @@ describe("pricing — tariff grid from unit economics", () => {
   it("promo max discount cap", () => {
     const r = calculatePrice({ lines: [dur(4, 30000)], promo: { code: "C", type: "PERCENT", value: 50, maxDiscount: 5000 } });
     expect(r.first.price).toBe(25000);
+  });
+});
+
+describe("calculatePlanSavings — настоящая выгода клиента", () => {
+  // Пример из задачи COMP-38: база 16 000, пакет 4 визита без тарифного дисконта
+  // Новый клиент: 4 разовых = 14 400 + 3×16 000 = 62 400; пакет = 12 000 + 3×16 000 = 60 000
+  it("новый клиент, пакет ≥4: экономия = разово за N визитов − payNow пакета", () => {
+    const lines = [dur(2, 16000)];
+    const plan = { kind: "PACKAGE" as const, discountPercent: 0, packageVisits: 4 };
+    expect(calculatePlanSavings({ lines, plan, isFirstOrder: true })).toBe(2400);
+  });
+
+  it("постоянный клиент, пакет ≥4 с тарифным дисконтом 3%: экономия от скидки тарифа, без скидки первого визита", () => {
+    const lines = [dur(2, 16000)];
+    const plan = { kind: "PACKAGE" as const, discountPercent: 3, packageVisits: 4 };
+    // regular = round(16000*0.97,50) = 15500; payNow = 15500*4 = 62000
+    // oneTime.first = 16000 (нет скидки первого); oneTimeCost = 16000*4 = 64000
+    expect(calculatePlanSavings({ lines, plan, isFirstOrder: false })).toBe(2000);
+  });
+
+  it("гость = новый клиент: isFirstOrder по умолчанию undefined, скидки нет → как isFirstOrder=false", () => {
+    const lines = [dur(2, 16000)];
+    const plan = { kind: "PACKAGE" as const, discountPercent: 3, packageVisits: 4 };
+    // guest: isFirstOrder = undefined → treated as false by calculatePrice
+    expect(calculatePlanSavings({ lines, plan })).toBe(2000);
+  });
+
+  it("выгода ≤ 0 → возвращает 0 (строку не показывают)", () => {
+    const lines = [dur(2, 16000)];
+    const plan = { kind: "PACKAGE" as const, discountPercent: 0, packageVisits: 4 };
+    // Постоянный клиент, нет тарифного дисконта: payNow = 16000*4, oneTimeCost = 16000*4 → 0
+    expect(calculatePlanSavings({ lines, plan, isFirstOrder: false })).toBe(0);
+  });
+
+  it("подписка для нового клиента: 10% разово хуже 5% подписки → экономии нет (0)", () => {
+    const lines = [dur(2, 16000)];
+    const plan = { kind: "SUBSCRIPTION" as const, discountPercent: 5 };
+    // oneTime.first = 14400 (10%); regular = 15200 (5%); saving = 14400-15200 = -800 → 0
+    expect(calculatePlanSavings({ lines, plan, isFirstOrder: true })).toBe(0);
+  });
+
+  it("подписка для постоянного клиента: разово 16000, подписка 15200 → экономия 800", () => {
+    const lines = [dur(2, 16000)];
+    const plan = { kind: "SUBSCRIPTION" as const, discountPercent: 5 };
+    // oneTime.first = 16000; regular = 15200; saving = 800
+    expect(calculatePlanSavings({ lines, plan, isFirstOrder: false })).toBe(800);
+  });
+
+  it("подписка для нового клиента с высоким дисконтом: 25% подписки > 10% разово → есть экономия", () => {
+    const lines = [dur(2, 16000)];
+    const plan = { kind: "SUBSCRIPTION" as const, discountPercent: 15 };
+    // oneTime.first = 14400 (10%); regular = round(16000*0.85,50) = 13600; saving = 14400-13600 = 800
+    expect(calculatePlanSavings({ lines, plan, isFirstOrder: true })).toBe(800);
+  });
+
+  it("пакет 1 визит: пакет без обязательства — скидка та же, что разово → выгоды нет", () => {
+    const lines = [dur(2, 16000)];
+    const plan = { kind: "PACKAGE" as const, discountPercent: 3, packageVisits: 1 };
+    // Не обязательство: оба первых визита получают 10% → first.price = 14400 с обеих сторон
+    // oneTimeCost = 14400; payNow = 14400; saving = 0
+    expect(calculatePlanSavings({ lines, plan, isFirstOrder: true })).toBe(0);
   });
 });
 
