@@ -224,6 +224,7 @@ async function main() {
     create: { slug: "cleaning", title: t("Уборка", "Cleaning", "Մաքրում"), description: t("Регулярная уборка квартир и домов", "Regular home cleaning"), image: "/img/cat-cleaning.svg", sort: 1 },
     update: {},
   });
+  // 4 новых категории (chef/massage/moving/dry-cleaning) создаются миграцией 20260929000000
   const soon: [string, string, string, string][] = [
     ["deep-cleaning", "Генеральная уборка", "Deep cleaning", "/img/cat-deep.svg"],
     ["upholstery", "Химчистка мебели", "Upholstery cleaning", "/img/cat-sofa.svg"],
