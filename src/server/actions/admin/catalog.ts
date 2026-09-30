@@ -91,7 +91,7 @@ const optionSchema = z.object({ id: z.string().optional(), title: i18nReq, subti
 const groupSchema = z.object({ id: z.string().optional(), title: i18nReq, hint: i18n.nullable().optional(), infoTitle: i18n.nullable().optional(), infoBody: i18n.nullable().optional(), type: z.enum(["SINGLE", "MULTI"]), required: z.boolean(), isDuration: z.boolean(), active: z.boolean(), options: z.array(optionSchema).max(60) });
 const planSchema = z.object({ id: z.string().optional(), kind: z.enum(["ONE_TIME", "SUBSCRIPTION", "PACKAGE"]), title: i18nReq, subtitle: i18n.nullable().optional(), badge: i18n.nullable().optional(), discountPercent: z.number().min(0).max(100), intervalDays: z.number().int().min(1).max(365).nullable(), visitsPerWeek: z.number().int().min(1).max(7).nullable(), packageVisits: z.number().int().min(1).max(100).nullable(), validityDays: z.number().int().min(1).max(3650).nullable(), active: z.boolean(), isDefault: z.boolean() });
 const serviceSchema = z.object({
-  slug, categoryId: z.string(), title: i18nReq, subtitle: i18n.nullable().optional(), description: i18n.nullable().optional(), badge: i18n.nullable().optional(), image: img, bannerImage: img, active: z.boolean(), sort: z.number().int(),
+  slug, categoryId: z.string(), title: i18nReq, subtitle: i18n.nullable().optional(), description: i18n.nullable().optional(), badge: i18n.nullable().optional(), image: img, bannerImage: img, active: z.boolean(), comingSoon: z.boolean().default(false), sort: z.number().int(),
   isNew: z.boolean().default(false), arrivalHours: z.number().int().min(0).max(168).nullable().optional(),
   includesText: i18n.nullable().optional(),
   excludesText: i18n.nullable().optional(),
@@ -110,7 +110,7 @@ export async function saveServiceAction(id: string, input: ServicePayload) {
     await db.$transaction(async (tx) => {
       await tx.service.update({
         where: { id },
-        data: { slug: d.slug, categoryId: d.categoryId, title: d.title, subtitle: J(d.subtitle), description: J(d.description), badge: J(d.badge), image: d.image ?? null, bannerImage: d.bannerImage ?? null, active: d.active, sort: d.sort, isNew: d.isNew, arrivalHours: d.arrivalHours ?? null, content: d.content as Prisma.InputJsonValue, includesText: J(d.includesText), excludesText: J(d.excludesText), masters: { set: d.masterIds.map((m) => ({ id: m })) } },
+        data: { slug: d.slug, categoryId: d.categoryId, title: d.title, subtitle: J(d.subtitle), description: J(d.description), badge: J(d.badge), image: d.image ?? null, bannerImage: d.bannerImage ?? null, active: d.active, comingSoon: d.comingSoon, sort: d.sort, isNew: d.isNew, arrivalHours: d.arrivalHours ?? null, content: d.content as Prisma.InputJsonValue, includesText: J(d.includesText), excludesText: J(d.excludesText), masters: { set: d.masterIds.map((m) => ({ id: m })) } },
       });
       // Группы и варианты
       const keepGroups = d.groups.map((g) => g.id).filter(Boolean) as string[];
