@@ -51,6 +51,14 @@
   },
   "admin": {
     "banners": {
+      "aiApply": "Կիրառել",
+      "aiError": "Հնարավոր չեղավ ստանալ պատասխան — կրկին փորձեք",
+      "aiGenerateImage": "Ստեղծել պատկեր",
+      "aiImageResults": "Պատկերի տարբերակներ",
+      "aiSuggestResults": "Վերնագրի տարբերակներ",
+      "aiSuggestTitle": "Առաջարկել վերնագիր",
+      "aiUsageCount": "Հարցումներ այս ամիս: {count}",
+      "aiUse": "Օգտագործել",
       "audience": "",
       "audiences": {
         "ALL": "",
@@ -166,6 +174,15 @@
       },
       "keys": {
         "add": "",
+        "changed": "",
+        "check": "",
+        "checkResult": {
+          "empty": "",
+          "error": "",
+          "no_check": "",
+          "rejected": "",
+          "unreachable": ""
+        },
         "clear": "",
         "clearConfirm": "",
         "errors": {
@@ -173,9 +190,70 @@
           "bad_value": "",
           "unknown_key": ""
         },
+        "groups": {
+          "ai": "ԱԻ օգնական",
+          "codes": "",
+          "login": "",
+          "mail": "",
+          "telegram": "Telegram"
+        },
+        "items": {
+          "ai_anthropicKey": {
+            "how": "console.anthropic.com → Settings → API Keys → Create Key",
+            "purpose": "ԱԻ-ով բանների վերնագրեր և ենթավերնագրեր.",
+            "title": "Claude AI (Anthropic)"
+          },
+          "ai_higgsfieldKey": {
+            "how": "app.higgsfield.ai → Settings → API Key",
+            "purpose": "Բաններների համար ԱԻ պատկերներ (Nano Banana Pro).",
+            "title": "Higgsfield — պատկերներ"
+          },
+          "apple_privateKey": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "google_clientSecret": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "mail_apiKey": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "notify_telegramBotToken": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "otp_sms_authToken": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "otp_telegram_gatewayToken": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "otp_whatsapp_accessToken": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          },
+          "team_botToken": {
+            "how": "",
+            "purpose": "",
+            "title": ""
+          }
+        },
+        "missing": "",
         "no": "Ոչ",
         "note": "",
         "pastePh": "",
+        "present": "",
         "push": {
           "createdAt": "",
           "noEncKey": "",
@@ -184,6 +262,7 @@
           "ready": "",
           "title": "Push ծանուցումներ"
         },
+        "replace": "",
         "services": {
           "APPLE_SIGNIN": {
             "how": "",
@@ -212,6 +291,7 @@
             "purpose": ""
           }
         },
+        "set": "",
         "status": {
           "active": "Ակտիվ",
           "empty": "",
@@ -221,6 +301,7 @@
         },
         "subtitle": "",
         "title": "",
+        "where": "",
         "yes": "Այո"
       },
       "library": {
