@@ -71,8 +71,8 @@ describe("sectionsForUser — дельта", () => {
 });
 
 describe("DELEGATABLE_SECTIONS", () => {
-  it("содержит ровно 15 разделов", () => {
-    expect(DELEGATABLE_SECTIONS).toHaveLength(15);
+  it("содержит ровно 16 разделов", () => {
+    expect(DELEGATABLE_SECTIONS).toHaveLength(16);
   });
 
   it("не содержит settings и staff", () => {

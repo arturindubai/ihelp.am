@@ -33,10 +33,9 @@ function resolvePeriod(sp: CcSearch): { period: Period; from: string; to: string
 
 function periodLink(sp: CcSearch, period: Period): string {
   const next: Record<string, string> = {};
-  for (const [k, v] of Object.entries(sp)) if (v && k !== "period" && k !== "from" && k !== "to") next[k] = v;
-  next.tab = "finance";
+  for (const [k, v] of Object.entries(sp)) if (v && k !== "period" && k !== "from" && k !== "to" && k !== "tab") next[k] = v;
   next.period = period;
-  return `/admin/control?${new URLSearchParams(next).toString()}`;
+  return `/admin/finance?${new URLSearchParams(next).toString()}`;
 }
 
 function Delta({ value }: { value: number | null }) {
@@ -200,8 +199,8 @@ function StatsSection({ stats, t }: { stats: PeriodStats; t: (k: any, v?: any) =
 }
 
 /**
- * Вкладка «Финансы» в Control Center: период, KPI-карточки, каналы, наличные, топ-мастеров, список транзакций.
- * DEV-133 (stats), DEV-134 (cash/masters), DEV-136 (transactions).
+ * Содержимое раздела «Финансы»: период, KPI-карточки, каналы, наличные, топ-мастеров, список транзакций.
+ * DEV-133 (stats), DEV-134 (cash/masters), DEV-136 (transactions). Страница: /admin/finance.
  */
 export async function FinanceTab({ sp }: { sp: CcSearch }) {
   const t = await getTranslations("admin.cc");

@@ -59,9 +59,8 @@ export function FinanceTransactions({ from, to, initial, masters, services, sp }
   const go = (patch: Record<string, string>) => {
     const next = { ...sp, ...patch };
     const qs = new URLSearchParams();
-    for (const [k, v] of Object.entries(next)) if (v) qs.set(k, v);
-    qs.set("tab", "finance");
-    startNav(() => router.push(`/admin/control?${qs.toString()}`));
+    for (const [k, v] of Object.entries(next)) if (v && k !== "tab") qs.set(k, v);
+    startNav(() => router.push(`/admin/finance?${qs.toString()}`));
   };
 
   const handleLoadMore = async () => {

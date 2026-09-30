@@ -20,8 +20,8 @@ export function FinancePeriodPicker({
   const apply = (newFrom: string, newTo: string) => {
     const next = { ...current, period: "custom", from: newFrom, to: newTo };
     const qs = new URLSearchParams();
-    for (const [k, v] of Object.entries(next)) if (v) qs.set(k, v);
-    start(() => router.push(`/admin/control?${qs.toString()}`));
+    for (const [k, v] of Object.entries(next)) if (v && k !== "tab") qs.set(k, v);
+    start(() => router.push(`/admin/finance?${qs.toString()}`));
   };
 
   return (

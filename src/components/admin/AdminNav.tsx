@@ -1,12 +1,12 @@
 "use client";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Gauge, LayoutDashboard, ClipboardList, CalendarRange, Sparkles, UsersRound, Contact, Star, TicketPercent, Image, FileText, LayoutGrid, Languages, Settings, ShieldCheck, History, BarChart2, Menu, X, ExternalLink } from "lucide-react";
+import { Gauge, LayoutDashboard, ClipboardList, CalendarRange, Sparkles, UsersRound, Contact, Star, TicketPercent, Image, FileText, LayoutGrid, Languages, Settings, ShieldCheck, History, BarChart2, Wallet, Menu, X, ExternalLink } from "lucide-react";
 import { Link, usePathname } from "@/i18n/navigation";
 import { cn } from "@/lib/format";
 import { Logo } from "@/components/Logo";
 
-const ICONS = { control: Gauge, dashboard: LayoutDashboard, orders: ClipboardList, schedule: CalendarRange, services: Sparkles, masters: UsersRound, clients: Contact, reviews: Star, promos: TicketPercent, banners: Image, pages: FileText, content: LayoutGrid, translations: Languages, analytics: BarChart2, settings: Settings, staff: ShieldCheck, log: History };
+const ICONS = { control: Gauge, dashboard: LayoutDashboard, finance: Wallet, orders: ClipboardList, schedule: CalendarRange, services: Sparkles, masters: UsersRound, clients: Contact, reviews: Star, promos: TicketPercent, banners: Image, pages: FileText, content: LayoutGrid, translations: Languages, analytics: BarChart2, settings: Settings, staff: ShieldCheck, log: History };
 
 const SERVICES_SUBS = [
   { key: "catalog", href: "/admin/services" },
