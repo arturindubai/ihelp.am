@@ -6,6 +6,8 @@
     "emailCodeSent": "Мы отправили код на этот адрес. Введите его ниже.",
     "emailConfirm": "Подтвердить email",
     "emailNotVerified": "Email не подтверждён — по нему нельзя войти по коду",
+    "emailRemindersLabel": "Получать напоминания о визитах и просьбы об отзыве по почте",
+    "emailRemindersTitle": "Email-уведомления",
     "emailVerified": "Email подтверждён",
     "history": "История",
     "language": "Язык уведомлений",
@@ -2151,10 +2153,13 @@
         "subject": "Как прошёл визит?",
         "title": "Как прошёл визит?"
       },
-      "unsubscribeLink": "отпишитесь здесь",
-      "unsubscribeText": "Не хотите получать письма — {link}.",
-      "unsubscribedBody": "Письма от iHelp больше не будут приходить на ваш адрес.",
-      "unsubscribedTitle": "Вы отписались от писем"
+      "unsubscribeButton": "Отписаться от напоминаний",
+      "unsubscribeConfirmBody": "Напоминания о визитах и просьбы об отзыве больше не будут приходить. Письма о заказе — подтверждение, перенос и отмена — будут приходить всегда.",
+      "unsubscribeConfirmTitle": "Отписаться от напоминаний?",
+      "unsubscribeLink": "отписаться",
+      "unsubscribeText": "Не хотите получать напоминания о визитах — {link}.",
+      "unsubscribedBody": "Напоминания о визитах и просьбы об отзыве больше не будут приходить. Письма о заказе — подтверждение, перенос и отмена — приходят всегда.",
+      "unsubscribedTitle": "Вы отписались от напоминаний"
     },
     "master": {
       "assigned": "📋 Новый визит\nКлиент: {clientName}\nУслуга: {serviceName}\nДата: {date}, {time}\nАдрес: {address}",

@@ -14,6 +14,8 @@ import { sendOtp, verifyOtp } from "../otp";
 import { normalizeEmail } from "@/lib/email";
 import { BookingError, scheduleVisit, BUSY_STATUSES } from "../services/booking";
 import { atYerevan } from "@/lib/time";
+import { verifyUnsubscribeToken } from "@/lib/emailToken";
+import { redirect } from "next/navigation";
 
 async function me() {
   const u = await getCurrentUser();
@@ -197,6 +199,31 @@ export async function reviewByTokenAction(token: string, rating: number, text: s
     },
   });
   await notifyTeam(html`⭐ Новый отзыв ${r}/5 · заказ №${visit.order.number} — на модерации`);
+  return { ok: true };
+}
+
+/** Подтвердить отписку от необязательных писем по токену из ссылки.
+ *  Используется формой на странице /email/unsubscribed?token=... */
+export async function confirmUnsubscribeAction(token: string, locale: string, _: FormData) {
+  const userId = verifyUnsubscribeToken(token);
+  if (!userId) {
+    redirect(`/${locale}`);
+  }
+  await db.user.updateMany({
+    where: { id: userId, emailUnsubscribedAt: null },
+    data: { emailUnsubscribedAt: new Date() },
+  });
+  redirect(`/${locale}/email/unsubscribed`);
+}
+
+/** Включить / выключить получение необязательных писем (напоминания, просьбы об отзыве) */
+export async function toggleEmailRemindersAction(enabled: boolean) {
+  const u = await me();
+  await db.user.update({
+    where: { id: u.id },
+    data: { emailUnsubscribedAt: enabled ? null : new Date() },
+  });
+  revalidatePath("/", "layout");
   return { ok: true };
 }
 

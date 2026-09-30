@@ -6,6 +6,8 @@
     "emailCodeSent": "We sent a code to this address. Enter it below.",
     "emailConfirm": "Verify email",
     "emailNotVerified": "Email not verified — you can't sign in with a code",
+    "emailRemindersLabel": "Receive visit reminders and review requests by email",
+    "emailRemindersTitle": "Email notifications",
     "emailVerified": "Email verified",
     "history": "History",
     "language": "Notification language",
@@ -2051,10 +2053,13 @@
         "subject": "How did your visit go?",
         "title": "How was the visit?"
       },
-      "unsubscribeLink": "unsubscribe here",
-      "unsubscribeText": "To stop receiving emails — {link}.",
-      "unsubscribedBody": "You will no longer receive emails from iHelp.",
-      "unsubscribedTitle": "You have unsubscribed"
+      "unsubscribeButton": "Unsubscribe from reminders",
+      "unsubscribeConfirmBody": "Visit reminders and review requests will no longer be sent. Order emails — confirmation, reschedule, and cancellation — will always be delivered.",
+      "unsubscribeConfirmTitle": "Unsubscribe from reminders?",
+      "unsubscribeLink": "unsubscribe",
+      "unsubscribeText": "Don't want visit reminders — {link}.",
+      "unsubscribedBody": "Visit reminders and review requests will no longer be sent. Order emails — confirmation, reschedule, and cancellation — are always delivered.",
+      "unsubscribedTitle": "You have unsubscribed from reminders"
     },
     "master": {
       "assigned": "📋 New visit\nClient: {clientName}\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}",
