@@ -52,6 +52,34 @@ describe("getCategory", () => {
   });
 });
 
+describe("getHome — href для comingSoon-категорий", () => {
+  it("comingSoon-категория получает href=/c/<slug>", async () => {
+    (db.category.findMany as Mock).mockResolvedValueOnce([
+      { id: "1", slug: "chef", title: { ru: "Повар" }, image: null, sort: 1, active: true, comingSoon: true, archived: false, services: [] },
+    ]);
+    const result = await getHome("ru");
+    expect(result.categories[0].href).toBe("/c/chef");
+  });
+
+  it("обычная категория с одной услугой → href=/s/<slug>", async () => {
+    (db.category.findMany as Mock).mockResolvedValueOnce([
+      { id: "2", slug: "cleaning", title: { ru: "Уборка" }, image: null, sort: 1, active: true, comingSoon: false, archived: false, services: [{ slug: "regular-clean", title: { ru: "Регулярная уборка" }, subtitle: null, image: null }] },
+    ]);
+    const result = await getHome("ru");
+    expect(result.categories[0].href).toBe("/s/regular-clean");
+  });
+
+  it("comingSoon-услуги не попадают в popular-список", async () => {
+    (db.service.findMany as Mock).mockResolvedValueOnce([
+      { slug: "regular-clean", title: { ru: "Уборка" }, subtitle: null, image: null, rating: 0, reviewsCount: 0, comingSoon: false, groups: [], plans: [] },
+      { slug: "chef-special", title: { ru: "Повар" }, subtitle: null, image: null, rating: 0, reviewsCount: 0, comingSoon: true, groups: [], plans: [] },
+    ]);
+    const result = await getHome("ru");
+    expect(result.services.map((s) => s.slug)).not.toContain("chef-special");
+    expect(result.services.map((s) => s.slug)).toContain("regular-clean");
+  });
+});
+
 describe("loadServiceRaw", () => {
   it("запрашивает услугу с category.archived:false", async () => {
     await loadServiceRaw("deep-clean");

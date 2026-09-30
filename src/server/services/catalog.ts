@@ -32,8 +32,8 @@ export async function getHome(locale: string, userId?: string | null) {
         title: tr(c.title, locale),
         image: c.image,
         comingSoon: c.comingSoon,
-        // если в категории одна услуга — ведём сразу в неё
-        href: c.comingSoon ? null : c.services.length === 1 ? `/s/${c.services[0].slug}` : `/c/${c.slug}`,
+        // comingSoon → /c/<slug> (форма «Уведомить меня»); одна услуга → /s/<slug>; иначе /c/<slug>
+        href: c.comingSoon ? `/c/${c.slug}` : c.services.length === 1 ? `/s/${c.services[0].slug}` : `/c/${c.slug}`,
         subcategories: isComposite
           ? [{
               section: null as string | null,
@@ -49,7 +49,7 @@ export async function getHome(locale: string, userId?: string | null) {
       };
     }),
     banners: filteredBanners.map((b) => ({ id: b.id, title: tr(b.title, locale), subtitle: tr(b.subtitle, locale), image: b.image, link: b.link, bg: b.bg, promoCode: b.promoCode })),
-    services: services.map((s) => serviceCard(s, locale)),
+    services: services.filter((s) => !s.comingSoon).map((s) => serviceCard(s, locale)),
     features: features.map((f) => ({ id: f.id, icon: f.icon, title: tr(f.title, locale) as string, body: tr(f.body, locale) as string })),
     faq: faq.map((f) => ({ id: f.id, q: tr(f.q, locale) as string, a: tr(f.a, locale) as string })),
     reviews: reviews.map((r) => ({
@@ -69,6 +69,7 @@ type SvcCardInput = {
   image: string | null;
   rating: number;
   reviewsCount: number;
+  comingSoon?: boolean;
   groups: { options: { price: number; durationMin: number }[] }[];
   plans: { discountPercent: number }[];
 };
@@ -83,6 +84,7 @@ export function serviceCard(s: SvcCardInput, locale: string) {
     image: s.image,
     rating: s.rating,
     reviewsCount: s.reviewsCount,
+    comingSoon: s.comingSoon ?? false,
     fromPrice: prices.length ? Math.min(...prices) : 0,
     maxDiscount: Math.max(0, ...s.plans.map((p) => p.discountPercent)),
     minDuration: durations.length ? Math.min(...durations) : 0,
@@ -99,7 +101,8 @@ export async function getCategories(locale: string) {
     slug: c.slug,
     title: tr(c.title, locale) as string,
     comingSoon: c.comingSoon,
-    href: c.services.length === 1 && !c.comingSoon ? `/s/${c.services[0].slug}` : `/c/${c.slug}`,
+    // comingSoon → /c/<slug> (форма «Уведомить меня»), одна услуга → /s/<slug>, иначе /c/<slug>
+    href: c.comingSoon ? `/c/${c.slug}` : c.services.length === 1 ? `/s/${c.services[0].slug}` : `/c/${c.slug}`,
   }));
 }
 

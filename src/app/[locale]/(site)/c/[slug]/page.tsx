@@ -8,6 +8,14 @@ import { NotifyForm } from "@/components/catalog/NotifyForm";
 import { cn } from "@/lib/format";
 import { PromoSlot } from "@/components/PromoSlot";
 
+export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }) {
+  const { slug } = await params;
+  const c = await getCategory(slug, "ru");
+  if (!c) return {};
+  if (c.comingSoon) return { robots: { index: false, follow: false } };
+  return {};
+}
+
 export default async function CategoryPage({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;
   setRequestLocale(locale);

@@ -104,6 +104,7 @@ export async function createOrder(user: User, input: CreateOrderInput) {
   const settings = await getSettings();
   const raw = await loadServiceRaw(input.slug);
   if (!raw) throw new BookingError("invalid");
+  if (raw.comingSoon) throw new BookingError("invalid");
   const view = localizeService(raw, "ru");
   const sel = resolveSelection(view, input.optionIds, input.planId);
   if (!sel.ok) throw new BookingError("invalid");
