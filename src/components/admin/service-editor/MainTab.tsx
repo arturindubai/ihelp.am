@@ -135,6 +135,10 @@ export function MainTab({
           <div className="pt-6">
             <Toggle label={t("common.active")} checked={s.active} onChange={(v) => up({ active: v })} />
           </div>
+          <div className="pt-6">
+            <Toggle label={t("services.isNew")} checked={s.isNew ?? false} onChange={(v) => up({ isNew: v })} />
+          </div>
+          <NumInput label={t("services.arrivalHours")} value={s.arrivalHours ?? null} onChange={(v) => up({ arrivalHours: v ?? null })} />
         </div>
       </Card>
 

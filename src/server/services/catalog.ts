@@ -69,6 +69,8 @@ type SvcCardInput = {
   image: string | null;
   rating: number;
   reviewsCount: number;
+  isNew: boolean;
+  arrivalHours: number | null;
   groups: { options: { price: number; durationMin: number }[] }[];
   plans: { discountPercent: number }[];
 };
@@ -83,6 +85,8 @@ export function serviceCard(s: SvcCardInput, locale: string) {
     image: s.image,
     rating: s.rating,
     reviewsCount: s.reviewsCount,
+    isNew: s.isNew,
+    arrivalHours: s.arrivalHours,
     fromPrice: prices.length ? Math.min(...prices) : 0,
     maxDiscount: Math.max(0, ...s.plans.map((p) => p.discountPercent)),
     minDuration: durations.length ? Math.min(...durations) : 0,

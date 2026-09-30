@@ -53,6 +53,8 @@ export default async function EditService({ params }: { params: Promise<{ locale
     bannerImage: s.bannerImage,
     active: s.active,
     sort: s.sort,
+    isNew: s.isNew,
+    arrivalHours: s.arrivalHours,
     includesText: s.includesText as AnyI,
     excludesText: s.excludesText as AnyI,
     groups: s.groups.map((g) => ({
