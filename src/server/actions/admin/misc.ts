@@ -286,6 +286,60 @@ export async function saveSettingsAction<K extends keyof Settings>(key: K, value
   return { ok: true };
 }
 
+/** Найти чаты и группы, куда бот получал сообщения (через getUpdates). Возвращает список чатов. */
+export async function findTelegramChatsAction() {
+  await requireSection("settings");
+  const s = await getSettings();
+  const token = s.team.botToken || s.notify.telegramBotToken;
+  if (!token) return { ok: false as const, error: "noToken" };
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=100`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    const json = (await r.json().catch(() => null)) as { ok: boolean; result?: { message?: { date: number; chat: { id: number; title?: string; username?: string; first_name?: string; type: string } } }[]; description?: string } | null;
+    if (!r.ok || !json?.ok) {
+      const desc = json?.description ?? "";
+      if (desc.toLowerCase().includes("webhook")) return { ok: false as const, error: "webhook" };
+      return { ok: false as const, error: "telegram" };
+    }
+    const since = Date.now() / 1000 - 86400;
+    const seen = new Map<number, { id: number; title: string; type: string }>();
+    for (const upd of json.result ?? []) {
+      const msg = upd.message;
+      if (!msg || msg.date < since) continue;
+      const c = msg.chat;
+      if (!seen.has(c.id)) {
+        seen.set(c.id, { id: c.id, title: c.title ?? c.username ?? c.first_name ?? String(c.id), type: c.type });
+      }
+    }
+    return { ok: true as const, chats: [...seen.values()] };
+  } catch {
+    return { ok: false as const, error: "network" };
+  }
+}
+
+/** Отправить тестовое сообщение в конкретный чат (по chatId из поля). */
+export async function sendTestNotifyToAction(chatId: string) {
+  await requireSection("settings");
+  if (!chatId) return { ok: false as const, error: "noChatId" };
+  const s = await getSettings();
+  const token = s.team.botToken || s.notify.telegramBotToken;
+  if (!token) return { ok: false as const, error: "noToken" };
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text: "✅ Тест iHelp: уведомления настроены", parse_mode: "HTML" }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const json = (await r.json().catch(() => null)) as { ok: boolean; description?: string } | null;
+    if (!r.ok || !json?.ok) return { ok: false as const, error: json?.description ?? "Ошибка Telegram" };
+    return { ok: true as const };
+  } catch {
+    return { ok: false as const, error: "Ошибка сети" };
+  }
+}
+
 export async function testNotifyAction() {
   await requireSection("settings");
   const s = await getSettings();
