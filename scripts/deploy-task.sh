@@ -52,7 +52,20 @@ exec 9> data/deploy.lock
 flock -n 9 || stop "Уже идёт другая выкладка — жду своей очереди в следующий раз"
 
 [ "$(git branch --show-current)" = main ] || stop "Основная копия не на main — выкладку не начинаю"
-[ -z "$(git status --porcelain)" ] || stop "В основной копии незакоммиченные изменения (чужая работа?) — выкладку не начинаю"
+# Отслеживаемые изменения — стоп; неотслеживаемые файлы — убрать в data/tmp/stray/ и продолжить
+_ms=$(git status --short)
+if [ -n "$_ms" ]; then
+  _ms_tracked=$(echo "$_ms" | grep -v '^??' || true)
+  [ -z "$_ms_tracked" ] || stop "В основной копии незакоммиченные изменения в отслеживаемых файлах (чужая работа?) — выкладку не начинаю"
+  _stray="data/tmp/stray/$(date +%Y%m%d-%H%M%S)"
+  mkdir -p "$_stray"
+  echo "⚠ В основной копии неотслеживаемые файлы — перемещаю в ${_stray}/ и продолжаю выкладку"
+  echo "$_ms" | awk '/^\?\?/{print substr($0, 4)}' | while IFS= read -r _sf; do
+    [ -z "$_sf" ] && continue
+    _sf="${_sf%/}"
+    if mv "$_sf" "$_stray/"; then echo "  → $_sf"; else echo "  ✗ не удалось переместить $_sf"; fi
+  done
+fi
 git fetch -q origin || stop "Нет связи с GitHub"
 declare -F deploy_recover_main > /dev/null && deploy_recover_main
 git merge --ff-only -q origin/main || stop "Локальный main разошёлся с origin/main — нужен человек"
