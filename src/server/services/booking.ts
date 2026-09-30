@@ -203,7 +203,7 @@ export async function createOrder(user: User, input: CreateOrderInput) {
         await generateSubscriptionVisits(tx, created.id, settings.booking.subscriptionHorizonDays, buffer);
       }
       if (promoId) {
-        await tx.promoRedemption.create({ data: { promoId, userId: user.id, orderId: created.id, phone: user.phone } });
+        await tx.promoRedemption.create({ data: { promoId, userId: user.id, orderId: created.id, phone: user.phone ?? "" } });
         await tx.promoCode.update({ where: { id: promoId }, data: { usedCount: { increment: 1 } } });
       }
       await tx.service.update({ where: { id: raw.id }, data: { bookingsCount: { increment: 1 } } });
