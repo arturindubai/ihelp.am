@@ -467,7 +467,7 @@ async function takeTask(key) {
 ────────────────────────────────────────
 ✓ ${t.key} взята: ${agent}, аренда ${Math.round((new Date(t.claimUntil) - Date.now()) / 60000)} мин, пульс продлевает её сам (хук Claude Code).
   Рабочая копия: ${dir}${created ? " (создана)" : " (уже была)"} — перейди в неё инструментом EnterWorktree (path=${dir})
-  Ветка: ${branch}${ahead ? `\n  В ветке уже есть работа — продолжай с неё:\n${ahead.split("\n").map((l) => `    ${l}`).join("\n")}\n  Нужно подтянуть main: git merge origin/main (не rebase — он запрещён для отправленных веток)` : ""}`);
+  Ветка: ${branch}${ahead ? `\n  В ветке уже есть работа — продолжай с неё:\n${ahead.split("\n").map((l) => `    ${l}`).join("\n")}\n  Если ветка конфликтует с main — перед сдачей: git merge origin/main (не rebase — запрещён для отправленных веток)` : ""}`);
 }
 
 /** Тестировщик: держит задачу «На проверке» и получает рабочую копию ровно на последнем коммите ветки */
@@ -478,15 +478,17 @@ async function testTask(key) {
   tryGit(["fetch", "-q", "origin"], ROOT);
   const sha = tryGit(["rev-parse", "--verify", "-q", `refs/remotes/origin/${branch}`], ROOT);
   if (!sha) die(`ветки ${branch} нет в репозитории — проверять нечего`);
-  // Критерий 2: ветка должна содержать текущий origin/main; тестировщик проверяет merged-result, не изолированную ветку
-  const isUpToDate = tryGit(["merge-base", "--is-ancestor", "origin/main", `refs/remotes/origin/${branch}`], ROOT);
-  if (isUpToDate === null) {
-    const behind = tryGit(["rev-list", "--count", `origin/${branch}..origin/main`], ROOT) ?? "?";
-    const reason = `Ветка ${branch} отстаёт от origin/main на ${behind} коммит(а). Тестирование не начато: тестировщик проверяет merged-result, а не изолированную ветку. Разработчик должен обновить ветку: git merge origin/main && git push, затем сдать задачу снова.`;
-    await api("POST", null, { action: "test-fail", agent, key, text: reason });
-    dropState(key);
-    console.log(`✗ ${key}: ветка не содержит текущий main — возвращена разработчику без тестирования`);
-    return;
+  // Гейт: ветка должна сливаться без конфликтов; отставание от main не блокирует тестирование
+  const behindTest = parseInt(tryGit(["rev-list", "--count", `origin/${branch}..origin/main`], ROOT) ?? "0", 10);
+  if (behindTest > 0) {
+    const conflicts = checkMergeConflicts(branch);
+    if (conflicts.length > 0) {
+      const reason = `Ветка ${branch} конфликтует с origin/main.\nФайлы с конфликтами:\n${conflicts.map((f) => `  ${f}`).join("\n")}\nРазработчик должен разрешить конфликт: git merge origin/main && git push, затем сдать задачу снова.`;
+      await api("POST", null, { action: "test-fail", agent, key, text: reason });
+      dropState(key);
+      console.log(`✗ ${key}: ветка конфликтует с main — возвращена разработчику`);
+      return;
+    }
   }
   const dir = path.join(WT, `test-${key}`);
   const list = tryGit(["worktree", "list", "--porcelain"], ROOT) ?? "";
@@ -500,6 +502,33 @@ async function testTask(key) {
   const d = await api("GET", { key });
   briefing("tester", d, agent, dir);
   console.log(`\n✓ ${key} взята на проверку: ${agent}. Рабочая копия ${dir} на коммите ${sha.slice(0, 10)} — перейди в неё (EnterWorktree path=${dir}).`);
+}
+
+/**
+ * Пробное слияние ветки с origin/main через git merge-tree --write-tree.
+ * Возвращает массив файлов с конфликтами (пустой — если конфликтов нет).
+ * При фатальной ошибке git выбрасывает исключение.
+ */
+function checkMergeConflicts(branch) {
+  try {
+    git(["merge-tree", "--write-tree", "origin/main", `origin/${branch}`], ROOT);
+    return [];
+  } catch (e) {
+    if (e.status === 1) {
+      // git merge-tree по умолчанию пишет CONFLICT-строки в stdout
+      const out = typeof e.stdout === "string" ? e.stdout : String(e.stdout ?? "");
+      const files = [];
+      for (const line of out.split("\n")) {
+        if (!line.includes("CONFLICT")) continue;
+        const inMatch = line.match(/\bMerge conflict in\s+(.+)$/i);
+        if (inMatch) { files.push(inMatch[1].trim()); continue; }
+        const typeMatch = line.match(/CONFLICT[^:]*:\s*(\S+)\s+(?:deleted|modified|renamed)/i);
+        if (typeMatch) files.push(typeMatch[1].trim());
+      }
+      return files.length > 0 ? [...new Set(files)] : ["(файлы с конфликтами)"];
+    }
+    throw e;
+  }
 }
 
 /** Факты для отчёта: коммиты ветки, объём изменений, миграции — деплоер видит их без раскопок */
@@ -519,15 +548,17 @@ function branchFacts(branch) {
   }
   const commits = tryGit(["log", "--oneline", "--no-merges", `origin/main..origin/${branch}`], ROOT) ?? "";
   if (!commits) die(`в ${branch} нет коммитов поверх main — сдавать нечего`);
-  // Критерий 1: ветка должна содержать текущий origin/main, иначе при слиянии деплоер получит конфликт
-  const isUpToDate = tryGit(["merge-base", "--is-ancestor", "origin/main", `origin/${branch}`], ROOT);
-  const behind = tryGit(["rev-list", "--count", `origin/${branch}..origin/main`], ROOT);
-  if (isUpToDate === null) {
-    die(
-      `Ветка ${branch} отстаёт от origin/main на ${behind ?? "?"} коммит(а).\n` +
-      `  Обновите: git merge origin/main\n` +
-      `  Затем:    git push && node scripts/cc.mjs review ${branch.replace("task/", "")} "…"`,
-    );
+  // Гейт: ветка должна сливаться с origin/main без конфликтов; отставание — только справка, не ошибка
+  const behind = parseInt(tryGit(["rev-list", "--count", `origin/${branch}..origin/main`], ROOT) ?? "0", 10);
+  if (behind > 0) {
+    const conflicts = checkMergeConflicts(branch);
+    if (conflicts.length > 0) {
+      die(
+        `Ветка ${branch} конфликтует с origin/main.\n` +
+        `  Файлы с конфликтами:\n${conflicts.map((f) => `    ${f}`).join("\n")}\n` +
+        `  Разрешите конфликт: git merge origin/main, затем git push и сдайте задачу снова.`,
+      );
+    }
   }
   const stat = (tryGit(["diff", "--shortstat", `origin/main...origin/${branch}`], ROOT) ?? "").trim();
   const files = (tryGit(["diff", "--name-only", `origin/main...origin/${branch}`], ROOT) ?? "").split("\n").filter(Boolean);
@@ -536,6 +567,7 @@ function branchFacts(branch) {
     "",
     "— факты из git —",
     `Ветка: ${branch}`,
+    behind > 0 ? `Отставание от main: ${behind} коммит(а) — слияние проверено, конфликтов нет` : null,
     `Коммиты:\n${commits
       .split("\n")
       .slice(0, 20)
@@ -543,7 +575,7 @@ function branchFacts(branch) {
       .join("\n")}`,
     `Изменения: ${stat}`,
     migrations.length ? `⚠ Миграции базы: ${migrations.join(", ")}` : "Миграций базы нет",
-  ].join("\n");
+  ].filter((v) => v !== null).join("\n");
 }
 
 /* ───── команды ───── */

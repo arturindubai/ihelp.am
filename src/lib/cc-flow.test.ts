@@ -7,6 +7,7 @@ import {
   canTransition,
   criteriaGate,
   extractFollowUpKeys,
+  parseConflictFiles,
   unblockTarget,
   doneGate,
   inTriageQueue,
@@ -577,4 +578,40 @@ describe("computeEpicStatus: статус из задач", () => {
   it("есть review, но нет in_progress — testing", () => expect(computeEpicStatus(["done", "review", "ready"])).toBe("testing"));
   it("есть ready, нет горячих — in_progress (запланирована работа)", () => expect(computeEpicStatus(["backlog", "ready"])).toBe("in_progress"));
   it("только backlog — planned", () => expect(computeEpicStatus(["backlog", "backlog"])).toBe("planned"));
+});
+
+describe("parseConflictFiles: гейт сдачи DEV-145", () => {
+  it("пустой вывод — нет файлов", () => {
+    expect(parseConflictFiles("")).toEqual([]);
+  });
+  it("чистое слияние (только tree SHA) — нет файлов", () => {
+    expect(parseConflictFiles("ffffffffffffffffffffffffffffffffffffffff\n")).toEqual([]);
+  });
+  it("строки без CONFLICT игнорируются", () => {
+    expect(parseConflictFiles("Auto-merging scripts/cc.mjs\nSome other message")).toEqual([]);
+  });
+  it("CONFLICT content: Merge conflict in path", () => {
+    const out = [
+      "ffffffffffffffffffffffffffffffffffffffff",
+      "CONFLICT (content): Merge conflict in scripts/cc.mjs",
+    ].join("\n");
+    expect(parseConflictFiles(out)).toEqual(["scripts/cc.mjs"]);
+  });
+  it("CONFLICT modify/delete — берётся имя файла перед 'deleted'", () => {
+    const out = "CONFLICT (modify/delete): docs/DEV_SYSTEM.md deleted in origin/main and modified in origin/task/DEV-99.";
+    expect(parseConflictFiles(out)).toEqual(["docs/DEV_SYSTEM.md"]);
+  });
+  it("несколько конфликтов — все файлы без дублей", () => {
+    const out = [
+      "abc123",
+      "CONFLICT (content): Merge conflict in scripts/cc.mjs",
+      "CONFLICT (content): Merge conflict in src/lib/cc-flow.ts",
+      "CONFLICT (content): Merge conflict in scripts/cc.mjs",
+    ].join("\n");
+    expect(parseConflictFiles(out)).toEqual(["scripts/cc.mjs", "src/lib/cc-flow.ts"]);
+  });
+  it("CONFLICT add/add", () => {
+    const out = "CONFLICT (add/add): Merge conflict in src/lib/new-file.ts";
+    expect(parseConflictFiles(out)).toEqual(["src/lib/new-file.ts"]);
+  });
 });
