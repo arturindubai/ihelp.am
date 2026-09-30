@@ -42,6 +42,7 @@ function groupOwnerQuestions(tasks: OwnerTask[], taskHref: Href, waitingDeps: Wa
       groupType: classifyGroup(reason, hasVariants),
       tasks: group.map((t) => ({ key: t.key, title: t.title, href: taskHref(t.key), priority: t.priority })),
       variants: multiQuestion.length === 1 ? (multiQuestion[0].variants ?? null) : null,
+      trailingText: multiQuestion.length === 1 ? multiQuestion[0].trailingText : undefined,
       multiQuestion: multiQuestion.length > 1 ? multiQuestion : null,
       isUrgent: group.some((t) => t.priority === "p0"),
       textMayCut: group.some((t) => t.textMayCut),

@@ -383,6 +383,7 @@
       "today": "Այսոր",
       "tomorrow": "",
       "total": "",
+      "unsaved": "",
       "up": "",
       "upload": "",
       "uploadErrBroken": "",
@@ -579,6 +580,7 @@
       "unassigned": ""
     },
     "services": {
+      "addCategory": "",
       "addFirstService": "",
       "addGroup": "",
       "addItem": "",
@@ -628,13 +630,17 @@
         "PACKAGE": "Այցերի Պակետ",
         "SUBSCRIPTION": "Բաժանորդագություն"
       },
+      "masterSearch": "",
       "masters": "",
+      "mastersSelected": "{n} ընտրված",
       "minPrice": "",
       "minutes": "",
       "multi": "",
       "newCategory": "",
       "newService": "",
+      "noMasters": "",
       "noServicesInCategory": "",
+      "noVariants": "",
       "note": "",
       "noteBody": "",
       "noteTitle": "",
@@ -646,6 +652,8 @@
       "planKind": "",
       "plans": "",
       "policy": "",
+      "previewOptions": "",
+      "previewStep": "",
       "pricePreview": "",
       "question": "",
       "rating": "",
@@ -655,6 +663,7 @@
       "searchPlaceholder": "",
       "services": "",
       "single": "",
+      "slugFromTitle": "",
       "stepBody": "",
       "stepTitle": "",
       "tabs": {
@@ -664,7 +673,11 @@
         "plans": ""
       },
       "title": "",
+      "unsavedLeave": "",
+      "unsavedStay": "",
+      "unsavedTitle": "",
       "validityDays": "",
+      "visitsNextWeek": "",
       "visitsPerWeek": ""
     },
     "settings": {
