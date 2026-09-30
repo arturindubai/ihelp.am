@@ -177,7 +177,8 @@ export async function getAdminServices() {
 export async function getAdminServiceEdit(id: string) {
   const now = new Date();
   const weekEnd = new Date(now.getTime() + 7 * 86400_000);
-  const [service, cats, masters, visitCounts] = await Promise.all([
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400_000);
+  const [service, cats, masters, visitCounts, orders30d] = await Promise.all([
     db.service.findUnique({
       where: { id },
       include: {
@@ -197,9 +198,10 @@ export async function getAdminServiceEdit(id: string) {
       },
       _count: { id: true },
     }),
+    db.order.count({ where: { serviceId: id, createdAt: { gte: thirtyDaysAgo } } }),
   ]);
   const visitMap = new Map(visitCounts.map((v) => [v.masterId, v._count.id]));
-  return { service, cats, masters, visitMap };
+  return { service, cats, masters, visitMap, orders30d };
 }
 
 // ──────────────── РАСПИСАНИЕ ────────────────

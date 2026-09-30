@@ -10,7 +10,7 @@ import type { ServicePayload } from "@/server/actions/admin/catalog";
 export default async function EditService({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params;
   if (!(await pageUser("services"))) return <Forbidden />;
-  const [{ service: s, cats, masters: allMasters, visitMap }, settings] = await Promise.all([getAdminServiceEdit(id), getSettings()]);
+  const [{ service: s, cats, masters: allMasters, visitMap, orders30d }, settings] = await Promise.all([getAdminServiceEdit(id), getSettings()]);
   if (!s) notFound();
 
   type AnyI = Record<string, string>;
@@ -90,6 +90,7 @@ export default async function EditService({ params }: { params: Promise<{ locale
         visitsNextWeek: visitMap.get(m.id) ?? 0,
       }))}
       rules={settings.pricing}
+      stats={{ orders30d, rating: s.rating, reviewsCount: s.reviewsCount }}
     />
   );
 }
