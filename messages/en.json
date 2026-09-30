@@ -1939,6 +1939,23 @@
     "badgeNew": "New",
     "comingSoonText": "We're preparing services and pros. Write to us — we'll answer your questions",
     "comingSoonTitle": "Opening soon",
+    "formatOnce": {
+      "cta": "Book now",
+      "desc": "A single pro visit — whenever you need it",
+      "title": "One-time visit"
+    },
+    "formatPack": {
+      "cta": "Buy pack",
+      "desc": "Pay for several visits upfront — cheaper per visit",
+      "title": "Visit pack"
+    },
+    "formatRegular": {
+      "badge": "Best value",
+      "cta": "Subscribe",
+      "desc": "Recurring visits with a subscription discount",
+      "title": "Regular cleaning"
+    },
+    "formatsTitle": "Choose a cleaning format",
     "newService": "New service",
     "notifyAlready": "We already have your contact",
     "notifyButton": "Notify me",
