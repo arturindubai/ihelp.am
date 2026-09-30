@@ -1471,6 +1471,7 @@
     },
     "services": {
       "addCategory": "Add category",
+      "addDurationOption": "Add an option with duration to calculate price",
       "addFirstService": "+ Add service",
       "addGroup": "Add step",
       "addItem": "Add item",
@@ -1490,6 +1491,7 @@
       "categoryArchivedBanner": "Category is archived — services are hidden",
       "categoryHasServices": "Category has services — move or delete them first",
       "categoryHiddenBanner": "Category is hidden — {n, plural, one {# service is not shown} other {# services are not shown}} on the site",
+      "clientPriceLabel": "Client price (example)",
       "comingSoon": "Show as 'Coming soon'",
       "comingSoonLabel": "Soon",
       "deleteCategory": "Delete category",
@@ -1530,7 +1532,9 @@
       "multi": "Multiple choice",
       "newCategory": "+ Category",
       "newService": "+ Service",
+      "noGroups": "Customer places order without selecting parameters",
       "noMasters": "No assigned masters",
+      "noPlans": "Customer places order without selecting a plan",
       "noServicesInCategory": "No services in category",
       "note": "Note block",
       "noteBody": "Text",
@@ -1553,6 +1557,11 @@
       "services": "Services",
       "single": "Single choice",
       "slugFromTitle": "From title",
+      "stats": {
+        "orders30d": "Orders in 30 days",
+        "rating": "Rating",
+        "reviews": "Reviews"
+      },
       "stepBody": "Description",
       "stepTitle": "Step",
       "tabs": {
