@@ -22,8 +22,9 @@ export default async function EditService({ params }: { params: Promise<{ locale
 
   const now = new Date();
   const weekEnd = new Date(now.getTime() + 7 * 86400_000);
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400_000);
 
-  const [cats, allMasters, settings, visitCounts] = await Promise.all([
+  const [cats, allMasters, settings, visitCounts, orders30d] = await Promise.all([
     db.category.findMany({ orderBy: { sort: "asc" } }),
     db.master.findMany({ orderBy: { sort: "asc" }, select: { id: true, name: true, photo: true, active: true } }),
     getSettings(),
@@ -36,6 +37,7 @@ export default async function EditService({ params }: { params: Promise<{ locale
       },
       _count: { id: true },
     }),
+    db.order.count({ where: { serviceId: id, createdAt: { gte: thirtyDaysAgo } } }),
   ]);
 
   const visitMap = new Map(visitCounts.map((v) => [v.masterId, v._count.id]));
@@ -115,6 +117,7 @@ export default async function EditService({ params }: { params: Promise<{ locale
         visitsNextWeek: visitMap.get(m.id) ?? 0,
       }))}
       rules={settings.pricing}
+      stats={{ orders30d, rating: s.rating, reviewsCount: s.reviewsCount }}
     />
   );
 }
