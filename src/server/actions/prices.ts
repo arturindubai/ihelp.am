@@ -4,13 +4,17 @@ import { z } from "zod";
 import { db } from "../db";
 import { requireSection } from "../admin";
 import { audit } from "../audit";
+import { applyBulkChange, validateBulkChange } from "@/lib/price-bulk";
 
 export async function savePriceAction(optionId: string, price: number) {
   const u = await requireSection("services");
   const p = z.object({ optionId: z.string(), price: z.number().int().min(0).max(10_000_000) }).safeParse({ optionId, price });
   if (!p.success) return { ok: false as const };
+  const existing = await db.option.findUnique({ where: { id: p.data.optionId }, select: { price: true } });
+  if (!existing) return { ok: false as const };
+  if (existing.price === p.data.price) return { ok: true as const };
   await db.option.update({ where: { id: p.data.optionId }, data: { price: p.data.price } });
-  await audit(u.id, "option.priceUpdate", "Option", p.data.optionId, { price: p.data.price });
+  await audit(u.id, "option.priceUpdate", "Option", p.data.optionId, { oldPrice: existing.price, price: p.data.price });
   revalidatePath("/", "layout");
   return { ok: true as const };
 }
@@ -25,21 +29,34 @@ export async function bulkPriceAction(optionIds: string[], type: "percent" | "fl
   if (!p.success) return { ok: false as const };
 
   const options = await db.option.findMany({ where: { id: { in: p.data.optionIds } }, select: { id: true, price: true } });
-  const updates = options.map((opt) => {
-    const newPrice =
-      p.data.type === "percent"
-        ? Math.max(0, Math.round(opt.price * (1 + p.data.value / 100)))
-        : Math.max(0, opt.price + Math.round(p.data.value));
-    return db.option.update({ where: { id: opt.id }, data: { price: newPrice } });
+
+  // Защита от обнуления: ни одна ненулевая цена не должна стать ≤ 0
+  if (!validateBulkChange(options.map((o) => o.price), p.data.type, p.data.value)) {
+    return { ok: false as const, reason: "wouldZero" as const };
+  }
+
+  // Нулевые цены пропускаются
+  const toUpdate = options
+    .map((opt) => ({ opt, newPrice: applyBulkChange(opt.price, p.data.type, p.data.value) }))
+    .filter((x): x is { opt: typeof options[number]; newPrice: number } => x.newPrice !== null);
+
+  if (toUpdate.length === 0) return { ok: true as const, updatedPrices: {} };
+
+  await db.$transaction(
+    toUpdate.map(({ opt, newPrice }) => db.option.update({ where: { id: opt.id }, data: { price: newPrice } }))
+  );
+
+  const changes = toUpdate.map(({ opt, newPrice }) => ({ id: opt.id, oldPrice: opt.price, newPrice }));
+  await audit(u.id, "option.bulkPriceUpdate", "Option", null, {
+    count: changes.length,
+    type: p.data.type,
+    value: p.data.value,
+    changes,
   });
-  await db.$transaction(updates);
-  await audit(u.id, "option.bulkPriceUpdate", "Option", null, { count: options.length, type: p.data.type, value: p.data.value });
+
   revalidatePath("/", "layout");
-  return { ok: true as const, updatedPrices: Object.fromEntries(options.map((opt) => {
-    const newPrice =
-      p.data.type === "percent"
-        ? Math.max(0, Math.round(opt.price * (1 + p.data.value / 100)))
-        : Math.max(0, opt.price + Math.round(p.data.value));
-    return [opt.id, newPrice];
-  })) };
+  return {
+    ok: true as const,
+    updatedPrices: Object.fromEntries(toUpdate.map(({ opt, newPrice }) => [opt.id, newPrice])),
+  };
 }

@@ -5,6 +5,7 @@ import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/format";
 import type { PriceRow } from "@/server/services/prices";
 import { savePriceAction, bulkPriceAction } from "@/server/actions/prices";
+import { applyBulkChange, validateBulkChange } from "@/lib/price-bulk";
 
 type Props = { rows: PriceRow[] };
 
@@ -37,7 +38,7 @@ export function PricesManager({ rows }: Props) {
   const [previewMode, setPreviewMode] = useState(false);
   const [confirmMode, setConfirmMode] = useState(false);
   const [bulkPending, startBulkTransition] = useTransition();
-  const [bulkError, setBulkError] = useState(false);
+  const [bulkError, setBulkError] = useState<"server" | "zero" | false>(false);
 
   const getPrice = useCallback((optionId: string) => {
     return localPrices[optionId] ?? rows.find((r) => r.optionId === optionId)?.price ?? 0;
@@ -71,23 +72,15 @@ export function PricesManager({ rows }: Props) {
     setSelectedIds(s);
   };
 
-  const computePreview = (optionId: string): number | null => {
-    const val = parseFloat(bulkValue);
-    if (isNaN(val)) return null;
-    const cur = getPrice(optionId);
-    if (bulkType === "percent") return Math.max(0, Math.round(cur * (1 + val / 100)));
-    return Math.max(0, cur + Math.round(val));
-  };
-
   const flashRow = (optionId: string) => {
     const existing = flashTimers.current.get(optionId);
     if (existing) clearTimeout(existing);
     setFlashIds((prev) => new Set([...prev, optionId]));
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       setFlashIds((prev) => { const s = new Set(prev); s.delete(optionId); return s; });
       flashTimers.current.delete(optionId);
     }, 800);
-    flashTimers.current.set(optionId, t);
+    flashTimers.current.set(optionId, timer);
   };
 
   const startEdit = (row: PriceRow) => {
@@ -102,6 +95,8 @@ export function PricesManager({ rows }: Props) {
   const commitEdit = async (optionId: string) => {
     const parsed = parseInt(editValue, 10);
     if (isNaN(parsed) || parsed < 0) { cancelEdit(); return; }
+    // Не сохранять и не писать в журнал, если цена не изменилась
+    if (parsed === getPrice(optionId)) { cancelEdit(); return; }
     setEditingId(null);
     setSavingId(optionId);
     const res = await savePriceAction(optionId, parsed);
@@ -120,6 +115,12 @@ export function PricesManager({ rows }: Props) {
   const handleBulkApply = () => {
     const val = parseFloat(bulkValue);
     if (isNaN(val)) return;
+    // Защита от обнуления: проверить, что ни одна ненулевая цена не станет ≤ 0
+    const selectedPrices = Array.from(selectedIds).map((id) => getPrice(id));
+    if (!validateBulkChange(selectedPrices, bulkType, val)) {
+      setBulkError("zero");
+      return;
+    }
     setBulkError(false);
     setConfirmMode(true);
   };
@@ -139,7 +140,7 @@ export function PricesManager({ rows }: Props) {
         setBulkError(false);
         startTransition(() => router.refresh());
       } else {
-        setBulkError(true);
+        setBulkError("server");
         setConfirmMode(false);
       }
     });
@@ -154,7 +155,6 @@ export function PricesManager({ rows }: Props) {
   };
 
   const bulkUnit = bulkType === "percent" ? "%" : " ֏";
-  const bulkDisplayValue = bulkValue ? `${bulkValue}${bulkUnit}` : "0" + bulkUnit;
 
   if (rows.length === 0) {
     return (
@@ -197,7 +197,7 @@ export function PricesManager({ rows }: Props) {
                   type="number"
                   className="input w-20 text-sm"
                   value={bulkValue}
-                  onChange={(e) => setBulkValue(e.target.value)}
+                  onChange={(e) => { setBulkValue(e.target.value); setBulkError(false); }}
                   placeholder="0"
                 />
                 <button
@@ -215,6 +215,12 @@ export function PricesManager({ rows }: Props) {
                     {t("prices.bulkApply")}
                   </button>
                 </div>
+                {bulkError === "zero" && (
+                  <p className="w-full text-xs text-bad">{t("prices.bulkZeroError")}</p>
+                )}
+                {bulkError === "server" && (
+                  <p className="w-full text-xs text-bad">{t("common.error")}</p>
+                )}
               </div>
             ) : (
               /* Полоса подтверждения */
@@ -236,9 +242,6 @@ export function PricesManager({ rows }: Props) {
                   </button>
                 </div>
               </div>
-            )}
-            {bulkError && (
-              <p className="mt-1 text-xs text-bad">{t("common.error")}</p>
             )}
           </div>
         </div>
@@ -268,7 +271,7 @@ export function PricesManager({ rows }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {displayRows.map((dr, idx) => {
+            {displayRows.map((dr) => {
               if (dr.kind === "sep") {
                 return (
                   <tr key={`sep-${dr.categoryId}`} className="bg-surface">
@@ -286,7 +289,13 @@ export function PricesManager({ rows }: Props) {
               const hasError = errorIds.has(row.optionId);
               const isFlashing = flashIds.has(row.optionId);
               const isSelected = selectedIds.has(row.optionId);
-              const previewPrice = (previewMode && isSelected) ? computePreview(row.optionId) : null;
+
+              // Предпросмотр: вычисляется через shared-функцию
+              const bulkVal = parseFloat(bulkValue);
+              const previewPrice =
+                previewMode && isSelected && !isNaN(bulkVal)
+                  ? applyBulkChange(price, bulkType, bulkVal)
+                  : undefined;
 
               return (
                 <tr
@@ -359,7 +368,7 @@ export function PricesManager({ rows }: Props) {
                         onClick={() => startEdit(row)}
                         className={cn(
                           "rounded px-1.5 py-0.5 hover:bg-surface",
-                          previewMode && isSelected && "text-muted line-through",
+                          previewMode && isSelected && previewPrice !== undefined && price > 0 && "text-muted line-through",
                         )}
                       >
                         {price} ֏
@@ -371,9 +380,11 @@ export function PricesManager({ rows }: Props) {
                   {previewMode && someSelected && (
                     <td className="px-3 py-2 text-right tabular-nums">
                       {isSelected ? (
-                        previewPrice === null || price === 0
-                          ? <span className="text-muted">—</span>
-                          : <span className="font-bold text-ok">{previewPrice} ֏</span>
+                        price === 0
+                          ? <span className="text-muted text-xs">{t("prices.unchanged")}</span>
+                          : previewPrice !== null && previewPrice !== undefined
+                            ? <span className="font-bold text-ok">{previewPrice} ֏</span>
+                            : <span className="text-muted">—</span>
                       ) : null}
                     </td>
                   )}
