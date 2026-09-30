@@ -3,9 +3,9 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { Star } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
-import { cancelOrderAction, cancelVisitAction, pauseOrderAction, rescheduleVisitAction, resumeOrderAction, reviewAction } from "@/server/actions/account";
+import { cancelOrderAction, cancelVisitAction, pauseOrderAction, rescheduleInfoAction, rescheduleVisitAction, resumeOrderAction, reviewAction } from "@/server/actions/account";
 import { Sheet } from "@/components/ui/Sheet";
-import { SlotPicker } from "@/components/booking/SlotPicker";
+import { SlotPicker, type SlotMaster } from "@/components/booking/SlotPicker";
 import { addDays, ymd } from "@/lib/time";
 
 export function OrderActions({ order }: { order: { id: string; kind: string; status: string } }) {
@@ -35,6 +35,8 @@ export function OrderActions({ order }: { order: { id: string; kind: string; sta
   );
 }
 
+type RescheduleInfo = { allowChooseMaster: boolean; masters: SlotMaster[]; currentMasterId: string | null };
+
 export function VisitActions({ visit, order, freeCancelHours, horizonDays }: { visit: { id: string; status: string; scheduledAt: string | null; hasReview: boolean }; order: { kind: string; status: string; serviceId: string; durationMin: number }; freeCancelHours: number; horizonDays: number }) {
   const t = useTranslations("order");
   const tc = useTranslations("common");
@@ -42,21 +44,28 @@ export function VisitActions({ visit, order, freeCancelHours, horizonDays }: { v
   const router = useRouter();
   const [pending, start] = useTransition();
   const [sheet, setSheet] = useState<"reschedule" | "cancel" | "review" | null>(null);
-  const [pick, setPick] = useState<{ date: string; time: string | null }>({ date: "", time: null });
+  const [pick, setPick] = useState<{ date: string; time: string | null; masterId: string | null }>({ date: "", time: null, masterId: null });
   const [rating, setRating] = useState(5);
   const [text, setText] = useState("");
   const [err, setErr] = useState<string>();
   const [thanks, setThanks] = useState(false);
+  const [rescheduleInfo, setRescheduleInfo] = useState<RescheduleInfo | null>(null);
 
   const late = visit.scheduledAt ? new Date(visit.scheduledAt).getTime() - Date.now() < freeCancelHours * 3600_000 : false;
   const active = ["ACTIVE", "PAUSED"].includes(order.status);
   const canChange = active && ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"].includes(visit.status);
   const close = () => { setSheet(null); setErr(undefined); };
 
+  function openReschedule() {
+    setSheet("reschedule");
+    // Загружаем список мастеров для листа переноса
+    rescheduleInfoAction(visit.id).then(setRescheduleInfo).catch(() => {});
+  }
+
   return (
     <div className="mt-2 flex flex-wrap gap-2">
-      {canChange && visit.status === "UNSCHEDULED" && <button className="btn-dark btn-sm" onClick={() => setSheet("reschedule")}>{t("schedule")}</button>}
-      {canChange && visit.status !== "UNSCHEDULED" && !late && <button className="btn-outline btn-sm" onClick={() => setSheet("reschedule")}>{t("reschedule")}</button>}
+      {canChange && visit.status === "UNSCHEDULED" && <button className="btn-dark btn-sm" onClick={openReschedule}>{t("schedule")}</button>}
+      {canChange && visit.status !== "UNSCHEDULED" && !late && <button className="btn-outline btn-sm" onClick={openReschedule}>{t("reschedule")}</button>}
       {canChange && visit.status !== "UNSCHEDULED" && !late && <button className="btn-ghost btn-sm text-bad" onClick={() => setSheet("cancel")}>{order.kind === "SUBSCRIPTION" ? t("skipVisit") : t("cancelVisit")}</button>}
       {canChange && visit.status !== "UNSCHEDULED" && late && <p className="text-xs text-muted">{t("lateCancel", { hours: freeCancelHours })}</p>}
       {visit.status === "DONE" && !visit.hasReview && !thanks && <button className="btn-outline btn-sm" onClick={() => setSheet("review")}><Star size={14} /> {t("leaveReview")}</button>}
@@ -64,11 +73,21 @@ export function VisitActions({ visit, order, freeCancelHours, horizonDays }: { v
 
       <Sheet open={sheet === "reschedule"} onClose={close} title={visit.status === "UNSCHEDULED" ? t("schedule") : t("reschedule")}
         footer={<><button className="btn-primary w-full" disabled={pending || !pick.time} onClick={() => start(async () => {
-          const r = await rescheduleVisitAction(visit.id, pick.date, pick.time!);
+          const r = await rescheduleVisitAction(visit.id, pick.date, pick.time!, pick.masterId);
           if (!r.ok) return setErr(r.error === "slot_taken" ? tb("errors.slot_taken") : tc("error"));
           close(); router.refresh();
         })}>{tc("done")}</button>{err && <p className="mt-2 text-sm text-bad">{err}</p>}</>}>
-        {sheet === "reschedule" && <SlotPicker serviceId={order.serviceId} durationMin={order.durationMin} horizonDays={horizonDays} onPick={(date, time) => setPick({ date, time })} />}
+        {sheet === "reschedule" && (
+          <SlotPicker
+            serviceId={order.serviceId}
+            durationMin={order.durationMin}
+            horizonDays={horizonDays}
+            masters={rescheduleInfo?.masters}
+            currentMasterId={rescheduleInfo?.currentMasterId}
+            allowChooseMaster={rescheduleInfo?.allowChooseMaster}
+            onPick={(date, time, masterId) => setPick({ date, time, masterId: masterId ?? null })}
+          />
+        )}
       </Sheet>
 
       <Sheet open={sheet === "cancel"} onClose={close} title={t("cancelConfirm")} footer={<div className="flex gap-2"><button className="btn-outline flex-1" onClick={close}>{tc("no")}</button><button className="btn-primary flex-1 bg-bad" disabled={pending} onClick={() => start(async () => { const r = await cancelVisitAction(visit.id); if (!r.ok) return setErr(tc("error")); close(); router.refresh(); })}>{tc("yes")}</button></div>}>

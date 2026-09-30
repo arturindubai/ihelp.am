@@ -2105,6 +2105,8 @@
     },
     "promoNotBetter": "Промокод не выгоднее текущей скидки",
     "promoPlaceholder": "Введите промокод",
+    "sameMaster": "Оставить мастера",
+    "sameMasterSub": "Тот же специалист, что и раньше",
     "savings": "Вы экономите {first} ֏ на первом визите и {regular} ֏ на каждом следующем",
     "selectedDate": "{date}",
     "serviceLabel": "Услуга",

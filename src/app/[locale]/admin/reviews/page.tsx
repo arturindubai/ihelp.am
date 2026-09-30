@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
+import { getAdminReviews } from "@/server/services/pages/admin";
 import { tr } from "@/i18n/locales";
 import { dateLabel, cn } from "@/lib/format";
 import { PageHead, Forbidden } from "@/components/admin/ui";
@@ -12,13 +12,8 @@ export default async function AdminReviews({ params, searchParams }: { params: P
   const { status = "PENDING" } = await searchParams;
   if (!(await pageUser("reviews"))) return <Forbidden />;
   const t = await getTranslations("admin");
-  const st = ["PENDING", "APPROVED", "REJECTED"].includes(status) ? (status as "PENDING") : "PENDING";
-  const [reviews, counts, masters, services] = await Promise.all([
-    db.review.findMany({ where: { status: st }, orderBy: { createdAt: "desc" }, take: 100, include: { master: true, service: true, visit: { include: { order: true } } } }),
-    db.review.groupBy({ by: ["status"], _count: true }),
-    db.master.findMany({ orderBy: { sort: "asc" } }),
-    db.service.findMany({ orderBy: { sort: "asc" } }),
-  ]);
+  const st = (["PENDING", "APPROVED", "REJECTED"].includes(status) ? status : "PENDING") as "PENDING" | "APPROVED" | "REJECTED";
+  const { reviews, counts, masters, services } = await getAdminReviews(st);
   return (
     <div className="max-w-3xl">
       <PageHead title={t("reviews.title")} actions={<ReviewCreate masters={masters.map((m) => ({ id: m.id, name: tr(m.name, locale) }))} services={services.map((s) => ({ id: s.id, name: tr(s.title, locale) }))} />} />

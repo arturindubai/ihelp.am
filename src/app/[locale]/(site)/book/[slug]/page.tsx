@@ -1,13 +1,13 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { ArrowLeft } from "lucide-react";
 import { Link, redirect } from "@/i18n/navigation";
-import { db } from "@/server/db";
 import { getCurrentUser } from "@/server/auth";
 import { getSettings } from "@/server/settings";
 import { loginMethods } from "@/server/otp";
 import { envContacts } from "@/server/contacts";
 import { getMastersForService, loadServiceRaw, localizeService, resolveSelection } from "@/server/services/catalog";
-import { isFirstOrder } from "@/server/services/booking";
+import { isFirstOrder, getLastOrderDraft } from "@/server/services/booking";
+import { getBookingAddresses } from "@/server/services/pages/catalog";
 import { tr } from "@/i18n/locales";
 import { Checkout } from "@/components/booking/Checkout";
 import { InlineLogin } from "./InlineLogin";
@@ -42,10 +42,11 @@ export default async function BookPage({ params, searchParams }: { params: Promi
     );
   }
 
-  const [addresses, masters, first] = await Promise.all([
-    db.address.findMany({ where: { userId: user.id }, orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }] }),
+  const [addresses, masters, first, draft] = await Promise.all([
+    getBookingAddresses(user.id),
     getMastersForService(raw!.id),
     isFirstOrder(user.id),
+    getLastOrderDraft(user.id),
   ]);
 
   return (
@@ -69,6 +70,8 @@ export default async function BookPage({ params, searchParams }: { params: Promi
       freeCancelHours={settings.booking.freeCancelHours}
       lateCancelFeeAmd={settings.booking.lateCancelFeeAmd}
       contacts={envContacts()}
+      defaultAddressId={draft?.addressId ?? null}
+      defaultPaymentMethod={draft?.paymentMethod ?? null}
     />
     </>
   );

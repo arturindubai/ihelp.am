@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import { db } from "@/server/db";
 import { pageUser } from "@/server/adminPage";
+import { getAdminOrderDetail } from "@/server/services/pages/admin";
 import { tr } from "@/i18n/locales";
 import { amd, dateLabel, durationLabel } from "@/lib/format";
 import { hm } from "@/lib/time";
@@ -15,10 +15,10 @@ import { OrderMessages } from "@/components/admin/OrderMessages";
 export default async function AdminOrder({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params;
   if (!(await pageUser("orders"))) return <Forbidden />;
-  const o = await db.order.findUnique({ where: { id }, include: { user: true, service: true, plan: true, promoCode: true, visits: { orderBy: [{ index: "asc" }], include: { master: true } } } });
-  if (!o) notFound();
+  const result = await getAdminOrderDetail(id);
+  if (!result) notFound();
+  const { order: o, masters } = result;
   const [t, to, ts, tb, ta] = await Promise.all([getTranslations("admin"), getTranslations("order"), getTranslations("service"), getTranslations("booking"), getTranslations("address")]);
-  const masters = await db.master.findMany({ where: { skills: { some: { id: o.serviceId } } }, orderBy: { sort: "asc" } });
   const mList = masters.map((m) => ({ id: m.id, name: tr(m.name, locale), active: m.active }));
   const cfg = o.config as { options: { group: unknown; option: unknown; price: number; durationMin: number }[]; firstOrder?: boolean };
   const a = o.addressSnapshot as Record<string, string | null>;
