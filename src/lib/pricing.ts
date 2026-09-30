@@ -185,3 +185,43 @@ export function calculatePrice(input: {
     savingsPercent: payNowBase ? Math.round(((payNowBase - payNow) / payNowBase) * 100) : 0,
   };
 }
+
+/**
+ * Настоящая выгода клиента при выборе тарифа (пакет/подписка) вместо разовых визитов.
+ * Сравнивает цену пакета/подписки со стоимостью тех же визитов разово — с учётом
+ * скидки первого заказа, которую клиент получил бы и при разовом бронировании.
+ *
+ * Пакет: цена N разовых визитов для этого клиента − payNow пакета.
+ * Подписка: цена 1 разового визита для этого клиента − regular.price подписки.
+ * Возвращает 0, если выгода ≤ 0 (строку «Экономия» не показывают).
+ */
+export function calculatePlanSavings(input: {
+  lines: PriceLine[];
+  plan: PricePlan;
+  isFirstOrder?: boolean;
+  rules?: Partial<PricingRules>;
+}): number {
+  const planResult = calculatePrice({
+    lines: input.lines,
+    plan: input.plan,
+    isFirstOrder: input.isFirstOrder,
+    rules: input.rules,
+  });
+  const oneTimeResult = calculatePrice({
+    lines: input.lines,
+    plan: { kind: "ONE_TIME", discountPercent: 0 },
+    isFirstOrder: input.isFirstOrder,
+    rules: input.rules,
+  });
+
+  let saving: number;
+  if (input.plan.kind === "PACKAGE") {
+    const visits = planResult.visits || 1;
+    const oneTimeCost = oneTimeResult.first.price + oneTimeResult.regular.price * (visits - 1);
+    saving = oneTimeCost - planResult.payNow;
+  } else {
+    saving = oneTimeResult.first.price - planResult.regular.price;
+  }
+
+  return Math.max(0, saving);
+}
