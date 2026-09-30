@@ -464,6 +464,10 @@ model PromoCode {
   planKinds      PlanKind[] @default([])
   active         Boolean   @default(true)
   usedCount      Int       @default(0)
+  /// Персональный промокод: работает только для клиента с этим телефоном
+  forPhone       String?
+  /// Персональный промокод: работает только для клиента с этим email
+  forEmail       String?
   createdAt      DateTime  @default(now())
   orders         Order[]
   redemptions    PromoRedemption[]
