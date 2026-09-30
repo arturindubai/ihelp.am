@@ -307,6 +307,8 @@ async function tellTeam(
   if (!msg) return;
   const { notifyMembers } = await import("./teamBot");
   await notifyMembers(msg);
+  const { notifyTasks } = await import("../notify");
+  await notifyTasks(msg).catch(() => null);
 }
 
 /** Задача закрылась: заблокированные только ею возвращаются в очередь; триажированные задачи бэклога — на разбор */

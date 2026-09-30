@@ -899,6 +899,8 @@
       "google_failed": "",
       "google_not_linked": "",
       "google_off": "",
+      "google_signup_phone_taken": "",
+      "google_signup_ticket_expired": "",
       "google_state": "",
       "name": "",
       "phone": "",
@@ -913,6 +915,9 @@
     "getCodeVia": "",
     "google": "",
     "googleHint": "",
+    "googleSignupEmailConfirmed": "",
+    "googleSignupPhoneHint": "",
+    "googleSignupTitle": "",
     "method": {
       "email": "",
       "phone": ""
@@ -943,6 +948,10 @@
     "anyMasterSub": "",
     "availableTime": "",
     "base": "",
+    "calMonthNav": {
+      "next": "",
+      "prev": ""
+    },
     "cancelRules": "",
     "card": "",
     "cardSoon": "",
@@ -989,6 +998,7 @@
     "promoNotBetter": "",
     "promoPlaceholder": "",
     "savings": "",
+    "selectedDate": "{date}",
     "serviceLabel": "",
     "startDate": "",
     "success": "",
@@ -1003,6 +1013,7 @@
     "summary": "",
     "title": "",
     "toOrder": "",
+    "weekdaysMin": "",
     "weekdaysShort": "",
     "whoComes": "",
     "wishes": ""
@@ -1261,8 +1272,13 @@
     "faq": "",
     "firstOffer": "",
     "firstVisit": "",
+    "firstVisitBannerText": "",
+    "firstVisitBannerTitle": "",
     "frequency": "",
     "frequencyHint": "",
+    "guarantee1": "",
+    "guarantee2": "",
+    "guarantee3": "",
     "how": "",
     "includes": "",
     "kind": {
@@ -1274,6 +1290,8 @@
     "noReviews": "",
     "notFound": "",
     "packTotal": "",
+    "packageSaving": "",
+    "perVisitSaving": "",
     "policy": "",
     "reviews": "",
     "sampleSchedule": "",
