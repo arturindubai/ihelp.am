@@ -1026,6 +1026,8 @@
     },
     "promoNotBetter": "",
     "promoPlaceholder": "",
+    "sameMaster": "",
+    "sameMasterSub": "",
     "savings": "",
     "selectedDate": "{date}",
     "serviceLabel": "",
