@@ -29,8 +29,9 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return meta;
 }
 
-export default async function ServicePage({ params }: { params: Promise<{ locale: string; slug: string }> }) {
+export default async function ServicePage({ params, searchParams }: { params: Promise<{ locale: string; slug: string }>; searchParams: Promise<{ plan?: string }> }) {
   const { locale, slug } = await params;
+  const { plan } = await searchParams;
   setRequestLocale(locale);
   const raw = await loadServiceRaw(slug);
   if (!raw) notFound();
@@ -139,7 +140,7 @@ export default async function ServicePage({ params }: { params: Promise<{ locale
         </section>
       )}
 
-      <ServiceConfigurator s={s} rules={settings.pricing} isFirstOrder={first} policy={s.policy ?? undefined} />
+      <ServiceConfigurator s={s} rules={settings.pricing} isFirstOrder={first} policy={s.policy ?? undefined} initialPlan={plan} />
 
       {s.note?.body && (
         <div className="mt-2 rounded-2xl bg-ok-50 p-4">

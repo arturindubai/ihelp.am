@@ -193,6 +193,27 @@ export function reviewGate(
 
 export const SHA_RE = /^[0-9a-f]{7,40}$/i;
 
+/**
+ * Извлекает имена файлов из вывода git merge-tree --write-tree при конфликте.
+ * Вызывается в cc.mjs для показа перечня конфликтных файлов при отказе сдачи.
+ * Поддерживает форматы:
+ *   "CONFLICT (content): Merge conflict in path/to/file"
+ *   "CONFLICT (modify/delete): path/to/file deleted in ..."
+ */
+export function parseConflictFiles(output: string): string[] {
+  const files: string[] = [];
+  for (const line of output.split("\n")) {
+    if (!line.includes("CONFLICT")) continue;
+    // Формат 1: "CONFLICT (...): Merge conflict in path/to/file"
+    const inMatch = line.match(/\bMerge conflict in\s+(.+)$/i);
+    if (inMatch) { files.push(inMatch[1].trim()); continue; }
+    // Формат 2: "CONFLICT (modify/delete): path/to/file deleted/modified/renamed in..."
+    const typeMatch = line.match(/CONFLICT[^:]*:\s*(\S+)\s+(?:deleted|modified|renamed)/i);
+    if (typeMatch) files.push(typeMatch[1].trim());
+  }
+  return [...new Set(files)];
+}
+
 export type CriterionResult = { done: boolean; cardKey?: string };
 
 /** Формат ключа follow-up карточки: PREFX-N (например IN-7, RISK-3) */
