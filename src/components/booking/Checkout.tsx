@@ -494,7 +494,7 @@ export function Checkout(props: {
       </div>
 
       {/* Sticky footer — кнопка подтвердить */}
-      <div className="h-28" />
+      <div className="h-32" />
       <div className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper">
         <div className="container-m p-3">
           <button
