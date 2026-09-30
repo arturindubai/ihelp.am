@@ -69,6 +69,8 @@ type SvcCardInput = {
   image: string | null;
   rating: number;
   reviewsCount: number;
+  isNew: boolean;
+  arrivalHours: number | null;
   groups: { options: { price: number; durationMin: number }[] }[];
   plans: { discountPercent: number }[];
 };
@@ -83,6 +85,8 @@ export function serviceCard(s: SvcCardInput, locale: string) {
     image: s.image,
     rating: s.rating,
     reviewsCount: s.reviewsCount,
+    isNew: s.isNew,
+    arrivalHours: s.arrivalHours,
     fromPrice: prices.length ? Math.min(...prices) : 0,
     maxDiscount: Math.max(0, ...s.plans.map((p) => p.discountPercent)),
     minDuration: durations.length ? Math.min(...durations) : 0,
@@ -109,7 +113,25 @@ export async function getCategory(slug: string, locale: string) {
     include: { services: { where: { active: true }, orderBy: { sort: "asc" }, include: { groups: { where: { active: true, isDuration: true }, include: { options: { where: { active: true } } } }, plans: { where: { active: true } } } } },
   });
   if (!c) return null;
-  return { slug: c.slug, title: tr(c.title, locale), description: tr(c.description, locale), comingSoon: c.comingSoon, services: c.services.map((s) => serviceCard(s, locale)) };
+
+  // Собираем доступные форматы: по одному слагу первой услуги каждого типа плана
+  const kindToSlug = new Map<string, string>();
+  for (const svc of c.services) {
+    for (const plan of svc.plans) {
+      if (!kindToSlug.has(plan.kind)) kindToSlug.set(plan.kind, svc.slug);
+    }
+  }
+  const formats = Array.from(kindToSlug.entries()).map(([kind, serviceSlug]) => ({ kind, serviceSlug }));
+
+  return {
+    slug: c.slug,
+    title: tr(c.title, locale),
+    description: tr(c.description, locale),
+    comingSoon: c.comingSoon,
+    showFormats: c.showFormats,
+    formats,
+    services: c.services.map((s) => serviceCard(s, locale)),
+  };
 }
 
 export async function loadServiceRaw(slug: string) {

@@ -51,7 +51,7 @@ function StatusBadge({ active, comingSoon, archived }: { active: boolean; coming
   return null;
 }
 
-type EditCat = { id?: string; slug: string; title: I18n; description: I18n | null; image: string | null; sort: number; active: boolean; comingSoon: boolean; archived: boolean };
+type EditCat = { id?: string; slug: string; title: I18n; description: I18n | null; image: string | null; sort: number; active: boolean; comingSoon: boolean; archived: boolean; showFormats: boolean };
 
 export function CatalogList({ categories: initial, pageTitle }: { categories: AdminCatalogCategory[]; pageTitle: string }) {
   const t = useTranslations("admin.services");
@@ -148,7 +148,7 @@ export function CatalogList({ categories: initial, pageTitle }: { categories: Ad
         <span className="text-sm font-semibold">{t("categories")}</span>
         <button
           className="btn-ghost btn-sm gap-1 text-xs"
-          onClick={() => { setEditCatErr(undefined); setEditCat({ slug: "", title: {}, description: null, image: null, sort: categories.length, active: true, comingSoon: false, archived: false }); }}
+          onClick={() => { setEditCatErr(undefined); setEditCat({ slug: "", title: {}, description: null, image: null, sort: categories.length, active: true, comingSoon: false, archived: false, showFormats: false }); }}
         >
           <Plus size={14} /> {t("newCategory")}
         </button>
@@ -208,7 +208,7 @@ export function CatalogList({ categories: initial, pageTitle }: { categories: Ad
         <div className="flex gap-2">
           <button
             className="btn-outline btn-sm"
-            onClick={() => { setEditCatErr(undefined); setEditCat({ slug: "", title: {}, description: null, image: null, sort: categories.length, active: true, comingSoon: false, archived: false }); }}
+            onClick={() => { setEditCatErr(undefined); setEditCat({ slug: "", title: {}, description: null, image: null, sort: categories.length, active: true, comingSoon: false, archived: false, showFormats: false }); }}
           >
             <Plus size={16} /> {t("newCategory")}
           </button>
@@ -296,7 +296,7 @@ export function CatalogList({ categories: initial, pageTitle }: { categories: Ad
                   <button
                     className="btn-ghost btn-sm"
                     title={tc("edit")}
-                    onClick={() => { setEditCatErr(undefined); setEditCat({ id: selectedCategory.id, slug: selectedCategory.slug, title: selectedCategory.title, description: selectedCategory.description, image: selectedCategory.image, sort: selectedCategory.sort, active: selectedCategory.active, comingSoon: selectedCategory.comingSoon, archived: selectedCategory.archived }); }}
+                    onClick={() => { setEditCatErr(undefined); setEditCat({ id: selectedCategory.id, slug: selectedCategory.slug, title: selectedCategory.title, description: selectedCategory.description, image: selectedCategory.image, sort: selectedCategory.sort, active: selectedCategory.active, comingSoon: selectedCategory.comingSoon, archived: selectedCategory.archived, showFormats: selectedCategory.showFormats ?? false }); }}
                   >
                     <Pencil size={16} />
                   </button>
@@ -385,6 +385,7 @@ export function CatalogList({ categories: initial, pageTitle }: { categories: Ad
             <NumInput label={tc("sort")} value={editCat.sort} onChange={(v) => setEditCat({ ...editCat, sort: v ?? 0 })} />
             <Toggle label={tc("active")} checked={editCat.active} onChange={(v) => setEditCat({ ...editCat, active: v })} />
             <Toggle label={t("comingSoon")} checked={editCat.comingSoon} onChange={(v) => setEditCat({ ...editCat, comingSoon: v })} />
+            <Toggle label={t("showFormats")} checked={editCat.showFormats ?? false} onChange={(v) => setEditCat({ ...editCat, showFormats: v })} />
             {editCatErr && <p className="text-sm text-bad">{editCatErr}</p>}
           </div>
         )}

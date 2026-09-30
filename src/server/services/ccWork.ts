@@ -4,7 +4,7 @@ import { upsertNote, createNote } from "./library";
 import { alertTech } from "../alerts";
 import { html, notifyTech } from "../notify";
 import { BLOCKED_ON_LABELS, STATUSES } from "@/lib/backlog-labels";
-import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, criteriaGate, doneGate, extractFollowUpKeys, isDesignerTask, isProductTask, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type CriterionResult, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
+import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, criteriaGate, doneGate, extractFollowUpKeys, isDesignerTask, isProductTask, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type CriterionResult, type Role, type TaskStatusKey, unblockTarget, isCodeTask, isUiTask, standGate } from "@/lib/cc-flow";
 import { isAgentAuthor, findBlockingError, baselineFor } from "@/lib/cc-triage";
 import { nextIntakeKey, intakeTitle } from "@/lib/cc-lanes";
 import { intakeClosingMapValid, parseDuplicateOriginalKey } from "@/lib/cc-intake";
@@ -52,14 +52,14 @@ async function say(taskId: string, author: string, kind: CommentKind, text: stri
     await db.taskComment.create({ data: { taskId, author, kind, text: trimmed } });
     return;
   }
-  // Текст длиннее лимита: полный материал — в Библиотеку, в ленте — резюме со ссылкой
+  // Текст длиннее лимита: полный материал — в Канон, в ленте — резюме со ссылкой
   let libraryNoteId: string | null = null;
   try {
     const doc = await createNote({ title: buildLibraryTitle(taskKey, author, kind), kind: "knowledge", content: trimmed }, author);
     libraryNoteId = doc.slug;
   } catch {
     // Ошибка сохранения: храним обрезанный текст с пометкой
-    await db.taskComment.create({ data: { taskId, author, kind, text: trimmed.slice(0, 4900) + "\n\n⚠️ Текст обрезан — не удалось сохранить в Библиотеку." } });
+    await db.taskComment.create({ data: { taskId, author, kind, text: trimmed.slice(0, 4900) + "\n\n⚠️ Текст обрезан — не удалось сохранить в Канон." } });
     return;
   }
   await db.taskComment.create({ data: { taskId, author, kind, text: buildSummaryText(trimmed, libraryNoteId), libraryNoteId } });
@@ -100,6 +100,8 @@ export type TransitionInput = {
   intakeClosingMap?: string;
   /** Результат чек-листа критериев при переходе в «Сделано»: по одному для каждого критерия */
   criteriaResult?: CriterionResult[];
+  /** Для «Сделано» у задач с интерфейсом: что проверено на живом сайте после выкладки */
+  liveProof?: string;
 };
 
 /** Смена статуса с проверкой прав, гейтов и записью в историю. Возвращает обновлённую задачу */
@@ -160,6 +162,11 @@ export async function transition(key: string, input: TransitionInput, actor: Act
     // «Что изменилось для людей» обязательно для код-задач — проверяем на сервере, а не только в браузере
     const effectiveReleaseNote = input.releaseNote?.trim() || task.releaseNote?.trim();
     if (isCodeTask(task.layer) && !task.noWork && !effectiveReleaseNote && !force) throw new CcError("release_note_required");
+    // Гейт живой проверки на сайте: для задач с интерфейсом требуется доказательство
+    if (!force && !task.noWork && isUiTask(task.layer, task.scope)) {
+      const liveProof = input.liveProof?.trim() || await findLiveProofFromFeed(task.id);
+      if (!liveProof) throw new CcError("site_check_required");
+    }
     data.deployedSha = input.sha?.trim() || null;
     data.doneAt = new Date();
     if (input.releaseNote?.trim()) data.releaseNote = input.releaseNote.trim().slice(0, 500);
@@ -264,6 +271,12 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   if (to === "done" && task.layer === "none" && task.nextSteps.length > 0) {
     await createNextStepsIntake(key, task.title, task.nextSteps, actor.name).catch(async (err) => {
       await say(task.id, "system", "note", `⚠️ Не удалось завести карточку следующих шагов: ${String(err).slice(0, 200)}`, key).catch(() => null);
+    });
+  }
+  // Критерий 5: при приёмке не-код задачи результат автоматически попадает в Канон
+  if (to === "done" && task.layer === "none") {
+    await nocodeToCanon(task, actor.name).catch(async (err) => {
+      await say(task.id, "system", "note", `⚠️ Не удалось сохранить результат в Канон: ${String(err).slice(0, 200)}`, key).catch(() => null);
     });
   }
   // Обновляем статус эпика по итогу изменения задачи
@@ -575,16 +588,38 @@ export async function reviewTake(key: string, agent: string) {
   return db.task.findUniqueOrThrow({ where: { id: t.id } });
 }
 
+/** Ищем запись от деплоера/CTO/владельца с «проверено на сайте» — для гейта cc done на UI-задаче */
+async function findLiveProofFromFeed(taskId: string): Promise<string | null> {
+  const comments = await db.taskComment.findMany({
+    where: { taskId },
+    orderBy: { createdAt: "desc" },
+    select: { author: true, text: true },
+    take: 100,
+  });
+  for (const c of comments) {
+    const role = roleOf(c.author);
+    if (["deployer", "cto", "owner"].includes(role) && /проверено на сайте/i.test(c.text)) {
+      return c.text.slice(0, 500);
+    }
+  }
+  return null;
+}
+
 /** Тестировщик: проверка пройдена. Для noWork-задач SHA не требуется; задача сразу отменяется как «не потребовалось» */
 export async function testPass(key: string, agent: string, sha: string, text: string) {
   if (roleOf(agent) !== "tester") throw new CcError("forbidden_role", roleOf(agent));
   if (text.trim().length < 40) throw new CcError("report_required");
-  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, claimedBy: true, noWork: true } });
+  const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, claimedBy: true, noWork: true, layer: true, scope: true, _count: { select: { attachments: true } } } });
   if (!t) throw new CcError("not_found");
   // Критерий 8: понятный отказ когда задача не на проверке
   if (t.status !== "review") throw new CcError("not_in_review", `задача сейчас в статусе «${STATUSES[t.status] ?? t.status}» — завершите текущий запуск`);
   if (t.claimedBy !== agent) throw new CcError("not_your_task", t.claimedBy ?? "");
   if (!t.noWork && !SHA_RE.test(sha.trim())) throw new CcError("sha_required");
+  // Гейт живой проверки на стенде: для задач с интерфейсом требуется скриншот и отметка в тексте
+  if (!t.noWork && isUiTask(t.layer, t.scope)) {
+    const gate = standGate(text, t._count.attachments);
+    if (gate) throw new CcError(gate);
+  }
   // Критерий 5: блокировать отметку, если после последней сдачи на проверку появилась запись об ошибке
   const lastReviewEvent = await db.taskEvent.findFirst({
     where: { taskId: t.id, field: "status", to: "review" },
@@ -807,7 +842,7 @@ export async function approveMockup(key: string, actor: Actor, comment: string |
     data: { mockupApprovedBy: actor.name, mockupApprovedAt: now, ...(needsClean.length !== t.needs.length ? { needs: needsClean } : {}) },
   });
   await log(t.id, actor.name, "mockupApprovedBy", t.mockupApprovedBy, actor.name);
-  const text = `${comment ? `Дизайн утверждён: ${comment.trim().slice(0, 500)}` : "Дизайн утверждён."}\nВ Библиотеке: ${canon.slug} (версия ${canon.version}).`;
+  const text = `${comment ? `Дизайн утверждён: ${comment.trim().slice(0, 500)}` : "Дизайн утверждён."}\nВ Каноне: ${canon.slug} (версия ${canon.version}).`;
   await say(t.id, actor.name, "note", text, key);
   // Если задача заблокирована на дизайне/владельце/продакте по причине макета — снять блокировку автоматически
   const autoUnblock =
@@ -972,6 +1007,24 @@ async function createDuplicateNotice(intakeKey: string, origKey: string, by: str
       existing.push(key);
     }
   }
+}
+
+/**
+ * По типу задачи определяем раздел Канона: инструкции и правила → rules, остальное → knowledge.
+ * Ориентируемся на ключевые слова в заголовке и описании задачи.
+ */
+function inferCanonKind(title: string, summary: string): string {
+  const text = `${title} ${summary}`.toLowerCase();
+  if (/инструкц|правила|регламент|руководство|политик|процесс|процедур|порядок/.test(text)) return "rules";
+  return "knowledge";
+}
+
+/** Критерий 5: при приёмке не-код задачи её результат (ownerSummary или proof) идёт в Канон */
+async function nocodeToCanon(task: { key: string; title: string; summary: string; ownerSummary: string | null; proof: string | null }, actor: string) {
+  const content = task.ownerSummary?.trim() || task.proof?.trim() || task.summary?.trim();
+  if (!content) return;
+  const kind = inferCanonKind(task.title, task.summary);
+  await upsertNote(`nocode-${task.key.toLowerCase()}`, { title: task.title, kind, content }, actor);
 }
 
 /** Follow-up карточка для ручного шага: intake IN-N с текстом критерия и ссылкой на исходную задачу */

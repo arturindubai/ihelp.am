@@ -51,6 +51,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
 Тестировщик (--agent tester):
   test КЛЮЧ                                     взять на проверку + рабочая копия на коммите ветки
   pass КЛЮЧ "что проверено"                     протестировано (отметка на текущий коммит ветки)
+            (задача с интерфейсом: обязателен скриншот attach КЛЮЧ --file, текст «Проверено на стенде: …»)
   fail КЛЮЧ "что не так"                        вернуть разработчику
 
 Триаж (--agent triage; также cto и product):
@@ -61,7 +62,7 @@ const HELP = `cc — Control Center из командной строки (docs/D
 Новая работа (любой чат — вместо того чтобы делать её сразу):
   intake "что нужно и зачем"                    карточка IN-N в очередь триажа; дальше — триаж и воркеры
 
-Библиотека (знания, инструкции, решения — Control Center → «Библиотека»):
+Канон (знания, инструкции, решения — Control Center → «Канон»):
   lib [--kind knowledge|rules|role|process|decision|spec] [--q слово]   список документов
   lib <slug>                                    текущий текст документа (slug — путь в репозитории или note-…)
   lib add --title "…" --kind knowledge --file запись.md   новая запись команды (виды: rules role process decision spec knowledge)
@@ -83,7 +84,8 @@ const HELP = `cc — Control Center из командной строки (docs/D
 
 Деплоер (--agent deployer):
   return КЛЮЧ "что исправить"                   вернуть на доработку
-  done КЛЮЧ --sha КОММИТ "что проверено после выкладки"
+  done КЛЮЧ --sha КОММИТ "что проверено после выкладки" [--live "что видел на сайте"]
+            (задача с интерфейсом: --live обязателен; deploy-task.sh передаёт его из отчёта автоматически)
   lock КЛЮЧ / unlock КЛЮЧ                        держать задачу на время выкладки / отпустить
   (выкладка одной задачи целиком — scripts/deploy-task.sh КЛЮЧ)
 
@@ -245,6 +247,9 @@ function hint(code) {
     triaged_refused: "\n  Запись человека в ленте новее события разбора — задача вернётся в очередь триажа автоматически.",
     not_your_task: "\n  Задачу держит другой исполнитель.",
     no_update_fields: "\n  Укажите поля: --design-file, --details-file, --summary-file или --data '{\"поле\":\"значение\"}'.",
+    screenshot_required: "\n  Задача с интерфейсом: прикрепите скриншот стенда перед вердиктом:\n  node /opt/ihelp.am/scripts/cc.mjs attach КЛЮЧ --file screenshot.png --agent tester",
+    live_stand_required: "\n  Задача с интерфейсом: укажите в тексте вердикта что именно проверено на стенде:\n  «Проверено на стенде: страница /ru/…, форма заказа, адаптив на телефоне.»",
+    site_check_required: "\n  Задача с интерфейсом: укажите что проверено на живом сайте после выкладки:\n  --live \"SMOKE OK, проверен вход и форма заказа на https://ihelp.am\"",
   };
   return h[code] ?? "";
 }
@@ -252,6 +257,14 @@ function hint(code) {
 /* ───── вывод ───── */
 
 const STATUS = { backlog: "Бэклог", ready: "В очереди", in_progress: "В работе", review: "На проверке", blocked: "Заблокирована", done: "Сделано", cancelled: "Отменена" };
+
+/** Задача с интерфейсом — зеркало cc-flow.ts isUiTask без TypeScript */
+const isUiTaskJs = (layer, scope) =>
+  layer === "front" || layer === "fullstack" ||
+  (scope || []).some((s) => {
+    const p = s.trim().replace(/^\.\//, "").replace(/\/+$/, "");
+    return p === "src/app" || p.startsWith("src/app/") || p === "src/components" || p.startsWith("src/components/");
+  });
 const line = (t) =>
   `${t.key.padEnd(10)} ${String(STATUS[t.status] ?? t.status).padEnd(13)} ${t.priority}  ${t.title}${t.claimedBy ? `  · ${t.claimedBy}` : ""}${t.health?.stale ? "  · 🪦 брошена?" : ""}${t.health?.phantom ? "  · 👻 без исполнителя" : ""}${t.rework ? `  · ↩${t.rework}` : ""}`;
 
@@ -274,6 +287,11 @@ function printTask(d) {
   if (t.mockupRequired) {
     const mStatus = t.mockupApprovedBy ? `✓ утверждён (${t.mockupApprovedBy})` : "✗ НЕ утверждён — задачу нельзя взять в работу";
     out.push("", `Макет: ${mStatus}${t.mockupUrl ? ` · ${t.mockupUrl}` : ""}`);
+  }
+  if (isUiTaskJs(t.layer, t.scope)) {
+    const standOk = !!t.testedSha;
+    const siteOk = t.status === "done";
+    out.push("", `Живая проверка: нужна · стенд ${standOk ? "✓" : "✗"} · сайт ${siteOk ? "✓" : "✗"}`);
   }
   if (t.claimedBy) out.push("", `Держит: ${t.claimedBy} до ${new Date(t.claimUntil).toLocaleString("ru-RU", { timeZone: "Asia/Yerevan" })}${d.health?.stale ? " — аренда истекла" : ""}`);
   if (t.branch) out.push(`Ветка: ${t.branch}`);
@@ -582,10 +600,10 @@ function branchFacts(branch) {
 
 const COMMENT_LIMIT = 5000;
 
-/** Если текст длиннее лимита — сообщить об этом до отправки (полный текст сохранится в Библиотеке) */
+/** Если текст длиннее лимита — сообщить об этом до отправки (полный текст сохранится в Каноне) */
 function warnIfLong(str) {
   if (str.length > COMMENT_LIMIT) {
-    console.log(`ℹ Длина текста: ${str.length} знаков (лимит ${COMMENT_LIMIT}) — полный текст сохранится в Библиотеке, в ленте будет резюме со ссылкой.`);
+    console.log(`ℹ Длина текста: ${str.length} знаков (лимит ${COMMENT_LIMIT}) — полный текст сохранится в Каноне, в ленте будет резюме со ссылкой.`);
   }
 }
 
@@ -890,7 +908,8 @@ async function main() {
           }
         }
       }
-      const r = await api("POST", null, { action: "done", agent: agentFor(k), key: k, sha, text: text() });
+      const liveProof = typeof flags.live === "string" ? flags.live.trim() : undefined;
+      const r = await api("POST", null, { action: "done", agent: agentFor(k), key: k, sha, text: text(), ...(liveProof ? { liveProof } : {}) });
       console.log(`✓ ${k} → ${STATUS[r.status] ?? r.status}`);
       return;
     }
@@ -1001,7 +1020,7 @@ async function main() {
         const file = typeof flags.file === "string" ? flags.file : null;
         if (!slug || !file || !fs.existsSync(file)) die("нужны slug записи и файл с текстом: lib update note-… --file запись.md");
         const body = { slug, title: typeof flags.title === "string" ? flags.title : undefined, note: typeof flags.note === "string" ? flags.note : undefined, content: fs.readFileSync(file, "utf8"), agent: typeof flags.agent === "string" ? flags.agent : "cto" };
-        const res = await fetchRetry(base, { method: "PUT", headers: { "x-cc-key": KEY, "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));
+        const res = await fetchRetry(base, { method: "PUT", headers: { "x-cc-key": KEY, "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch((e) => die(`Канон не отвечает: ${e.message}`));
         const d = await res.json().catch(() => ({}));
         if (!res.ok) die(d.error ?? res.status);
         return console.log(d.changed ? `✓ ${slug}: новая версия ${d.version}` : `· ${slug}: текст не изменился, версия та же`);
@@ -1010,14 +1029,14 @@ async function main() {
         const file = typeof flags.file === "string" ? flags.file : null;
         if (!file || !fs.existsSync(file)) die("нужен файл с текстом: --file запись.md");
         const body = { title: typeof flags.title === "string" ? flags.title : "", kind: typeof flags.kind === "string" ? flags.kind : "knowledge", content: fs.readFileSync(file, "utf8"), agent: typeof flags.agent === "string" ? flags.agent : "cto" };
-        const res = await fetchRetry(base, { method: "POST", headers: { "x-cc-key": KEY, "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));
+        const res = await fetchRetry(base, { method: "POST", headers: { "x-cc-key": KEY, "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch((e) => die(`Канон не отвечает: ${e.message}`));
         const d = await res.json().catch(() => ({}));
         if (!res.ok) die(d.error ?? res.status);
         return console.log(`✓ запись ${d.slug} · ${d.kind} · ${d.title}`);
       }
       const slug = pos[0];
       const query = new URLSearchParams(slug ? { slug } : { ...(typeof flags.kind === "string" ? { kind: flags.kind } : {}), ...(typeof flags.q === "string" ? { q: flags.q } : {}) });
-      const res = await fetchRetry(`${base}?${query}`, { headers: { "x-cc-key": KEY } }).catch((e) => die(`Библиотека не отвечает: ${e.message}`));
+      const res = await fetchRetry(`${base}?${query}`, { headers: { "x-cc-key": KEY } }).catch((e) => die(`Канон не отвечает: ${e.message}`));
       const d = await res.json().catch(() => ({}));
       if (!res.ok) die(d.error ?? res.status);
       if (flags.json) return console.log(JSON.stringify(d, null, 2));

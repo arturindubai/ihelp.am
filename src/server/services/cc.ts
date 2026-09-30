@@ -319,7 +319,7 @@ export async function addComment(key: string, text: string, author: string, kind
     const doc = await createNote({ title: buildLibraryTitle(key, author, kind), kind: "knowledge", content: trimmed }, author);
     libraryNoteId = doc.slug;
   } catch {
-    return db.taskComment.create({ data: { taskId: task.id, text: trimmed.slice(0, 4900) + "\n\n⚠️ Текст обрезан — не удалось сохранить в Библиотеку.", author, kind } });
+    return db.taskComment.create({ data: { taskId: task.id, text: trimmed.slice(0, 4900) + "\n\n⚠️ Текст обрезан — не удалось сохранить в Канон.", author, kind } });
   }
   return db.taskComment.create({ data: { taskId: task.id, text: buildSummaryText(trimmed, libraryNoteId), libraryNoteId, author, kind } });
 }
