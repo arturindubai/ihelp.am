@@ -478,6 +478,16 @@ async function testTask(key) {
   tryGit(["fetch", "-q", "origin"], ROOT);
   const sha = tryGit(["rev-parse", "--verify", "-q", `refs/remotes/origin/${branch}`], ROOT);
   if (!sha) die(`ветки ${branch} нет в репозитории — проверять нечего`);
+  // Критерий 2: ветка должна содержать текущий origin/main; тестировщик проверяет merged-result, не изолированную ветку
+  const isUpToDate = tryGit(["merge-base", "--is-ancestor", "origin/main", `refs/remotes/origin/${branch}`], ROOT);
+  if (isUpToDate === null) {
+    const behind = tryGit(["rev-list", "--count", `origin/${branch}..origin/main`], ROOT) ?? "?";
+    const reason = `Ветка ${branch} отстаёт от origin/main на ${behind} коммит(а). Тестирование не начато: тестировщик проверяет merged-result, а не изолированную ветку. Разработчик должен обновить ветку: git merge origin/main && git push, затем сдать задачу снова.`;
+    await api("POST", null, { action: "test-fail", agent, key, text: reason });
+    dropState(key);
+    console.log(`✗ ${key}: ветка не содержит текущий main — возвращена разработчику без тестирования`);
+    return;
+  }
   const dir = path.join(WT, `test-${key}`);
   const list = tryGit(["worktree", "list", "--porcelain"], ROOT) ?? "";
   if (list.split("\n").includes(`worktree ${dir}`)) git(["checkout", "-q", "--detach", sha], dir);
@@ -509,14 +519,23 @@ function branchFacts(branch) {
   }
   const commits = tryGit(["log", "--oneline", "--no-merges", `origin/main..origin/${branch}`], ROOT) ?? "";
   if (!commits) die(`в ${branch} нет коммитов поверх main — сдавать нечего`);
+  // Критерий 1: ветка должна содержать текущий origin/main, иначе при слиянии деплоер получит конфликт
+  const isUpToDate = tryGit(["merge-base", "--is-ancestor", "origin/main", `origin/${branch}`], ROOT);
+  const behind = tryGit(["rev-list", "--count", `origin/${branch}..origin/main`], ROOT);
+  if (isUpToDate === null) {
+    die(
+      `Ветка ${branch} отстаёт от origin/main на ${behind ?? "?"} коммит(а).\n` +
+      `  Обновите: git merge origin/main\n` +
+      `  Затем:    git push && node scripts/cc.mjs review ${branch.replace("task/", "")} "…"`,
+    );
+  }
   const stat = (tryGit(["diff", "--shortstat", `origin/main...origin/${branch}`], ROOT) ?? "").trim();
   const files = (tryGit(["diff", "--name-only", `origin/main...origin/${branch}`], ROOT) ?? "").split("\n").filter(Boolean);
   const migrations = files.filter((f) => f.startsWith("prisma/migrations/"));
-  const behind = tryGit(["rev-list", "--count", `origin/${branch}..origin/main`], ROOT);
   return [
     "",
     "— факты из git —",
-    `Ветка: ${branch}${behind && behind !== "0" ? ` (отстаёт от main на ${behind})` : ""}`,
+    `Ветка: ${branch}`,
     `Коммиты:\n${commits
       .split("\n")
       .slice(0, 20)

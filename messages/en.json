@@ -1912,7 +1912,9 @@
           "times": "×{n}",
           "skipped": "Runs without denial data: {n} — not counted in the share.",
           "hint": "A denial is a command blocked by the role rules (scripts/worker-run.sh). Only the command form is shown, without text or keys. To check instructions against the rules: node scripts/check-role-commands.mjs."
-        }
+        },
+        "mergeConflicts": "Merge conflicts (30 d.)",
+        "mergeConflictsHint": "{pct}% of returns · total {total} · last {days} days"
       },
       "logs": {
         "subtitle": "Recent application errors and warnings — to catch failures without SSH.",
