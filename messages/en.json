@@ -370,6 +370,7 @@
           "package": "Visit packages",
           "subscription": "Subscriptions"
         },
+        "chartTitle": "Revenue chart",
         "conversion": "Conversion",
         "conversionNa": "no data",
         "empty": "No orders for this period",
