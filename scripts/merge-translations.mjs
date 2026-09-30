@@ -16,47 +16,88 @@ function readJSON(p) {
   try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return {}; }
 }
 
+function isPlainObject(v) {
+  return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
+
+function mergeDeep(ancestor, current, other, pathPrefix) {
+  const merged = { ...current };
+  const conflicts = [];
+
+  // Удаления: ключ был в предке и в current, но other его удалил
+  for (const key of Object.keys(ancestor)) {
+    if (
+      !Object.prototype.hasOwnProperty.call(other, key) &&
+      Object.prototype.hasOwnProperty.call(current, key)
+    ) {
+      const fullPath = pathPrefix ? `${pathPrefix}.${key}` : key;
+      if (JSON.stringify(current[key]) === JSON.stringify(ancestor[key])) {
+        delete merged[key];
+      } else {
+        conflicts.push(fullPath);
+      }
+    }
+  }
+
+  for (const key of Object.keys(other)) {
+    const fullPath = pathPrefix ? `${pathPrefix}.${key}` : key;
+    const hadAncestor = Object.prototype.hasOwnProperty.call(ancestor, key);
+    const hadCurrent = Object.prototype.hasOwnProperty.call(current, key);
+    const otherVal = other[key];
+    const currentVal = current[key];
+    const ancestorVal = ancestor[key];
+
+    if (!hadAncestor) {
+      if (!hadCurrent) {
+        merged[key] = otherVal;
+      } else if (isPlainObject(currentVal) && isPlainObject(otherVal)) {
+        const sub = mergeDeep({}, currentVal, otherVal, fullPath);
+        merged[key] = sub.merged;
+        conflicts.push(...sub.conflicts);
+      } else if (JSON.stringify(currentVal) !== JSON.stringify(otherVal)) {
+        conflicts.push(fullPath);
+      }
+    } else if (!hadCurrent) {
+      if (JSON.stringify(otherVal) !== JSON.stringify(ancestorVal)) {
+        conflicts.push(fullPath);
+      }
+    } else if (isPlainObject(currentVal) && isPlainObject(otherVal)) {
+      const subAncestor = isPlainObject(ancestorVal) ? ancestorVal : {};
+      const sub = mergeDeep(subAncestor, currentVal, otherVal, fullPath);
+      merged[key] = sub.merged;
+      conflicts.push(...sub.conflicts);
+    } else {
+      const ancestorStr = JSON.stringify(ancestorVal);
+      const currentStr = JSON.stringify(currentVal);
+      const otherStr = JSON.stringify(otherVal);
+      if (currentStr === ancestorStr && otherStr !== ancestorStr) {
+        merged[key] = otherVal;
+      } else if (
+        currentStr !== ancestorStr &&
+        otherStr !== ancestorStr &&
+        currentStr !== otherStr
+      ) {
+        conflicts.push(fullPath);
+      }
+    }
+  }
+
+  return { merged, conflicts };
+}
+
 const ancestor = readJSON(ancestorPath);
 const current = readJSON(currentPath);
 const other = readJSON(otherPath);
 
-const merged = Object.assign({}, current);
-const conflicts = [];
+const { merged, conflicts } = mergeDeep(ancestor, current, other, '');
 
-for (const key of Object.keys(other)) {
-  const hadAncestor = Object.prototype.hasOwnProperty.call(ancestor, key);
-  const hadCurrent = Object.prototype.hasOwnProperty.call(current, key);
-  const otherStr = JSON.stringify(other[key]);
-
-  if (!hadAncestor && !hadCurrent) {
-    // Новый ключ только в other — добавляем
-    merged[key] = other[key];
-  } else if (!hadAncestor && hadCurrent) {
-    // Добавлен в обоих — конфликт при разных значениях
-    if (JSON.stringify(current[key]) !== otherStr) conflicts.push(key);
-  } else {
-    // Ключ был в предке — трёхстороннее слияние
-    const ancestorStr = JSON.stringify(ancestor[key]);
-    const currentStr = hadCurrent ? JSON.stringify(current[key]) : undefined;
-    if (currentStr === ancestorStr && otherStr !== ancestorStr) {
-      // Только other изменил — берём из other
-      merged[key] = other[key];
-    } else if (
-      currentStr !== undefined &&
-      currentStr !== ancestorStr &&
-      otherStr !== ancestorStr &&
-      currentStr !== otherStr
-    ) {
-      // Оба изменили по-разному — конфликт
-      conflicts.push(key);
-    }
-  }
-}
+// Всегда пишем результат: при конфликте — то, что слилось без спора,
+// по спорным ключам сохраняется значение текущей ветки.
+writeFileSync(currentPath, JSON.stringify(merged, null, 2) + '\n');
 
 if (conflicts.length > 0) {
-  process.stderr.write(`Конфликт в файле переводов: ключи ${conflicts.join(', ')}\n`);
+  process.stderr.write(`Конфликт в файле переводов: ${conflicts.join(', ')}\n`);
   process.exit(1);
 }
 
-writeFileSync(currentPath, JSON.stringify(merged, null, 2) + '\n');
 process.exit(0);

@@ -4,7 +4,7 @@ import { upsertNote, createNote } from "./library";
 import { alertTech } from "../alerts";
 import { html, notifyTech } from "../notify";
 import { BLOCKED_ON_LABELS, STATUSES } from "@/lib/backlog-labels";
-import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, doneGate, isDesignerTask, isProductTask, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
+import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, criteriaGate, doneGate, extractFollowUpKeys, isDesignerTask, isProductTask, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type CriterionResult, type Role, type TaskStatusKey, unblockTarget, isCodeTask } from "@/lib/cc-flow";
 import { isAgentAuthor, findBlockingError, baselineFor } from "@/lib/cc-triage";
 import { nextIntakeKey, intakeTitle } from "@/lib/cc-lanes";
 import { intakeClosingMapValid, parseDuplicateOriginalKey } from "@/lib/cc-intake";
@@ -98,6 +98,8 @@ export type TransitionInput = {
   noWork?: boolean;
   /** Карта просьб при закрытии intake (source=intake, to=done|cancelled): каждая просьба → ключ задачи или причина */
   intakeClosingMap?: string;
+  /** Результат чек-листа критериев при переходе в «Сделано»: по одному для каждого критерия */
+  criteriaResult?: CriterionResult[];
 };
 
 /** Смена статуса с проверкой прав, гейтов и записью в историю. Возвращает обновлённую задачу */
@@ -135,8 +137,10 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   }
   if (to === "review") {
     const branch = input.branch?.trim() || task.branch;
+    // opts передаём в reviewGate только если оба поля определены — тогда оба обязательны.
+    // Если UI передаёт только releaseNote, opts не передаётся; поле сохраняется отдельно.
     const extra =
-      input.releaseNote !== undefined || input.ownerSummary !== undefined
+      input.releaseNote !== undefined && input.ownerSummary !== undefined
         ? { releaseNote: input.releaseNote, ownerSummary: input.ownerSummary, nextSteps: input.nextSteps, noWork: input.noWork }
         : undefined;
     // Возврат на проверку после блокировки: отчёт уже в ленте, нужна только ветка
@@ -153,9 +157,49 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   if (to === "done") {
     const gate = doneGate({ layer: task.layer, noWork: task.noWork }, { sha: input.sha, text, attachments: task._count.attachments });
     if (gate && !force) throw new CcError(gate);
+    // «Что изменилось для людей» обязательно для код-задач — проверяем на сервере, а не только в браузере
+    const effectiveReleaseNote = input.releaseNote?.trim() || task.releaseNote?.trim();
+    if (isCodeTask(task.layer) && !task.noWork && !effectiveReleaseNote && !force) throw new CcError("release_note_required");
     data.deployedSha = input.sha?.trim() || null;
-    data.proof = text.slice(0, 2000) || null;
     data.doneAt = new Date();
+    if (input.releaseNote?.trim()) data.releaseNote = input.releaseNote.trim().slice(0, 500);
+    // Критерии: если задача протестирована — доверяем тестировщику; иначе требуем явный чек-лист
+    const hasTesterReview = !!task.testedAt;
+    let criteriaResult = input.criteriaResult ? [...input.criteriaResult] : undefined;
+    if (task.requirements.length > 0 && !criteriaResult && !hasTesterReview && !force) throw new CcError("criteria_incomplete");
+    if (criteriaResult && task.requirements.length > 0) {
+      // Валидация явно введённых ключей: карточка должна существовать и быть открытой
+      const CARD_KEY_RE = /^[A-Z]+-\d+$/;
+      const explicitKeys = criteriaResult
+        .filter((r, i) => i < task.requirements.length && !r.done && CARD_KEY_RE.test(r.cardKey?.trim() ?? ""))
+        .map((r) => r.cardKey!.trim());
+      if (explicitKeys.length > 0) {
+        const found = await db.task.findMany({ where: { key: { in: explicitKeys }, status: { notIn: ["done", "cancelled"] } }, select: { key: true } });
+        const foundSet = new Set(found.map((f) => f.key));
+        const invalid = explicitKeys.filter((k) => !foundSet.has(k));
+        if (invalid.length && !force) throw new CcError("followup_not_found", invalid[0]);
+      }
+      // Для незакрытых критериев без явного ключа — автоматически создаём follow-up карточку
+      for (let i = 0; i < Math.min(criteriaResult.length, task.requirements.length); i++) {
+        const r = criteriaResult[i];
+        if (!r.done && !CARD_KEY_RE.test(r.cardKey?.trim() ?? "")) {
+          const newCard = await createFollowUpCard(task.key, task.title, task.requirements[i], actor.name).catch(() => null);
+          if (newCard) criteriaResult[i] = { ...r, cardKey: newCard.key };
+        }
+      }
+      // Доказательство включает отметки по каждому критерию
+      const criteriaLines = task.requirements.map((req, i) => {
+        const r = criteriaResult![i];
+        if (!r || r.done) return `✓ ${req}`;
+        return `↗ ${req} (${r.cardKey ?? "карточка создана"})`;
+      });
+      const proofParts = [...criteriaLines, ...(text.trim() ? ["", text.trim()] : [])];
+      data.proof = proofParts.join("\n").slice(0, 2000) || null;
+      data.followUps = extractFollowUpKeys(task.requirements, criteriaResult);
+    } else {
+      data.proof = text.slice(0, 2000) || null;
+      data.followUps = [];
+    }
   }
   if (to === "blocked") {
     const on = input.blockedOn || "tech";
@@ -181,7 +225,7 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   if (from === "review" && to === "ready") data.rework = { increment: 1 };
   // Проверка относится к конкретному коммиту: возврат на доработку и новая сдача её обнуляют
   if (to === "review" || (from === "review" && to === "ready")) Object.assign(data, { testedSha: null, testedBy: null, testedAt: null });
-  if (from === "done") Object.assign(data, { doneAt: null, deployedSha: null, proof: null });
+  if (from === "done") Object.assign(data, { doneAt: null, deployedSha: null, proof: null, followUps: [] });
   // Гейт: закрытие входящей без карты просьб не разрешается
   if (task.source === "intake" && (to === "done" || to === "cancelled") && !force) {
     const map = input.intakeClosingMap?.trim() ?? "";
@@ -263,6 +307,8 @@ async function tellTeam(
   if (!msg) return;
   const { notifyMembers } = await import("./teamBot");
   await notifyMembers(msg);
+  const { notifyTasks } = await import("../notify");
+  await notifyTasks(msg).catch(() => null);
 }
 
 /** Задача закрылась: заблокированные только ею возвращаются в очередь; триажированные задачи бэклога — на разбор */
@@ -334,9 +380,9 @@ export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Tas
         if (t.status !== "ready" && !takeover) throw new CcError("not_ready_status", t.status);
         // Воркер «Продукт и не-код» берёт только задачи без кода: код пишет разработчик, проверяет тестировщик
         if (actor.role === "nocode" && t.layer !== "none") throw new CcError("forbidden_role", "nocode: code task");
-        // Дизайнер берёт только фронт/бэк+фронт без дизайна и вложений, флаг макета или дизайн-исследование
+        // Дизайнер берёт только фронт/бэк+фронт без дизайна и вложений, флаг макета (с написанными требованиями) или дизайн-исследование
         if (actor.role === "designer" && !isDesignerTask({ ...t, hasAttachments: t._count.attachments > 0 })) throw new CcError("forbidden_role", "designer: not a designer task");
-        // Продакт берёт только задачи с открытыми вопросами к нему
+        // Продакт берёт задачи с открытыми вопросами или шага 1 цепочки макета (mockupRequired без screenRequirements)
         if (actor.role === "product" && !isProductTask(t)) throw new CcError("forbidden_role", "product: no open needs");
         // Родитель с открытыми частями не берётся в работу: части делаются отдельно
         const openParts = await tx.task.count({ where: { parentKey: t.key, status: { notIn: CLOSED_STATUSES } } });
@@ -362,8 +408,8 @@ export async function claim(agent: string, opts: ClaimOptions = {}): Promise<Tas
       if (opts.layer) filter.layer = opts.layer;
       if (opts.priority) filter.priority = opts.priority;
       if (actor.role === "nocode") Object.assign(filter, { layer: "none", needs: { isEmpty: true } });
-      else if (actor.role === "designer") Object.assign(filter, { OR: [{ mockupRequired: true, mockupApprovedBy: null, mockupUrl: null }, { assignee: "designer" }, { needsDesign: true, OR: [{ design: null }, { design: "" }], attachments: { none: {} } }] });
-      else if (actor.role === "product") Object.assign(filter, { needs: { isEmpty: false } });
+      else if (actor.role === "designer") Object.assign(filter, { OR: [{ mockupRequired: true, mockupApprovedBy: null, mockupUrl: null, NOT: [{ screenRequirements: null }, { screenRequirements: "" }] }, { assignee: "designer" }, { needsDesign: true, OR: [{ design: null }, { design: "" }], attachments: { none: {} } }] });
+      else if (actor.role === "product") Object.assign(filter, { OR: [{ needs: { isEmpty: false } }, { mockupRequired: true, mockupApprovedBy: null, OR: [{ screenRequirements: null }, { screenRequirements: "" }] }] });
       else if (opts.auto) Object.assign(filter, { layer: opts.layer ?? { not: "none" }, owner: { not: "product" }, needs: { isEmpty: true } });
       const candidates = await tx.task.findMany({ where: filter, take: 200 });
       const exclude = new Set<string>();
@@ -919,6 +965,26 @@ async function createDuplicateNotice(intakeKey: string, origKey: string, by: str
       existing.push(key);
     }
   }
+}
+
+/** Follow-up карточка для ручного шага: intake IN-N с текстом критерия и ссылкой на исходную задачу */
+async function createFollowUpCard(doneKey: string, doneTitle: string, criterionText: string, by: string) {
+  const existing = (await db.task.findMany({ where: { key: { startsWith: "IN-" } }, select: { key: true } })).map((t) => t.key);
+  const sort = ((await db.task.aggregate({ _max: { sort: true } }))._max.sort ?? 0) + 1;
+  const text = `Ручной шаг из ${doneKey} «${doneTitle}»:\n${criterionText}`;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const key = nextIntakeKey(existing);
+    try {
+      const task = await db.task.create({
+        data: { key, title: intakeTitle(text), summary: text.slice(0, 2000), area: "product", layer: "none", priority: "p2", stage: "later", owner: "owner", source: "intake", createdBy: by, status: "backlog", sort },
+      });
+      await db.taskEvent.create({ data: { taskId: task.id, actor: by, field: "created", from: null, to: key } });
+      return task;
+    } catch {
+      existing.push(key);
+    }
+  }
+  return null;
 }
 
 async function createNextStepsIntake(doneKey: string, doneTitle: string, steps: string[], by: string) {
