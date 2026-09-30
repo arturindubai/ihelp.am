@@ -7,6 +7,8 @@ import { getUpcomingVisits, getUserOrders } from "@/server/services/pages/accoun
 import { amd, dateLabel, cn } from "@/lib/format";
 import { visitWindow } from "@/server/services/booking";
 import { StatusBadge } from "@/components/account/StatusBadge";
+import { VisitCacheSync } from "@/components/pwa/VisitCacheSync";
+import { CLIENT_CACHE_KEY } from "@/lib/visitCache";
 
 export default async function OrdersPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { locale } = await params;
@@ -69,6 +71,7 @@ export default async function OrdersPage({ params, searchParams }: { params: Pro
 
   return (
     <div className="container-m pt-4">
+      {tab === "upcoming" && <VisitCacheSync endpoint="/api/visits/me" cacheKey={CLIENT_CACHE_KEY} />}
       <h1 className="h1 mb-3">{t("orders")}</h1>
       <div className="mb-4 flex gap-1 rounded-xl bg-surface p-1">
         {tabs.map((x) => (
