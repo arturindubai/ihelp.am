@@ -1258,6 +1258,15 @@
       "rescheduled": ""
     }
   },
+  "offline": {
+    "backOnline": "",
+    "cachedAt": "",
+    "clientTitle": "",
+    "noCache": "",
+    "noVisits": "",
+    "proTitle": "",
+    "viewOnly": ""
+  },
   "operator": {
     "all": "",
     "assignMaster": "",
