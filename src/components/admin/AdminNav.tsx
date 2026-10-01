@@ -11,6 +11,7 @@ const ICONS = { control: Gauge, dashboard: LayoutDashboard, orders: ClipboardLis
 const SERVICES_SUBS = [
   { key: "catalog", href: "/admin/services" },
   { key: "prices", href: "/admin/prices" },
+  { key: "demand", href: "/admin/services/demand" },
 ] as const;
 
 export function AdminNav({ sections }: { sections: string[] }) {
@@ -33,16 +34,23 @@ export function AdminNav({ sections }: { sections: string[] }) {
             <i.icon size={18} /> {t("nav.services")}
           </div>
           <div className="ml-5 mt-0.5 space-y-0.5">
-            {SERVICES_SUBS.map((sub) => (
-              <Link
-                key={sub.key}
-                href={sub.href}
-                onClick={() => setOpen(false)}
-                className={cn("flex items-center rounded-lg px-3 py-2 text-sm font-medium", path.startsWith(sub.href) ? "bg-ink text-inverse" : "text-ink hover:bg-surface")}
-              >
-                {t(`nav.${sub.key}`)}
-              </Link>
-            ))}
+            {SERVICES_SUBS.map((sub) => {
+              // /admin/services является префиксом /admin/services/demand — нужна точная проверка для каталога
+              const isSubActive =
+                sub.key === "catalog"
+                  ? path.startsWith("/admin/services") && !path.startsWith("/admin/services/demand")
+                  : path.startsWith(sub.href);
+              return (
+                <Link
+                  key={sub.key}
+                  href={sub.href}
+                  onClick={() => setOpen(false)}
+                  className={cn("flex items-center rounded-lg px-3 py-2 text-sm font-medium", isSubActive ? "bg-ink text-inverse" : "text-ink hover:bg-surface")}
+                >
+                  {t(`nav.${sub.key}`)}
+                </Link>
+              );
+            })}
           </div>
         </div>
       );
@@ -66,9 +74,11 @@ export function AdminNav({ sections }: { sections: string[] }) {
   const currentLabel = currentKey
     ? path.startsWith("/admin/prices")
       ? t("nav.prices")
-      : path.startsWith("/admin/services")
-        ? t("nav.catalog")
-        : t(`nav.${currentKey}`)
+      : path.startsWith("/admin/services/demand")
+        ? t("nav.demand")
+        : path.startsWith("/admin/services")
+          ? t("nav.catalog")
+          : t(`nav.${currentKey}`)
     : t("title");
 
   return (

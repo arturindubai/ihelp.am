@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { getSettings } from "@/server/settings";
 import { generateSubscriptionVisitsSafe, resumeSubscription } from "@/server/services/booking";
+import { sendInterestDigest } from "@/server/services/serviceInterest";
 import { cleanUnusedImages, cleanOldAuditLogs } from "@/server/services/cleanup";
 import { runWatchdog } from "@/server/services/ccWork";
 import { checkTechBlocks, checkCtoMessages } from "@/server/services/ccWatchdog";
@@ -145,6 +146,9 @@ export async function GET(req: Request) {
     const auditLogs = await cleanOldAuditLogs(now);
     cleaned = { otp: otp.count, sessions: sessions.count, auditLogs };
   }), undefined);
+
+  // 4д. Дайджест «Уведомить меня»: раз в день около 10:00 по Еревану, если включён режим digest
+  await step("interest-digest", () => daily("interest-digest", 10, () => sendInterestDigest(now)), undefined);
 
   // 5а. Сторож Control Center: брошенные задачи, возврат в очередь, снятие блокировок по зависимостям (docs/DEV_SYSTEM.md)
   const cc = await step("cc-watchdog", () => runWatchdog(now), null);
