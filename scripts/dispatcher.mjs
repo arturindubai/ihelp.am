@@ -206,7 +206,7 @@ async function processAiQueue() {
     const stdoutText = r.stdout?.trim() ?? "";
 
     if (!result || result.is_error) {
-      const rawError = result?.result ?? errOutput || stdoutText || "Ошибка выполнения";
+      const rawError = (result?.result ?? errOutput) || stdoutText || "Ошибка выполнения";
       const errText = String(rawError).slice(0, 1000);
       // Зеркало needsLoginPause из src/lib/login-pause.ts: только при ошибочных статусах
       const aiStatus = r.error?.code === "ETIMEDOUT" ? "timeout" : "failed";
