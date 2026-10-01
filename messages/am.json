@@ -137,6 +137,13 @@
         "review": "",
         "take": ""
       },
+      "designTab": {
+        "chainStep": {
+          "approval": "",
+          "mockup": "",
+          "requirements": ""
+        }
+      },
       "form": {
         "delete": "Ջնջել",
         "deleteConfirm": ""

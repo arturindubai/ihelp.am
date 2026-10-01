@@ -269,6 +269,11 @@
         "approvedAgent": "у {agent}",
         "approvedEmpty": "Пока ничего не утверждено",
         "canon": "запись в Каноне",
+        "chainStep": {
+          "approval": "Утверждение",
+          "mockup": "Макет",
+          "requirements": "Требования"
+        },
         "designSnippet": "Дизайн: {text}",
         "files": "файлов: {n}",
         "gate": "нужен макет",
