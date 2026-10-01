@@ -2055,6 +2055,7 @@
     "google": "Войти через Google",
     "googleHint": "Для сотрудников: вход по рабочей почте, указанной в профиле",
     "googleSignupEmailConfirmed": "Email {email} подтверждён Google",
+    "googleSignupNoChannels": "Для завершения регистрации нужен номер телефона, но каналы доставки кодов сейчас недоступны. Войдите по email или попробуйте позже.",
     "googleSignupPhoneHint": "Введите номер телефона, чтобы завершить регистрацию",
     "googleSignupTitle": "Регистрация через Google",
     "method": {
