@@ -12,6 +12,8 @@ import { consumeReviewToken } from "../services/reviews";
 import { headers } from "next/headers";
 import { sendOtp, verifyOtp } from "../otp";
 import { normalizeEmail } from "@/lib/email";
+import { normalizePhone } from "@/lib/phone";
+import type { OtpChannel } from "@prisma/client";
 import { BookingError, scheduleVisit, BUSY_STATUSES } from "../services/booking";
 import { getMastersForService } from "../services/catalog";
 import { tr } from "@/i18n/locales";
@@ -267,4 +269,38 @@ export async function unlinkTelegramAction() {
   await db.user.update({ where: { id: u.id }, data: { telegramId: null, telegramUsername: null } });
   revalidatePath("/", "layout");
   return { ok: true };
+}
+
+/** AUTH-22 · Шаг 1: отправить OTP для привязки телефона к аккаунту, созданному по email */
+export async function sendPhoneLinkCodeAction(phoneRaw: string, channel: OtpChannel, locale = "ru") {
+  const u = await getCurrentUser();
+  if (!u) return { ok: false as const, error: "auth" };
+  if (u.phone) return { ok: false as const, error: "already" };
+  const phone = normalizePhone(phoneRaw);
+  if (!phone) return { ok: false as const, error: "phone" };
+  if (channel === "EMAIL") return { ok: false as const, error: "channel_unavailable" };
+  const existing = await db.user.findUnique({ where: { phone } });
+  if (existing) return { ok: false as const, error: "phone_taken" };
+  const h = await headers();
+  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || undefined;
+  const r = await sendOtp(phone, channel, ip, ["ru", "en", "am"].includes(locale) ? locale : "ru");
+  return { ...r, phone };
+}
+
+/** AUTH-22 · Шаг 2: подтвердить OTP и привязать телефон к текущему аккаунту */
+export async function confirmPhoneLinkAction(phoneRaw: string, code: string) {
+  const u = await getCurrentUser();
+  if (!u) return { ok: false as const, error: "auth" };
+  if (u.phone) return { ok: false as const, error: "already" };
+  const phone = normalizePhone(phoneRaw);
+  if (!phone || !/^\d{4,6}$/.test(code.trim())) return { ok: false as const, error: "code" };
+  if (!(await verifyOtp(phone, code))) return { ok: false as const, error: "code" };
+  try {
+    await db.user.update({ where: { id: u.id }, data: { phone } });
+  } catch {
+    // P2002 — нарушение уникальности: номер занят другим аккаунтом
+    return { ok: false as const, error: "phone_taken" };
+  }
+  revalidatePath("/", "layout");
+  return { ok: true as const };
 }

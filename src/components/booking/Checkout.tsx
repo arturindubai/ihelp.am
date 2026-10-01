@@ -1,12 +1,14 @@
 "use client";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Banknote, CreditCard, Tag, Check, UsersRound, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { Banknote, CreditCard, Tag, Check, UsersRound, ArrowLeft, ChevronLeft, ChevronRight, X, Smartphone, Send, MessageCircle } from "lucide-react";
 import { useRouter, Link } from "@/i18n/navigation";
 import { calculatePrice, type PricePromo, type PricingRules } from "@/lib/pricing";
 import { amd, cn, dateLabel, durationLabel } from "@/lib/format";
 import { addDays, atYerevan, isoWeekday, ymd } from "@/lib/time";
 import { createOrderAction, promoAction, slotsAction } from "@/server/actions/booking";
+import { sendPhoneLinkCodeAction, confirmPhoneLinkAction } from "@/server/actions/account";
+import { formatPhone } from "@/lib/phone";
 import { Sheet } from "@/components/ui/Sheet";
 import { AddressForm, addressLine, type AddressRow } from "./AddressForm";
 import { Img } from "@/components/Img";
@@ -64,6 +66,14 @@ export function Checkout(props: {
   defaultAddressId?: string | null;
   /** Предвыбранный способ оплаты из последнего заказа */
   defaultPaymentMethod?: "CASH" | "CARD" | null;
+  /** Телефон подтверждён OTP — можно создавать заказ */
+  phoneConfirmed: boolean;
+  /** Email подтверждён — не показываем напоминание */
+  emailVerified: boolean;
+  /** Доступные каналы OTP для привязки телефона */
+  channels: ("SMS" | "WHATSAPP" | "TELEGRAM")[];
+  /** Имя Telegram-бота для входа */
+  telegramBot: string | null;
 }) {
   const t = useTranslations("booking");
   const ts = useTranslations("service");
@@ -103,6 +113,8 @@ export function Checkout(props: {
   const [error, setError] = useState<string>();
   const [pending, start] = useTransition();
   const [loadingSlots, startSlots] = useTransition();
+  const [showPhoneSheet, setShowPhoneSheet] = useState(false);
+  const [emailBannerDismissed, setEmailBannerDismissed] = useState(false);
 
   const multiDays = props.plan?.kind === "SUBSCRIPTION" && (props.plan.visitsPerWeek || 0) > 1;
   const wdNames = t("weekdaysShort").split(",");
@@ -163,6 +175,7 @@ export function Checkout(props: {
 
   function submit() {
     setError(undefined);
+    if (!props.phoneConfirmed) { setShowPhoneSheet(true); return; }
     if (!addressId) return setError(t("errors.no_address"));
     if (!time) return setError(t("errors.no_slot"));
     if (multiDays && weekdays.length < (props.plan?.visitsPerWeek || 2)) return setError(t("errors.days"));
@@ -190,6 +203,7 @@ export function Checkout(props: {
           setSlots(await slotsAction(props.service.id, date, props.durationMin));
           return;
         }
+        if (r.error === "phone_required") { setShowPhoneSheet(true); return; }
         setError(t.has(`errors.${r.error}`) ? t(`errors.${r.error}`) : tc("error"));
         return;
       }
@@ -238,6 +252,17 @@ export function Checkout(props: {
           </div>
         </div>
       </div>
+
+      {/* Мягкое напоминание добавить email — только у пользователей с телефоном но без email */}
+      {props.phoneConfirmed && !props.emailVerified && !emailBannerDismissed && (
+        <div className="container-m pt-3">
+          <div className="flex items-center gap-2 rounded-xl bg-badge px-3 py-2.5 text-sm">
+            <span className="flex-1 text-ink">{t("emailReminderText")}</span>
+            <Link href="/account" className="shrink-0 font-medium text-brand-text">{t("emailReminderAdd")}</Link>
+            <button onClick={() => setEmailBannerDismissed(true)} className="shrink-0 text-muted" aria-label={tc("close")}><X size={14} /></button>
+          </div>
+        </div>
+      )}
 
       {/* Sections */}
       <div className="container-m">
@@ -721,6 +746,15 @@ export function Checkout(props: {
         </div>
       </Sheet>
 
+      {/* Sheet: телефон обязателен для заказа */}
+      <Sheet open={showPhoneSheet} onClose={() => setShowPhoneSheet(false)} title={t("phoneRequired")}>
+        <PhoneLinkForm
+          channels={props.channels}
+          telegramBot={props.telegramBot}
+          onDone={() => { setShowPhoneSheet(false); router.refresh(); }}
+        />
+      </Sheet>
+
       {/* Sheet адреса — список + добавить новый */}
       <Sheet open={addrOpen} onClose={() => setAddrOpen(false)} title={t("address")}>
         <div className="space-y-2">
@@ -747,6 +781,122 @@ export function Checkout(props: {
           />
         </div>
       </Sheet>
+    </div>
+  );
+}
+
+type PhoneChannel = "SMS" | "WHATSAPP" | "TELEGRAM";
+const CHANNEL_ICONS: Record<PhoneChannel, React.ComponentType<{ size?: number }>> = { WHATSAPP: MessageCircle, TELEGRAM: Send, SMS: Smartphone };
+
+/** Форма привязки телефона к аккаунту, созданному по email (AUTH-22) */
+function PhoneLinkForm({ channels, telegramBot, onDone }: { channels: PhoneChannel[]; telegramBot: string | null; onDone: () => void }) {
+  const t = useTranslations("booking");
+  const ta = useTranslations("auth");
+  const tc = useTranslations("common");
+  const locale = useLocale();
+  const [step, setStep] = useState<"phone" | "code">("phone");
+  const [phone, setPhone] = useState("+374 ");
+  const [normalized, setNormalized] = useState("");
+  const [channel, setChannel] = useState<PhoneChannel>(channels[0] || "TELEGRAM");
+  const [code, setCode] = useState("");
+  const [devCode, setDevCode] = useState<string>();
+  const [codeLength, setCodeLength] = useState(4);
+  const [resendIn, setResendIn] = useState(0);
+  const [error, setError] = useState<string>();
+  const [pending, start] = useTransition();
+  const codeRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const id = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [resendIn]);
+
+  const errText = (e: string) => (ta.has(`errors.${e}`) ? ta(`errors.${e}`, { sec: 0 }) : tc("error"));
+
+  function send(ch: PhoneChannel) {
+    setError(undefined);
+    setChannel(ch);
+    start(async () => {
+      const r = await sendPhoneLinkCodeAction(phone, ch, locale);
+      if (!r.ok) return setError(errText(r.error));
+      setNormalized(r.phone!);
+      setDevCode(r.devCode);
+      setCodeLength(r.codeLength);
+      setResendIn(r.resendIn);
+      setStep("code");
+      setTimeout(() => codeRef.current?.focus(), 50);
+    });
+  }
+
+  const verifying = useRef("");
+  function verify(value = code) {
+    if (verifying.current === value) return;
+    verifying.current = value;
+    setError(undefined);
+    start(async () => {
+      const r = await confirmPhoneLinkAction(normalized, value);
+      if (!r.ok) { verifying.current = ""; return setError(errText(r.error)); }
+      onDone();
+    });
+  }
+
+  if (!channels.length && !telegramBot) {
+    return <p className="text-sm text-muted">{t("phoneRequiredBody")}</p>;
+  }
+
+  return (
+    <div>
+      <p className="mb-4 text-sm text-muted">{t("phoneRequiredBody")}</p>
+
+      {step === "phone" && (
+        <div>
+          <label className="label" htmlFor="link-phone">{ta("phone")}</label>
+          <input id="link-phone" className="input text-lg tracking-wide" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <p className="mt-4 mb-2 text-sm font-medium">{ta("getCodeVia")}</p>
+          <div className="grid gap-2">
+            {channels.map((ch) => {
+              const Icon = CHANNEL_ICONS[ch];
+              return (
+                <button key={ch} disabled={pending} onClick={() => send(ch)} className={ch === channels[0] ? "btn-primary" : "btn-outline"}>
+                  <Icon size={18} /> {ta(`channel.${ch}`)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {step === "code" && (
+        <div>
+          <p className="text-sm text-muted">{ta("codeSent", { channel: ta(`channel.${channel}`), phone: formatPhone(normalized) })}</p>
+          {devCode && <p className="mt-2 rounded-lg bg-warn-50 px-3 py-2 text-sm text-warn">{ta("devCode", { code: devCode })}</p>}
+          <label className="label mt-4" htmlFor="link-code">{ta("code")}</label>
+          <input
+            id="link-code"
+            ref={codeRef}
+            className="input text-center text-2xl tracking-[.5em]"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            value={code}
+            onChange={(e) => {
+              const v = e.target.value.replace(/\D/g, "");
+              setCode(v);
+              if (v.length === codeLength) verify(v);
+            }}
+          />
+          <button className="btn-primary mt-3 w-full" disabled={pending || code.length < codeLength} onClick={() => verify()}>
+            {ta("verify")}
+          </button>
+          <div className="mt-4 flex items-center justify-between text-sm">
+            <button className="link" onClick={() => { setStep("phone"); setCode(""); verifying.current = ""; }}>{ta("changePhone")}</button>
+            {resendIn > 0 ? <span className="text-muted">{ta("resendIn", { sec: resendIn })}</span> : <button className="link" disabled={pending} onClick={() => send(channel)}>{ta("resend")}</button>}
+          </div>
+        </div>
+      )}
+
+      {error && <p className="mt-3 text-sm text-bad">{error}</p>}
     </div>
   );
 }

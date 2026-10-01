@@ -25,9 +25,9 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   if (!sel.ok) redirect({ href: `/s/${slug}`, locale });
   const ok = sel as Extract<typeof sel, { ok: true }>;
   const [user, settings, t, tc] = await Promise.all([getCurrentUser(), getSettings(), getTranslations("booking"), getTranslations("common")]);
+  const methods = await loginMethods(settings);
 
   if (!user) {
-    const methods = await loginMethods(settings);
     return (
       <div className="container-m">
         <div className="flex items-center gap-3 pt-3">
@@ -72,6 +72,10 @@ export default async function BookPage({ params, searchParams }: { params: Promi
       contacts={envContacts()}
       defaultAddressId={draft?.addressId ?? null}
       defaultPaymentMethod={draft?.paymentMethod ?? null}
+      phoneConfirmed={!!user.phone}
+      emailVerified={!!user.emailVerifiedAt}
+      channels={methods.channels}
+      telegramBot={settings.notify.telegramBotUsername || null}
     />
     </>
   );
