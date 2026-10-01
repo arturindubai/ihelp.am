@@ -74,6 +74,10 @@ function BackLink({ onBack }: { onBack?: () => void }) {
   return onBack ? <button type="button" className="link mb-3 text-sm" onClick={onBack}>← {t("otherMethods")}</button> : null;
 }
 
+const EMAIL_STORAGE_KEY = "ihelp_auth_email";
+const CODE_TS_STORAGE_KEY = "ihelp_auth_code_ts";
+const CODE_TTL_MS = 10 * 60 * 1000;
+
 /** Вход по коду из письма: только для тех, у кого email подтверждён; ответ одинаков для любого адреса */
 function EmailLogin({ onDone, onBack }: { onDone: (role: string) => void; onBack?: () => void }) {
   const t = useTranslations("auth");
@@ -89,6 +93,17 @@ function EmailLogin({ onDone, onBack }: { onDone: (role: string) => void; onBack
   const [pending, start] = useTransition();
   const codeRef = useRef<HTMLInputElement>(null);
 
+  // Восстановить email и шаг из sessionStorage при монтировании
+  useEffect(() => {
+    const savedEmail = sessionStorage.getItem(EMAIL_STORAGE_KEY);
+    const savedTs = sessionStorage.getItem(CODE_TS_STORAGE_KEY);
+    if (savedEmail) setEmail(savedEmail);
+    if (savedTs) {
+      const ts = parseInt(savedTs, 10);
+      if (!isNaN(ts) && Date.now() - ts < CODE_TTL_MS) setStep("code");
+    }
+  }, []);
+
   useEffect(() => {
     if (resendIn <= 0) return;
     const id = setTimeout(() => setResendIn((s) => s - 1), 1000);
@@ -103,6 +118,8 @@ function EmailLogin({ onDone, onBack }: { onDone: (role: string) => void; onBack
       const r = await sendEmailLoginCodeAction(email, locale);
       if (!r.ok) return setError(errText(r.error, "retryIn" in r ? r.retryIn : undefined));
       setEmail(r.email);
+      sessionStorage.setItem(EMAIL_STORAGE_KEY, r.email);
+      sessionStorage.setItem(CODE_TS_STORAGE_KEY, Date.now().toString());
       setDevCode(r.devCode);
       setCodeLength(r.codeLength);
       setResendIn(r.resendIn);
@@ -119,8 +136,16 @@ function EmailLogin({ onDone, onBack }: { onDone: (role: string) => void; onBack
     start(async () => {
       const r = await verifyEmailLoginCodeAction(email, value, locale);
       if (!r.ok) { verifying.current = ""; return setError(errText(r.error)); }
+      sessionStorage.removeItem(EMAIL_STORAGE_KEY);
+      sessionStorage.removeItem(CODE_TS_STORAGE_KEY);
       onDone(r.role);
     });
+  }
+
+  function changeEmail() {
+    sessionStorage.removeItem(CODE_TS_STORAGE_KEY);
+    setStep("email");
+    setCode("");
   }
 
   return (
@@ -129,7 +154,16 @@ function EmailLogin({ onDone, onBack }: { onDone: (role: string) => void; onBack
       {step === "email" && (
         <form onSubmit={(e) => { e.preventDefault(); send(); }}>
           <label className="label" htmlFor="login-email">{t("email")}</label>
-          <input id="login-email" type="email" className="input" autoComplete="email" inputMode="email" value={email} placeholder={t("emailPlaceholder")} onChange={(e) => setEmail(e.target.value)} />
+          <input
+            id="login-email"
+            type="email"
+            className="input"
+            autoComplete="email"
+            inputMode="email"
+            value={email}
+            placeholder={t("emailPlaceholder")}
+            onChange={(e) => { setEmail(e.target.value); sessionStorage.setItem(EMAIL_STORAGE_KEY, e.target.value); }}
+          />
           <button className="btn-primary mt-3 w-full" disabled={pending || !email.trim()}><Mail size={18} /> {t("emailGetCode")}</button>
           <p className="mt-3 text-xs text-muted">{t("emailOnlyConfirmed")}</p>
           <p className="mt-3 text-xs text-muted">
@@ -164,7 +198,7 @@ function EmailLogin({ onDone, onBack }: { onDone: (role: string) => void; onBack
             {t("verify")}
           </button>
           <div className="mt-4 flex items-center justify-between text-sm">
-            <button className="link" onClick={() => { setStep("email"); setCode(""); }}>{t("changeEmail")}</button>
+            <button className="link" onClick={changeEmail}>{t("changeEmail")}</button>
             {resendIn > 0 ? <span className="text-muted">{t("resendIn", { sec: resendIn })}</span> : <button className="link" disabled={pending} onClick={send}>{t("resend")}</button>}
           </div>
         </div>
