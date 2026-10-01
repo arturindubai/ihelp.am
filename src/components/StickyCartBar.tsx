@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
-import { readCart, writeCart, CART_EVENT, type CartEntry } from "@/lib/cart";
+import { readCart, writeCart, clearCart, CART_EVENT, type CartEntry } from "@/lib/cart";
 import { getCartAction } from "@/server/actions/cart";
 import { amd } from "@/lib/format";
 
@@ -24,12 +24,16 @@ export function StickyCartBar() {
     setCart(local);
     setReady(true);
 
-    // Синхронизация с сервером: поддерживает смену устройства после входа
+    // Синхронизация с сервером: поддерживает смену устройства после входа.
+    // Если сервер вернул null (пустая или устаревшая корзина) — очищаем localStorage.
     getCartAction()
       .then((serverCart) => {
         if (serverCart) {
           writeCart(serverCart);
           setCart(serverCart);
+        } else {
+          clearCart();
+          setCart(null);
         }
       })
       .catch(() => null);
