@@ -8,6 +8,7 @@ export type CartEntry = {
   planId: string | null;
   count: number;       // число услуг в корзине (не опций)
   total: number;       // итоговая сумма по всем услугам
+  slugs: string[];     // все slug-и в корзине — для кнопок AddToCartButton
 };
 
 const CART_KEY = "ihelp_cart";

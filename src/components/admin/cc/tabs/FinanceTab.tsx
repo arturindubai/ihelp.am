@@ -32,9 +32,8 @@ function resolvePeriod(sp: CcSearch): { period: Period; from: string; to: string
 function periodLink(sp: CcSearch, period: Period): string {
   const next: Record<string, string> = {};
   for (const [k, v] of Object.entries(sp)) if (v && k !== "period" && k !== "from" && k !== "to") next[k] = v;
-  next.tab = "finance";
   next.period = period;
-  return `/admin/control?${new URLSearchParams(next).toString()}`;
+  return `/admin/finance?${new URLSearchParams(next).toString()}`;
 }
 
 function Delta({ value }: { value: number | null }) {

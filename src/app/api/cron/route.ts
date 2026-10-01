@@ -3,9 +3,10 @@ import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { getSettings } from "@/server/settings";
 import { generateSubscriptionVisitsSafe, resumeSubscription } from "@/server/services/booking";
+import { sendInterestDigest } from "@/server/services/serviceInterest";
 import { cleanUnusedImages, cleanOldAuditLogs } from "@/server/services/cleanup";
 import { runWatchdog } from "@/server/services/ccWork";
-import { checkTechBlocks, checkCtoMessages } from "@/server/services/ccWatchdog";
+import { checkTechBlocks, checkCtoMessages, checkDispatcherWatchdog } from "@/server/services/ccWatchdog";
 import { getTick } from "@/server/services/workers";
 import { processQueue, cleanQueue } from "@/server/services/notifyQueue";
 import { findExpiringPackages } from "@/server/services/packages";
@@ -146,12 +147,18 @@ export async function GET(req: Request) {
     cleaned = { otp: otp.count, sessions: sessions.count, auditLogs };
   }), undefined);
 
+  // 4д. Дайджест «Уведомить меня»: раз в день около 10:00 по Еревану, если включён режим digest
+  await step("interest-digest", () => daily("interest-digest", 10, () => sendInterestDigest(now)), undefined);
+
   // 5а. Сторож Control Center: брошенные задачи, возврат в очередь, снятие блокировок по зависимостям (docs/DEV_SYSTEM.md)
   const cc = await step("cc-watchdog", () => runWatchdog(now), null);
 
   // 5а''. Алерты: блокировки на технике > 4 ч и непрочитанные сообщения CTO > 2 ч
   await step("cc-tech-blocks", () => checkTechBlocks(now).then(() => undefined), undefined);
   await step("cc-cto-messages", () => checkCtoMessages(now).then(() => undefined), undefined);
+
+  // 5а'''. Сторож диспетчера: тех-алерт если воркеры включены, а диспетчер молчит > 10 минут
+  await step("dispatcher-watchdog", () => checkDispatcherWatchdog(now).then(() => undefined), undefined);
 
   // 5а'. Задачи «На проверке» без ветки в репозитории: скорее всего выложены, но cc done не прошла
   await step("cc-review-no-branch", async () => {

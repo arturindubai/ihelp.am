@@ -11,7 +11,6 @@ import { YouTab } from "@/components/admin/cc/tabs/YouTab";
 import { ActivityTab, DoneTab, NotifyTab, PlansTab } from "@/components/admin/cc/tabs/FeedTabs";
 import { WorkersTab } from "@/components/admin/cc/tabs/WorkersTab";
 import { DesignTab } from "@/components/admin/cc/tabs/DesignTab";
-import { FinanceTab } from "@/components/admin/cc/tabs/FinanceTab";
 import { ProductTab } from "@/components/admin/cc/tabs/ProductTab";
 import { TABS, ccHref, type CcSearch, type Tab } from "@/components/admin/cc/tabs/shared";
 
@@ -33,6 +32,7 @@ export default async function ControlCenter({ params, searchParams }: { params: 
     next.tab = "notify";
     redirect(`/${locale}/admin/control?${new URLSearchParams(next)}`);
   }
+  if (sp.tab === "finance") redirect(`/${locale}/admin/finance`);
   const tab: Tab = (TABS as readonly string[]).includes(sp.tab ?? "") ? (sp.tab as Tab) : "backlog";
   const taskHref = (key: string) => ccHref(sp, { task: key });
 
@@ -46,7 +46,6 @@ export default async function ControlCenter({ params, searchParams }: { params: 
       {tab === "deployer" && <DeployerTab taskHref={taskHref} />}
       {tab === "plans" && <PlansTab />}
       {tab === "approvals" && <ApprovalsTab taskHref={taskHref} />}
-      {tab === "finance" && <FinanceTab sp={sp} />}
       {tab === "design" && <DesignTab locale={locale} taskHref={taskHref} />}
       {tab === "product" && <ProductTab locale={locale} taskHref={taskHref} />}
       {tab === "workers" && <WorkersTab locale={locale} taskHref={taskHref} />}

@@ -7,7 +7,7 @@ import { getCartAction } from "@/server/actions/cart";
 import { amd } from "@/lib/format";
 
 // Скрываем плашку там, где PriceBar уже показывает корзину или где оформление не нужно
-const HIDE_ON = [/^\/book\//, /^\/s\//];
+const HIDE_ON = [/^\/book\//, /^\/s\//, /^\/cart/];
 
 // Совпадает с HIDE в BottomNav — на этих путях BottomNav скрыт
 const BOTTOM_NAV_HIDDEN = [/^\/s\//, /^\/book\//, /^\/login/];
@@ -53,7 +53,6 @@ export function StickyCartBar() {
   const mobileBottom = aboveNav ? "bottom-20" : "bottom-0";
 
   const countLabel = cart.count > 99 ? "99+" : t("itemsCount", { count: cart.count });
-  const bookHref = `/book/${cart.slug}?o=${cart.opts.join(",")}${cart.planId ? `&p=${cart.planId}` : ""}`;
 
   return (
     // Мобильно: полная ширина. Десктоп: компактно справа снизу
@@ -63,7 +62,7 @@ export function StickyCartBar() {
           <div className="font-medium text-ink">{countLabel}</div>
           <div className="text-sm text-muted">{amd(cart.total)}</div>
         </div>
-        <Link href={bookHref} className="btn-primary shrink-0">
+        <Link href="/cart" className="btn-primary shrink-0">
           {t("checkout")}
         </Link>
       </div>

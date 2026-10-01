@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { ServiceCard } from "@/components/ServiceCard";
 
 type Service = {
+  id: string;
   slug: string;
   title: string;
   subtitle: string;

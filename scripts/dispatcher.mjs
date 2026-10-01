@@ -25,6 +25,10 @@ const DATA = path.join(ROOT, "data", "workers");
 const DRY = process.argv.includes("--dry-run");
 fs.mkdirSync(DATA, { recursive: true });
 
+// --check: самопроверка загрузки (импорты и синтаксис). Используется в deploy/smoke.sh.
+// Если дошли сюда — скрипт загрузился без ошибок.
+if (process.argv.includes("--check")) { console.log("dispatcher: OK"); process.exit(0); }
+
 /** Сколько минут воркер может работать, прежде чем systemd его остановит */
 const LIMIT_MIN = { triage: 45, product: 60, designer: 60, dev: 100, nocode: 60, tester: 60, deployer: 75 };
 
@@ -289,8 +293,15 @@ async function reconcile(running, stopAll) {
     } catch {}
     const err = readText(path.join(DATA, `${run.id}.err`)).trim();
     const minutes = (Date.now() - Date.parse(run.startedAt)) / 60000;
-    const status = stopped ? "stopped" : outcome(result, minutes >= LIMIT_MIN[run.pool] - 1, err);
-    const summary = ((result?.result ? String(result.result) : err) || "нет ответа").trim().slice(-1500);
+    // Зависший запуск: юнит не активен, файлов результата нет, запуск висит дольше лимита пула.
+    // Возникает, когда диспетчер не мог запустить проход (напр. синтаксическая ошибка скрипта)
+    // и не успел сверить запуски вовремя — вкладка «Воркеры» показывала их как «работающих».
+    const stale = !stopped && !result && !err && minutes > (LIMIT_MIN[run.pool] ?? 60) + 2;
+    if (stale) log(`⚰ ${run.agent} ${run.taskKey ?? "—"}: зависший запуск (~${Math.round(minutes)} мин без прохода диспетчера)`);
+    const status = stopped ? "stopped" : stale ? "failed" : outcome(result, minutes >= LIMIT_MIN[run.pool] - 1, err);
+    const summary = stale
+      ? `зависший запуск: диспетчер не делал проходы ~${Math.round(minutes)} мин, юнит systemd больше не существует`
+      : ((result?.result ? String(result.result) : err) || "нет ответа").trim().slice(-1500);
     // Отказы прав — в самый конец лога, после обрезки: по этому разделу «Здоровье» считает долю запусков с отказами (DEV-79).
     // В раздел идёт только форма команды, без текста аргументов и ключей
     const denials = formatDenials(result?.permission_denials);

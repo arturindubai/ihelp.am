@@ -5,6 +5,7 @@ import { db } from "@/server/db";
 import { isValidContact } from "@/lib/contactValidation";
 import { normalizeEmail } from "@/lib/email";
 import { normalizePhone } from "@/lib/phone";
+import { notifyNewInterest } from "@/server/services/serviceInterest";
 
 const MAX_CONTACT_LEN = 100;
 const IP_HOURLY_LIMIT = 20;
@@ -48,6 +49,7 @@ export async function submitServiceInterest(
     await db.serviceInterest.create({
       data: { serviceSlug: slug, contact: normalizedContact, ip: ip ?? null, kind },
     });
+    void notifyNewInterest(slug, kind);
     return "ok";
   } catch (e: unknown) {
     // уникальный индекс: тот же контакт уже оставлял заявку на эту услугу

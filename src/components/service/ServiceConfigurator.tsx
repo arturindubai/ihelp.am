@@ -72,7 +72,7 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy, initialPla
   // Сохраняем выбор в localStorage и дебаунсированно на сервере
   useEffect(() => {
     if (lines.length > 0) {
-      writeCart({ slug: s.slug, opts, planId, count: 1, total: barPrice });
+      writeCart({ slug: s.slug, opts, planId, count: 1, total: barPrice, slugs: [s.slug] });
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => {
         addToCartAction(s.id, opts, planId).catch(() => null);
@@ -86,8 +86,9 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy, initialPla
   }, [lines.length, opts, planId, barPrice, s.slug, s.id]);
 
   function go() {
-    const q = new URLSearchParams({ o: opts.join(","), ...(planId ? { p: planId } : {}) });
-    router.push(`/book/${s.slug}?${q}`);
+    clearTimeout(saveTimerRef.current);
+    addToCartAction(s.id, opts, planId).catch(() => null);
+    router.push("/cart");
   }
 
   return (
@@ -301,7 +302,7 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy, initialPla
         caption={complete ? barCaption : t("selectAll")}
         action={
           <button className="btn-primary min-w-[140px]" disabled={!complete} onClick={go}>
-            {tc("continue")}
+            {t("toCart")}
           </button>
         }
       />

@@ -71,6 +71,15 @@ db_schema_ok() {
 }
 check "схема Prisma и база согласованы (Task, Epic, WorkerRun)" db_schema_ok
 
+echo "Серверные скрипты (диспетчер воркеров)"
+scripts_syntax_ok() {
+  for f in scripts/*.mjs; do
+    node --check "$f" 2>/dev/null || { echo "    синтаксическая ошибка: $f"; return 1; }
+  done
+}
+check "node --check scripts/*.mjs (синтаксис)" scripts_syntax_ok
+check "dispatcher.mjs загружается (импорты и --check)" node scripts/dispatcher.mjs --check
+
 echo "Счётчики данных (выкладка не должна создавать записи)"
 # Сверка выполняется только при запуске через deploy/update.sh — тот передаёт PREDEPLOY_COUNTS_FILE.
 # Прямой запуск smoke.sh (тестировщик, вручную, rollback.sh) сверку пропускает.

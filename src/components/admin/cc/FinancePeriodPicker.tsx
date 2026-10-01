@@ -21,7 +21,7 @@ export function FinancePeriodPicker({
     const next = { ...current, period: "custom", from: newFrom, to: newTo };
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(next)) if (v) qs.set(k, v);
-    start(() => router.push(`/admin/control?${qs.toString()}`));
+    start(() => router.push(`/admin/finance?${qs.toString()}`));
   };
 
   return (
