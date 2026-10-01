@@ -7,6 +7,7 @@ import { calculatePrice, type PricePromo, type PricingRules } from "@/lib/pricin
 import { amd, cn, dateLabel, durationLabel } from "@/lib/format";
 import { addDays, atYerevan, isoWeekday, ymd } from "@/lib/time";
 import { createOrderAction, promoAction, slotsAction } from "@/server/actions/booking";
+import { clearCart } from "@/lib/cart";
 import { Sheet } from "@/components/ui/Sheet";
 import { AddressForm, addressLine, type AddressRow } from "./AddressForm";
 import { Img } from "@/components/Img";
@@ -193,6 +194,7 @@ export function Checkout(props: {
         setError(t.has(`errors.${r.error}`) ? t(`errors.${r.error}`) : tc("error"));
         return;
       }
+      clearCart();
       router.replace(`/book/${props.service.slug}/success?orderId=${r.orderId}`);
     });
   }
