@@ -3,7 +3,7 @@ import { Home, LayoutGrid, CalendarDays, User } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
 
-const HIDE = [/^\/s\//, /^\/book\//, /^\/login/];
+const HIDE = [/^\/s\//, /^\/book\//, /^\/login/, /^\/cart/];
 
 export function BottomNav() {
   const t = useTranslations("nav");

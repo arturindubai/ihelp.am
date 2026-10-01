@@ -2161,8 +2161,18 @@
     "wishes": "Пожелания"
   },
   "cart": {
+    "byPlan": "По подписке",
+    "cancelPolicy": "Бесплатная отмена за 24 ч",
+    "change": "Изменить",
     "checkout": "Оформить",
-    "itemsCount": "{count, plural, one {# услуга} few {# услуги} other {# услуг}}"
+    "crossSell": "Часто берут вместе",
+    "empty": "Корзина пуста",
+    "emptyHint": "Выберите услугу",
+    "itemsCount": "{count, plural, one {# услуга} few {# услуги} other {# услуг}}",
+    "savings": "Вы экономите {amount}",
+    "title": "Ваш заказ",
+    "toCatalog": "Перейти в каталог",
+    "total": "Итого"
   },
   "catalog": {
     "arrivalToday": "сегодня",
@@ -2562,6 +2572,7 @@
     "title": "Ваш отзыв о визите"
   },
   "service": {
+    "addToCart": "+ Добавить",
     "benefits": "Преимущества",
     "excludes": "Не входит",
     "faq": "Частые вопросы",
@@ -2596,6 +2607,7 @@
     "selectRequirements": "Выберите параметры",
     "startsAt": "от {price} за визит",
     "thenPerVisit": "далее {price} за визит",
+    "toCart": "В корзину",
     "total": "Итого"
   }
 }
