@@ -40,6 +40,6 @@ export async function GET(req: Request) {
   await alertTech("telegram-widget-login", html`🔓 <b>Вход через Telegram Widget</b>\n${user.phone}`, 5);
 
   const next = url.searchParams.get("next") || "";
-  const dest = next.startsWith("/ru/") ? next : STAFF_ROLES.includes(user.role) ? "/ru/admin" : "/ru/account";
+  const dest = next.startsWith("/ru/") ? next : STAFF_ROLES.includes(user.role) ? "/ru/admin" : "/ru/services";
   return NextResponse.redirect(new URL(dest, base));
 }

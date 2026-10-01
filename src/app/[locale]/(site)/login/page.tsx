@@ -5,6 +5,7 @@ import { loginMethods } from "@/server/otp";
 import { getSettings } from "@/server/settings";
 import { unpackSignupTicket } from "@/lib/signupTicket";
 import { unpackGoogleSignupTicket } from "@/lib/googleSignupTicket";
+import { safeReturnPath } from "@/lib/safeRedirect";
 import { LoginClient } from "./LoginClient";
 
 export default async function LoginPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ next?: string; error?: string; complete?: string; "google-complete"?: string }> }) {
@@ -14,7 +15,7 @@ export default async function LoginPage({ params, searchParams }: { params: Prom
   const googleComplete = sp["google-complete"];
   setRequestLocale(locale);
   const user = await getCurrentUser();
-  const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : null;
+  const safeNext = safeReturnPath(next);
   if (user) redirect({ href: safeNext || "/account", locale });
   // Пришли из Telegram-бота с подтверждённым номером нового клиента: остаётся имя и email (AUTH-11)
   const ticket = complete ? unpackSignupTicket(complete, process.env.SESSION_SECRET || "dev") : null;

@@ -26,7 +26,7 @@ export function LoginClient({
       signup={signup}
       googleSignup={googleSignup}
       onDone={(role) => {
-        const dest = next || (role === "MASTER" ? "/pro" : role === "OPERATOR" ? "/operator" : ["OWNER", "ADMIN"].includes(role) ? "/admin" : "/account");
+        const dest = next || (role === "MASTER" ? "/pro" : role === "OPERATOR" ? "/operator" : ["OWNER", "ADMIN"].includes(role) ? "/admin" : "/services");
         router.replace(dest);
         router.refresh();
       }}
