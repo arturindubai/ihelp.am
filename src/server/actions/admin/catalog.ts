@@ -168,6 +168,46 @@ export async function deleteServiceAction(id: string) {
   return { ok: true as const, archived: false };
 }
 
+export async function createSectionAction(categoryId: string, title: Record<string, string>, sort: number) {
+  const u = await requireSection("services");
+  const s = await db.categorySection.create({ data: { categoryId, title, sort } });
+  await audit(u.id, "section.create", "CategorySection", s.id, { categoryId, title });
+  revalidateAll();
+  return { ok: true as const, id: s.id };
+}
+
+export async function updateSectionAction(id: string, title: Record<string, string>) {
+  const u = await requireSection("services");
+  await db.categorySection.update({ where: { id }, data: { title } });
+  await audit(u.id, "section.update", "CategorySection", id, { title });
+  revalidateAll();
+  return { ok: true as const };
+}
+
+export async function deleteSectionAction(id: string) {
+  const u = await requireSection("services");
+  await db.service.updateMany({ where: { sectionId: id }, data: { sectionId: null } });
+  await db.categorySection.delete({ where: { id } });
+  await audit(u.id, "section.delete", "CategorySection", id);
+  revalidateAll();
+  return { ok: true as const };
+}
+
+export async function reorderSectionsAction(ids: string[]) {
+  await requireSection("services");
+  await db.$transaction(ids.map((id, i) => db.categorySection.update({ where: { id }, data: { sort: i } })));
+  revalidateAll();
+  return { ok: true as const };
+}
+
+export async function moveServiceToSectionAction(serviceId: string, sectionId: string | null) {
+  const u = await requireSection("services");
+  await db.service.update({ where: { id: serviceId }, data: { sectionId } });
+  await audit(u.id, "service.moveSection", "Service", serviceId, { sectionId });
+  revalidateAll();
+  return { ok: true as const };
+}
+
 export async function duplicateServiceAction(id: string) {
   const u = await requireSection("services");
   const s = await db.service.findUniqueOrThrow({ where: { id }, include: { groups: { include: { options: true } }, plans: true, masters: { select: { id: true } } } });

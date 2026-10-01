@@ -11,6 +11,7 @@ type Props = { rows: PriceRow[] };
 
 type DisplayRow =
   | { kind: "sep"; categoryId: string; title: string }
+  | { kind: "subsep"; sectionId: string | null; title: string }
   | { kind: "data"; row: PriceRow };
 
 export function PricesManager({ rows }: Props) {
@@ -47,10 +48,17 @@ export function PricesManager({ rows }: Props) {
   const displayRows = useMemo((): DisplayRow[] => {
     const result: DisplayRow[] = [];
     let lastCatId = "";
+    let lastSectionKey = "";
     for (const row of rows) {
       if (row.categoryId !== lastCatId) {
         result.push({ kind: "sep", categoryId: row.categoryId, title: row.categoryTitle });
         lastCatId = row.categoryId;
+        lastSectionKey = "";
+      }
+      const sectionKey = row.sectionId ?? "null";
+      if (sectionKey !== lastSectionKey && row.sectionTitle) {
+        result.push({ kind: "subsep", sectionId: row.sectionId, title: row.sectionTitle });
+        lastSectionKey = sectionKey;
       }
       result.push({ kind: "data", row });
     }
@@ -271,11 +279,20 @@ export function PricesManager({ rows }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {displayRows.map((dr) => {
+            {displayRows.map((dr, dri) => {
               if (dr.kind === "sep") {
                 return (
                   <tr key={`sep-${dr.categoryId}`} className="bg-surface">
                     <td colSpan={colCount} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-muted">
+                      {dr.title}
+                    </td>
+                  </tr>
+                );
+              }
+              if (dr.kind === "subsep") {
+                return (
+                  <tr key={`subsep-${dri}`} className="bg-brand-50">
+                    <td colSpan={colCount} className="px-4 py-1 text-xs font-medium text-brand-text">
                       {dr.title}
                     </td>
                   </tr>
