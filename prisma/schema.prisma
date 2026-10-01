@@ -122,26 +122,43 @@ model Address {
 }
 
 model Category {
-  id          String     @id @default(cuid())
-  slug        String     @unique
+  id          String            @id @default(cuid())
+  slug        String            @unique
   title       Json
   description Json?
   image       String?
-  sort        Int        @default(0)
-  active      Boolean    @default(true)
-  comingSoon  Boolean    @default(false)
-  showFormats Boolean    @default(false)
-  archived    Boolean    @default(false)
+  sort        Int               @default(0)
+  active      Boolean           @default(true)
+  comingSoon  Boolean           @default(false)
+  showFormats Boolean           @default(false)
+  archived    Boolean           @default(false)
   services    Service[]
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  sections    CategorySection[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+/// Раздел внутри категории (например «Глубокая уборка» и «Дезинфекция» внутри «Уборки»)
+model CategorySection {
+  id         String    @id @default(cuid())
+  categoryId String
+  category   Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  title      Json
+  sort       Int       @default(0)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  services   Service[]
+
+  @@index([categoryId])
 }
 
 model Service {
-  id            String        @id @default(cuid())
+  id            String           @id @default(cuid())
   categoryId    String
-  category      Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  slug          String        @unique
+  category      Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  sectionId     String?
+  section       CategorySection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  slug          String           @unique
   title         Json
   subtitle      Json?
   description   Json?
@@ -154,20 +171,20 @@ model Service {
   includesText  Json?
   /// Что не входит в услугу — мультиязычный текст, строки разделены \n
   excludesText  Json?
-  active        Boolean       @default(true)
-  comingSoon    Boolean       @default(false)
-  sort          Int           @default(0)
-  isNew         Boolean       @default(false)
+  active        Boolean          @default(true)
+  comingSoon    Boolean          @default(false)
+  sort          Int              @default(0)
+  isNew         Boolean          @default(false)
   arrivalHours  Int?
-  rating        Float         @default(0)
-  reviewsCount  Int           @default(0)
-  bookingsCount Int           @default(0)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  rating        Float            @default(0)
+  reviewsCount  Int              @default(0)
+  bookingsCount Int              @default(0)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
   groups        OptionGroup[]
   plans         Plan[]
-  masters       Master[]      @relation("MasterSkills")
+  masters       Master[]         @relation("MasterSkills")
   orders        Order[]
   reviews       Review[]
 }
@@ -460,6 +477,8 @@ model Review {
   authorName String?
   rating    Int
   text      String?
+  /// Чаевые мастеру в драмах (0 = не оставлены); FLOW-13
+  tipAmount  Int       @default(0)
   reply     String?
   status    ReviewStatus @default(PENDING)
   createdAt DateTime     @default(now())

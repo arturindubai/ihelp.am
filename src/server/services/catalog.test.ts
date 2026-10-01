@@ -155,6 +155,7 @@ describe("getCategory — formats", () => {
       description: null,
       comingSoon: false,
       showFormats: false,
+      sections: [],
       services: [makeService("s1", [])],
     });
     const c = await getCategory("cleaning", "ru");
@@ -169,6 +170,7 @@ describe("getCategory — formats", () => {
       description: null,
       comingSoon: false,
       showFormats: true,
+      sections: [],
       services: [
         makeService("svc-once", ["ONE_TIME"]),
         makeService("svc-sub", ["SUBSCRIPTION", "ONE_TIME"]),

@@ -1,12 +1,11 @@
 "use client";
 import { useState, useTransition, useRef } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { GripVertical, Pencil, Plus, Copy, ExternalLink, Trash2, ChevronDown, ChevronRight, Search, Archive, ArchiveRestore } from "lucide-react";
+import { GripVertical, Pencil, Plus, Copy, ExternalLink, Trash2, ChevronDown, ChevronRight, Search, Archive, ArchiveRestore, DollarSign, CalendarDays } from "lucide-react";
 import { Link, useRouter } from "@/i18n/navigation";
 import {
   archiveCategoryAction,
   createServiceAction,
-  deleteCategoryAction,
   deleteServiceAction,
   duplicateServiceAction,
   reorderCategoriesAction,
@@ -14,12 +13,17 @@ import {
   saveCategoryAction,
   toggleServiceAction,
   toggleServiceComingSoonAction,
+  createSectionAction,
+  updateSectionAction,
+  deleteSectionAction,
+  reorderSectionsAction,
+  moveServiceToSectionAction,
 } from "@/server/actions/admin/catalog";
 import { cn } from "@/lib/format";
 import { Sheet } from "@/components/ui/Sheet";
 import { I18nInput, ImageInput, NumInput, TextInput, Toggle, type I18n } from "./fields";
 import { Img } from "@/components/Img";
-import type { AdminCatalogCategory, AdminCatalogService } from "@/server/services/adminCatalog";
+import type { AdminCatalogCategory, AdminCatalogSection, AdminCatalogService } from "@/server/services/adminCatalog";
 
 type Filter = "all" | "active" | "hidden" | "soon";
 
@@ -57,6 +61,7 @@ function StatusBadge({ active, comingSoon, archived, demandCount }: { active: bo
 }
 
 type EditCat = { id?: string; slug: string; title: I18n; description: I18n | null; image: string | null; sort: number; active: boolean; comingSoon: boolean; archived: boolean; showFormats: boolean };
+type EditSection = { id?: string; title: I18n; categoryId: string };
 
 export function CatalogList({ categories: initial, pageTitle }: { categories: AdminCatalogCategory[]; pageTitle: string }) {
   const t = useTranslations("admin.services");
@@ -74,10 +79,15 @@ export function CatalogList({ categories: initial, pageTitle }: { categories: Ad
   const [editCat, setEditCat] = useState<EditCat | null>(null);
   const [editCatErr, setEditCatErr] = useState<string>();
 
+  const [editSection, setEditSection] = useState<EditSection | null>(null);
+  const [editSectionErr, setEditSectionErr] = useState<string>();
+
   const dragCatRef = useRef<number | null>(null);
-  const dragSvcRef = useRef<number | null>(null);
+  const dragSvcRef = useRef<{ sectionId: string | null; index: number } | null>(null);
+  const dragSecRef = useRef<number | null>(null);
   const [dragCatOver, setDragCatOver] = useState<number | null>(null);
-  const [dragSvcOver, setDragSvcOver] = useState<number | null>(null);
+  const [dragSvcOver, setDragSvcOver] = useState<string | null>(null); // svc.id
+  const [dragSecOver, setDragSecOver] = useState<string | null>(null); // section.id or "null" for no-section
 
   const selectedCategory = categories.find((c) => c.id === selectedId) ?? categories[0] ?? null;
 
@@ -109,6 +119,7 @@ export function CatalogList({ categories: initial, pageTitle }: { categories: Ad
     start(async () => { await reorderCategoriesAction(next.map((c) => c.id)); });
   };
 
+  // Переупорядочивание услуг в плоском списке (без разделов или внутри одного раздела)
   const reorderSvcs = (from: number, to: number) => {
     if (!selectedCategory) return;
     const svcs = [...selectedCategory.services];
@@ -116,6 +127,23 @@ export function CatalogList({ categories: initial, pageTitle }: { categories: Ad
     svcs.splice(to, 0, item);
     setCategories(categories.map((c) => c.id === selectedCategory.id ? { ...c, services: svcs } : c));
     start(async () => { await reorderServicesAction(svcs.map((s) => s.id)); });
+  };
+
+  const reorderSecs = (from: number, to: number) => {
+    if (!selectedCategory) return;
+    const secs = [...selectedCategory.sections];
+    const [item] = secs.splice(from, 1);
+    secs.splice(to, 0, item);
+    setCategories(categories.map((c) => c.id === selectedCategory.id ? { ...c, sections: secs } : c));
+    start(async () => { await reorderSectionsAction(secs.map((s) => s.id)); });
+  };
+
+  const moveToSection = (svcId: string, sectionId: string | null) => {
+    setCategories(categories.map((c) => ({
+      ...c,
+      services: c.services.map((s) => s.id === svcId ? { ...s, sectionId } : s),
+    })));
+    start(async () => { await moveServiceToSectionAction(svcId, sectionId); });
   };
 
   const toggleActive = (svcId: string, val: boolean) => {
@@ -139,6 +167,36 @@ export function CatalogList({ categories: initial, pageTitle }: { categories: Ad
     if (!r.ok) return setEditCatErr(r.error === "slug" ? tc("slugHint") : `${tc("error")}: ${r.error}`);
     setEditCat(null); router.refresh();
   });
+
+  const saveSection = () => start(async () => {
+    if (!editSection) return;
+    if (editSection.id) {
+      await updateSectionAction(editSection.id, editSection.title as Record<string, string>);
+      setCategories(categories.map((c) => ({
+        ...c,
+        sections: c.sections.map((s) => s.id === editSection.id ? { ...s, title: editSection.title as Record<string, string> } : s),
+      })));
+    } else {
+      const sort = (selectedCategory?.sections.length ?? 0);
+      const r = await createSectionAction(editSection.categoryId, editSection.title as Record<string, string>, sort);
+      setCategories(categories.map((c) => c.id === editSection.categoryId
+        ? { ...c, sections: [...c.sections, { id: r.id, title: editSection.title as Record<string, string>, sort }] }
+        : c,
+      ));
+    }
+    setEditSection(null);
+    router.refresh();
+  });
+
+  const deleteSection = (sectionId: string) => {
+    if (!confirm(t("sectionDeleteConfirm"))) return;
+    setCategories(categories.map((c) => ({
+      ...c,
+      sections: c.sections.filter((s) => s.id !== sectionId),
+      services: c.services.map((s) => s.sectionId === sectionId ? { ...s, sectionId: null } : s),
+    })));
+    start(async () => { await deleteSectionAction(sectionId); });
+  };
 
   const FILTERS: { key: Filter; label: string }[] = [
     { key: "all", label: t("filterAll") },
@@ -204,6 +262,26 @@ export function CatalogList({ categories: initial, pageTitle }: { categories: Ad
         ? <div className="flex items-center gap-2 rounded-lg border border-warn bg-warn-50 px-3 py-2 text-sm text-warn">{t("categoryHiddenBanner", { n: selectedCategory.services.length })}</div>
         : null
   );
+
+  // Группируем услуги по разделам для отображения
+  const sections = selectedCategory?.sections ?? [];
+  const svcsBySectionId = new Map<string | null, AdminCatalogService[]>();
+  svcsBySectionId.set(null, []);
+  for (const sec of sections) svcsBySectionId.set(sec.id, []);
+  for (const svc of filteredServices) {
+    const key = svc.sectionId ?? null;
+    const target = svcsBySectionId.has(key) ? key : null;
+    svcsBySectionId.get(target)!.push(svc);
+  }
+
+  // Сортировка порядка: разделы по sort, потом без раздела
+  const sectionGroups: { section: AdminCatalogSection | null; svcs: AdminCatalogService[] }[] = [
+    ...sections.map((sec) => ({ section: sec, svcs: svcsBySectionId.get(sec.id) ?? [] })),
+    { section: null, svcs: svcsBySectionId.get(null) ?? [] },
+  ];
+
+  // Индекс для переупорядочивания всей плоской таблицы
+  let svcFlatIndex = 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -306,6 +384,14 @@ export function CatalogList({ categories: initial, pageTitle }: { categories: Ad
                     <Pencil size={16} />
                   </button>
                   <button
+                    className="btn-ghost btn-sm text-xs gap-1"
+                    disabled={pending}
+                    onClick={() => { setEditSectionErr(undefined); setEditSection({ title: {}, categoryId: selectedCategory.id }); }}
+                    title={t("newSection")}
+                  >
+                    <Plus size={14} /> {t("sectionLabel")}
+                  </button>
+                  <button
                     className="btn-primary btn-sm"
                     disabled={pending}
                     onClick={() => start(async () => { const r = await createServiceAction(selectedCategory.id); router.push(`/admin/services/${r.id}`); })}
@@ -318,29 +404,120 @@ export function CatalogList({ categories: initial, pageTitle }: { categories: Ad
               {/* Предупреждение о скрытой/заархивированной категории */}
               {warningBanner && <div className="px-4 pt-3">{warningBanner}</div>}
 
-              {/* Список услуг */}
-              <ul className="divide-y divide-line">
-                {filteredServices.map((svc, i) => (
-                  <ServiceRow
-                    key={svc.id}
-                    svc={svc}
-                    locale={locale}
-                    index={i}
-                    pending={pending}
-                    dragOver={dragSvcOver === i}
-                    onDragStart={() => { dragSvcRef.current = i; }}
-                    onDragOver={(e) => { e.preventDefault(); setDragSvcOver(i); }}
-                    onDragLeave={() => setDragSvcOver(null)}
-                    onDrop={() => { if (dragSvcRef.current !== null && dragSvcRef.current !== i) reorderSvcs(dragSvcRef.current, i); dragSvcRef.current = null; setDragSvcOver(null); }}
-                    onDragEnd={() => { dragSvcRef.current = null; setDragSvcOver(null); }}
-                    onToggleActive={(v) => toggleActive(svc.id, v)}
-                    onToggleSoon={(v) => toggleSoon(svc.id, v)}
-                    demandCount={svc.demandCount}
-                    onDuplicate={() => start(async () => { const r = await duplicateServiceAction(svc.id); router.push(`/admin/services/${r.id}`); })}
-                    onDelete={() => { if (confirm(tc("deleteConfirm"))) start(async () => { await deleteServiceAction(svc.id); router.refresh(); }); }}
-                  />
-                ))}
-              </ul>
+              {/* Услуги, сгруппированные по разделам */}
+              <div>
+                {sectionGroups.map(({ section, svcs }) => {
+                  const sectionKey = section ? section.id : "null";
+                  const secIndex = section ? sections.findIndex((s) => s.id === section.id) : -1;
+
+                  return (
+                    <div
+                      key={sectionKey}
+                      onDragOver={(e) => {
+                        // Разрешаем дроп на раздел только для услуг
+                        if (dragSvcRef.current) { e.preventDefault(); setDragSecOver(sectionKey); }
+                      }}
+                      onDragLeave={() => setDragSecOver(null)}
+                      onDrop={() => {
+                        if (dragSvcRef.current) {
+                          const svc = filteredServices[svcFlatIndex]; // не используется напрямую
+                          // Находим перетаскиваемую услугу
+                          const fromSectionId = dragSvcRef.current.sectionId;
+                          const fromIdx = dragSvcRef.current.index;
+                          const allSvcs = selectedCategory.services;
+                          const srcList = fromSectionId === null
+                            ? allSvcs.filter((s) => !s.sectionId)
+                            : allSvcs.filter((s) => s.sectionId === fromSectionId);
+                          const svcToMove = srcList[fromIdx];
+                          if (svcToMove && (svcToMove.sectionId ?? null) !== (section?.id ?? null)) {
+                            moveToSection(svcToMove.id, section?.id ?? null);
+                          }
+                          dragSvcRef.current = null;
+                          setDragSecOver(null);
+                        }
+                      }}
+                      className={cn(dragSecOver === sectionKey && "outline outline-1 outline-brand rounded-lg")}
+                    >
+                      {/* Строка раздела */}
+                      {section && (
+                        <div
+                          className="flex items-center gap-2 bg-surface px-3 py-1.5 text-xs font-semibold text-muted border-b border-line"
+                          draggable
+                          onDragStart={(e) => { e.stopPropagation(); dragSecRef.current = secIndex; }}
+                          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                          onDrop={(e) => { e.stopPropagation(); if (dragSecRef.current !== null && dragSecRef.current !== secIndex) { reorderSecs(dragSecRef.current, secIndex); } dragSecRef.current = null; }}
+                          onDragEnd={() => { dragSecRef.current = null; }}
+                        >
+                          <GripVertical size={14} className="cursor-grab active:cursor-grabbing shrink-0" />
+                          <span className="flex-1 truncate">{section.title[locale] ?? section.title.ru ?? ""}</span>
+                          {svcs.length === 0 && <span className="rounded-full bg-warn-50 px-1.5 py-0.5 text-[10px] text-warn">{t("sectionEmpty")}</span>}
+                          <button
+                            className="btn-ghost btn-sm px-1"
+                            title={t("editSection")}
+                            onClick={() => { setEditSectionErr(undefined); setEditSection({ id: section.id, title: section.title, categoryId: selectedCategory.id }); }}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            className="btn-ghost btn-sm px-1 text-bad"
+                            title={t("deleteSection")}
+                            onClick={() => deleteSection(section.id)}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Услуги раздела */}
+                      <ul className="divide-y divide-line">
+                        {svcs.map((svc, i) => {
+                          const flatIdx = svcFlatIndex;
+                          svcFlatIndex++;
+                          return (
+                            <ServiceRow
+                              key={svc.id}
+                              svc={svc}
+                              locale={locale}
+                              index={flatIdx}
+                              pending={pending}
+                              dragOver={dragSvcOver === svc.id}
+                              sections={sections}
+                              currentSectionId={section?.id ?? null}
+                              onDragStart={() => { dragSvcRef.current = { sectionId: section?.id ?? null, index: i }; }}
+                              onDragOver={(e) => { e.preventDefault(); setDragSvcOver(svc.id); }}
+                              onDragLeave={() => setDragSvcOver(null)}
+                              onDrop={() => {
+                                if (dragSvcRef.current && dragSvcRef.current.sectionId === (section?.id ?? null)) {
+                                  const srcIdx = dragSvcRef.current.index;
+                                  if (srcIdx !== i) {
+                                    const allSvcs = [...selectedCategory.services];
+                                    const filtered = allSvcs.filter((s) => (s.sectionId ?? null) === (section?.id ?? null));
+                                    const [moved] = filtered.splice(srcIdx, 1);
+                                    filtered.splice(i, 0, moved);
+                                    const otherSvcs = allSvcs.filter((s) => (s.sectionId ?? null) !== (section?.id ?? null));
+                                    const reordered = [...otherSvcs, ...filtered];
+                                    setCategories(categories.map((c) => c.id === selectedCategory.id ? { ...c, services: reordered } : c));
+                                    start(async () => { await reorderServicesAction(filtered.map((s) => s.id)); });
+                                  }
+                                }
+                                dragSvcRef.current = null;
+                                setDragSvcOver(null);
+                              }}
+                              onDragEnd={() => { dragSvcRef.current = null; setDragSvcOver(null); }}
+                              onToggleActive={(v) => toggleActive(svc.id, v)}
+                              onToggleSoon={(v) => toggleSoon(svc.id, v)}
+                              demandCount={svc.demandCount}
+                              onDuplicate={() => start(async () => { const r = await duplicateServiceAction(svc.id); router.push(`/admin/services/${r.id}`); })}
+                              onDelete={() => { if (confirm(tc("deleteConfirm"))) start(async () => { await deleteServiceAction(svc.id); router.refresh(); }); }}
+                              onMoveToSection={(secId) => moveToSection(svc.id, secId)}
+                            />
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
 
               {/* Кнопка добавления услуги пунктирной рамкой */}
               <div className="p-3">
@@ -399,6 +576,23 @@ export function CatalogList({ categories: initial, pageTitle }: { categories: Ad
           </div>
         )}
       </Sheet>
+
+      {/* Редактор раздела */}
+      <Sheet
+        open={!!editSection}
+        onClose={() => setEditSection(null)}
+        title={editSection?.id ? t("editSection") : t("newSection").replace("+ ", "")}
+        footer={
+          <button className="btn-primary w-full" disabled={pending} onClick={saveSection}>{tc("save")}</button>
+        }
+      >
+        {editSection && (
+          <div className="space-y-3">
+            <I18nInput label={tc("title")} required value={editSection.title} onChange={(v) => setEditSection({ ...editSection, title: v })} />
+            {editSectionErr && <p className="text-sm text-bad">{editSectionErr}</p>}
+          </div>
+        )}
+      </Sheet>
     </div>
   );
 }
@@ -407,6 +601,7 @@ function ServiceRow({
   svc, locale, index, pending, dragOver,
   onDragStart, onDragOver, onDragLeave, onDrop, onDragEnd,
   onToggleActive, onToggleSoon, onDuplicate, onDelete, demandCount,
+  sections, currentSectionId, onMoveToSection,
 }: {
   svc: AdminCatalogService;
   locale: string;
@@ -423,9 +618,13 @@ function ServiceRow({
   onDuplicate: () => void;
   onDelete: () => void;
   demandCount: number;
+  sections: AdminCatalogSection[];
+  currentSectionId: string | null;
+  onMoveToSection: (sectionId: string | null) => void;
 }) {
   const t = useTranslations("admin.services");
   const tc = useTranslations("admin.common");
+  const [showSectionMenu, setShowSectionMenu] = useState(false);
 
   return (
     <li
@@ -448,7 +647,14 @@ function ServiceRow({
         </span>
         <Img src={svc.image || "/img/svc-regular.svg"} width={52} className="size-13 shrink-0 rounded-xl object-cover" />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium">{svc.title}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-sm font-medium">{svc.title}</span>
+            {svc.hasNoPrice && (
+              <span className="shrink-0 rounded-full bg-warn-50 px-1.5 py-0.5 text-[10px] text-warn">
+                {t("noPricesBadge")}
+              </span>
+            )}
+          </div>
           <div className="hidden flex-wrap items-center gap-1.5 text-xs text-muted sm:flex">
             <span className="font-mono">/{svc.slug}</span>
             {svc.orders > 0 && <><span>·</span><span>{svc.orders} {t("bookings")}</span></>}
@@ -472,9 +678,41 @@ function ServiceRow({
           )}
         </div>
         <div className="flex items-center">
+          <Link className="btn-ghost btn-sm px-1.5" href={`/admin/services/${svc.id}?tab=pricing`} title={t("tabs.options")}><DollarSign size={15} /></Link>
+          <Link className="btn-ghost btn-sm px-1.5" href={`/admin/services/${svc.id}?tab=plans`} title={t("tabs.plans")}><CalendarDays size={15} /></Link>
           <Link className="btn-ghost btn-sm px-1.5" href={`/admin/services/${svc.id}`} title={tc("edit")}><Pencil size={15} /></Link>
           <button className="btn-ghost btn-sm px-1.5" title={tc("copy")} disabled={pending} onClick={onDuplicate}><Copy size={15} /></button>
           <a className="btn-ghost btn-sm px-1.5" href={`/${locale}/s/${svc.slug}`} target="_blank" title={t("openOnSite")}><ExternalLink size={15} /></a>
+          {sections.length > 0 && (
+            <div className="relative">
+              <button
+                className="btn-ghost btn-sm px-1.5 text-xs"
+                title={t("moveToSection")}
+                onClick={() => setShowSectionMenu((v) => !v)}
+              >
+                {t("sectionLabel")}
+              </button>
+              {showSectionMenu && (
+                <div className="absolute right-0 top-full z-20 mt-1 min-w-[160px] rounded-lg border border-line bg-paper shadow-md">
+                  {sections.map((sec) => (
+                    <button
+                      key={sec.id}
+                      className={cn("flex w-full items-center px-3 py-2 text-left text-xs hover:bg-surface", currentSectionId === sec.id && "text-brand font-medium")}
+                      onClick={() => { onMoveToSection(sec.id); setShowSectionMenu(false); }}
+                    >
+                      {sec.title[locale] ?? sec.title.ru ?? sec.id}
+                    </button>
+                  ))}
+                  <button
+                    className={cn("flex w-full items-center px-3 py-2 text-left text-xs hover:bg-surface", currentSectionId === null && "text-brand font-medium")}
+                    onClick={() => { onMoveToSection(null); setShowSectionMenu(false); }}
+                  >
+                    {t("noSection")}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <button className="btn-ghost btn-sm px-1.5 text-bad" title={tc("delete")} disabled={pending} onClick={onDelete}><Trash2 size={15} /></button>
         </div>
       </div>
