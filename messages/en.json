@@ -70,6 +70,25 @@
     "typeWork": "Work"
   },
   "admin": {
+    "ai": {
+      "applied": "Schedule applied",
+      "apply": "Apply",
+      "balance": "Claude subscription unavailable — sign in on server",
+      "balanceLow": "Go to settings",
+      "close": "Close",
+      "costApprox": "Tokens this month",
+      "drawerTitle": "Schedule assistant",
+      "errorText": "Could not get a proposal — please try again",
+      "explanation": "Explanation",
+      "proposalTitle": "Scheduling proposal",
+      "reject": "Reject",
+      "retry": "Try again",
+      "showMore": "Show {n} more",
+      "statusReady": "{unassigned} without pro · {masters} pros",
+      "suggestBtn": "Suggest schedule",
+      "thinking": "Building schedule...",
+      "tokensLabel": "tokens"
+    },
     "banners": {
       "aiApply": "Apply",
       "aiError": "Could not get a response — please try again",
