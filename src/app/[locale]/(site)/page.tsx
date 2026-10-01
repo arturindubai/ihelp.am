@@ -27,6 +27,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
   const [user, s, t, tc] = await Promise.all([getCurrentUser(), getSettings(), getTranslations("home"), getTranslations("common")]);
   const data = await getHome(locale, user?.id);
   const wa = contactLink(s.brand, "whatsapp");
+  const autoMode = !!(user && (user.phone || (user.email && user.emailVerifiedAt)));
   return (
     <div className="container-w pt-4">
       <div className="mx-auto max-w-[560px] md:max-w-none">
@@ -38,6 +39,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           comingSoonLabel={tc("comingSoon")}
           categories={data.categories}
           slogan={t("slogan")}
+          autoMode={autoMode}
         />
 
         <PromoSlot placement="HERO_HOME" locale={locale} />
