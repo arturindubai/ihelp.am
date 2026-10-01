@@ -319,3 +319,61 @@ export function calcMasterRanking(
 export function noConversionData(): ConversionInfo {
   return { value: null };
 }
+
+// ─── Список операций (транзакций) ────────────────────────────────────────────
+
+/** Одна строка в списке/выгрузке операций */
+export interface TransactionRow {
+  visitId: string;
+  /** YYYY-MM-DD по ереванскому времени */
+  date: string;
+  type: PlanKind;
+  /** Имя клиента из user.name; телефон и email не передаются */
+  clientName: string;
+  masterName: string | null;
+  serviceName: string;
+  amount: number;
+  paymentMethod: PaymentMethod;
+}
+
+const TYPE_LABELS: Record<PlanKind, string> = {
+  ONE_TIME: "Разовый",
+  SUBSCRIPTION: "Подписка",
+  PACKAGE: "Пакет",
+};
+
+const PAYMENT_LABELS: Record<PaymentMethod, string> = {
+  CASH: "Наличными",
+  CARD: "Картой",
+};
+
+/** Экранирует значение для CSV (поле в кавычках, внутренние кавычки удваиваются) */
+function csvCell(v: string): string {
+  return `"${v.replace(/"/g, '""')}"`;
+}
+
+/**
+ * Конвертирует список операций в CSV-строку.
+ * Кодировка UTF-8 с BOM, разделитель — точка с запятой (Excel-совместимый формат).
+ * Телефоны и адреса почты клиентов в выгрузку не попадают.
+ */
+export function transactionsToCsv(rows: TransactionRow[]): string {
+  const BOM = "﻿";
+  const headers = ["Дата", "Тип", "Клиент", "Мастер", "Услуга", "Сумма", "Способ оплаты"];
+  const lines: string[] = [headers.map(csvCell).join(";")];
+
+  for (const r of rows) {
+    const cells = [
+      r.date,
+      TYPE_LABELS[r.type] ?? r.type,
+      r.clientName,
+      r.masterName ?? "",
+      r.serviceName,
+      String(r.amount),
+      PAYMENT_LABELS[r.paymentMethod] ?? r.paymentMethod,
+    ];
+    lines.push(cells.map(csvCell).join(";"));
+  }
+
+  return BOM + lines.join("\r\n");
+}

@@ -422,7 +422,34 @@
         "revenue": "Выручка",
         "title": "Финансовая аналитика",
         "toCollect": "К сдаче",
-        "total": "Итого"
+        "total": "Итого",
+        "tx": {
+          "colAmount": "Сумма",
+          "colClient": "Клиент",
+          "colDate": "Дата",
+          "colMaster": "Мастер",
+          "colPayment": "Оплата",
+          "colService": "Услуга",
+          "colType": "Тип",
+          "empty": "Нет операций за выбранный период",
+          "exportCsv": "Экспорт CSV",
+          "loadMore": "Загрузить ещё",
+          "loadMoreLoading": "Загрузка…",
+          "masterAll": "Все мастера",
+          "paymentCard": "Картой",
+          "paymentCash": "Наличными",
+          "serviceAll": "Все услуги",
+          "title": "Список операций",
+          "typeAll": "Все типы",
+          "typeLabel": {
+            "ONE_TIME": "Разовый",
+            "PACKAGE": "Пакет",
+            "SUBSCRIPTION": "Подписка"
+          },
+          "typeOneTime": "Разовые",
+          "typePackage": "Пакеты",
+          "typeSubscription": "Подписки"
+        }
       },
       "form": {
         "delete": "Удалить",
