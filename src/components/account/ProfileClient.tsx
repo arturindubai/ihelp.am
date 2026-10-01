@@ -1,7 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { MapPin, Pencil, Trash2, Plus, LogOut, Send } from "lucide-react";
+import { MapPin, Pencil, Trash2, Plus, LogOut, Send, Mail, Globe } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
 import { confirmProfileEmailAction, sendProfileEmailCodeAction, toggleEmailRemindersAction, unlinkTelegramAction, updateProfileAction } from "@/server/actions/account";
 import { toggleAdsConsentAction } from "@/server/actions/consent";
@@ -83,13 +83,18 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
         </form>
       </section>
 
-      {telegramLinkEnabled && (
-        <TelegramSection telegramId={user.telegramId} telegramUsername={user.telegramUsername} error={telegramError} />
-      )}
-
-      {googleEnabled && (
-        <GoogleSection emailVerified={emailVerified} email={savedEmail} error={googleLinkError} />
-      )}
+      <LoginMethodsSection
+        email={savedEmail}
+        emailVerified={emailVerified}
+        emailCodes={emailCodes}
+        onEmailVerified={() => setEmailVerified(true)}
+        telegramId={user.telegramId}
+        telegramUsername={user.telegramUsername}
+        telegramError={telegramError}
+        telegramLinkEnabled={telegramLinkEnabled}
+        googleEnabled={googleEnabled}
+        googleLinkError={googleLinkError}
+      />
 
       {user.email && <EmailRemindersSection initialValue={user.emailReminders} />}
 
@@ -123,13 +128,35 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
   );
 }
 
-/** Блок привязки Telegram в профиле (AUTH-10): привязать виджетом или отвязать */
-function TelegramSection({ telegramId, telegramUsername, error }: { telegramId: string | null; telegramUsername: string | null; error: string | null }) {
+/** Единый блок «Способы входа»: email, Telegram, Google */
+function LoginMethodsSection({
+  email,
+  emailVerified,
+  emailCodes,
+  onEmailVerified,
+  telegramId,
+  telegramUsername,
+  telegramError,
+  telegramLinkEnabled,
+  googleEnabled,
+  googleLinkError,
+}: {
+  email: string;
+  emailVerified: boolean;
+  emailCodes: boolean;
+  onEmailVerified: () => void;
+  telegramId: string | null;
+  telegramUsername: string | null;
+  telegramError: string | null;
+  telegramLinkEnabled: boolean;
+  googleEnabled: boolean;
+  googleLinkError: string | null;
+}) {
   const t = useTranslations("account");
-  const tc = useTranslations("common");
   const [linked, setLinked] = useState(!!telegramId);
   const [username, setUsername] = useState(telegramUsername);
   const [pending, start] = useTransition();
+  const [showEmailVerify, setShowEmailVerify] = useState(false);
 
   function handleUnlink() {
     start(async () => {
@@ -141,22 +168,73 @@ function TelegramSection({ telegramId, telegramUsername, error }: { telegramId: 
 
   return (
     <section className="card mt-4 p-4">
-      <h2 className="h3 mb-3">{t("telegramTitle")}</h2>
-      {error === "conflict" && <p className="mb-2 text-sm text-bad">{t("telegramConflict")}</p>}
-      {linked ? (
-        <div className="flex items-center gap-3">
-          <span className="chip bg-ok-50 text-ok flex items-center gap-1.5">
-            <Send size={14} />
-            <span className="truncate max-w-[200px]">{username ? t("telegramLinked", { username }) : t("telegramLinkedNoUsername")}</span>
-          </span>
-          <button className="btn-ghost btn-sm text-bad ml-auto" onClick={handleUnlink} disabled={pending}>{t("telegramDisconnect")}</button>
-        </div>
-      ) : (
-        <a className="btn-outline btn-sm inline-flex items-center gap-2" href="/api/auth/telegram/start?mode=link">
-          <Send size={16} />
-          {t("telegramConnect")}
-        </a>
-      )}
+      <h2 className="h3 mb-3">{t("loginMethodsTitle")}</h2>
+      <ul className="divide-y divide-line">
+        <li className="flex flex-wrap items-center gap-3 py-3">
+          <Mail size={18} className="shrink-0 text-muted" />
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-ink">{t("methodEmail")}</div>
+            {email && <div className="truncate max-w-[160px] text-xs text-muted">{email}</div>}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {email && emailVerified ? (
+              <span className="chip bg-ok-50 text-ok">✓ {t("emailStatusVerified")}</span>
+            ) : email ? (
+              <>
+                <span className="chip bg-surface text-warn">{t("emailStatusUnverified")}</span>
+                {emailCodes && (
+                  <button type="button" className="link text-xs ml-2" onClick={() => setShowEmailVerify((v) => !v)}>
+                    {t("emailConfirm")}
+                  </button>
+                )}
+              </>
+            ) : (
+              <span className="chip bg-surface text-muted">{t("methodNotLinked")}</span>
+            )}
+          </div>
+          {showEmailVerify && email && (
+            <div className="mt-1 w-full">
+              <EmailStatus verified={emailVerified} canConfirm={emailCodes} onVerified={() => { onEmailVerified(); setShowEmailVerify(false); }} />
+            </div>
+          )}
+        </li>
+        {telegramLinkEnabled && (
+          <li className="flex flex-wrap items-center gap-3 py-3">
+            <Send size={18} className="shrink-0 text-muted" />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-ink">{t("methodTelegram")}</div>
+              {linked && username && <div className="truncate max-w-[140px] text-xs text-muted">@{username}</div>}
+            </div>
+            {linked ? (
+              <>
+                <span className="chip bg-ok-50 text-ok">{t("methodLinked")}</span>
+                <button className="btn-ghost btn-sm text-bad ml-auto" onClick={handleUnlink} disabled={pending}>{t("telegramDisconnect")}</button>
+              </>
+            ) : (
+              <a className="btn-outline btn-sm" href="/api/auth/telegram/start?mode=link">{t("methodConnect")}</a>
+            )}
+            {telegramError === "conflict" && (
+              <p className="mt-1 w-full text-xs text-bad">{t("telegramConflict")}</p>
+            )}
+          </li>
+        )}
+        {googleEnabled && (
+          <li className="flex flex-wrap items-center gap-3 py-3">
+            <Globe size={18} className="shrink-0 text-muted" />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-ink">{t("methodGoogle")}</div>
+              {emailVerified && email && <div className="truncate max-w-[180px] text-xs text-muted">{email}</div>}
+            </div>
+            {emailVerified ? (
+              <span className="chip bg-ok-50 text-ok">{t("methodLinked")}</span>
+            ) : (
+              <a className="btn-outline btn-sm" href="/api/auth/google/link-start">{t("methodConnect")}</a>
+            )}
+            {googleLinkError === "google_used" && <p className="mt-1 w-full text-xs text-bad">{t("googleUsed")}</p>}
+            {googleLinkError === "email_mismatch" && <p className="mt-1 w-full text-xs text-bad">{t("googleEmailMismatch")}</p>}
+          </li>
+        )}
+      </ul>
     </section>
   );
 }
@@ -220,28 +298,6 @@ function AdsConsentSection({ initialValue }: { initialValue: boolean }) {
           <span className="mt-0.5 block text-xs text-muted">{tc("ads.hint")}</span>
         </span>
       </label>
-    </section>
-  );
-}
-
-/** Блок привязки Google в профиле (AUTH-20): привязать OAuth или показать chip «Google подключён» */
-function GoogleSection({ emailVerified, email, error }: { emailVerified: boolean; email: string; error: string | null }) {
-  const t = useTranslations("account");
-
-  return (
-    <section className="card mt-4 p-4">
-      <h2 className="h3 mb-3">{t("googleTitle")}</h2>
-      {emailVerified ? (
-        <span className="chip bg-ok-50 text-ok">{t("googleLinked")} {email}</span>
-      ) : (
-        <>
-          <a className="btn-outline btn-sm" href="/api/auth/google/link-start">
-            {t("googleConnect")}
-          </a>
-          {error === "google_used" && <p className="mt-2 text-sm bg-bad-50 text-bad rounded px-2 py-1">{t("googleUsed")}</p>}
-          {error === "email_mismatch" && <p className="mt-2 text-sm bg-bad-50 text-bad rounded px-2 py-1">{t("googleEmailMismatch")}</p>}
-        </>
-      )}
     </section>
   );
 }
