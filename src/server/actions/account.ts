@@ -13,6 +13,8 @@ import { headers } from "next/headers";
 import { sendOtp, verifyOtp } from "../otp";
 import { normalizeEmail } from "@/lib/email";
 import { BookingError, scheduleVisit, BUSY_STATUSES } from "../services/booking";
+import { getMastersForService } from "../services/catalog";
+import { tr } from "@/i18n/locales";
 import { calcCancelPenalty } from "@/lib/cancelPenalty";
 import { atYerevan } from "@/lib/time";
 import { verifyUnsubscribeToken } from "@/lib/emailToken";
@@ -90,7 +92,7 @@ export async function cancelVisitAction(visitId: string) {
   return { ok: true };
 }
 
-export async function rescheduleVisitAction(visitId: string, date: string, time: string) {
+export async function rescheduleVisitAction(visitId: string, date: string, time: string, masterId: string | null = null) {
   const { v } = await ownVisit(visitId);
   const s = await getSettings();
   if (!["UNSCHEDULED", "SCHEDULED", "CONFIRMED"].includes(v.status)) return { ok: false, error: "state" };
@@ -101,7 +103,7 @@ export async function rescheduleVisitAction(visitId: string, date: string, time:
   if (Number.isNaN(start) || start < Date.now() + s.booking.leadHours * 3600_000 - 5 * 60_000 || start > Date.now() + (s.booking.horizonDays + 1) * 86400_000) return { ok: false, error: "slot_taken" };
   if (v.order.expiresAt && new Date(`${date}T00:00:00+04:00`) > v.order.expiresAt) return { ok: false, error: "expired" };
   try {
-    await scheduleVisit(v.id, date, time, v.order.preferredMasterId);
+    await scheduleVisit(v.id, date, time, masterId);
   } catch (e) {
     if (e instanceof BookingError) return { ok: false, error: e.message };
     throw e;
@@ -110,6 +112,27 @@ export async function rescheduleVisitAction(visitId: string, date: string, time:
   await notifyMasterRescheduled(v.id).catch(() => {});
   await notifyClientRescheduled(v.id).catch(() => {});
   return { ok: true };
+}
+
+/** Данные для листа переноса: список мастеров по услуге и текущий мастер визита */
+export async function rescheduleInfoAction(visitId: string) {
+  const { v } = await ownVisit(visitId);
+  const s = await getSettings();
+  if (!s.booking.allowChooseMaster) return { allowChooseMaster: false as const, masters: [], currentMasterId: v.masterId };
+  const raw = await getMastersForService(v.order.serviceId);
+  const locale = v.order.locale || "ru";
+  return {
+    allowChooseMaster: true as const,
+    currentMasterId: v.masterId,
+    masters: raw.map((m) => ({
+      id: m.id,
+      name: tr(m.name, locale),
+      photo: m.photo,
+      rating: m.rating,
+      reviewsCount: m.reviewsCount,
+      experienceYears: m.experienceYears,
+    })),
+  };
 }
 
 export async function cancelOrderAction(orderId: string) {

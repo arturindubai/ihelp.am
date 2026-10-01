@@ -43,6 +43,7 @@ export async function WorkersTab({ locale, taskHref }: { locale: string; taskHre
   const when = (d: Date) => `${dateLabel(d, locale, { day: "numeric", month: "short" })}, ${timeLabel(d)}`;
   const minutes = (a: Date, b: Date | null) => Math.max(1, Math.round(((b ?? new Date()).getTime() - a.getTime()) / 60_000));
   const tickAge = data.tick ? (Date.now() - Date.parse(data.tick.at)) / 60_000 : null;
+  const tickSevere = tickAge !== null && tickAge > 10;
   const queueOf = (p: Pool) => data.queues[p] as { key: string; title: string; priority: string; reason?: string; detail?: string; intake?: boolean }[];
   const lastTriageBatch = data.runs.find((r) => r.pool === "triage" && r.keys.length > 0)?.keys.length ?? null;
   const runKeys = (r: { taskKey: string | null; keys: string[] }) => (r.taskKey ? [r.taskKey] : r.keys);
@@ -51,10 +52,13 @@ export async function WorkersTab({ locale, taskHref }: { locale: string; taskHre
     <div className="space-y-4">
       <Card title={tw("master")}>
         <WorkersMaster key="master" initial={data.config} running={data.running.length} />
-        <div key="tick" className={cn("mt-3 rounded-lg px-3 py-2 text-xs", tickAge === null || tickAge > 3 ? "bg-warn-50 text-warn" : "bg-surface text-muted")}>
-          {tickAge === null ? tw("dispatcherNever") : tw("dispatcherTick", { ago: ago(t, data.tick!.at) })}
-          {tickAge !== null && tickAge > 3 && ` ${tw("dispatcherLate")}`}
+        <div key="tick" className={cn("mt-3 rounded-lg px-3 py-2 text-xs", tickAge === null || tickSevere ? "bg-bad-50 text-bad" : tickAge > 3 ? "bg-warn-50 text-warn" : "bg-surface text-muted")}>
+          {tickAge === null ? tw("dispatcherNever") : tickSevere ? tw("dispatcherStalled", { ago: ago(t, data.tick!.at) }) : tw("dispatcherTick", { ago: ago(t, data.tick!.at) })}
+          {tickAge !== null && tickAge > 3 && !tickSevere && ` ${tw("dispatcherLate")}`}
           {data.requests.length > 0 && ` · ${tw("pendingRequests", { list: data.requests.map((r) => `${tw(`pools.${r.pool}`)}${r.key ? ` ${r.key}` : ""}`).join(", ") })}`}
+          {tickSevere && data.tick?.lines && data.tick.lines.length > 0 && (
+            <div className="mt-1 truncate font-mono text-[10px] opacity-80">{data.tick.lines[data.tick.lines.length - 1]}</div>
+          )}
         </div>
         {data.tick && data.tick.lines.length > 0 && (
           <div key="log" className="mt-2">

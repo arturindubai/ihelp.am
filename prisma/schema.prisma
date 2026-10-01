@@ -939,6 +939,31 @@ model AppError {
   @@index([lastSeenAt])
 }
 
+/// Очередь запросов к ИИ-ассистенту (ROUTE-8): диспетчер берёт queued-записи и выполняет их через claude -p на подписке
+model AiRequest {
+  id          String    @id @default(cuid())
+  /// Тип задачи: echo | schedule — определяет системный промпт в диспетчере
+  kind        String
+  /// Входные данные запроса; данные клиентов — только минимально необходимые (без имён, только id/время/адрес)
+  input       Json
+  /// Ответ модели в виде JSON; null до завершения
+  output      Json?
+  /// queued | running | done | failed
+  status      String    @default("queued")
+  /// Текст ошибки при status=failed
+  error       String?
+  /// Суммарное число токенов запроса (input + output + cache)
+  tokens      Int       @default(0)
+  /// Кто создал запрос: userId или имя агента
+  requestedBy String?
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+}
+
 /// Серверная корзина покупок (FLOW-3): переживает выход/вход и смену устройства
 model Cart {
   id        String     @id @default(cuid())

@@ -33,7 +33,7 @@ function resolvePeriod(sp: CcSearch): { period: Period; from: string; to: string
 
 function periodLink(sp: CcSearch, period: Period): string {
   const next: Record<string, string> = {};
-  for (const [k, v] of Object.entries(sp)) if (v && k !== "period" && k !== "from" && k !== "to" && k !== "tab") next[k] = v;
+  for (const [k, v] of Object.entries(sp)) if (v && k !== "period" && k !== "from" && k !== "to") next[k] = v;
   next.period = period;
   return `/admin/finance?${new URLSearchParams(next).toString()}`;
 }

@@ -2,10 +2,10 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { Star } from "lucide-react";
-import { useRouter } from "@/i18n/navigation";
-import { cancelOrderAction, cancelVisitAction, pauseOrderAction, rescheduleVisitAction, resumeOrderAction, reviewAction } from "@/server/actions/account";
+import { Link, useRouter } from "@/i18n/navigation";
+import { cancelOrderAction, cancelVisitAction, pauseOrderAction, rescheduleInfoAction, rescheduleVisitAction, resumeOrderAction, reviewAction } from "@/server/actions/account";
 import { Sheet } from "@/components/ui/Sheet";
-import { SlotPicker } from "@/components/booking/SlotPicker";
+import { SlotPicker, type SlotMaster } from "@/components/booking/SlotPicker";
 import { addDays, ymd } from "@/lib/time";
 
 export function OrderActions({ order }: { order: { id: string; kind: string; status: string } }) {
@@ -35,6 +35,8 @@ export function OrderActions({ order }: { order: { id: string; kind: string; sta
   );
 }
 
+type RescheduleInfo = { allowChooseMaster: boolean; masters: SlotMaster[]; currentMasterId: string | null };
+
 export function VisitActions({ visit, order, freeCancelHours, horizonDays }: { visit: { id: string; status: string; scheduledAt: string | null; hasReview: boolean }; order: { kind: string; status: string; serviceId: string; durationMin: number }; freeCancelHours: number; horizonDays: number }) {
   const t = useTranslations("order");
   const tc = useTranslations("common");
@@ -42,21 +44,28 @@ export function VisitActions({ visit, order, freeCancelHours, horizonDays }: { v
   const router = useRouter();
   const [pending, start] = useTransition();
   const [sheet, setSheet] = useState<"reschedule" | "cancel" | "review" | null>(null);
-  const [pick, setPick] = useState<{ date: string; time: string | null }>({ date: "", time: null });
+  const [pick, setPick] = useState<{ date: string; time: string | null; masterId: string | null }>({ date: "", time: null, masterId: null });
   const [rating, setRating] = useState(5);
   const [text, setText] = useState("");
   const [err, setErr] = useState<string>();
   const [thanks, setThanks] = useState(false);
+  const [rescheduleInfo, setRescheduleInfo] = useState<RescheduleInfo | null>(null);
 
   const late = visit.scheduledAt ? new Date(visit.scheduledAt).getTime() - Date.now() < freeCancelHours * 3600_000 : false;
   const active = ["ACTIVE", "PAUSED"].includes(order.status);
   const canChange = active && ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"].includes(visit.status);
   const close = () => { setSheet(null); setErr(undefined); };
 
+  function openReschedule() {
+    setSheet("reschedule");
+    // Загружаем список мастеров для листа переноса
+    rescheduleInfoAction(visit.id).then(setRescheduleInfo).catch(() => {});
+  }
+
   return (
     <div className="mt-2 flex flex-wrap gap-2">
-      {canChange && visit.status === "UNSCHEDULED" && <button className="btn-dark btn-sm" onClick={() => setSheet("reschedule")}>{t("schedule")}</button>}
-      {canChange && visit.status !== "UNSCHEDULED" && !late && <button className="btn-outline btn-sm" onClick={() => setSheet("reschedule")}>{t("reschedule")}</button>}
+      {canChange && visit.status === "UNSCHEDULED" && <button className="btn-dark btn-sm" onClick={openReschedule}>{t("schedule")}</button>}
+      {canChange && visit.status !== "UNSCHEDULED" && !late && <button className="btn-outline btn-sm" onClick={openReschedule}>{t("reschedule")}</button>}
       {canChange && visit.status !== "UNSCHEDULED" && !late && <button className="btn-ghost btn-sm text-bad" onClick={() => setSheet("cancel")}>{order.kind === "SUBSCRIPTION" ? t("skipVisit") : t("cancelVisit")}</button>}
       {canChange && visit.status !== "UNSCHEDULED" && late && <p className="text-xs text-muted">{t("lateCancel", { hours: freeCancelHours })}</p>}
       {visit.status === "DONE" && !visit.hasReview && !thanks && <button className="btn-outline btn-sm" onClick={() => setSheet("review")}><Star size={14} /> {t("leaveReview")}</button>}
@@ -64,11 +73,21 @@ export function VisitActions({ visit, order, freeCancelHours, horizonDays }: { v
 
       <Sheet open={sheet === "reschedule"} onClose={close} title={visit.status === "UNSCHEDULED" ? t("schedule") : t("reschedule")}
         footer={<><button className="btn-primary w-full" disabled={pending || !pick.time} onClick={() => start(async () => {
-          const r = await rescheduleVisitAction(visit.id, pick.date, pick.time!);
+          const r = await rescheduleVisitAction(visit.id, pick.date, pick.time!, pick.masterId);
           if (!r.ok) return setErr(r.error === "slot_taken" ? tb("errors.slot_taken") : tc("error"));
           close(); router.refresh();
         })}>{tc("done")}</button>{err && <p className="mt-2 text-sm text-bad">{err}</p>}</>}>
-        {sheet === "reschedule" && <SlotPicker serviceId={order.serviceId} durationMin={order.durationMin} horizonDays={horizonDays} onPick={(date, time) => setPick({ date, time })} />}
+        {sheet === "reschedule" && (
+          <SlotPicker
+            serviceId={order.serviceId}
+            durationMin={order.durationMin}
+            horizonDays={horizonDays}
+            masters={rescheduleInfo?.masters}
+            currentMasterId={rescheduleInfo?.currentMasterId}
+            allowChooseMaster={rescheduleInfo?.allowChooseMaster}
+            onPick={(date, time, masterId) => setPick({ date, time, masterId: masterId ?? null })}
+          />
+        )}
       </Sheet>
 
       <Sheet open={sheet === "cancel"} onClose={close} title={t("cancelConfirm")} footer={<div className="flex gap-2"><button className="btn-outline flex-1" onClick={close}>{tc("no")}</button><button className="btn-primary flex-1 bg-bad" disabled={pending} onClick={() => start(async () => { const r = await cancelVisitAction(visit.id); if (!r.ok) return setErr(tc("error")); close(); router.refresh(); })}>{tc("yes")}</button></div>}>
@@ -84,6 +103,176 @@ export function VisitActions({ visit, order, freeCancelHours, horizonDays }: { v
         <textarea className="input min-h-28 py-2" placeholder={t("reviewPlaceholder")} value={text} onChange={(e) => setText(e.target.value)} />
         {err && <p className="mt-2 text-sm text-bad">{err}</p>}
       </Sheet>
+    </div>
+  );
+}
+
+/** Главные кнопки действий трекера заказа: перенос, отмена, отзыв, «заказать снова» */
+export function OrderTrackerActions({
+  order,
+  upcomingVisit,
+  reviewVisit,
+  cancelDeadline,
+  freeCancelHours,
+  horizonDays,
+}: {
+  order: { id: string; kind: string; status: string; serviceId: string; durationMin: number; serviceSlug: string };
+  upcomingVisit: { id: string; status: string; scheduledAt: string | null } | null;
+  reviewVisit: { id: string } | null;
+  cancelDeadline: { free: boolean; label: string } | null;
+  freeCancelHours: number;
+  horizonDays: number;
+}) {
+  const t = useTranslations("order");
+  const tc = useTranslations("common");
+  const tb = useTranslations("booking");
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [sheet, setSheet] = useState<"reschedule" | "cancel" | "pause" | "review" | null>(null);
+  const [pick, setPick] = useState<{ date: string; time: string | null; masterId: string | null }>({ date: "", time: null, masterId: null });
+  const [rating, setRating] = useState(5);
+  const [text, setText] = useState("");
+  const [until, setUntil] = useState(addDays(ymd(new Date()), 14));
+  const [err, setErr] = useState<string>();
+  const [thanks, setThanks] = useState(false);
+  const [rescheduleInfo, setRescheduleInfo] = useState<RescheduleInfo | null>(null);
+
+  const isActive = ["ACTIVE", "PAUSED"].includes(order.status);
+  const isDone = order.status === "COMPLETED" || order.status === "CANCELLED";
+  const canReschedule = isActive && upcomingVisit != null && ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"].includes(upcomingVisit.status);
+  const isUnscheduled = upcomingVisit?.status === "UNSCHEDULED";
+  const late = upcomingVisit?.scheduledAt ? new Date(upcomingVisit.scheduledAt).getTime() - Date.now() < freeCancelHours * 3600_000 : false;
+  const close = () => { setSheet(null); setErr(undefined); };
+
+  function openReschedule() {
+    if (!upcomingVisit) return;
+    setSheet("reschedule");
+    rescheduleInfoAction(upcomingVisit.id).then(setRescheduleInfo).catch(() => {});
+  }
+
+  function doCancel() {
+    start(async () => {
+      let r: { ok: boolean; error?: string };
+      if (order.kind === "ONE_TIME" && upcomingVisit) {
+        r = await cancelVisitAction(upcomingVisit.id);
+      } else {
+        r = await cancelOrderAction(order.id);
+      }
+      if (!r.ok) return setErr(tc("error"));
+      close();
+      router.refresh();
+    });
+  }
+
+  if (!isActive && !isDone) return null;
+
+  return (
+    <div className="mt-4 space-y-2">
+      {/* Кнопки переноса и отмены */}
+      {isActive && (
+        <div className="flex gap-2">
+          {canReschedule && !late && (
+            <button className="btn-outline flex-1" onClick={openReschedule}>
+              {isUnscheduled ? t("schedule") : t("reschedule")}
+            </button>
+          )}
+          <div className="flex flex-1 flex-col gap-1">
+            <button
+              className="btn-outline w-full border-bad text-bad hover:bg-bad-50"
+              onClick={() => setSheet("cancel")}
+            >
+              {order.kind === "SUBSCRIPTION" ? t("cancelSubscription") : t("cancelOrder")}
+            </button>
+            {cancelDeadline && (
+              <p className={`text-xs ${cancelDeadline.free ? "text-ok" : "text-bad"}`}>
+                {cancelDeadline.free
+                  ? t("cancelFreeUntil", { datetime: cancelDeadline.label })
+                  : t("cancelPaid", { amount: cancelDeadline.label })}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Пауза / возобновление для подписки */}
+      {isActive && order.kind === "SUBSCRIPTION" && order.status === "ACTIVE" && (
+        <button className="btn-outline w-full" onClick={() => setSheet("pause")}>{t("pause")}</button>
+      )}
+      {isActive && order.kind === "SUBSCRIPTION" && order.status === "PAUSED" && (
+        <button className="btn-dark w-full" disabled={pending} onClick={() => start(async () => { await resumeOrderAction(order.id); router.refresh(); })}>
+          {t("resume")}
+        </button>
+      )}
+
+      {/* Оставить отзыв */}
+      {reviewVisit && !thanks && (
+        <button className="btn-primary w-full" onClick={() => setSheet("review")}>
+          <Star size={16} /> {t("leaveReview")}
+        </button>
+      )}
+      {thanks && <p className="text-sm text-ok">{t("reviewThanks")}</p>}
+
+      {/* Заказать снова */}
+      {isDone && (
+        <Link href={`/book/${order.serviceSlug}`} className="btn-outline flex w-full items-center justify-center">
+          {t("bookAgain")}
+        </Link>
+      )}
+
+      {/* Лист переноса */}
+      <Sheet open={sheet === "reschedule"} onClose={close} title={isUnscheduled ? t("schedule") : t("reschedule")}
+        footer={<><button className="btn-primary w-full" disabled={pending || !pick.time} onClick={() => start(async () => {
+          if (!upcomingVisit) return;
+          const r = await rescheduleVisitAction(upcomingVisit.id, pick.date, pick.time!, pick.masterId);
+          if (!r.ok) return setErr(r.error === "slot_taken" ? tb("errors.slot_taken") : tc("error"));
+          close(); router.refresh();
+        })}>{tc("done")}</button>{err && <p className="mt-2 text-sm text-bad">{err}</p>}</>}>
+        {sheet === "reschedule" && (
+          <SlotPicker
+            serviceId={order.serviceId}
+            durationMin={order.durationMin}
+            horizonDays={horizonDays}
+            masters={rescheduleInfo?.masters}
+            currentMasterId={rescheduleInfo?.currentMasterId}
+            allowChooseMaster={rescheduleInfo?.allowChooseMaster}
+            onPick={(date, time, masterId) => setPick({ date, time, masterId: masterId ?? null })}
+          />
+        )}
+      </Sheet>
+
+      {/* Лист отмены */}
+      <Sheet open={sheet === "cancel"} onClose={close} title={t("cancelConfirm")}
+        footer={<div className="flex gap-2">
+          <button className="btn-outline flex-1" onClick={close}>{tc("no")}</button>
+          <button className="btn-primary flex-1 bg-bad" disabled={pending} onClick={doCancel}>{tc("yes")}</button>
+        </div>}>
+        {err && <p className="text-sm text-bad">{err}</p>}
+      </Sheet>
+
+      {/* Лист паузы */}
+      <Sheet open={sheet === "pause"} onClose={close} title={t("pause")}
+        footer={<button className="btn-primary w-full" disabled={pending} onClick={() => start(async () => { await pauseOrderAction(order.id, until); close(); router.refresh(); })}>{tc("apply")}</button>}>
+        <label className="label">{t("pauseUntil")}</label>
+        <input type="date" className="input" min={addDays(ymd(new Date()), 1)} value={until} onChange={(e) => setUntil(e.target.value)} />
+      </Sheet>
+
+      {/* Лист отзыва */}
+      {reviewVisit && (
+        <Sheet open={sheet === "review"} onClose={close} title={t("yourReview")}
+          footer={<button className="btn-primary w-full" disabled={pending} onClick={() => start(async () => {
+            if (!reviewVisit) return;
+            const r = await reviewAction(reviewVisit.id, rating, text);
+            if (r.ok) { setThanks(true); close(); } else setErr(tc("error"));
+          })}>{t("sendReview")}</button>}>
+          <div className="mb-3 flex justify-center gap-2">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <button key={i} onClick={() => setRating(i)} aria-label={`${i}`}><Star size={36} className={i <= rating ? "fill-brand stroke-brand" : "stroke-line"} /></button>
+            ))}
+          </div>
+          <textarea className="input min-h-28 py-2" placeholder={t("reviewPlaceholder")} value={text} onChange={(e) => setText(e.target.value)} />
+          {err && <p className="mt-2 text-sm text-bad">{err}</p>}
+        </Sheet>
+      )}
     </div>
   );
 }

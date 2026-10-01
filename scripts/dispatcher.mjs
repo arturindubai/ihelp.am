@@ -25,6 +25,10 @@ const DATA = path.join(ROOT, "data", "workers");
 const DRY = process.argv.includes("--dry-run");
 fs.mkdirSync(DATA, { recursive: true });
 
+// --check: самопроверка загрузки (импорты и синтаксис). Используется в deploy/smoke.sh.
+// Если дошли сюда — скрипт загрузился без ошибок.
+if (process.argv.includes("--check")) { console.log("dispatcher: OK"); process.exit(0); }
+
 /** Сколько минут воркер может работать, прежде чем systemd его остановит */
 const LIMIT_MIN = { triage: 45, product: 60, designer: 60, dev: 100, nocode: 60, tester: 60, deployer: 75 };
 
@@ -84,6 +88,128 @@ const cc = (args) => {
   if (r.status !== 0) throw new Error((r.stderr || r.stdout).trim().slice(0, 300));
   return r.stdout;
 };
+
+/* ─── ИИ-очередь (ROUTE-8) ─── */
+
+/**
+ * Системные промпты по kind.
+ * Данные клиентов передаются минимально: только id мастеров, временные интервалы, адрес без имён.
+ * Подробнее — docs/specs/ai-assistant.md, docs/PERSONAL_DATA.md.
+ */
+const AI_SYSTEM_PROMPTS = {
+  echo: "Ты — тестовый эхо-агент iHelp. Получи JSON на входе и верни его поле \"text\" в поле \"output\". Ответь ТОЛЬКО валидным JSON без markdown и пояснений, например: {\"output\": \"значение\"}.",
+};
+
+/** Собрать промпт для claude -p: системная инструкция + вход */
+function buildAiPrompt(kind, input) {
+  const system = AI_SYSTEM_PROMPTS[kind] ?? `Обработай запрос kind="${kind}" и верни результат в поле "output". Ответь ТОЛЬКО валидным JSON.`;
+  return `${system}\n\nВвод:\n${JSON.stringify(input, null, 2)}`;
+}
+
+/**
+ * Обработать очередь AI-запросов.
+ * Берёт следующий queued-запрос и выполняет его inline через claude -p.
+ * Для каждого запроса: отметить running → запустить claude -p → записать результат.
+ * Максимум AI_MAX_PER_PASS запросов за один проход (защита от зависания диспетчера).
+ */
+const AI_MAX_PER_PASS = 3;
+const AI_TIMEOUT_MS = 3 * 60_000 + 5_000; // 3 минуты + запас
+
+async function processAiQueue() {
+  const token = envValue("CLAUDE_CODE_OAUTH_TOKEN");
+
+  for (let i = 0; i < AI_MAX_PER_PASS; i++) {
+    // Взять следующий queued-запрос
+    let req = null;
+    try {
+      const res = await fetch(`${URL_BASE}?${new URLSearchParams({ resource: "ai-queue" })}`, {
+        headers: { "x-cc-key": KEY },
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await res.json().catch(() => ({}));
+      req = data.request ?? null;
+    } catch (e) {
+      log("! ai-queue: не удалось получить запрос:", String(e).slice(0, 120));
+      break;
+    }
+
+    if (!req) break; // очередь пуста
+
+    // Отметить запрос как запущенный
+    try {
+      await api({ action: "ai-queue-start", id: req.id });
+    } catch (e) {
+      log(`! ai-req ${req.id}: не удалось отметить running — ${String(e).slice(0, 120)}`);
+      continue;
+    }
+
+    // Проверить вход в подписку
+    if (!token) {
+      const errText = "Подписка Claude недоступна: нет CLAUDE_CODE_OAUTH_TOKEN. Войти: scripts/claude-login.sh на сервере.";
+      await api({ action: "ai-queue-fail", id: req.id, error: errText, loginError: true }).catch(() => null);
+      log(`✗ ai-req ${req.id} (${req.kind}): нет входа в Claude`);
+      break; // все запросы упадут с той же причиной — не тратим время
+    }
+
+    // Записать промпт
+    const promptFile = path.join(DATA, `aireq-${req.id}.prompt`);
+    try {
+      fs.writeFileSync(promptFile, buildAiPrompt(req.kind, req.input));
+    } catch (e) {
+      await api({ action: "ai-queue-fail", id: req.id, error: `Не удалось записать промпт: ${String(e).slice(0, 200)}` }).catch(() => null);
+      continue;
+    }
+
+    // Запустить claude -p без инструментов
+    const claudeEnv = {
+      ...process.env,
+      CLAUDE_CODE_OAUTH_TOKEN: token,
+      HOME: "/root",
+      PATH: process.env.PATH || "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    };
+    delete claudeEnv.ANTHROPIC_API_KEY;
+    delete claudeEnv.ANTHROPIC_AUTH_TOKEN;
+    delete claudeEnv.ANTHROPIC_BASE_URL;
+    delete claudeEnv.CLAUDE_CODE_USE_BEDROCK;
+    delete claudeEnv.CLAUDE_CODE_USE_VERTEX;
+
+    const promptContent = fs.readFileSync(promptFile, "utf8");
+    const r = sh(
+      "claude",
+      ["-p", "--model", "sonnet", "--output-format", "json", "--permission-mode", "dontAsk", "--strict-mcp-config", "--allowedTools", ""],
+      { env: claudeEnv, timeout: AI_TIMEOUT_MS, input: promptContent },
+    );
+
+    let result = null;
+    try { result = JSON.parse(r.stdout); } catch {}
+
+    const errOutput = r.stderr?.trim() ?? "";
+    const stdoutText = r.stdout?.trim() ?? "";
+
+    if (!result || result.is_error) {
+      const rawError = (result?.result ?? errOutput) || stdoutText || "Ошибка выполнения";
+      const errText = String(rawError).slice(0, 1000);
+      // Зеркало needsLoginPause из src/lib/login-pause.ts: только при ошибочных статусах
+      const aiStatus = r.error?.code === "ETIMEDOUT" ? "timeout" : "failed";
+      const loginErr = ["failed", "timeout"].includes(aiStatus) && /not logged in|\/login|oauth|failed to authenticate|authentication_error|\b401\b/i.test(errText);
+      await api({ action: "ai-queue-fail", id: req.id, error: errText, loginError: loginErr }).catch(() => null);
+      log(`✗ ai-req ${req.id} (${req.kind}): ${aiStatus}${loginErr ? " (нет входа)" : ""}`);
+      if (loginErr) break;
+      continue;
+    }
+
+    // Подсчитать токены
+    const u = result.usage ?? {};
+    const tokens = (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.output_tokens ?? 0);
+
+    // Разобрать ответ модели (должен быть JSON)
+    let output = null;
+    try { output = JSON.parse(String(result.result)); } catch { output = { raw: String(result.result).slice(0, 2000) }; }
+
+    await api({ action: "ai-queue-done", id: req.id, output, tokens }).catch(() => null);
+    log(`✓ ai-req ${req.id} (${req.kind}): done, ${tokens} токенов`);
+  }
+}
 
 /** Текущие коммиты веток задач в GitHub: тестировщик и деплоер работают только с отправленным кодом */
 function heads() {
@@ -167,8 +293,15 @@ async function reconcile(running, stopAll) {
     } catch {}
     const err = readText(path.join(DATA, `${run.id}.err`)).trim();
     const minutes = (Date.now() - Date.parse(run.startedAt)) / 60000;
-    const status = stopped ? "stopped" : outcome(result, minutes >= LIMIT_MIN[run.pool] - 1, err);
-    const summary = ((result?.result ? String(result.result) : err) || "нет ответа").trim().slice(-1500);
+    // Зависший запуск: юнит не активен, файлов результата нет, запуск висит дольше лимита пула.
+    // Возникает, когда диспетчер не мог запустить проход (напр. синтаксическая ошибка скрипта)
+    // и не успел сверить запуски вовремя — вкладка «Воркеры» показывала их как «работающих».
+    const stale = !stopped && !result && !err && minutes > (LIMIT_MIN[run.pool] ?? 60) + 2;
+    if (stale) log(`⚰ ${run.agent} ${run.taskKey ?? "—"}: зависший запуск (~${Math.round(minutes)} мин без прохода диспетчера)`);
+    const status = stopped ? "stopped" : stale ? "failed" : outcome(result, minutes >= LIMIT_MIN[run.pool] - 1, err);
+    const summary = stale
+      ? `зависший запуск: диспетчер не делал проходы ~${Math.round(minutes)} мин, юнит systemd больше не существует`
+      : ((result?.result ? String(result.result) : err) || "нет ответа").trim().slice(-1500);
     // Отказы прав — в самый конец лога, после обрезки: по этому разделу «Здоровье» считает долю запусков с отказами (DEV-79).
     // В раздел идёт только форма команды, без текста аргументов и ключей
     const denials = formatDenials(result?.permission_denials);
@@ -315,6 +448,9 @@ async function main() {
     const seenAgents = new Set(byButton.map((a) => `${a.pool}|${a.agent}`));
     plan = { ...plan2, actions: [...byButton, ...plan2.actions.filter((a) => !seenAgents.has(`${a.pool}|${a.agent}`))] };
   }
+  // Обработать очередь AI-запросов (ROUTE-8): короткие задачи выполняются inline
+  await processAiQueue().catch((e) => log("! processAiQueue упал:", String(e).slice(0, 200)));
+
   for (const u of plan.unmet ?? []) log(`· «Запустить сейчас» не выполнено — ${u}`);
   const paused = plan.config.pausedUntil && Date.parse(plan.config.pausedUntil) > Date.now();
   if (!plan.actions.length) return log(paused ? `на паузе до ${plan.config.pausedUntil}` : plan.config.enabled ? "работы нет" : "воркеры выключены в Control Center");

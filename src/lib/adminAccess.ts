@@ -1,16 +1,16 @@
 import type { Role } from "@prisma/client";
 
-export type Section = "control" | "dashboard" | "finance" | "orders" | "schedule" | "clients" | "reviews" | "services" | "masters" | "promos" | "banners" | "pages" | "content" | "translations" | "settings" | "staff" | "log" | "analytics";
+export type Section = "control" | "dashboard" | "orders" | "schedule" | "clients" | "reviews" | "services" | "masters" | "promos" | "banners" | "pages" | "content" | "translations" | "settings" | "staff" | "log" | "analytics" | "finance";
 
 /** 16 разделов, доступных для тонкой настройки per-person поверх роли. settings и staff — только у OWNER */
-export const DELEGATABLE_SECTIONS: Section[] = ["control", "dashboard", "finance", "orders", "schedule", "clients", "reviews", "services", "masters", "promos", "banners", "pages", "content", "translations", "analytics", "log"];
+export const DELEGATABLE_SECTIONS: Section[] = ["control", "dashboard", "orders", "schedule", "clients", "reviews", "services", "masters", "promos", "banners", "pages", "content", "translations", "analytics", "finance", "log"];
 
 const ACCESS: Record<Role, Section[]> = {
   CLIENT: [],
   MASTER: [],
   OPERATOR: ["dashboard", "orders", "schedule", "clients", "reviews"],
-  ADMIN: ["control", "dashboard", "finance", "orders", "schedule", "clients", "reviews", "services", "masters", "promos", "banners", "pages", "content", "translations", "analytics", "log"],
-  OWNER: ["control", "dashboard", "finance", "orders", "schedule", "clients", "reviews", "services", "masters", "promos", "banners", "pages", "content", "translations", "analytics", "settings", "staff", "log"],
+  ADMIN: ["control", "dashboard", "orders", "schedule", "clients", "reviews", "services", "masters", "promos", "banners", "pages", "content", "translations", "analytics", "finance", "log"],
+  OWNER: ["control", "dashboard", "orders", "schedule", "clients", "reviews", "services", "masters", "promos", "banners", "pages", "content", "translations", "analytics", "finance", "settings", "staff", "log"],
 };
 
 export function sectionsFor(role: Role): Section[] {
