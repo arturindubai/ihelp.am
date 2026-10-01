@@ -38,6 +38,7 @@
     "upcoming": "Предстоящие"
   },
   "address": {
+    "addAddress": "Добавить адрес",
     "apartment": "Квартира",
     "aptShort": "кв. {n}",
     "building": "Дом",
@@ -54,7 +55,10 @@
     "makeDefault": "Сделать основным",
     "saveAddress": "Сохранить адрес",
     "select": "Выберите район",
-    "street": "Улица"
+    "street": "Улица",
+    "typeHome": "Дом",
+    "typeOther": "Другое",
+    "typeWork": "Работа"
   },
   "admin": {
     "analytics": {
@@ -422,7 +426,34 @@
         "revenue": "Выручка",
         "title": "Финансовая аналитика",
         "toCollect": "К сдаче",
-        "total": "Итого"
+        "total": "Итого",
+        "tx": {
+          "colAmount": "Сумма",
+          "colClient": "Клиент",
+          "colDate": "Дата",
+          "colMaster": "Мастер",
+          "colPayment": "Оплата",
+          "colService": "Услуга",
+          "colType": "Тип",
+          "empty": "Нет операций за выбранный период",
+          "exportCsv": "Экспорт CSV",
+          "loadMore": "Загрузить ещё",
+          "loadMoreLoading": "Загрузка…",
+          "masterAll": "Все мастера",
+          "paymentCard": "Картой",
+          "paymentCash": "Наличными",
+          "serviceAll": "Все услуги",
+          "title": "Список операций",
+          "typeAll": "Все типы",
+          "typeLabel": {
+            "ONE_TIME": "Разовый",
+            "PACKAGE": "Пакет",
+            "SUBSCRIPTION": "Подписка"
+          },
+          "typeOneTime": "Разовые",
+          "typePackage": "Пакеты",
+          "typeSubscription": "Подписки"
+        }
       },
       "form": {
         "delete": "Удалить",
@@ -2039,11 +2070,11 @@
       "google_not_linked": "Этот Google-аккаунт не привязан. Войдите по номеру телефона и укажите эту почту в профиле",
       "google_off": "Вход через Google сейчас выключен",
       "google_signup_phone_taken": "Этот телефон уже привязан к другому аккаунту",
-      "phone_taken": "Этот номер уже привязан к другому аккаунту",
       "google_signup_ticket_expired": "Ссылка на регистрацию устарела — войдите через Google ещё раз",
       "google_state": "Сессия входа устарела, попробуйте ещё раз",
       "name": "Укажите имя",
       "phone": "Проверьте номер телефона",
+      "phone_taken": "Этот номер уже привязан к другому аккаунту",
       "telegram_conflict": "Этот Telegram уже привязан к другому аккаунту",
       "telegram_failed": "Не удалось войти через Telegram. Попробуйте ещё раз",
       "telegram_not_linked": "Этот Telegram не привязан ни к одному аккаунту",
@@ -2056,6 +2087,7 @@
     "google": "Войти через Google",
     "googleHint": "Для сотрудников: вход по рабочей почте, указанной в профиле",
     "googleSignupEmailConfirmed": "Email {email} подтверждён Google",
+    "googleSignupNoChannels": "Для завершения регистрации нужен номер телефона, но каналы доставки кодов сейчас недоступны. Войдите по email или попробуйте позже.",
     "googleSignupPhoneHint": "Введите номер телефона, чтобы завершить регистрацию",
     "googleSignupTitle": "Регистрация через Google",
     "method": {

@@ -38,6 +38,7 @@
     "upcoming": "Upcoming"
   },
   "address": {
+    "addAddress": "Add address",
     "apartment": "Apartment",
     "aptShort": "apt. {n}",
     "building": "Building",
@@ -54,7 +55,10 @@
     "makeDefault": "Set as default",
     "saveAddress": "Save address",
     "select": "Select district",
-    "street": "Street"
+    "street": "Street",
+    "typeHome": "Home",
+    "typeOther": "Other",
+    "typeWork": "Work"
   },
   "admin": {
     "banners": {
@@ -393,7 +397,34 @@
         "revenue": "Revenue",
         "title": "Finance analytics",
         "toCollect": "To collect",
-        "total": "Total"
+        "total": "Total",
+        "tx": {
+          "colAmount": "Amount",
+          "colClient": "Client",
+          "colDate": "Date",
+          "colMaster": "Master",
+          "colPayment": "Payment",
+          "colService": "Service",
+          "colType": "Type",
+          "empty": "No transactions in the selected period",
+          "exportCsv": "Export CSV",
+          "loadMore": "Load more",
+          "loadMoreLoading": "Loading…",
+          "masterAll": "All masters",
+          "paymentCard": "Card",
+          "paymentCash": "Cash",
+          "serviceAll": "All services",
+          "title": "Transactions",
+          "typeAll": "All types",
+          "typeLabel": {
+            "ONE_TIME": "One-time",
+            "PACKAGE": "Package",
+            "SUBSCRIPTION": "Subscription"
+          },
+          "typeOneTime": "One-time",
+          "typePackage": "Packages",
+          "typeSubscription": "Subscriptions"
+        }
       },
       "form": {
         "delete": "Delete",
@@ -1940,11 +1971,11 @@
       "google_not_linked": "This Google account is not linked. Sign in with your phone and add this email in your profile",
       "google_off": "Google sign-in is currently disabled",
       "google_signup_phone_taken": "This phone number is already linked to another account",
-      "phone_taken": "This phone number is already linked to another account",
       "google_signup_ticket_expired": "Registration link expired — please sign in with Google again",
       "google_state": "Sign-in session expired, please try again",
       "name": "Please enter your name",
       "phone": "Please check the phone number",
+      "phone_taken": "This phone number is already linked to another account",
       "telegram_conflict": "This Telegram account is already linked to another account",
       "telegram_failed": "Failed to sign in with Telegram. Please try again",
       "telegram_not_linked": "This Telegram account is not linked to any account",
@@ -1957,6 +1988,7 @@
     "google": "Sign in with Google",
     "googleHint": "For staff: sign in with your work email listed in your profile",
     "googleSignupEmailConfirmed": "Email {email} confirmed by Google",
+    "googleSignupNoChannels": "A phone number is needed to complete registration, but code delivery is unavailable. Sign in with email or try again later.",
     "googleSignupPhoneHint": "Enter your phone number to complete registration",
     "googleSignupTitle": "Sign up with Google",
     "method": {

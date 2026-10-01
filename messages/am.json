@@ -36,6 +36,7 @@
     "upcoming": ""
   },
   "address": {
+    "addAddress": "",
     "apartment": "Բնակարան",
     "aptShort": "",
     "building": "Շենք",
@@ -52,7 +53,10 @@
     "makeDefault": "",
     "saveAddress": "",
     "select": "",
-    "street": "Փողոց"
+    "street": "Փողոց",
+    "typeHome": "",
+    "typeOther": "",
+    "typeWork": ""
   },
   "admin": {
     "banners": {
@@ -553,6 +557,7 @@
       "clients": "",
       "control": "Control Center",
       "dashboard": "",
+      "finance": "",
       "log": "",
       "masters": "",
       "menu": "",
@@ -1066,11 +1071,11 @@
       "google_not_linked": "",
       "google_off": "",
       "google_signup_phone_taken": "",
-      "phone_taken": "",
       "google_signup_ticket_expired": "",
       "google_state": "",
       "name": "",
       "phone": "",
+      "phone_taken": "",
       "telegram_conflict": "",
       "telegram_failed": "",
       "telegram_not_linked": "",
@@ -1083,6 +1088,7 @@
     "google": "",
     "googleHint": "",
     "googleSignupEmailConfirmed": "",
+    "googleSignupNoChannels": "",
     "googleSignupPhoneHint": "",
     "googleSignupTitle": "",
     "method": {

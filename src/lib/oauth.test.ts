@@ -11,6 +11,11 @@ describe("вход через Google", () => {
     expect(verifyState(state, SECRET)).toBe("abc|/admin");
   });
 
+  it("значение с точками (next-путь) корректно подписывается и проверяется", () => {
+    const state = signState("abc|/order/1.2.3", SECRET);
+    expect(verifyState(state, SECRET)).toBe("abc|/order/1.2.3");
+  });
+
   it("подделанное или чужое состояние отклоняется", () => {
     const state = signState("abc", SECRET);
     expect(verifyState(state, "другой-секрет")).toBeNull();

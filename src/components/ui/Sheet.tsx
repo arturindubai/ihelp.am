@@ -1,9 +1,11 @@
 "use client";
 import { useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { X } from "lucide-react";
 
 /** Нижняя шторка на мобильных, модальное окно на десктопе */
 export function Sheet({ open, onClose, title, children, footer }: { open: boolean; onClose: () => void; title?: React.ReactNode; children: React.ReactNode; footer?: React.ReactNode }) {
+  const tc = useTranslations("common");
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -18,11 +20,11 @@ export function Sheet({ open, onClose, title, children, footer }: { open: boolea
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
-      <button aria-label="close" className="absolute inset-0 bg-overlay/50" onClick={onClose} />
+      <button aria-label={tc("close")} className="absolute inset-0 bg-overlay/50" onClick={onClose} />
       <div className="relative flex max-h-[88dvh] w-full flex-col rounded-t-3xl bg-paper sm:max-w-[520px] sm:rounded-3xl">
         <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-2">
           <div className="h2 pt-1">{title}</div>
-          <button onClick={onClose} className="grid size-9 shrink-0 place-items-center rounded-full bg-surface" aria-label="close">
+          <button onClick={onClose} className="grid size-9 shrink-0 place-items-center rounded-full bg-surface" aria-label={tc("close")}>
             <X size={18} />
           </button>
         </div>
