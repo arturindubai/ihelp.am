@@ -8,6 +8,8 @@
     "emailNotVerified": "Email not verified — you can't sign in with a code",
     "emailRemindersLabel": "Receive visit reminders and review requests by email",
     "emailRemindersTitle": "Email notifications",
+    "emailStatusUnverified": "Not verified",
+    "emailStatusVerified": "Verified",
     "emailVerified": "Email verified",
     "googleConnect": "Connect Google",
     "googleEmailMismatch": "Your profile already has a different email; change it manually first",
@@ -21,6 +23,13 @@
       "en": "English",
       "ru": "Русский"
     },
+    "loginMethodsTitle": "Login methods",
+    "methodConnect": "Connect",
+    "methodEmail": "Email",
+    "methodGoogle": "Google",
+    "methodLinked": "Connected",
+    "methodNotLinked": "Not connected",
+    "methodTelegram": "Telegram",
     "name": "Name",
     "noAddresses": "No addresses yet",
     "noOrders": "Your orders will appear here",
@@ -38,6 +47,7 @@
     "upcoming": "Upcoming"
   },
   "address": {
+    "addAddress": "Add address",
     "apartment": "Apartment",
     "aptShort": "apt. {n}",
     "building": "Building",
@@ -54,7 +64,10 @@
     "makeDefault": "Set as default",
     "saveAddress": "Save address",
     "select": "Select district",
-    "street": "Street"
+    "street": "Street",
+    "typeHome": "Home",
+    "typeOther": "Other",
+    "typeWork": "Work"
   },
   "admin": {
     "banners": {
@@ -393,7 +406,34 @@
         "revenue": "Revenue",
         "title": "Finance analytics",
         "toCollect": "To collect",
-        "total": "Total"
+        "total": "Total",
+        "tx": {
+          "colAmount": "Amount",
+          "colClient": "Client",
+          "colDate": "Date",
+          "colMaster": "Master",
+          "colPayment": "Payment",
+          "colService": "Service",
+          "colType": "Type",
+          "empty": "No transactions in the selected period",
+          "exportCsv": "Export CSV",
+          "loadMore": "Load more",
+          "loadMoreLoading": "Loading…",
+          "masterAll": "All masters",
+          "paymentCard": "Card",
+          "paymentCash": "Cash",
+          "serviceAll": "All services",
+          "title": "Transactions",
+          "typeAll": "All types",
+          "typeLabel": {
+            "ONE_TIME": "One-time",
+            "PACKAGE": "Package",
+            "SUBSCRIPTION": "Subscription"
+          },
+          "typeOneTime": "One-time",
+          "typePackage": "Packages",
+          "typeSubscription": "Subscriptions"
+        }
       },
       "form": {
         "delete": "Delete",
@@ -1965,6 +2005,7 @@
     "google": "Sign in with Google",
     "googleHint": "For staff: sign in with your work email listed in your profile",
     "googleSignupEmailConfirmed": "Email {email} confirmed by Google",
+    "googleSignupNoChannels": "A phone number is needed to complete registration, but code delivery is unavailable. Sign in with email or try again later.",
     "googleSignupPhoneHint": "Enter your phone number to complete registration",
     "googleSignupTitle": "Sign up with Google",
     "method": {
@@ -2109,11 +2150,13 @@
     "formatsTitle": "Choose a cleaning format",
     "newService": "New service",
     "notifyAlready": "We already have your contact",
+    "notifyAutoSuccess": "You're on the list! We'll notify you at your contact when booking opens.",
     "notifyButton": "Notify me",
     "notifyConsent": "By clicking the button, you agree to your contact being processed to notify you at launch. <privacy>Privacy policy</privacy>",
     "notifyHint": "We'll send only one message when we launch",
     "notifyInvalid": "Enter a phone number or e-mail",
     "notifyPlaceholder": "+374 … or name@mail.com",
+    "notifyPopupHint": "We're preparing this service in Yerevan. Leave your contact — we'll be the first to tell you when we launch.",
     "notifySubtitle": "Phone or e-mail — your choice",
     "notifySuccess": "You're on the list! We'll message you when booking opens.",
     "notifyTitle": "Notify me at launch",

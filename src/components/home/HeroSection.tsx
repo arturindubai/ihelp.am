@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Img } from "@/components/Img";
 import { Search } from "lucide-react";
 import { SubcategoriesSheet } from "./SubcategoriesSheet";
+import { NotifyPopup } from "@/components/catalog/NotifyPopup";
 import { locales, defaultLocale } from "@/i18n/locales";
 import { amd } from "@/lib/format";
 
@@ -47,15 +48,17 @@ type Props = {
   comingSoonLabel: string;
   categories: Category[];
   slogan: string;
+  autoMode: boolean;
 };
 
-export function HeroSection({ heroTitle, searchPlaceholder, comingSoonLabel, categories, slogan }: Props) {
+export function HeroSection({ heroTitle, searchPlaceholder, comingSoonLabel, categories, slogan, autoMode }: Props) {
   const router = useRouter();
   const th = useTranslations("home");
   const tc = useTranslations("common");
   const pathname = usePathname();
   const inputRef = useRef<HTMLInputElement>(null);
   const [openSlug, setOpenSlug] = useState<string | null>(null);
+  const [openNotifySlug, setOpenNotifySlug] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -207,6 +210,18 @@ export function HeroSection({ heroTitle, searchPlaceholder, comingSoonLabel, cat
             </div>
           );
 
+          if (c.comingSoon) {
+            return (
+              <button
+                key={c.slug}
+                type="button"
+                onClick={() => setOpenNotifySlug(c.slug)}
+                className={wrapperClass}
+              >
+                {tile}
+              </button>
+            );
+          }
           if (c.subcategories.length > 0) {
             return (
               <button
@@ -244,6 +259,14 @@ export function HeroSection({ heroTitle, searchPlaceholder, comingSoonLabel, cat
           comingSoonLabel={comingSoonLabel}
         />
       )}
+
+      <NotifyPopup
+        open={openNotifySlug !== null}
+        onClose={() => setOpenNotifySlug(null)}
+        categorySlug={openNotifySlug}
+        categoryTitle={categories.find((c) => c.slug === openNotifySlug)?.title ?? ""}
+        autoMode={autoMode}
+      />
     </section>
   );
 }

@@ -1,5 +1,5 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { CalendarDays, ChevronRight, LayoutDashboard, Briefcase } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, LayoutDashboard, Briefcase } from "lucide-react";
 import { Link, redirect } from "@/i18n/navigation";
 import { getCurrentUser, STAFF_ROLES } from "@/server/auth";
 import { getAccountAddresses } from "@/server/services/pages/account";
@@ -14,13 +14,16 @@ export default async function AccountPage({ params, searchParams }: { params: Pr
   setRequestLocale(locale);
   const user = await getCurrentUser();
   if (!user) return redirect({ href: "/login?next=/account", locale });
-  const [addresses, settings, t, tn] = await Promise.all([getAccountAddresses(user.id), getSettings(), getTranslations("account"), getTranslations("nav")]);
+  const [addresses, settings, t, tn, tc] = await Promise.all([getAccountAddresses(user.id), getSettings(), getTranslations("account"), getTranslations("nav"), getTranslations("common")]);
   const telegramLinkEnabled = settings.telegramWidget.enabled && !!settings.notify.telegramBotToken && !!settings.notify.telegramBotUsername;
   const telegramError = telegram_error && ["state", "failed", "conflict", "off"].includes(telegram_error) ? telegram_error : null;
   const googleEnabled = settings.google.enabled && !!settings.google.clientId;
   const googleLinkError = google_link_error && ["google_used", "email_mismatch", "google_off"].includes(google_link_error) ? google_link_error : null;
   return (
     <div className="container-m pt-4">
+      <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink mb-3">
+        <ChevronLeft size={16} /> {tc("back")}
+      </Link>
       <h1 className="h1 mb-4">{user.name || t("title")}</h1>
       <PromoSlot placement="CLIENT_CABINET" locale={locale} />
       <div className="card mb-4 divide-y divide-line">

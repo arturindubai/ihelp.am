@@ -28,7 +28,10 @@ export async function GET(req: Request) {
   jar.delete("g_state");
   const state = url.searchParams.get("state") ?? "";
   const code = url.searchParams.get("code") ?? "";
-  if (!code || !state || state !== saved || !verifyState(state, process.env.SESSION_SECRET || "dev")) return fail("google_state");
+  // Если Google вернул error (отмена, запрет организации и т.д.) — показываем понятную ошибку,
+  // а не «сессия устарела» (google_state), которое сбивает с толку при смене аккаунта.
+  if (!code) return fail(url.searchParams.get("error") ? "google_failed" : "google_state");
+  if (!state || state !== saved || !verifyState(state, process.env.SESSION_SECRET || "dev")) return fail("google_state");
 
   const profile = await exchangeGoogleCode(s, code);
   if (!profile || !profile.emailVerified) return fail("google_failed");

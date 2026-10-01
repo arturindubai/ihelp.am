@@ -8,6 +8,8 @@
     "emailNotVerified": "Email не подтверждён — по нему нельзя войти по коду",
     "emailRemindersLabel": "Получать напоминания о визитах и просьбы об отзыве по почте",
     "emailRemindersTitle": "Email-уведомления",
+    "emailStatusUnverified": "Не подтверждён",
+    "emailStatusVerified": "Подтверждён",
     "emailVerified": "Email подтверждён",
     "googleConnect": "Привязать Google",
     "googleEmailMismatch": "В профиле уже указан другой email; сначала измените его вручную",
@@ -21,6 +23,13 @@
       "en": "English",
       "ru": "Русский"
     },
+    "loginMethodsTitle": "Способы входа",
+    "methodConnect": "Привязать",
+    "methodEmail": "Email",
+    "methodGoogle": "Google",
+    "methodLinked": "Привязан",
+    "methodNotLinked": "Не привязан",
+    "methodTelegram": "Telegram",
     "name": "Имя",
     "noAddresses": "Адресов пока нет",
     "noOrders": "Здесь появятся ваши заказы",
@@ -38,6 +47,7 @@
     "upcoming": "Предстоящие"
   },
   "address": {
+    "addAddress": "Добавить адрес",
     "apartment": "Квартира",
     "aptShort": "кв. {n}",
     "building": "Дом",
@@ -54,7 +64,10 @@
     "makeDefault": "Сделать основным",
     "saveAddress": "Сохранить адрес",
     "select": "Выберите район",
-    "street": "Улица"
+    "street": "Улица",
+    "typeHome": "Дом",
+    "typeOther": "Другое",
+    "typeWork": "Работа"
   },
   "admin": {
     "analytics": {
@@ -422,7 +435,34 @@
         "revenue": "Выручка",
         "title": "Финансовая аналитика",
         "toCollect": "К сдаче",
-        "total": "Итого"
+        "total": "Итого",
+        "tx": {
+          "colAmount": "Сумма",
+          "colClient": "Клиент",
+          "colDate": "Дата",
+          "colMaster": "Мастер",
+          "colPayment": "Оплата",
+          "colService": "Услуга",
+          "colType": "Тип",
+          "empty": "Нет операций за выбранный период",
+          "exportCsv": "Экспорт CSV",
+          "loadMore": "Загрузить ещё",
+          "loadMoreLoading": "Загрузка…",
+          "masterAll": "Все мастера",
+          "paymentCard": "Картой",
+          "paymentCash": "Наличными",
+          "serviceAll": "Все услуги",
+          "title": "Список операций",
+          "typeAll": "Все типы",
+          "typeLabel": {
+            "ONE_TIME": "Разовый",
+            "PACKAGE": "Пакет",
+            "SUBSCRIPTION": "Подписка"
+          },
+          "typeOneTime": "Разовые",
+          "typePackage": "Пакеты",
+          "typeSubscription": "Подписки"
+        }
       },
       "form": {
         "delete": "Удалить",
@@ -2064,6 +2104,7 @@
     "google": "Войти через Google",
     "googleHint": "Для сотрудников: вход по рабочей почте, указанной в профиле",
     "googleSignupEmailConfirmed": "Email {email} подтверждён Google",
+    "googleSignupNoChannels": "Для завершения регистрации нужен номер телефона, но каналы доставки кодов сейчас недоступны. Войдите по email или попробуйте позже.",
     "googleSignupPhoneHint": "Введите номер телефона, чтобы завершить регистрацию",
     "googleSignupTitle": "Регистрация через Google",
     "method": {
@@ -2208,11 +2249,13 @@
     "formatsTitle": "Выберите формат уборки",
     "newService": "Новая услуга",
     "notifyAlready": "Мы уже получили ваш контакт",
+    "notifyAutoSuccess": "Записали! Уведомим по вашему контакту, как откроем запись.",
     "notifyButton": "Уведомить меня",
     "notifyConsent": "Нажимая кнопку, вы соглашаетесь на обработку контакта для уведомления о запуске. <privacy>Политика конфиденциальности</privacy>",
     "notifyHint": "Передадим только одно сообщение о запуске",
     "notifyInvalid": "Введите телефон или e-mail",
     "notifyPlaceholder": "+374 … или name@mail.com",
+    "notifyPopupHint": "Готовим услугу в Ереване. Оставьте контакт — сообщим первыми о запуске.",
     "notifySubtitle": "Телефон или e-mail — на выбор",
     "notifySuccess": "Записаны! Сообщим, когда откроем запись.",
     "notifyTitle": "Уведомить меня о запуске",

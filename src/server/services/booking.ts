@@ -141,7 +141,8 @@ export class BookingError extends Error {}
 /** Берёт транзакционную блокировку по (masterId, date) — исключает двойное бронирование одного слота */
 async function lockMasterDay(tx: Tx, masterId: string, dateStr: string) {
   const dateInt = parseInt(dateStr.replace(/-/g, ""), 10);
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${masterId}), ${dateInt})`;
+  // hashtext() → int4; dateInt приводим к int4, чтобы совпасть с перегрузкой (int4, int4)
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${masterId}), ${dateInt}::int4)`;
 }
 
 export async function createOrder(user: User, input: CreateOrderInput) {

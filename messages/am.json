@@ -6,6 +6,8 @@
     "emailCodeSent": "",
     "emailConfirm": "",
     "emailNotVerified": "",
+    "emailStatusUnverified": "",
+    "emailStatusVerified": "",
     "emailVerified": "",
     "googleConnect": "",
     "googleEmailMismatch": "",
@@ -19,6 +21,13 @@
       "en": "English",
       "ru": "Русский"
     },
+    "loginMethodsTitle": "",
+    "methodConnect": "",
+    "methodEmail": "",
+    "methodGoogle": "Google",
+    "methodLinked": "",
+    "methodNotLinked": "",
+    "methodTelegram": "Telegram",
     "name": "",
     "noAddresses": "",
     "noOrders": "",
@@ -36,6 +45,7 @@
     "upcoming": ""
   },
   "address": {
+    "addAddress": "",
     "apartment": "Բնակարան",
     "aptShort": "",
     "building": "Շենք",
@@ -52,7 +62,10 @@
     "makeDefault": "",
     "saveAddress": "",
     "select": "",
-    "street": "Փողոց"
+    "street": "Փողոց",
+    "typeHome": "",
+    "typeOther": "",
+    "typeWork": ""
   },
   "admin": {
     "banners": {
@@ -553,6 +566,7 @@
       "clients": "",
       "control": "Control Center",
       "dashboard": "",
+      "finance": "",
       "log": "",
       "masters": "",
       "menu": "",
@@ -1082,6 +1096,7 @@
     "google": "",
     "googleHint": "",
     "googleSignupEmailConfirmed": "",
+    "googleSignupNoChannels": "",
     "googleSignupPhoneHint": "",
     "googleSignupTitle": "",
     "method": {

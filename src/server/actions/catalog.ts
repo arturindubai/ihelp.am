@@ -6,6 +6,7 @@ import { isValidContact } from "@/lib/contactValidation";
 import { normalizeEmail } from "@/lib/email";
 import { normalizePhone } from "@/lib/phone";
 import { notifyNewInterest } from "@/server/services/serviceInterest";
+import { getCurrentUser } from "@/server/auth";
 
 const MAX_CONTACT_LEN = 100;
 const IP_HOURLY_LIMIT = 20;
@@ -58,4 +59,16 @@ export async function submitServiceInterest(
     }
     throw e;
   }
+}
+
+/** Автоматически регистрирует интерес авторизованного пользователя по его подтверждённому контакту */
+export async function autoNotifyInterest(slug: string): Promise<"ok" | "already" | "invalid"> {
+  const user = await getCurrentUser();
+  if (!user) return "invalid";
+
+  const contact = (user.email && user.emailVerifiedAt ? user.email : null) ?? user.phone ?? null;
+  if (!contact) return "invalid";
+
+  const result = await submitServiceInterest(slug, contact);
+  return result === "too_many" ? "ok" : result;
 }

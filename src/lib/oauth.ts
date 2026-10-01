@@ -27,7 +27,12 @@ export function signState(value: string, secret: string) {
 }
 
 export function verifyState(state: string, secret: string) {
-  const [value, exp, sig] = (state || "").split(".");
+  // Берём два последних сегмента как exp и sig: value может содержать точки (путь next=).
+  const parts = (state || "").split(".");
+  if (parts.length < 3) return null;
+  const sig = parts[parts.length - 1];
+  const exp = parts[parts.length - 2];
+  const value = parts.slice(0, parts.length - 2).join(".");
   if (!value || !exp || !sig) return null;
   if (Number(exp) < Date.now()) return null;
   const expected = crypto.createHmac("sha256", secret).update(`${value}.${exp}`).digest("hex");

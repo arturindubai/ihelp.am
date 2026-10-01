@@ -57,7 +57,7 @@ export default async function ServicePage({ params, searchParams }: { params: Pr
       <div className="container-m">
         <div className="relative -mx-4">
           {s.bannerImage ? <div className="relative aspect-[16/9] w-full"><Img src={s.bannerImage} fill sizes="(max-width: 768px) 100vw, 768px" className="object-cover" /></div> : <div className="h-14" />}
-          <Link href="/" className="absolute top-3 left-3 grid size-9 place-items-center rounded-full bg-paper shadow" aria-label="back">
+          <Link href="/" className="absolute top-3 left-3 grid size-9 place-items-center rounded-full bg-paper shadow" aria-label={tc("back")}>
             <ArrowLeft size={18} />
           </Link>
         </div>
@@ -85,7 +85,7 @@ export default async function ServicePage({ params, searchParams }: { params: Pr
     <div className="container-m">
       <div className="relative -mx-4">
         {s.bannerImage ? <div className="relative aspect-[16/9] w-full"><Img src={s.bannerImage} fill sizes="(max-width: 768px) 100vw, 768px" className="object-cover" /></div> : <div className="h-14" />}
-        <Link href={`/`} className="absolute top-3 left-3 grid size-9 place-items-center rounded-full bg-paper shadow" aria-label="back">
+        <Link href={`/`} className="absolute top-3 left-3 grid size-9 place-items-center rounded-full bg-paper shadow" aria-label={tc("back")}>
           <ArrowLeft size={18} />
         </Link>
       </div>

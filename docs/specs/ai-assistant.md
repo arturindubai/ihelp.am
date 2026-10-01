@@ -1,6 +1,6 @@
 # Спецификация: ИИ-помощник расписания
 
-Задача ROUTE-5 (L), часть 1 из 3 — очередь запросов.
+Задача ROUTE-5 (L): часть 1 (ROUTE-8) — очередь запросов; часть 2 (ROUTE-9) — предложение расстановки визитов.
 
 ## Архитектура
 
@@ -60,7 +60,7 @@
 | `kind` | Назначение | Промпт |
 |---|---|---|
 | `echo` | Тест очереди | Вернуть поле `input.text` в `output` |
-| `schedule` | Предложить расписание (ROUTE-9) | Анализ слотов мастеров и выбор оптимальных |
+| `schedule-proposal` | Предложить расстановку визитов дня (ROUTE-9) | Анализ слотов мастеров и выбор оптимальных пар «визит → мастер + время» |
 
 ### Обработка ошибок
 
@@ -92,7 +92,7 @@
 | kind | Что передаётся | Что НЕ передаётся |
 |---|---|---|
 | `echo` | Только тестовые данные | — |
-| `schedule` | id мастеров, временны́е интервалы, адрес (район/улица без имени клиента) | Имя клиента, телефон, email, история платежей |
+| `schedule-proposal` | id мастеров, временны́е интервалы, адрес (район/улица без имени клиента) | Имя клиента, телефон, email, история платежей |
 
 Подробнее — `docs/PERSONAL_DATA.md` (раздел «ИИ-ассистент»).
 
@@ -116,6 +116,40 @@ docker compose exec -T db psql -U app -d homeservices -tAc \
 
 # Ожидаемый результат: status=done, output содержит {"output":"ping"}, tokens > 0
 ```
+
+## Сервис scheduleAssistant.ts (ROUTE-9)
+
+Файл: `src/server/services/scheduleAssistant.ts`
+
+### requestScheduleProposal(date, requestedBy?)
+
+Собирает нераспределённые визиты дня (scheduledAt на дату, masterId=null) и занятость всех активных мастеров,
+ставит запрос `kind=schedule-proposal` в очередь через `enqueueInternal`. Возвращает `{ requestId, visitCount }`.
+
+Поле `travelMatrix` в input зарезервировано для ROUTE-4 (матрица времени в пути между адресами).
+
+### parseAndValidateProposal(output)
+
+Разбирает `output` AiRequest по схеме zod. Каждое назначение проверяется:
+1. Визит существует в БД
+2. Мастер активен
+3. Мастер имеет навык для услуги визита
+4. Слот свободен с учётом bufferMin (`isMasterFree` из `src/lib/slots.ts`)
+
+Невалидные назначения возвращаются с полем `valid=false` и `invalidReason`. Порядок важен: первое
+валидное назначение добавляется в in-memory busy мастера, чтобы второе назначение того же мастера
+учитывало его.
+
+### Actions: src/server/actions/admin/schedule.ts
+
+- `requestProposalAction(date)` — поставить запрос, проверка права `schedule`, аудит
+- `applyProposalAction(requestId)` — применить: назначить мастеров через `scheduleVisit`, аудит
+- `rejectProposalAction(requestId)` — отклонить: только аудит, расписание не меняется
+
+### Системный промпт kind=schedule-proposal
+
+Добавлен в `scripts/dispatcher.mjs` → `AI_SYSTEM_PROMPTS['schedule-proposal']`.
+Промпт указывает формат выхода (JSON с assignments + explanation) и правила назначения.
 
 ## Расход токенов (критерий 3 ROUTE-5)
 
