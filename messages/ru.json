@@ -57,6 +57,25 @@
     "street": "Улица"
   },
   "admin": {
+    "ai": {
+      "applied": "Расстановка применена",
+      "apply": "Применить",
+      "balance": "Подписка Claude недоступна — войдите на сервере",
+      "balanceLow": "Перейти в настройки",
+      "close": "Закрыть",
+      "costApprox": "Токенов за месяц",
+      "drawerTitle": "Ассистент расписания",
+      "errorText": "Не удалось получить предложение — попробуйте ещё раз",
+      "explanation": "Объяснение",
+      "proposalTitle": "Предложение расстановки",
+      "reject": "Отклонить",
+      "retry": "Повторить",
+      "showMore": "Показать ещё {n}",
+      "statusReady": "{unassigned} без мастера · {masters} мастеров",
+      "suggestBtn": "Помочь расставить",
+      "thinking": "Подбираю расстановку...",
+      "tokensLabel": "токенов"
+    },
     "analytics": {
       "columns": "Столбцы: date, orders_count, revenue_amd, master_utilization_pct, first_visit_ratio_pct — одна строка на день.",
       "download": "Скачать CSV",

@@ -1,8 +1,8 @@
 "use server";
 import { requireSection } from "../../admin";
 import { audit } from "../../audit";
-import { get } from "../../services/aiQueue";
-import { requestScheduleProposal, parseAndValidateProposal } from "../../services/scheduleAssistant";
+import { get, getMonthTokens } from "../../services/aiQueue";
+import { requestScheduleProposal, parseAndValidateProposal, type ParsedProposal } from "../../services/scheduleAssistant";
 import { scheduleVisit } from "../../services/booking";
 
 /** Поставить запрос на предложение расписания для указанного дня */
@@ -69,4 +69,34 @@ export async function rejectProposalAction(requestId: string): Promise<
   if (!req) return { ok: false, error: "not_found" };
   await audit(u.id, "schedule.reject", "AiRequest", requestId, {});
   return { ok: true };
+}
+
+/** Получить статус AiRequest (опрос каждые 2 с из AssistantDrawer) */
+export async function getProposalStatusAction(requestId: string): Promise<
+  | { status: "queued" | "running" }
+  | { status: "done"; proposal: ParsedProposal }
+  | { status: "failed"; error: string; noSubscription: boolean }
+> {
+  const req = await get(requestId);
+  if (!req) return { status: "failed", error: "not_found", noSubscription: false };
+
+  if (req.status === "done") {
+    const proposal = await parseAndValidateProposal(req.output);
+    return { status: "done", proposal };
+  }
+
+  if (req.status === "failed") {
+    const error = req.error ?? "unknown";
+    const noSubscription =
+      error.includes("Подписка Claude") ||
+      /not logged in|oauth|failed to authenticate|authentication_error|\b401\b/i.test(error);
+    return { status: "failed", error, noSubscription };
+  }
+
+  return { status: req.status as "queued" | "running" };
+}
+
+/** Токены ИИ-помощника за текущий месяц для чипа в шапке drawer */
+export async function getMonthTokensAction(): Promise<number> {
+  return getMonthTokens();
 }
