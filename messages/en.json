@@ -1924,6 +1924,7 @@
     "google": "Sign in with Google",
     "googleHint": "For staff: sign in with your work email listed in your profile",
     "googleSignupEmailConfirmed": "Email {email} confirmed by Google",
+    "googleSignupNoChannels": "A phone number is needed to complete registration, but code delivery is unavailable. Sign in with email or try again later.",
     "googleSignupPhoneHint": "Enter your phone number to complete registration",
     "googleSignupTitle": "Sign up with Google",
     "method": {

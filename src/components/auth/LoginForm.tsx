@@ -360,7 +360,15 @@ function GoogleSignupForm({ ticket, email, name: initialName, channels, onDone }
     });
   }
 
-  if (!channels.length) return null;
+  if (!channels.length) {
+    return (
+      <div>
+        <h3 className="h3">{t("googleSignupTitle")}</h3>
+        <p className="mt-2 rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad">{t("googleSignupNoChannels")}</p>
+        <Link href="/login" className="link mt-3 inline-block text-sm">{t("otherMethods")}</Link>
+      </div>
+    );
+  }
 
   return (
     <div>
