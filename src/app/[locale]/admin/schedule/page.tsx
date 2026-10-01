@@ -5,10 +5,12 @@ import { pageUser } from "@/server/adminPage";
 import { tr } from "@/i18n/locales";
 import { addDays, atYerevan, hm, isoWeekday, ymd } from "@/lib/time";
 import { getAdminSchedule } from "@/server/services/pages/admin";
+import { sumMonthTokens } from "@/server/services/aiQueue";
 import { dateLabel, durationLabel } from "@/lib/format";
 import { DateJump } from "@/components/admin/DateJump";
 import { PageHead, Forbidden } from "@/components/admin/ui";
 import { StatusBadge } from "@/components/account/StatusBadge";
+import { AssistantDrawer } from "@/components/admin/schedule/AssistantDrawer";
 
 export default async function Schedule({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ date?: string }> }) {
   const { locale } = await params;
@@ -17,7 +19,24 @@ export default async function Schedule({ params, searchParams }: { params: Promi
   const [t, to] = await Promise.all([getTranslations("admin"), getTranslations("order")]);
   const date = /^\d{4}-\d{2}-\d{2}$/.test(sp.date || "") ? sp.date! : ymd(new Date());
   const from = atYerevan(date, "00:00"), to_ = atYerevan(addDays(date, 1), "00:00");
-  const [masters, visits] = await getAdminSchedule(from, to_);
+  const [[masters, visits], monthTokens] = await Promise.all([
+    getAdminSchedule(from, to_),
+    sumMonthTokens(),
+  ]);
+
+  // Подготовка метаданных для ИИ-помощника
+  const unassignedVisits = visits.filter((v) => v.masterId === null);
+  const unassignedCount = unassignedVisits.length;
+  const masterIndex: Record<string, string> = {};
+  for (const m of masters) masterIndex[m.id] = tr(m.name, locale);
+  const visitIndex: Record<string, { service: string; time: string }> = {};
+  for (const v of unassignedVisits) {
+    visitIndex[v.id] = {
+      service: tr(v.order.service.title, locale),
+      time: v.scheduledAt ? hm(v.scheduledAt) : "",
+    };
+  }
+
   const cols = [{ id: null as string | null, name: t("schedule.unassigned"), hours: "", off: false }, ...masters.map((m) => {
     const wh = ((m.workingHours || {}) as Record<string, [string, string][]>)[String(isoWeekday(date))] || [];
     return { id: m.id, name: tr(m.name, locale), hours: wh.map(([a, b]) => `${a}–${b}`).join(", "), off: !wh.length || m.timeOff.length > 0 };
@@ -25,11 +44,21 @@ export default async function Schedule({ params, searchParams }: { params: Promi
   return (
     <div>
       <PageHead title={t("schedule.title")} actions={
-        <div className="flex items-center gap-1">
-          <Link href={`/admin/schedule?date=${addDays(date, -1)}`} className="btn-outline btn-sm px-2"><ChevronLeft size={18} /></Link>
-          <Link href={`/admin/schedule`} className="btn-outline btn-sm">{t("common.today")}</Link>
-          <DateJump value={date} base="/admin/schedule" />
-          <Link href={`/admin/schedule?date=${addDays(date, 1)}`} className="btn-outline btn-sm px-2"><ChevronRight size={18} /></Link>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <Link href={`/admin/schedule?date=${addDays(date, -1)}`} className="btn-outline btn-sm px-2"><ChevronLeft size={18} /></Link>
+            <Link href={`/admin/schedule`} className="btn-outline btn-sm">{t("common.today")}</Link>
+            <DateJump value={date} base="/admin/schedule" />
+            <Link href={`/admin/schedule?date=${addDays(date, 1)}`} className="btn-outline btn-sm px-2"><ChevronRight size={18} /></Link>
+          </div>
+          <AssistantDrawer
+            unassignedCount={unassignedCount}
+            masterCount={masters.length}
+            monthTokens={monthTokens}
+            date={date}
+            masterIndex={masterIndex}
+            visitIndex={visitIndex}
+          />
         </div>
       } sub={dateLabel(from, locale, { weekday: "long", day: "numeric", month: "long" })} />
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">

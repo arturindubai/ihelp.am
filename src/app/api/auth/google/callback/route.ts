@@ -6,6 +6,7 @@ import { getSettings } from "@/server/settings";
 import { audit } from "@/server/audit";
 import { exchangeGoogleCode, verifyState } from "@/server/services/oauth";
 import { packGoogleSignupTicket } from "@/lib/googleSignupTicket";
+import { safeReturnPath } from "@/lib/safeRedirect";
 
 /**
  * Возврат из Google.
@@ -78,12 +79,14 @@ export async function GET(req: Request) {
     // Проверяем, не добавил ли кто-то этот email в профиль без подтверждения
     const unverified = await db.user.findFirst({ where: { email: { equals: profile.email, mode: "insensitive" } } });
     if (unverified) return fail("google_not_linked");
-    // Новый пользователь: тикет с данными из Google, редирект на форму телефона
+    // Новый пользователь: тикет с данными из Google, редирект на форму телефона.
+    // Сохраняем next, чтобы после завершения регистрации вернуть пользователя туда, куда он шёл.
     const ticket = packGoogleSignupTicket(
       { email: profile.email, name: profile.name || "", locale: "ru" },
       process.env.SESSION_SECRET || "dev",
     );
-    return NextResponse.redirect(new URL(`/ru/login?google-complete=${encodeURIComponent(ticket)}`, base));
+    const nextParam = safeReturnPath(next) ? `&next=${encodeURIComponent(next)}` : "";
+    return NextResponse.redirect(new URL(`/ru/login?google-complete=${encodeURIComponent(ticket)}${nextParam}`, base));
   }
 
   if (user.blocked) return fail("blocked");
@@ -95,6 +98,7 @@ export async function GET(req: Request) {
 
   await createSession(user.id, user.role);
   await audit(user.id, "auth.google", "User", user.id, { email: profile.email });
-  const dest = next.startsWith("/") ? `/ru${next}` : STAFF_ROLES.includes(user.role) ? "/ru/admin" : "/ru/account";
+  const safePath = safeReturnPath(next);
+  const dest = safePath ? `/ru${safePath}` : STAFF_ROLES.includes(user.role) ? "/ru/admin" : "/ru/services";
   return NextResponse.redirect(new URL(dest, base));
 }

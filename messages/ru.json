@@ -70,6 +70,25 @@
     "typeWork": "Работа"
   },
   "admin": {
+    "ai": {
+      "applied": "Расстановка применена",
+      "apply": "Применить",
+      "balance": "Подписка Claude недоступна — войдите на сервере",
+      "balanceLow": "Перейти в настройки",
+      "close": "Закрыть",
+      "costApprox": "Токенов за месяц",
+      "drawerTitle": "Ассистент расписания",
+      "errorText": "Не удалось получить предложение — попробуйте ещё раз",
+      "explanation": "Объяснение",
+      "proposalTitle": "Предложение расстановки",
+      "reject": "Отклонить",
+      "retry": "Повторить",
+      "showMore": "Показать ещё {n}",
+      "statusReady": "{unassigned} без мастера · {masters} мастеров",
+      "suggestBtn": "Помочь расставить",
+      "thinking": "Подбираю расстановку...",
+      "tokensLabel": "токенов"
+    },
     "analytics": {
       "columns": "Столбцы: date, orders_count, revenue_amd, master_utilization_pct, first_visit_ratio_pct — одна строка на день.",
       "download": "Скачать CSV",
@@ -2092,6 +2111,7 @@
       "google_state": "Сессия входа устарела, попробуйте ещё раз",
       "name": "Укажите имя",
       "phone": "Проверьте номер телефона",
+      "phone_taken": "Этот номер уже привязан к другому аккаунту",
       "telegram_conflict": "Этот Telegram уже привязан к другому аккаунту",
       "telegram_failed": "Не удалось войти через Telegram. Попробуйте ещё раз",
       "telegram_not_linked": "Этот Telegram не привязан ни к одному аккаунту",
@@ -2155,11 +2175,14 @@
     "discountFirst": "Скидка на первый визит",
     "discountPlan": "Скидка тарифа",
     "discountPromo": "Промокод",
+    "emailReminderAdd": "Добавить",
+    "emailReminderText": "Добавьте email, чтобы получать уведомления о визитах",
     "errors": {
       "days": "Выберите дни недели",
       "invalid": "Проверьте параметры заказа",
       "no_address": "Укажите адрес",
       "no_slot": "Выберите дату и время",
+      "phone_required": "Для заказа нужен подтверждённый номер телефона",
       "slot_taken": "Это время только что заняли — выберите другое"
     },
     "freeCancel": "Бесплатная отмена за {hours} ч до визита",
@@ -2172,6 +2195,8 @@
     "payFirst": "Первый визит",
     "payNow": "К оплате",
     "payment": "Оплата",
+    "phoneRequired": "Нужен номер телефона",
+    "phoneRequiredBody": "Мастер связывается с клиентом по телефону перед визитом. Добавьте номер — это займёт пару секунд.",
     "pickDays": "Дни недели",
     "pickDaysHint": "Выберите минимум {count} {count, plural, one {день} few {дня} other {дней}}",
     "promo": "Промокод",

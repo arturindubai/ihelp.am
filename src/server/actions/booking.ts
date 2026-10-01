@@ -96,6 +96,7 @@ export async function lastOrderDraftAction() {
 export async function createOrderAction(input: z.infer<typeof orderSchema>) {
   const u = await getCurrentUser();
   if (!u) return { ok: false as const, error: "auth" };
+  if (!u.phone) return { ok: false as const, error: "phone_required" };
   const parsed = orderSchema.safeParse(input);
   if (!parsed.success) return { ok: false as const, error: "invalid" };
   try {

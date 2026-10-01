@@ -68,6 +68,25 @@
     "typeWork": ""
   },
   "admin": {
+    "ai": {
+      "applied": "Ժամանակացույցը կիրառված է",
+      "apply": "Կիրառել",
+      "balance": "Claude բաժանորդագրությունն անհասանելի է",
+      "balanceLow": "Անցնել կարգավորումներ",
+      "close": "Փակել",
+      "costApprox": "Ամսական թոքեններ",
+      "drawerTitle": "Ժամանակացույցի օգնական",
+      "errorText": "Առաջարկ ստանալ հնարավոր չեղավ — կրկին փորձեք",
+      "explanation": "Բացատրություն",
+      "proposalTitle": "Ժամանակացույցի առաջարկ",
+      "reject": "Մերժել",
+      "retry": "Կրկնել",
+      "showMore": "Ցույց տալ ևս {n}",
+      "statusReady": "{unassigned} առանց վարպետի · {masters} վարպետ",
+      "suggestBtn": "Օգնել դասավորել",
+      "thinking": "Ընտրում եմ ժամանակացույց...",
+      "tokensLabel": "թոքեն"
+    },
     "banners": {
       "aiApply": "Կիրառել",
       "aiError": "Հնարավոր չեղավ ստանալ պատասխան — կրկին փորձեք",
@@ -1084,6 +1103,7 @@
       "google_state": "",
       "name": "",
       "phone": "",
+      "phone_taken": "",
       "telegram_conflict": "",
       "telegram_failed": "",
       "telegram_not_linked": "",
@@ -1146,11 +1166,14 @@
     "discountFirst": "",
     "discountPlan": "",
     "discountPromo": "",
+    "emailReminderAdd": "",
+    "emailReminderText": "",
     "errors": {
       "days": "",
       "invalid": "",
       "no_address": "",
       "no_slot": "",
+      "phone_required": "",
       "slot_taken": ""
     },
     "freeCancel": "",
@@ -1163,6 +1186,8 @@
     "payFirst": "",
     "payNow": "",
     "payment": "",
+    "phoneRequired": "",
+    "phoneRequiredBody": "",
     "pickDays": "",
     "pickDaysHint": "",
     "promo": "",
