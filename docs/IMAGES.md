@@ -205,6 +205,189 @@
 
 ---
 
+## 8. Скоро-услуги — миниатюры для thumbnail
+
+Все 30 услуг из `scripts/once/catalog-soon-tree.mjs` имеют `comingSoon=true` и не имеют картинки (`image: null`) — они загружаются через «Услуги» в админке после генерации. Дополнительно: 1 плитка для новой категории «Дезинсекция» (pest-control).
+
+Формат: 800×800 (1:1), генерация 1:1 в 1K, тот же стиль что разделы 2–3. Загружать через «Услуги» → нужная услуга → поле «Изображение».
+
+---
+
+### CAT-pest-control — плитка категории «Дезинсекция»
+Категория `pest-control` · 800×800 (1:1)
+
+> Close-up of a gloved professional hand holding a precision applicator and spraying treatment into a gap along an apartment kitchen cabinet base, burnt-orange gloves visible, clean modern kitchen interior softly blurred behind, bright daylight, tight square composition centered on the action.
+
+---
+
+### deep-cleaning-apartment — Генеральная уборка квартиры
+Услуга `deep-cleaning-apartment` · 800×800 (1:1)
+
+> A woman in her early 40s with local Armenian appearance, a cleaning professional in a plain burnt-orange uniform polo shirt (no logo, no text), vacuuming under a sofa in a tidy living room, a full cleaning caddy with coloured microfiber cloths visible beside her, late morning apartment light, tight square composition centered on the professional.
+
+### deep-cleaning-furniture — Чистка мягкой мебели
+Услуга `deep-cleaning-furniture` · 800×800 (1:1)
+
+> Professional upholstery extraction machine with a burnt-orange body cleaning a light grey fabric sofa, a visible clean stripe next to the still-soiled area, the nozzle in close-up action, apartment living room softly blurred behind, tight square composition.
+
+### deep-cleaning-kitchen — Кухня
+Услуга `deep-cleaning-kitchen` · 800×800 (1:1)
+
+> Close-up of a gloved hand scrubbing a gas stove burner grate with a burnt-orange handled brush, gleaming degreased ceramic hob surface visible beside the still-dirty section, bright kitchen daylight, tight square composition centered on the action.
+
+### deep-cleaning-bathroom — Ванная
+Услуга `deep-cleaning-bathroom` · 800×800 (1:1)
+
+> Close-up of gloved hands scrubbing tile grout in a bathroom with a narrow stiff brush, shiny clean white tiles surrounding the area being worked on, chrome fixtures gleaming in the background, soft bathroom light, tight square composition.
+
+### deep-cleaning-ac — Чистка кондиционера
+Услуга `deep-cleaning-ac` · 800×800 (1:1)
+
+> A technician in a plain burnt-orange uniform polo shirt (no logo, no text) holding a dusty filter removed from a wall-mounted air conditioner unit, the grey filter clearly showing accumulated dust, the open unit on the apartment wall behind, natural light, tight square composition.
+
+### deep-cleaning-balcony — Балкон и лоджия
+Услуга `deep-cleaning-balcony` · 800×800 (1:1)
+
+> Close-up of gloved hands scrubbing a balcony tile floor with a burnt-orange handled deck brush, foamy water and a freshly swept clean area visible beside the dirty section, Yerevan rooftops softly blurred through the railing behind, bright daylight, tight square composition.
+
+---
+
+### handyman-electrician — Электрик
+Услуга `handyman-electrician` · 800×800 (1:1)
+
+> A man in his late 30s with local Armenian appearance, in a plain burnt-orange uniform polo shirt (no logo, no text), installing a new wall socket in an apartment using a screwdriver, white wall and neat cable visible, focused precise work, natural light, tight square composition.
+
+### handyman-plumber — Сантехник
+Услуга `handyman-plumber` · 800×800 (1:1)
+
+> A man in his late 30s with local Armenian appearance, in a plain burnt-orange uniform polo shirt (no logo, no text), tightening a chrome mixer tap under a bathroom sink with an adjustable wrench, pipe and under-sink cabinet visible, natural bathroom light, tight square composition.
+
+### handyman-furniture — Сборка мебели
+Услуга `handyman-furniture` · 800×800 (1:1)
+
+> A man in his early 40s with local Armenian appearance, in a plain burnt-orange uniform polo shirt (no logo, no text), assembling flat-pack shelving in an apartment room, referring to an instruction sheet on the floor, tools laid out neatly beside the parts, natural light, tight square composition.
+
+### handyman-shelves-tv — Навес полок и ТВ
+Услуга `handyman-shelves-tv` · 800×800 (1:1)
+
+> A man in his late 30s with local Armenian appearance, in a plain burnt-orange uniform polo shirt (no logo, no text), securing a flat-screen TV wall bracket to an apartment wall with a cordless drill, a spirit level resting on the bracket, clean white wall, natural light, tight square composition.
+
+---
+
+### moving-apartment — Квартирный переезд
+Услуга `moving-apartment` · 800×800 (1:1)
+
+> Two movers with local Armenian appearance in plain burnt-orange uniform polo shirts (no logo, no text), carefully carrying a bubble-wrapped sofa through an open apartment doorway, moving boxes stacked neatly in the hallway behind them, natural light, tight square composition.
+
+### moving-loaders — Грузчики почасово
+Услуга `moving-loaders` · 800×800 (1:1)
+
+> A man in his 30s with local Armenian appearance, in a plain burnt-orange uniform polo shirt (no logo, no text), carrying a large sealed cardboard box steadily down a clean apartment staircase, focused steady grip, natural stairwell light, tight square composition.
+
+### moving-packing — Упаковка вещей
+Услуга `moving-packing` · 800×800 (1:1)
+
+> Gloved hands in plain burnt-orange uniform carefully wrapping a framed picture in bubble wrap on a wooden apartment floor, rolls of tape and packing paper neatly arranged nearby, apartment interior softly blurred behind, tight square composition centered on the action.
+
+### moving-furniture — Разборка и сборка мебели
+Услуга `moving-furniture` · 800×800 (1:1)
+
+> A man in his late 30s with local Armenian appearance, in a plain burnt-orange uniform polo shirt (no logo, no text), disassembling a bed frame with a cordless screwdriver, hardware neatly sorted into small labelled bags on the floor beside him, bright apartment bedroom, tight square composition.
+
+---
+
+### chef-day — Повар на день
+Услуга `chef-day` · 800×800 (1:1)
+
+> A woman in her 40s with local Armenian appearance, in a plain burnt-orange chef apron (no logo, no text), stirring a pot on a home kitchen stove, fresh vegetables and herbs arranged on the countertop, warm kitchen light, tight square composition centered on the cook.
+
+### chef-event — Повар на мероприятие
+Услуга `chef-event` · 800×800 (1:1)
+
+> A chef in a plain burnt-orange apron (no logo, no text), arranging a platter of appetisers on a dining table set for a celebration, warm home interior, flowers and tableware softly blurred in the background, tight square composition centered on the platter.
+
+### chef-prep — Заготовки на неделю
+Услуга `chef-prep` · 800×800 (1:1)
+
+> Overhead tight shot of hands in a plain burnt-orange apron portioning cooked dishes into a row of clear glass meal-prep containers on a kitchen counter, an organised weekly set being filled with colourful food, tight square composition.
+
+---
+
+### massage-classic — Классический массаж
+Услуга `massage-classic` · 800×800 (1:1)
+
+> A massage therapist in a plain burnt-orange uniform polo shirt (no logo, no text), performing a back massage on a client lying face-down on a portable massage table set up in a tidy apartment room, soft warm natural light, calm and restful atmosphere, tight square composition.
+
+### massage-relaxing — Расслабляющий массаж
+Услуга `massage-relaxing` · 800×800 (1:1)
+
+> Close-up of a massage therapist's hands gently pouring aromatic oil from a small dark bottle onto a client's shoulder, a neatly folded burnt-orange towel draped across the client, soft warm apartment room light behind, tight square composition.
+
+### massage-sport — Спортивный массаж
+Услуга `massage-sport` · 800×800 (1:1)
+
+> A massage therapist in a plain burnt-orange uniform polo shirt (no logo, no text), using both thumbs to apply deep pressure to a client's calf muscle on a portable massage table, focused therapeutic work, bright apartment room with natural light, tight square composition.
+
+---
+
+### dry-cleaning-clothes — Одежда с доставкой
+Услуга `dry-cleaning-clothes` · 800×800 (1:1)
+
+> A delivery person in a plain burnt-orange uniform polo shirt (no logo, no text), carrying a neat set of freshly dry-cleaned clothes in transparent garment bags on hangers to an apartment door, bright entrance hallway, tight square composition.
+
+### dry-cleaning-carpet — Ковры
+Услуга `dry-cleaning-carpet` · 800×800 (1:1)
+
+> A professional in a plain burnt-orange uniform polo shirt (no logo, no text), rolling up a freshly cleaned colourful traditional rug on a bright apartment floor, clean restored fibres visible, natural light, tight square composition.
+
+### dry-cleaning-curtains — Шторы
+Услуга `dry-cleaning-curtains` · 800×800 (1:1)
+
+> Close-up of gloved hands unclipping clean pressed curtains from a drying rack, fabric bright and wrinkle-free, apartment window with soft daylight visible behind, tight square composition.
+
+### dry-cleaning-ironing — Глажка
+Услуга `dry-cleaning-ironing` · 800×800 (1:1)
+
+> Close-up of a steam iron with a burnt-orange accent gliding over a crisp white dress shirt on an ironing board, a fine jet of steam rising, perfectly pressed collar visible in the frame, warm apartment light, tight square composition.
+
+---
+
+### after-renovation-cleaning — Уборка после ремонта
+Услуга `after-renovation-cleaning` · 800×800 (1:1)
+
+> A professional in a plain burnt-orange uniform polo shirt (no logo, no text), wiping white construction dust from a newly painted windowsill with a damp microfiber cloth, protective film partly peeled from the floor beneath, bare freshly painted walls, bright daylight, tight square composition.
+
+---
+
+### cleaning-part-time — Помощница на часть дня
+Услуга `cleaning-part-time` · 800×800 (1:1)
+
+> A woman in her 30s with local Armenian appearance, in a plain burnt-orange uniform polo shirt (no logo, no text), washing dishes at a kitchen sink with bright morning light coming through the window, a tidy counter and a small vase of flowers on the windowsill visible behind, tight square composition.
+
+---
+
+### pest-control-cockroaches — Тараканы
+Услуга `pest-control-cockroaches` · 800×800 (1:1)
+
+> Close-up of a gloved professional hand applying pest treatment along a kitchen cabinet base gap with a fine-tipped applicator, burnt-orange gloves visible, clean modern kitchen interior softly blurred behind, bright daylight, tight square composition centered on the applicator tip.
+
+### pest-control-bedbugs — Клопы
+Услуга `pest-control-bedbugs` · 800×800 (1:1)
+
+> A pest-control professional in a plain burnt-orange uniform polo shirt (no logo, no text) and a light protective mask, applying treatment along the seam of a white mattress with a professional canister, clean apartment bedroom, natural light, tight square composition.
+
+### pest-control-ants — Муравьи
+Услуга `pest-control-ants` · 800×800 (1:1)
+
+> Close-up of a gloved hand placing a small professional bait station along an apartment baseboard, clean skirting board and light tiled floor visible, soft natural daylight, tight square composition centered on the bait station.
+
+### pest-control-rodents — Грызуны
+Услуга `pest-control-rodents` · 800×800 (1:1)
+
+> A pest-control professional in a plain burnt-orange uniform polo shirt (no logo, no text), inspecting a corner of an apartment utility room with a small torch, a sealed professional equipment case set down beside them, clean interior, tight square composition.
+
+---
+
 ## Что осталось
 
 1. **Утвердить цвет и шрифт (DSN-2).** Если палитра изменится — перегенерировать только фото с людьми (форма мастеров: плитки 04–07 и 08, портреты, баннер, обложки); иллюстрации и знак перекрашиваются.
