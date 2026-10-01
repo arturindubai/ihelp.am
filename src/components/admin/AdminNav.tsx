@@ -16,6 +16,7 @@ const SERVICES_SUBS = [
 
 export function AdminNav({ sections }: { sections: string[] }) {
   const t = useTranslations("admin");
+  const tc = useTranslations("common");
   const path = usePathname();
   const [open, setOpen] = useState(false);
   const items = sections.map((s) => ({ key: s, href: s === "dashboard" ? "/admin" : `/admin/${s}`, icon: ICONS[s as keyof typeof ICONS] }));
@@ -93,7 +94,7 @@ export function AdminNav({ sections }: { sections: string[] }) {
       </header>
       {open && (
         <div className="fixed inset-0 z-50 md:hidden">
-          <button className="absolute inset-0 bg-overlay/40" onClick={() => setOpen(false)} aria-label="close" />
+          <button className="absolute inset-0 bg-overlay/40" onClick={() => setOpen(false)} aria-label={tc("close")} />
           <div className="relative h-full w-72 overflow-y-auto bg-paper p-3">
             <div className="mb-3 flex items-center justify-between px-2"><Logo /><button onClick={() => setOpen(false)} className="btn-ghost btn-sm px-2"><X size={20} /></button></div>
             {list}
