@@ -13,24 +13,6 @@ import { OrderActions, OrderTrackerActions, VisitActions } from "@/components/ac
 import { getOrderEventFeed } from "@/server/services/orderEvents";
 import { ClearCart } from "@/components/ClearCart";
 
-function expLabel(n: number, locale: string): string {
-  if (n <= 0) return "";
-  if (locale === "en") return `${n} yr exp`;
-  const rem10 = n % 10, rem100 = n % 100;
-  if (rem100 >= 11 && rem100 <= 14) return `${n} лет опыта`;
-  if (rem10 === 1) return `${n} год опыта`;
-  if (rem10 >= 2 && rem10 <= 4) return `${n} года опыта`;
-  return `${n} лет опыта`;
-}
-
-function reviewsLabel(n: number, locale: string): string {
-  if (locale === "en") return `${n} review${n !== 1 ? "s" : ""}`;
-  const rem10 = n % 10, rem100 = n % 100;
-  if (rem100 >= 11 && rem100 <= 14) return `${n} отзывов`;
-  if (rem10 === 1) return `${n} отзыв`;
-  if (rem10 >= 2 && rem10 <= 4) return `${n} отзыва`;
-  return `${n} отзывов`;
-}
 
 function eventColor(status: string) {
   if (["DONE", "CONFIRMED", "SCHEDULED", "CREATED"].includes(status)) return "bg-ok";
@@ -125,7 +107,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     <div className="container-w pb-10 pt-3">
       {/* Навбар */}
       <div className="mb-4 flex items-center gap-3">
-        <Link href="/account/orders" className="grid size-9 shrink-0 place-items-center rounded-full bg-surface" aria-label="back">
+        <Link href="/account/orders" className="grid size-9 shrink-0 place-items-center rounded-full bg-surface" aria-label={tc("back")}>
           <ArrowLeft size={18} />
         </Link>
         <h1 className="flex-1 text-xl font-bold">{t("number", { number: o.number })}</h1>
@@ -179,8 +161,8 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                       <div className="truncate font-semibold">{masterName}</div>
                       {master.reviewsCount > 0 ? (
                         <div className="text-sm text-muted">
-                          ★ {master.rating.toFixed(1)} · {reviewsLabel(master.reviewsCount, locale)}
-                          {master.experienceYears > 0 && ` · ${expLabel(master.experienceYears, locale)}`}
+                          ★ {master.rating.toFixed(1)} · {tc("reviews", { count: master.reviewsCount })}
+                          {master.experienceYears > 0 && ` · ${tc("yearsExp", { count: master.experienceYears })}`}
                         </div>
                       ) : (
                         <div className="text-sm text-muted">{t("masterNew")}</div>
@@ -327,8 +309,8 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                     <div className="truncate font-semibold">{masterName}</div>
                     {master.reviewsCount > 0 ? (
                       <div className="text-sm text-muted">
-                        ★ {master.rating.toFixed(1)} · {reviewsLabel(master.reviewsCount, locale)}
-                        {master.experienceYears > 0 && ` · ${expLabel(master.experienceYears, locale)}`}
+                        ★ {master.rating.toFixed(1)} · {tc("reviews", { count: master.reviewsCount })}
+                        {master.experienceYears > 0 && ` · ${tc("yearsExp", { count: master.experienceYears })}`}
                       </div>
                     ) : (
                       <div className="text-sm text-muted">{t("masterNew")}</div>

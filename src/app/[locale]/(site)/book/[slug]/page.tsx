@@ -24,14 +24,14 @@ export default async function BookPage({ params, searchParams }: { params: Promi
   const sel = resolveSelection(s, optionIds, p);
   if (!sel.ok) redirect({ href: `/s/${slug}`, locale });
   const ok = sel as Extract<typeof sel, { ok: true }>;
-  const [user, settings, t] = await Promise.all([getCurrentUser(), getSettings(), getTranslations("booking")]);
+  const [user, settings, t, tc] = await Promise.all([getCurrentUser(), getSettings(), getTranslations("booking"), getTranslations("common")]);
 
   if (!user) {
     const methods = await loginMethods(settings);
     return (
       <div className="container-m">
         <div className="flex items-center gap-3 pt-3">
-          <Link href={`/s/${slug}`} className="grid size-9 place-items-center rounded-full bg-surface" aria-label="back"><ArrowLeft size={18} /></Link>
+          <Link href={`/s/${slug}`} className="grid size-9 place-items-center rounded-full bg-surface" aria-label={tc("back")}><ArrowLeft size={18} /></Link>
           <h1 className="text-xl font-bold">{t("title")}</h1>
         </div>
         <div className="card mt-4 p-4">
