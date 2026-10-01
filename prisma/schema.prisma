@@ -460,6 +460,8 @@ model Review {
   authorName String?
   rating    Int
   text      String?
+  /// Чаевые мастеру в драмах (0 = не оставлены); FLOW-13
+  tipAmount  Int       @default(0)
   reply     String?
   status    ReviewStatus @default(PENDING)
   createdAt DateTime     @default(now())

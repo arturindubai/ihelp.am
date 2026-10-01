@@ -201,7 +201,7 @@ export async function reviewAction(visitId: string, rating: number, text: string
 }
 
 /** Оставить отзыв по одноразовому токену из сообщения (без входа в аккаунт). */
-export async function reviewByTokenAction(token: string, rating: number, text: string) {
+export async function reviewByTokenAction(token: string, rating: number, text: string, tipAmount = 0) {
   const data = await consumeReviewToken(token);
   if (!data) return { ok: false, reason: "invalid" as const };
 
@@ -217,6 +217,7 @@ export async function reviewByTokenAction(token: string, rating: number, text: s
 
   const user = await db.user.findUnique({ where: { id: userId }, select: { name: true } });
   const r = Math.min(5, Math.max(1, Math.round(rating)));
+  const tip = Math.max(0, Math.round(tipAmount));
   await db.review.create({
     data: {
       visitId,
@@ -225,11 +226,13 @@ export async function reviewByTokenAction(token: string, rating: number, text: s
       serviceId: visit.order.serviceId,
       rating: r,
       text: text.trim().slice(0, 2000) || null,
+      tipAmount: tip,
       authorName: user?.name ?? null,
       status: "PENDING",
     },
   });
-  await notifyTeam(html`⭐ Новый отзыв ${r}/5 · заказ №${visit.order.number} — на модерации`);
+  const tipNote = tip > 0 ? ` · чаевые ${tip} ֏` : "";
+  await notifyTeam(html`⭐ Новый отзыв ${r}/5 · заказ №${visit.order.number}${tipNote} — на модерации`);
   return { ok: true };
 }
 
