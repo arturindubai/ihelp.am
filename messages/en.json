@@ -38,6 +38,7 @@
     "upcoming": "Upcoming"
   },
   "address": {
+    "addAddress": "Add address",
     "apartment": "Apartment",
     "aptShort": "apt. {n}",
     "building": "Building",
@@ -54,7 +55,10 @@
     "makeDefault": "Set as default",
     "saveAddress": "Save address",
     "select": "Select district",
-    "street": "Street"
+    "street": "Street",
+    "typeHome": "Home",
+    "typeOther": "Other",
+    "typeWork": "Work"
   },
   "admin": {
     "banners": {
