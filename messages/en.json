@@ -2451,11 +2451,21 @@
   },
   "review": {
     "alreadyLeft": "You have already left a review for this visit.",
+    "bookAgain": "Book again",
+    "customTip": "Custom amount",
     "invalid": "This link is invalid or has already been used.",
-    "placeholder": "What did you like, what could be improved?",
+    "invalidToken": "This link is invalid or the review has already been submitted",
+    "masterLabel": "Your pro",
+    "noTip": "No tip",
+    "placeholder": "What did you like, or what could be improved?",
+    "ratingLabels": "Poor,Below expectations,Okay,Good,Excellent!",
     "send": "Submit review",
-    "thanks": "Thank you! Your review has been received.",
-    "title": "Your review of the visit"
+    "thanks": "Thanks for your review!",
+    "thanksSub": "Your review helps other customers",
+    "tips": "Leave a tip for your pro",
+    "tipsHint": "Tips go directly to your pro",
+    "title": "Your review of the visit",
+    "toHome": "Go to home"
   },
   "service": {
     "benefits": "Benefits",

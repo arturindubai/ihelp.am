@@ -1528,11 +1528,21 @@
   },
   "review": {
     "alreadyLeft": "",
+    "bookAgain": "",
+    "customTip": "",
     "invalid": "",
+    "invalidToken": "",
+    "masterLabel": "",
+    "noTip": "",
     "placeholder": "",
+    "ratingLabels": "",
     "send": "",
     "thanks": "",
-    "title": ""
+    "thanksSub": "",
+    "tips": "",
+    "tipsHint": "",
+    "title": "",
+    "toHome": ""
   },
   "service": {
     "benefits": "",

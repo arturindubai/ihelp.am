@@ -1,5 +1,8 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { getReviewToken } from "@/server/services/pages/catalog";
+import { tr } from "@/i18n/locales";
+import { dateLabel } from "@/lib/format";
+import { Logo } from "@/components/Logo";
 import { ReviewForm } from "./ReviewForm";
 
 export default async function ReviewTokenPage({ params }: { params: Promise<{ locale: string; token: string }> }) {
@@ -15,15 +18,36 @@ export default async function ReviewTokenPage({ params }: { params: Promise<{ lo
   if (isInvalid || alreadyLeft) {
     return (
       <div className="container-m flex min-h-[50dvh] flex-col items-center justify-center gap-4 pt-8 text-center">
-        <p className="text-lg text-muted">{alreadyLeft ? t("alreadyLeft") : t("invalid")}</p>
+        <div className="rounded-xl bg-bad-50 p-4 text-bad">
+          {t("invalidToken")}
+        </div>
       </div>
     );
   }
 
+  const master = rt.visit.master;
+  const masterName = master ? tr(master.name, locale) : t("masterLabel");
+  const masterPhoto = master?.photo ?? null;
+  const service = rt.visit.order.service;
+  const serviceTitle = tr(service.title, locale);
+  const serviceSlug = service.slug;
+  const visitDateLabel = rt.visit.scheduledAt
+    ? dateLabel(rt.visit.scheduledAt, locale, { day: "numeric", month: "long" })
+    : "";
+
   return (
-    <div className="container-m py-8">
-      <h1 className="mb-6 text-center text-xl font-bold">{t("title")}</h1>
-      <ReviewForm token={token} />
+    <div className="container-m max-w-md mx-auto pt-8 pb-10">
+      <div className="flex justify-center pb-6">
+        <Logo className="text-2xl" />
+      </div>
+      <ReviewForm
+        token={token}
+        masterName={masterName}
+        masterPhoto={masterPhoto}
+        serviceTitle={serviceTitle}
+        visitDateLabel={visitDateLabel}
+        serviceSlug={serviceSlug}
+      />
     </div>
   );
 }
