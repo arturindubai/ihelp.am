@@ -32,6 +32,25 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
   return (
     <div>
       <section className="card p-4">
+        <h2 className="h3 mb-3">{t("addresses")}</h2>
+        {addresses.length === 0 && <p className="mb-3 text-sm text-muted">{t("noAddresses")}</p>}
+        <ul className="divide-y divide-line">
+          {addresses.map((a) => (
+            <li key={a.id} className="flex items-center gap-3 py-3">
+              <MapPin size={18} className="shrink-0 text-muted" />
+              <div className="flex-1 text-sm">
+                <div className="flex items-center gap-2">{a.label && <span className="font-semibold truncate max-w-[120px]">{a.label}</span>}{a.isDefault && <span className="chip bg-brand-50 text-brand">{ta("default")}</span>}</div>
+                {addressLine(a, (n) => ta("aptShort", { n }))}
+              </div>
+              <button className="btn-ghost btn-sm" aria-label={tc("edit")} onClick={() => setEdit(a)}><Pencil size={16} /></button>
+              <button className="btn-ghost btn-sm text-bad" aria-label={tc("delete")} onClick={() => start(async () => { await deleteAddressAction(a.id); setAddresses((l) => l.filter((x) => x.id !== a.id)); })}><Trash2 size={16} /></button>
+            </li>
+          ))}
+        </ul>
+        <button className="btn-outline mt-2 w-full" onClick={() => setEdit({})}><Plus size={18} /> {ta("addAddress")}</button>
+      </section>
+
+      <section className="card mt-4 p-4">
         <h2 className="h3 mb-3">{t("personal")}</h2>
         <form className="space-y-3" onSubmit={(e) => {
           e.preventDefault();
@@ -76,25 +95,6 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
 
       <AdsConsentSection initialValue={user.adsConsent} />
 
-      <section className="card mt-4 p-4">
-        <h2 className="h3 mb-3">{t("addresses")}</h2>
-        {addresses.length === 0 && <p className="mb-3 text-sm text-muted">{t("noAddresses")}</p>}
-        <ul className="divide-y divide-line">
-          {addresses.map((a) => (
-            <li key={a.id} className="flex items-center gap-3 py-3">
-              <MapPin size={18} className="shrink-0 text-muted" />
-              <div className="flex-1 text-sm">
-                <div className="flex items-center gap-2">{a.label && <span className="font-semibold">{a.label}</span>}{a.isDefault && <span className="chip bg-brand-50 text-brand">{ta("default")}</span>}</div>
-                {addressLine(a, (n) => ta("aptShort", { n }))}
-              </div>
-              <button className="btn-ghost btn-sm" aria-label={tc("edit")} onClick={() => setEdit(a)}><Pencil size={16} /></button>
-              <button className="btn-ghost btn-sm text-bad" aria-label={tc("delete")} onClick={() => start(async () => { await deleteAddressAction(a.id); setAddresses((l) => l.filter((x) => x.id !== a.id)); })}><Trash2 size={16} /></button>
-            </li>
-          ))}
-        </ul>
-        <button className="btn-outline mt-2 w-full" onClick={() => setEdit({})}><Plus size={18} /> {ta("saveAddress")}</button>
-      </section>
-
       <button className="btn-ghost mt-4 w-full text-bad" onClick={() => start(async () => {
         let endpoint: string | undefined;
         try {
@@ -108,7 +108,7 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
         router.refresh();
       })}><LogOut size={18} /> {tn("logout")}</button>
 
-      <Sheet open={!!edit} onClose={() => setEdit(null)} title={edit?.id ? tc("edit") : ta("saveAddress")}>
+      <Sheet open={!!edit} onClose={() => setEdit(null)} title={edit?.id ? tc("edit") : ta("addAddress")}>
         {edit && (
           <AddressForm initial={edit} districts={districts} onSaved={(a) => {
             setAddresses((l) => {

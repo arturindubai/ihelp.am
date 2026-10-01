@@ -29,6 +29,15 @@ export function AddressForm({ initial, districts, onSaved }: { initial?: Partial
         });
       }}
     >
+      <div className="col-span-2 flex gap-2 flex-wrap">
+        {[t("typeHome"), t("typeWork"), t("typeOther")].map((label) => (
+          <button type="button" key={label}
+            className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${v.label === label ? "border-action bg-brand-50 text-brand" : "border-line bg-paper text-ink"}`}
+            onClick={() => setV({ ...v, label })}>
+            {label}
+          </button>
+        ))}
+      </div>
       {districts.length > 0 && (
         <div className="col-span-2">
           <label className="label">{t("district")}</label>
@@ -39,11 +48,11 @@ export function AddressForm({ initial, districts, onSaved }: { initial?: Partial
         </div>
       )}
       <div className="col-span-2">
-        <label className="label">{t("street")} *</label>
+        <label className="label">{t("street")} <span className="text-bad ml-0.5">*</span></label>
         <input className="input" required value={v.street} onChange={set("street")} />
       </div>
       <div>
-        <label className="label">{t("building")} *</label>
+        <label className="label">{t("building")} <span className="text-bad ml-0.5">*</span></label>
         <input className="input" required value={v.building} onChange={set("building")} />
       </div>
       <div><label className="label">{t("apartment")}</label><input className="input" value={v.apartment || ""} onChange={set("apartment")} /></div>

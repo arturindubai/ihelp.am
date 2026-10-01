@@ -38,6 +38,7 @@
     "upcoming": "Предстоящие"
   },
   "address": {
+    "addAddress": "Добавить адрес",
     "apartment": "Квартира",
     "aptShort": "кв. {n}",
     "building": "Дом",
@@ -54,7 +55,10 @@
     "makeDefault": "Сделать основным",
     "saveAddress": "Сохранить адрес",
     "select": "Выберите район",
-    "street": "Улица"
+    "street": "Улица",
+    "typeHome": "Дом",
+    "typeOther": "Другое",
+    "typeWork": "Работа"
   },
   "admin": {
     "analytics": {

@@ -36,6 +36,7 @@
     "upcoming": ""
   },
   "address": {
+    "addAddress": "",
     "apartment": "Բնակարան",
     "aptShort": "",
     "building": "Շենք",
@@ -52,7 +53,10 @@
     "makeDefault": "",
     "saveAddress": "",
     "select": "",
-    "street": "Փողոց"
+    "street": "Փողոց",
+    "typeHome": "",
+    "typeOther": "",
+    "typeWork": ""
   },
   "admin": {
     "banners": {
