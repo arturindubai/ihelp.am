@@ -297,9 +297,10 @@ function ProposalView({
   onReject: () => void;
   t: ReturnType<typeof useTranslations<"admin.ai">>;
 }) {
+  const THRESHOLD = 10;
   const PREVIEW = 5;
   const items = proposal.assignments;
-  const shown = showAll || items.length <= PREVIEW ? items : items.slice(0, PREVIEW);
+  const shown = showAll || items.length <= THRESHOLD ? items : items.slice(0, PREVIEW);
   const hidden = items.length - PREVIEW;
 
   return (
@@ -334,7 +335,7 @@ function ProposalView({
             );
           })}
         </ul>
-        {!showAll && items.length > PREVIEW && (
+        {!showAll && items.length > THRESHOLD && (
           <button
             type="button"
             className="mt-2 flex items-center gap-1 text-xs text-brand"

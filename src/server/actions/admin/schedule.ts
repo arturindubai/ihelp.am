@@ -77,6 +77,7 @@ export async function getProposalStatusAction(requestId: string): Promise<
   | { status: "done"; proposal: ParsedProposal }
   | { status: "failed"; error: string; noSubscription: boolean }
 > {
+  await requireSection("schedule");
   const req = await get(requestId);
   if (!req) return { status: "failed", error: "not_found", noSubscription: false };
 
@@ -98,5 +99,6 @@ export async function getProposalStatusAction(requestId: string): Promise<
 
 /** Токены ИИ-помощника за текущий месяц для чипа в шапке drawer */
 export async function getMonthTokensAction(): Promise<number> {
+  await requireSection("schedule");
   return getMonthTokens();
 }
