@@ -25,7 +25,7 @@ export async function GET(req: Request) {
 
   const callbackPath = mode === "link" ? "/api/auth/telegram/link" : "/api/auth/telegram/widget";
   const callbackUrl = new URL(callbackPath, base).toString();
-  const returnUrl = next ? `/ru${next}` : mode === "link" ? "/ru/account" : "/ru/account";
+  const returnUrl = next ? `/ru${next}` : mode === "link" ? "/ru/account" : "/ru/services";
   const safeReturn = encodeURIComponent(returnUrl);
 
   const html = `<!DOCTYPE html>
