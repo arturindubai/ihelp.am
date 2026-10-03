@@ -406,6 +406,8 @@ model Visit {
   remindedAt      DateTime?
   reviewRequestedAt DateTime?
   masterNote      String?
+  /// true после первого открытия карточки оператором — скрывает бейдж «Новая» (BUG-50)
+  operatorSeen    Boolean     @default(false)
   /// Ключи отправленных клиентских уведомлений на уровне визита: ["masterAssigned", "rescheduled:2026-09-28T06:00", "cancelled", "completed"]
   clientNotifiedEvents String[] @default([])
   createdAt       DateTime    @default(now())
