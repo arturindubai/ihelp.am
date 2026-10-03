@@ -1,5 +1,6 @@
 import "server-only";
 import fs from "fs/promises";
+import path from "path";
 import { db } from "../db";
 import { getSettings } from "../settings";
 import { hasAlertRecipient } from "../notify";
@@ -348,11 +349,28 @@ export async function linkErrorToTask(errorId: string, taskKey: string) {
 
 /* ───────────── Состояние системы ───────────── */
 
-type Mark = { lastOkAt?: string; lastErrorAt?: string; restoreOkAt?: string; restoreErrorAt?: string };
+type Mark = { lastOkAt?: string; lastErrorAt?: string; restoreOkAt?: string; restoreErrorAt?: string; backupsMb?: number };
+
+/** Рекурсивно суммирует размер файлов в директории, возвращает МБ */
+async function dirSizeMb(dir: string): Promise<number> {
+  let total = 0;
+  async function walk(d: string) {
+    let entries;
+    try { entries = await fs.readdir(d, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const full = path.join(d, e.name);
+      if (e.isDirectory()) await walk(full);
+      else if (e.isFile()) { try { total += (await fs.stat(full)).size; } catch { /* пропускаем */ } }
+    }
+  }
+  try { await walk(dir); } catch { return 0; }
+  return Math.round((total / (1024 * 1024)) * 10) / 10;
+}
 
 /** Живое состояние: бэкапы, фоновые задачи, диск, каналы уведомлений, объёмы данных */
 export async function systemStatus() {
-  const [backup, cron, s, orders, visits, clients, masters] = await Promise.all([
+  const uploadDir = process.env.UPLOAD_DIR || "/data/uploads";
+  const [backup, cron, s, orders, visits, clients, masters, dbSizeRows, uploadsMb] = await Promise.all([
     db.setting.findUnique({ where: { key: "_backup" } }),
     db.setting.findUnique({ where: { key: "_cron" } }),
     getSettings(),
@@ -360,16 +378,20 @@ export async function systemStatus() {
     db.visit.count(),
     db.user.count({ where: { role: "CLIENT" } }),
     db.master.count({ where: { active: true } }),
+    db.$queryRaw<[{ size: bigint }]>`SELECT pg_database_size(current_database()) AS size`.catch(() => null),
+    dirSizeMb(uploadDir).catch(() => 0),
   ]);
   const b = (backup?.value ?? {}) as Mark;
   const cronMarks = (cron?.value ?? {}) as Record<string, string>;
   let diskFreePct: number | null = null;
   try {
-    const st = await fs.statfs(process.env.UPLOAD_DIR || "/data/uploads");
+    const st = await fs.statfs(uploadDir);
     diskFreePct = Math.round((st.bavail / st.blocks) * 100);
   } catch {
     diskFreePct = null;
   }
+  const dbMb = dbSizeRows ? Math.round((Number(dbSizeRows[0].size) / (1024 * 1024)) * 10) / 10 : null;
+  const backupsMb = typeof b.backupsMb === "number" ? b.backupsMb : null;
   const hours = (iso?: string) => (iso ? (Date.now() - Date.parse(iso)) / 3600_000 : null);
   const otpChannels = [
     s.otp.whatsapp.enabled && "WhatsApp",
@@ -381,6 +403,9 @@ export async function systemStatus() {
     restoreCheck: { lastOkAt: b.restoreOkAt ?? null, failed: !!(b.restoreErrorAt && Date.parse(b.restoreErrorAt) > Date.parse(b.restoreOkAt ?? "1970-01-01")) },
     cron: { lastRunAt: cronMarks.lastRunAt ?? null, ageMin: cronMarks.lastRunAt ? (Date.now() - Date.parse(cronMarks.lastRunAt)) / 60_000 : null },
     diskFreePct,
+    dbMb,
+    uploadsMb: Math.round(uploadsMb * 10) / 10,
+    backupsMb,
     otpChannels,
     teamChat: !!(s.notify.telegramBotToken && (s.notify.teamChatId || s.notify.telegramChatId)),
     techChat: hasAlertRecipient(s),
@@ -392,4 +417,14 @@ export async function systemStatus() {
     data: { orders, visits, clients, masters },
     backlogInCode: BACKLOG.length,
   };
+}
+
+/** История показателей хранилища за 30 дней (новые сначала в базе, для отображения переворачиваем) */
+export async function getStorageHistory() {
+  const rows = await db.storageMetric.findMany({
+    orderBy: { date: "desc" },
+    take: 30,
+    select: { date: true, dbMb: true, uploadsMb: true, backupsMb: true, diskFreePct: true },
+  });
+  return rows.reverse();
 }

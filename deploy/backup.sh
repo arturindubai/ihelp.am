@@ -23,6 +23,12 @@ mark() {
     log "WARN: не удалось записать отметку $1"
 }
 
+# Отметка числового значения (DB-7): markNum backupsMb 320
+markNum() {
+  $PSQL -d homeservices -c "INSERT INTO \"Setting\"(key, value) VALUES ('_backup', jsonb_build_object('$1', $2::bigint)) ON CONFLICT (key) DO UPDATE SET value = \"Setting\".value || EXCLUDED.value" > /dev/null 2>&1 ||
+    log "WARN: не удалось записать числовую отметку $1"
+}
+
 backup_db() {
   out="/backups/db-$1.sql.gz"
   tmp="/backups/.db-$1.$$.tmp"
@@ -95,6 +101,7 @@ cycle() {
   backup_db_retry "$day" 12 || return 1
   backup_uploads "$day" || mark lastErrorAt
   find /backups \( -name 'db-*.sql.gz' -o -name 'uploads-*.tar.gz' \) -mtime +"$KEEP_DAYS" -delete
+  backup_mb=$(du -sm /backups 2>/dev/null | awk 'NR==1{print int($1)}') && [ -n "$backup_mb" ] && markNum backupsMb "$backup_mb"
   if [ -z "$(find /backups -maxdepth 1 -name .restore-checked -mtime -7 2> /dev/null)" ]; then
     if restore_check "/backups/db-$day.sql.gz"; then
       touch /backups/.restore-checked

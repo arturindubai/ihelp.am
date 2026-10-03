@@ -1,4 +1,3 @@
-import fs from "fs/promises";
 import { NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { getSettings } from "@/server/settings";
@@ -17,6 +16,7 @@ import { setVisitStatus } from "@/server/services/visits";
 import { html, notifyTeam } from "@/server/notify";
 import { alertTech } from "@/server/alerts";
 import { ymd } from "@/lib/time";
+import { systemStatus } from "@/server/services/cc";
 
 const HOUR = 3600_000;
 
@@ -214,12 +214,34 @@ export async function GET(req: Request) {
     await alertTech("restore-check", "❌ <b>Еженедельная проверка восстановления из бэкапа не прошла</b>\nПроверить: docker compose logs backup", 24 * 60);
   }
 
-  // 7. Свободное место на диске сервера (том с фото лежит на основном диске)
+  // 7. Метрики хранилища: запись раз в сутки, алерты при низком диске или большой базе
+  let storageSnap: Awaited<ReturnType<typeof systemStatus>> | null = null;
+  await step("storage-metrics", () => daily("storage-metrics", 4, async () => {
+    storageSnap = await systemStatus();
+    const diskFreePct = storageSnap.diskFreePct ?? 100;
+    const dbMb = storageSnap.dbMb ?? 0;
+    const dateKey = new Date(ymd(now) + "T00:00:00Z");
+    await db.storageMetric.upsert({
+      where: { date: dateKey },
+      create: { date: dateKey, dbMb, uploadsMb: storageSnap.uploadsMb, backupsMb: storageSnap.backupsMb, diskFreePct },
+      update: { dbMb, uploadsMb: storageSnap.uploadsMb, backupsMb: storageSnap.backupsMb, diskFreePct },
+    });
+    if (diskFreePct < 20) {
+      await alertTech("disk-20pct", html`⚠️ <b>Мало места на диске: ${diskFreePct}%</b>\nБаза: ${dbMb.toFixed(0)} МБ · Загрузки: ${storageSnap.uploadsMb.toFixed(0)} МБ\nРекомендация: освободить диск (docker builder prune -f, старые бэкапы) или расширить хранилище`, 12 * 60);
+    }
+    if (dbMb > 5 * 1024) {
+      await alertTech("db-5gb", html`⚠️ <b>База данных превысила 5 ГБ: ${(dbMb / 1024).toFixed(1)} ГБ</b>\nРекомендация: перейти на managed PostgreSQL (например Supabase или Neon) или расширить диск сервера`, 24 * 60);
+    }
+  }), undefined);
+
+  // 7а. Проверка диска каждые 15 минут (без daily): алерт при < 20%
   let diskFreePct: number | null = null;
   try {
-    const st = await fs.statfs(process.env.UPLOAD_DIR || "/data/uploads");
-    diskFreePct = Math.round((st.bavail / st.blocks) * 100);
-    if (diskFreePct < 15) await alertTech("disk", html`⚠️ <b>На диске сервера осталось ${diskFreePct}% места (занято >${100 - diskFreePct}%)</b>\nОсвободить: node scripts/cc.mjs gc, docker builder prune -f, старые бэкапы`, 12 * 60);
+    if (!storageSnap) storageSnap = await systemStatus();
+    diskFreePct = storageSnap.diskFreePct;
+    if (diskFreePct != null && diskFreePct < 20) {
+      await alertTech("disk", html`⚠️ <b>На диске сервера осталось ${diskFreePct}% места (занято >${100 - diskFreePct}%)</b>\nОсвободить: node scripts/cc.mjs gc, docker builder prune -f, старые бэкапы`, 12 * 60);
+    }
   } catch (e) {
     console.error("[cron] disk check failed", e);
   }

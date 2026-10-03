@@ -4,6 +4,7 @@ import { pageUser } from "@/server/adminPage";
 import { boardAudit, depChainsStatus, healthStatus, mergeConflictStats, staleTasksList } from "@/server/services/ccBoard";
 import { otpStats } from "@/server/services/otpStats";
 import { workerDenials24 } from "@/server/services/ccHealth";
+import { getStorageHistory } from "@/server/services/cc";
 import { Forbidden } from "@/components/admin/ui";
 import { CcHeader } from "@/components/admin/cc/CcHeader";
 import { SystemPanel } from "@/components/admin/cc/SystemPanel";
@@ -44,7 +45,7 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
   const { locale } = await params;
   setRequestLocale(locale);
   if (!(await pageUser("control"))) return <Forbidden />;
-  const [t, th, h, audit, otp, staleTasks, mergeStats, denials, chains] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.healthPage"), healthStatus(), boardAudit(), otpStats(), staleTasksList(), mergeConflictStats(), workerDenials24(), depChainsStatus()]);
+  const [t, th, h, audit, otp, staleTasks, mergeStats, denials, chains, storageHistory] = await Promise.all([getTranslations("admin.cc"), getTranslations("admin.cc.healthPage"), healthStatus(), boardAudit(), otpStats(), staleTasksList(), mergeConflictStats(), workerDenials24(), depChainsStatus(), getStorageHistory()]);
   const uptime = h.uptimeSec >= 86400 ? th("uptimeD", { d: Math.floor(h.uptimeSec / 86400), h: Math.floor((h.uptimeSec % 86400) / 3600) }) : th("uptimeH", { h: Math.floor(h.uptimeSec / 3600), m: Math.floor((h.uptimeSec % 3600) / 60) });
   const tickTone: Tone = h.tickAgeMin == null ? "warn" : h.tickAgeMin > 3 ? "bad" : "ok";
   const workersValue = h.workers.state === "stopped" ? th("workersStopped") : h.workers.state === "planned" ? th("workersPlanned", { when: `${dateLabel(new Date(h.workers.pausedUntil!), locale, { day: "numeric", month: "short" })}, ${timeLabel(new Date(h.workers.pausedUntil!))}` }) : h.workers.state === "paused" ? th("workersPaused") : h.workers.enabled ? (h.workers.dryRun ? th("workersDry") : th("workersOn")) : th("workersOff");
@@ -171,6 +172,41 @@ export default async function HealthPage({ params }: { params: Promise<{ locale:
               </li>
             ))}
           </ul>
+        </Card>
+      )}
+
+      {storageHistory.length > 0 && (
+        <Card title={th("storageHistory")} className="mb-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-line text-left text-muted">
+                  <th className="py-1 pr-3 font-medium">{th("storageDate")}</th>
+                  <th className="py-1 pr-3 font-medium text-right">{th("storageDb")}</th>
+                  <th className="py-1 pr-3 font-medium text-right">{th("storageUploads")}</th>
+                  <th className="py-1 pr-3 font-medium text-right">{th("storageBackups")}</th>
+                  <th className="py-1 font-medium text-right">{th("storageDisk")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {storageHistory.map((row) => {
+                  const fmt = (mb: number) => mb >= 1024 ? `${(mb / 1024).toFixed(2)} ГБ` : `${mb} МБ`;
+                  const diskBad = row.diskFreePct < 20;
+                  const dbBad = row.dbMb > 5 * 1024;
+                  return (
+                    <tr key={row.date.toISOString()} className="border-b border-line/50 last:border-0">
+                      <td className="py-1 pr-3 tabular-nums text-muted">{dateLabel(row.date, locale, { day: "2-digit", month: "2-digit", year: "2-digit" })}</td>
+                      <td className={cn("py-1 pr-3 text-right tabular-nums", dbBad && "text-bad font-medium")}>{fmt(row.dbMb)}</td>
+                      <td className="py-1 pr-3 text-right tabular-nums">{fmt(row.uploadsMb)}</td>
+                      <td className="py-1 pr-3 text-right tabular-nums text-muted">{row.backupsMb != null ? fmt(row.backupsMb) : "—"}</td>
+                      <td className={cn("py-1 text-right tabular-nums", diskBad && "text-bad font-medium")}>{row.diskFreePct}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-xs text-muted">{th("storageHistoryHint")}</p>
         </Card>
       )}
 
