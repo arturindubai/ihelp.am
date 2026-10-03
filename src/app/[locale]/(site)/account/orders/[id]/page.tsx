@@ -12,6 +12,7 @@ import { calcCancelPenalty } from "@/lib/cancelPenalty";
 import { contactLinks } from "@/lib/contacts";
 import { StatusBadge } from "@/components/account/StatusBadge";
 import { OrderActions, OrderTrackerActions, VisitActions } from "@/components/account/OrderActions";
+import { SupportSheetButton } from "@/components/account/SupportSheetButton";
 import { getOrderEventFeed } from "@/server/services/orderEvents";
 import { ClearCart } from "@/components/ClearCart";
 import { resolveCartEntry } from "@/server/services/cart";
@@ -49,13 +50,22 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const r = o.recurrence as { weekdays: number[]; time: string; intervalDays: number } | null;
   const wd = tb("weekdaysShort").split(",");
 
-  // Ближайший активный визит
+  // Ближайший активный визит (для кнопок действий: перенос, отмена)
   const upcomingVisit = o.visits.find((v) =>
     ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"].includes(v.status) &&
     (v.scheduledAt == null || v.scheduledAt > new Date())
   ) ?? null;
 
-  const master = upcomingVisit?.master ?? null;
+  // Визит для карточки мастера: запланированный → в пути/в процессе → последний завершённый
+  const masterVisit =
+    upcomingVisit ??
+    o.visits.find((v) => ["ON_WAY", "IN_PROGRESS"].includes(v.status)) ??
+    [...o.visits].reverse().find((v) => v.status === "DONE") ??
+    null;
+
+  const master = masterVisit?.master ?? null;
+  // Кнопки связи с мастером показываются только при активных статусах (не после DONE)
+  const showMasterContact = masterVisit != null && masterVisit.status !== "DONE";
 
   // Последний выполненный визит без отзыва
   const reviewVisit = [...o.visits].reverse().find((v) => v.status === "DONE" && !v.review) ?? null;
@@ -123,6 +133,13 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     id: o.id, kind: o.kind, status: o.status,
     serviceId: o.serviceId, durationMin: o.durationMin,
     serviceSlug: o.service.slug,
+  };
+
+  // Контакты компании для шторки поддержки
+  const brandContacts = {
+    phone: settings.brand.phone,
+    whatsapp: settings.brand.whatsapp,
+    telegram: settings.brand.telegram,
   };
 
   // Карточка мастера (используется в двух местах)
@@ -201,18 +218,32 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                       )}
                     </div>
                   </div>
-                  {master.phone && (
-                    <div className="mt-3 flex gap-2">
-                      <a href={`tel:${master.phone}`} className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-surface px-3 py-2 text-sm font-medium hover:bg-brand-50">
-                        <Phone size={15} /> {t("callMaster")}
-                      </a>
-                      <a href={`https://wa.me/${master.phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-surface px-3 py-2 text-sm font-medium hover:bg-brand-50">
-                        <MessageCircle size={15} /> {t("writeMaster")}
-                      </a>
-                    </div>
+                  {showMasterContact && (
+                    master.phone ? (
+                      <div className="mt-3 flex gap-2">
+                        <a href={`tel:${master.phone}`} className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-surface px-3 py-2 text-sm font-medium hover:bg-brand-50">
+                          <Phone size={15} /> {t("callMaster")}
+                        </a>
+                        <a href={`https://wa.me/${master.phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-surface px-3 py-2 text-sm font-medium hover:bg-brand-50">
+                          <MessageCircle size={15} /> {t("writeMaster")}
+                        </a>
+                      </div>
+                    ) : (
+                      <SupportSheetButton
+                        contacts={brandContacts}
+                        orderNumber={String(o.number)}
+                        label={t("masterNoPhone")}
+                        className="mt-3 btn-outline w-full"
+                      />
+                    )
                   )}
                   <div className="mt-2 text-center">
-                    <Link href="/account" className="text-xs text-muted hover:underline">{t("supportLink")}</Link>
+                    <SupportSheetButton
+                      contacts={brandContacts}
+                      orderNumber={String(o.number)}
+                      label={t("supportLink")}
+                      className="text-xs text-muted hover:underline"
+                    />
                   </div>
                 </>
               ) : (
@@ -245,7 +276,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                     )}
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="text-sm">{t(`visitEvents.${e.status}` as Parameters<typeof t>[0])}</span>
-                      <span className="shrink-0 text-xs text-muted">{timeLabel(e.createdAt)}</span>
+                      <span className="shrink-0 text-xs text-muted">{dateLabel(e.createdAt, locale, { day: "numeric", month: "short" })}, {hm(e.createdAt)}</span>
                     </div>
                   </li>
                 ))}
@@ -354,18 +385,32 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                     )}
                   </div>
                 </div>
-                {master.phone && (
-                  <div className="mt-3 flex gap-2">
-                    <a href={`tel:${master.phone}`} className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-surface px-3 py-2 text-sm font-medium hover:bg-brand-50">
-                      <Phone size={15} /> {t("callMaster")}
-                    </a>
-                    <a href={`https://wa.me/${master.phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-surface px-3 py-2 text-sm font-medium hover:bg-brand-50">
-                      <MessageCircle size={15} /> {t("writeMaster")}
-                    </a>
-                  </div>
+                {showMasterContact && (
+                  master.phone ? (
+                    <div className="mt-3 flex gap-2">
+                      <a href={`tel:${master.phone}`} className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-surface px-3 py-2 text-sm font-medium hover:bg-brand-50">
+                        <Phone size={15} /> {t("callMaster")}
+                      </a>
+                      <a href={`https://wa.me/${master.phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-surface px-3 py-2 text-sm font-medium hover:bg-brand-50">
+                        <MessageCircle size={15} /> {t("writeMaster")}
+                      </a>
+                    </div>
+                  ) : (
+                    <SupportSheetButton
+                      contacts={brandContacts}
+                      orderNumber={String(o.number)}
+                      label={t("masterNoPhone")}
+                      className="mt-3 btn-outline w-full"
+                    />
+                  )
                 )}
                 <div className="mt-2 text-center">
-                  <Link href="/account" className="text-xs text-muted hover:underline">{t("supportLink")}</Link>
+                  <SupportSheetButton
+                    contacts={brandContacts}
+                    orderNumber={String(o.number)}
+                    label={t("supportLink")}
+                    className="text-xs text-muted hover:underline"
+                  />
                 </div>
               </>
             ) : (

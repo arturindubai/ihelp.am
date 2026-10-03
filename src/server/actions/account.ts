@@ -86,6 +86,7 @@ export async function cancelVisitAction(visitId: string) {
   // Уведомить мастера до изменения статуса, пока masterId ещё доступен
   if (v.masterId) await notifyMasterCancelled(v.id).catch(() => {});
   await db.visit.update({ where: { id: v.id }, data: { status, ...(status === "UNSCHEDULED" ? { scheduledAt: null, masterId: null } : {}) } });
+  await db.visitEvent.create({ data: { visitId: v.id, orderId: v.orderId, status, actor: "client" } }).catch(() => {});
   if (v.order.kind === "ONE_TIME") await db.order.update({ where: { id: v.orderId }, data: { status: "CANCELLED", cancelReason: "client" } });
   await notifyCancelVisitTeam(v.orderId, v.scheduledAt, status === "SKIPPED");
   // Клиент: уведомление об отмене (только для разовых заказов; для подписки SKIPPED — без уведомления)
@@ -110,6 +111,7 @@ export async function rescheduleVisitAction(visitId: string, date: string, time:
     if (e instanceof BookingError) return { ok: false, error: e.message };
     throw e;
   }
+  await db.visitEvent.create({ data: { visitId: v.id, orderId: v.orderId, status: "SCHEDULED", actor: "client" } }).catch(() => {});
   await notifyRescheduleVisitTeam(v.orderId, date, time);
   await notifyMasterRescheduled(v.id).catch(() => {});
   await notifyClientRescheduled(v.id).catch(() => {});

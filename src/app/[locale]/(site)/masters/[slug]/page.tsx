@@ -14,6 +14,7 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const { locale, slug } = await params;
   const [m, s] = await Promise.all([getMasterPublicProfile(slug), getSettings()]);
   if (!m) return {};
+  if (m.isDemo) return { robots: { index: false, follow: false } };
   const name = tr(m.name, locale);
   const cityStr = locale === "ru" ? "в Ереване" : "in Yerevan";
   const ratingStr = m.reviewsCount
@@ -52,7 +53,7 @@ export default async function MasterPage({ params }: { params: Promise<{ locale:
         <div className="rounded-xl bg-surface p-3"><div className="text-lg font-bold">{m.jobsCount}</div><div className="text-xs text-muted">{tc("jobs", { count: m.jobsCount }).replace(/^\d+\s/, "")}</div></div>
         <div className="rounded-xl bg-surface p-3"><div className="text-lg font-bold">{m.experienceYears}</div><div className="text-xs text-muted">{tc("yearsExp", { count: m.experienceYears }).replace(/^\d+\s/, "")}</div></div>
       </div>
-      {tr(m.bio, locale) && (
+      {!m.isDemo && tr(m.bio, locale) && (
         <section className="mt-6"><h2 className="h2 mb-2">{t("about")}</h2><p className="whitespace-pre-line text-muted">{tr(m.bio, locale)}</p></section>
       )}
       {langs && <p className="mt-3 text-sm"><span className="text-muted">{tc("languages")}:</span> {langs}</p>}

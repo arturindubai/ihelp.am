@@ -342,6 +342,7 @@ async function main() {
       where: { slug },
       create: {
         slug,
+        isDemo: true,
         name: t(ru, en),
         bio: t("Демо-профиль. Замените фото и описание в админке.", "Demo profile."),
         photo: `/img/master-${i + 1}.svg`,
