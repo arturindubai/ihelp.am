@@ -2398,16 +2398,18 @@
       "tomorrowItem": "• {time} — {serviceName} · {clientName} · {address}"
     },
     "order": {
-      "cancelled": "❌ Visit cancelled\nService: {serviceName}, {date}\nWant to reschedule? Place a new order on the website.",
-      "completed": "⭐ How did it go?\n{masterName} has completed the work. Your review helps other customers and motivates the master.\nLeave a review: {reviewLink}",
-      "created": "✅ Order confirmed\nService: {serviceName}\nDate: {date}, {time}\nAddress: {address}\nTotal: {price}\nThank you for choosing iHelp! We will assign a master soon.",
-      "masterAssigned": "👷 Master assigned\nService: {serviceName}, {date} at {time}\nMaster: {masterName}\nFeel free to contact us with any questions.",
-      "onWay": "🚗 Your master is on the way\n{masterName} is heading to you. Estimated arrival: {eta} min.",
-      "rescheduled": "🔄 Visit rescheduled\nService: {serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}",
+      "cancelled": "❌ Visit cancelled — order #{n}\nService: {serviceName}\nDate: {date}, {time}{feeLine}\nView order: {link}\nQuestions? {contacts}",
+      "completed": "⭐ Visit completed — order #{n}\nPro: {masterName}. Your review helps other customers.\nLeave a review: {reviewLink}\nQuestions? {contacts}",
+      "created": "✅ Order #{n} confirmed\n{serviceName}, {date}, {time}\nAddress: {address}\nPro: {masterLine}\nTotal: {price}\nView order: {link}\nQuestions? {contacts}",
+      "masterAssigned": "👷 Pro assigned — order #{n}\n{serviceName}, {date} at {time}\nPro: {masterName}\nView order: {link}\nQuestions? {contacts}",
+      "onWay": "🚗 Your pro is on the way — order #{n}\n{masterName} is heading to you. Estimated arrival: {eta} min.\nView order: {link}\nQuestions? {contacts}",
+      "orderCancelled": "❌ Order #{n} cancelled\nService: {serviceName}\nDate: {date}, {time}{feeLine}\nQuestions? {contacts}",
+      "rescheduled": "🔄 Visit rescheduled — order #{n}\n{serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}\nView order: {link}\nQuestions? {contacts}",
       "subjectCancelled": "Order #{n} cancelled",
       "subjectCompleted": "How was your visit? — order #{n}",
       "subjectCreated": "Order #{n} confirmed",
-      "subjectMasterAssigned": "Master assigned — order #{n}",
+      "subjectMasterAssigned": "Pro assigned — order #{n}",
+      "subjectOnWay": "Your pro is on the way — order #{n}",
       "subjectRescheduled": "Visit rescheduled — order #{n}",
       "subjectVisitCancelled": "Visit {date} cancelled — order #{n}"
     }

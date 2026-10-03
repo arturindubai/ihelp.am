@@ -2497,16 +2497,18 @@
       "tomorrowItem": "• {time} — {serviceName} · {clientName} · {address}"
     },
     "order": {
-      "cancelled": "❌ Визит отменён\nУслуга: {serviceName}, {date}\nЕсли хотите перенести — оформите новый заказ на сайте.",
-      "completed": "⭐ Как прошёл визит?\n{masterName} завершил работу. Ваш отзыв помогает другим клиентам и мотивирует мастера.\nОставить отзыв: {reviewLink}",
-      "created": "✅ Заказ принят\nУслуга: {serviceName}\nДата: {date}, {time}\nАдрес: {address}\nСтоимость: {price}\nСпасибо, что выбрали iHelp! Ваш заказ уже у нас — скоро назначим мастера.",
-      "masterAssigned": "👷 Мастер назначен\nУслуга: {serviceName}, {date} в {time}\nМастер: {masterName}\nЕсли есть вопросы — напишите нам.",
-      "onWay": "🚗 Мастер выехал\n{masterName} уже в пути. Примерное время прибытия: {eta} мин.",
-      "rescheduled": "🔄 Визит перенесён\nУслуга: {serviceName}\nНовая дата: {date}, {time}\nАдрес прежний: {address}",
+      "cancelled": "❌ Визит отменён — заказ №{n}\nУслуга: {serviceName}\nДата: {date}, {time}{feeLine}\nОткрыть заказ: {link}\nВопросы: {contacts}",
+      "completed": "⭐ Визит завершён — заказ №{n}\nМастер: {masterName}. Ваш отзыв помогает другим клиентам.\nОставить отзыв: {reviewLink}\nВопросы: {contacts}",
+      "created": "✅ Заказ №{n} принят\n{serviceName}, {date}, {time}\nАдрес: {address}\nМастер: {masterLine}\nК оплате мастеру: {price}\nОткрыть заказ: {link}\nВопросы: {contacts}",
+      "masterAssigned": "👷 Мастер назначен — заказ №{n}\n{serviceName}, {date} в {time}\nМастер: {masterName}\nОткрыть заказ: {link}\nВопросы: {contacts}",
+      "onWay": "🚗 Мастер в пути — заказ №{n}\nМастер {masterName} уже в пути. Будет примерно через {eta} мин.\nОткрыть заказ: {link}\nВопросы: {contacts}",
+      "orderCancelled": "❌ Заказ №{n} отменён\nУслуга: {serviceName}\nДата: {date}, {time}{feeLine}\nВопросы: {contacts}",
+      "rescheduled": "🔄 Визит перенесён — заказ №{n}\n{serviceName}\nНовая дата: {date}, {time}\nАдрес: {address}\nОткрыть заказ: {link}\nВопросы: {contacts}",
       "subjectCancelled": "Заказ №{n} отменён",
       "subjectCompleted": "Как прошёл визит? — заказ №{n}",
       "subjectCreated": "Заказ №{n} принят",
       "subjectMasterAssigned": "Мастер назначен — заказ №{n}",
+      "subjectOnWay": "Мастер в пути — заказ №{n}",
       "subjectRescheduled": "Визит перенесён — заказ №{n}",
       "subjectVisitCancelled": "Визит {date} отменён — заказ №{n}"
     }
