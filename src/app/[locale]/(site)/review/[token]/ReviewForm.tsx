@@ -14,9 +14,10 @@ interface ReviewFormProps {
   serviceTitle: string;
   visitDateLabel: string;
   serviceSlug: string;
+  orderId: string;
 }
 
-export function ReviewForm({ token, masterName, masterPhoto, serviceTitle, visitDateLabel, serviceSlug }: ReviewFormProps) {
+export function ReviewForm({ token, masterName, masterPhoto, serviceTitle, visitDateLabel, serviceSlug, orderId }: ReviewFormProps) {
   const t = useTranslations("review");
   const tc = useTranslations("common");
   const ratingLabels = t("ratingLabels").split(",");
@@ -41,7 +42,7 @@ export function ReviewForm({ token, masterName, masterPhoto, serviceTitle, visit
         <div className="text-5xl">★</div>
         <p className="mt-4 text-lg font-semibold">{t("thanks")}</p>
         <p className="mt-1 text-sm text-muted">{t("thanksSub")}</p>
-        <Link href={`/s/${serviceSlug}`} className="btn-primary mt-6 flex w-full items-center justify-center">
+        <Link href={`/book/${serviceSlug}?reorder=${orderId}`} className="btn-primary mt-6 flex w-full items-center justify-center">
           {t("bookAgain")}
         </Link>
         <Link href="/" className="btn-outline mt-2 flex w-full items-center justify-center">

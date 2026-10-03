@@ -2141,6 +2141,7 @@
     "masterBusy": "Busy at this time",
     "noCallLabel": "No call needed before arrival",
     "noSlots": "No available times for this day",
+    "paramChanged": "The option «{param}» is no longer available. Please select an alternative.",
     "payFirst": "First visit",
     "payNow": "Total",
     "payment": "Payment",
@@ -2148,6 +2149,7 @@
     "phoneRequiredBody": "The pro contacts you by phone before the visit. Add your number — it only takes a moment.",
     "pickDays": "Days of the week",
     "pickDaysHint": "Choose at least {count} {count, plural, one {day} other {days}}",
+    "priceUpdated": "Price updated: {newPrice} AMD instead of {oldPrice} AMD",
     "promo": "Promo code",
     "promoApplied": "Promo code {code} applied",
     "promoErrors": {
@@ -2215,6 +2217,7 @@
     "totalCart": "Cart total"
   },
   "catalog": {
+    "allServices": "All services",
     "arrivalToday": "today",
     "arrivalWithin": "within {n} h",
     "badgeNew": "New",
@@ -2250,6 +2253,8 @@
     "notifySuccess": "You're on the list! We'll message you when booking opens.",
     "notifyTitle": "Notify me at launch",
     "notifyTooMany": "Too many requests, please try again later",
+    "reorderUnavailable": "The options from your previous order have changed. Please select new ones.",
+    "serviceUnavailable": "This service is temporarily unavailable. Choose another or come back later.",
     "writeWhatsApp": "Write on WhatsApp"
   },
   "common": {

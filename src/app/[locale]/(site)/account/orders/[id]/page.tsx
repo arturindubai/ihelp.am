@@ -306,7 +306,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               {o.status === "CANCELLED" && <div className="flex justify-between gap-4"><dt className="text-muted">{t("cancelledAt")}</dt><dd className="text-right text-sm text-muted">{dateLabel(o.updatedAt, locale, { day: "numeric", month: "short" })}, {timeLabel(o.updatedAt)}</dd></div>}
               {o.cancelPenalty > 0 && <div className="flex justify-between"><dt className="text-muted">{t("cancelPenaltyLabel")}</dt><dd className="font-semibold text-bad">{amd(o.cancelPenalty)}</dd></div>}
             </dl>
-            <OrderActions order={{ id: o.id, kind: o.kind, status: o.status }} />
+            <OrderActions order={{ id: o.id, kind: o.kind, status: o.status, serviceSlug: o.service.slug }} />
           </section>
 
           {/* Список визитов */}
