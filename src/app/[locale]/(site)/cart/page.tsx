@@ -97,7 +97,10 @@ export default async function CartPage({ params }: { params: Promise<{ locale: s
                   )}
                 </div>
                 <div className="flex items-center justify-between mt-1">
-                  <Link href={`/s/${item.slug}`} className="text-sm text-brand underline underline-offset-2">
+                  <Link
+                    href={`/s/${item.slug}?o=${item.optionIds.join(",")}&p=${item.planId ?? ""}&edit=1`}
+                    className="text-sm text-brand underline underline-offset-2"
+                  >
                     {t("change")}
                   </Link>
                   <CartItemCounter cartItemId={item.cartItemId} serviceId={item.serviceId} qty={item.qty} />
