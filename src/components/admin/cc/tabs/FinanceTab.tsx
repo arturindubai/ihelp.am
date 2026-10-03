@@ -85,37 +85,60 @@ function CashBlock({
 }) {
   if (cash.masters.length === 0) return null;
   return (
-    <div className="rounded-xl border border-warn-50 bg-warn-50 p-4">
-      <h2 className="h3 mb-1">{t("finance.cashTitle")}</h2>
-      <p className="mb-3 text-xs text-muted">{t("finance.cashHint")}</p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-xs text-muted">
-              <th className="pb-1.5 text-left font-medium">{t("finance.master")}</th>
-              <th className="pb-1.5 text-right font-medium">{t("finance.cashOrders")}</th>
-              <th className="pb-1.5 text-right font-medium">{t("finance.toCollect")}</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {cash.masters.map((m) => (
-              <tr key={m.masterId}>
-                <td className="max-w-[12rem] truncate py-2" title={m.masterName ?? undefined}>
-                  {m.masterName || t("finance.noName")}
-                </td>
-                <td className="py-2 text-right">{m.ordersCount}</td>
-                <td className="py-2 text-right font-medium">{amd(m.toCollect)}</td>
+    <div className="space-y-3">
+      {/* Два сводных блока: получение не отмечено / на руках у мастеров */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-2">
+        <div className="card p-4">
+          <p className="text-sm text-muted">{t("finance.cashNotConfirmed")}</p>
+          <p className={cn("mt-1 text-xl font-bold text-ink", cash.totalToCollect > 0 && "text-warn")}>
+            {amd(cash.totalToCollect)}
+            {cash.totalToCollect > 0 && <span className="ml-1 text-warn">⚠</span>}
+          </p>
+          <p className="mt-1 text-xs text-muted">{t("finance.cashNotConfirmedHint")}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-sm text-muted">{t("finance.cashInHands")}</p>
+          <p className="mt-1 text-xl font-bold text-ink">{amd(cash.totalReceived)}</p>
+          <p className="mt-1 text-xs text-muted">{t("finance.cashInHandsHint")}</p>
+          <p className="mt-1 text-xs text-muted italic">{t("finance.cashInHandsTooltip")}</p>
+        </div>
+      </div>
+
+      {/* Таблица по мастерам */}
+      <div className="rounded-xl border border-warn-50 bg-warn-50 p-4">
+        <h2 className="h3 mb-3">{t("finance.cashTitle")}</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted">
+                <th className="pb-1.5 text-left font-medium">{t("finance.master")}</th>
+                <th className="pb-1.5 text-right font-medium">{t("finance.cashOrders")}</th>
+                <th className="pb-1.5 text-right font-medium">{t("finance.cashNotConfirmed")}</th>
+                <th className="pb-1.5 text-right font-medium">{t("finance.cashInHandsShort")}</th>
               </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="border-t border-warn text-sm font-semibold">
-              <td className="pt-2">{t("finance.total")}</td>
-              <td className="pt-2 text-right">{cash.masters.reduce((s, m) => s + m.ordersCount, 0)}</td>
-              <td className="pt-2 text-right">{amd(cash.totalToCollect)}</td>
-            </tr>
-          </tfoot>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {cash.masters.map((m) => (
+                <tr key={m.masterId}>
+                  <td className="max-w-[12rem] truncate py-2" title={m.masterName ?? undefined}>
+                    {m.masterName || t("finance.noName")}
+                  </td>
+                  <td className="py-2 text-right">{m.ordersCount}</td>
+                  <td className={cn("py-2 text-right font-medium", m.toCollect > 0 && "text-warn")}>{amd(m.toCollect)}</td>
+                  <td className="py-2 text-right font-medium">{amd(m.received)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-warn text-sm font-semibold">
+                <td className="pt-2">{t("finance.total")}</td>
+                <td className="pt-2 text-right">{cash.masters.reduce((s, m) => s + m.ordersCount, 0)}</td>
+                <td className="pt-2 text-right">{amd(cash.totalToCollect)}</td>
+                <td className="pt-2 text-right">{amd(cash.totalReceived)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       </div>
     </div>
   );

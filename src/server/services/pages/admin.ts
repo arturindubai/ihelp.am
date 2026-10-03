@@ -19,7 +19,7 @@ export async function getDashboardData() {
   const ago7 = new Date(Date.now() - 7 * 86400_000);
   const ago30 = new Date(Date.now() - 30 * 86400_000);
 
-  const [todayCnt, tomorrowCnt, newOrders, revenue, subs, unassigned, pendingReviews, visits30, first30, cashPending, upcoming, recent, masters] = await Promise.all([
+  const [todayCnt, tomorrowCnt, newOrders, revenue, subs, unassigned, pendingReviews, visits30, first30, cashNotConfirmed, cashInHands, upcoming, recent, masters] = await Promise.all([
     db.visit.count({ where: { scheduledAt: { gte: d0, lt: d1 }, status: { in: [...BUSY_STATUSES, "DONE"] } } }),
     db.visit.count({ where: { scheduledAt: { gte: d1, lt: d2 }, status: { in: BUSY_STATUSES } } }),
     db.order.count({ where: { createdAt: { gte: ago7 } } }),
@@ -29,7 +29,10 @@ export async function getDashboardData() {
     db.review.count({ where: { status: "PENDING" } }),
     db.visit.count({ where: { scheduledAt: { gte: ago30, lt: d1 }, status: { in: [...BUSY_STATUSES, "DONE"] } } }),
     db.visit.count({ where: { index: 1, scheduledAt: { gte: ago30, lt: d1 }, status: { in: [...BUSY_STATUSES, "DONE"] }, order: { config: { path: ["firstOrder"], equals: true } } } }),
+    // cashNotConfirmed: визит выполнен, мастер не нажал «Получил наличные» — статус приёма неизвестен
     db.visit.aggregate({ where: { status: "DONE", cashCollected: false, order: { paymentMethod: "CASH" } }, _sum: { price: true }, _count: true }),
+    // cashInHands: мастер отметил получение, деньги у него на руках, ещё не сданы
+    db.visit.aggregate({ where: { status: "DONE", cashCollected: true, order: { paymentMethod: "CASH" } }, _sum: { price: true }, _count: true }),
     db.visit.findMany({ where: { scheduledAt: { gte: new Date() }, status: { in: BUSY_STATUSES } }, orderBy: { scheduledAt: "asc" }, take: 8, include: { master: true, order: { include: { user: true, service: true } } } }),
     db.order.findMany({ orderBy: { createdAt: "desc" }, take: 8, include: { user: true, service: true, plan: true } }),
     db.master.findMany({ where: { active: true }, include: { visits: { where: { scheduledAt: { gte: d0, lt: d7 }, status: { in: [...BUSY_STATUSES, "DONE"] } }, select: { durationMin: true } } } }),
@@ -42,7 +45,7 @@ export async function getDashboardData() {
     busyMin += m.visits.reduce((s, v) => s + v.durationMin, 0);
   }
 
-  return { todayCnt, tomorrowCnt, newOrders, revenue, subs, unassigned, pendingReviews, visits30, first30, cashPending, upcoming, recent, workMin, busyMin };
+  return { todayCnt, tomorrowCnt, newOrders, revenue, subs, unassigned, pendingReviews, visits30, first30, cashNotConfirmed, cashInHands, upcoming, recent, workMin, busyMin };
 }
 
 // ──────────────── КЛИЕНТЫ ────────────────
