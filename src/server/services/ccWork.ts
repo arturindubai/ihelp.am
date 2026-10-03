@@ -5,6 +5,7 @@ import { alertTech } from "../alerts";
 import { html, notifyTech } from "../notify";
 import { BLOCKED_ON_LABELS, STATUSES } from "@/lib/backlog-labels";
 import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, criteriaGate, doneGate, extractFollowUpKeys, isDesignerTask, isProductTask, isReady, needsReason, noPoolGate, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type CriterionResult, type Role, type TaskStatusKey, unblockTarget, isCodeTask, isUiTask, standGate } from "@/lib/cc-flow";
+import { maskSecrets } from "@/lib/secrets-mask";
 import { isAgentAuthor, findBlockingError, baselineFor } from "@/lib/cc-triage";
 import { nextIntakeKey, intakeTitle } from "@/lib/cc-lanes";
 import { intakeClosingMapValid, parseDuplicateOriginalKey } from "@/lib/cc-intake";
@@ -45,24 +46,30 @@ async function log(taskId: string, actor: string, field: string, from: string | 
   await db.taskEvent.create({ data: { taskId, actor, field, from, to } });
 }
 
-async function say(taskId: string, author: string, kind: CommentKind, text: string, taskKey: string) {
+async function say(taskId: string, author: string, kind: CommentKind, text: string, taskKey: string): Promise<boolean> {
   const trimmed = text.trim();
-  if (!trimmed) return;
-  if (!needsLibrary(trimmed)) {
-    await db.taskComment.create({ data: { taskId, author, kind, text: trimmed } });
-    return;
+  if (!trimmed) return false;
+  const { masked: safeText, found: hadSecret } = maskSecrets(trimmed);
+  if (!needsLibrary(safeText)) {
+    await db.taskComment.create({ data: { taskId, author, kind, text: safeText } });
+  } else {
+    // Текст длиннее лимита: полный материал — в Канон, в ленте — резюме со ссылкой
+    let libraryNoteId: string | null = null;
+    try {
+      const doc = await createNote({ title: buildLibraryTitle(taskKey, author, kind), kind: "knowledge", content: safeText }, author);
+      libraryNoteId = doc.slug;
+    } catch {
+      // Ошибка сохранения: храним обрезанный текст с пометкой
+      await db.taskComment.create({ data: { taskId, author, kind, text: safeText.slice(0, 4900) + "\n\n⚠️ Текст обрезан — не удалось сохранить в Канон." } });
+      if (hadSecret) await db.taskComment.create({ data: { taskId, author: "system", kind: "system", text: "⚠️ В записи обнаружен секрет — значение скрыто. Ключи вставляются в Control Center → Ключи." } });
+      return hadSecret;
+    }
+    await db.taskComment.create({ data: { taskId, author, kind, text: buildSummaryText(safeText, libraryNoteId), libraryNoteId } });
   }
-  // Текст длиннее лимита: полный материал — в Канон, в ленте — резюме со ссылкой
-  let libraryNoteId: string | null = null;
-  try {
-    const doc = await createNote({ title: buildLibraryTitle(taskKey, author, kind), kind: "knowledge", content: trimmed }, author);
-    libraryNoteId = doc.slug;
-  } catch {
-    // Ошибка сохранения: храним обрезанный текст с пометкой
-    await db.taskComment.create({ data: { taskId, author, kind, text: trimmed.slice(0, 4900) + "\n\n⚠️ Текст обрезан — не удалось сохранить в Канон." } });
-    return;
+  if (hadSecret) {
+    await db.taskComment.create({ data: { taskId, author: "system", kind: "system", text: "⚠️ В записи обнаружен секрет — значение скрыто. Ключи вставляются в Control Center → Ключи." } });
   }
-  await db.taskComment.create({ data: { taskId, author, kind, text: buildSummaryText(trimmed, libraryNoteId), libraryNoteId } });
+  return hadSecret;
 }
 
 /** Каким видом записи ляжет текст перехода в ленту задачи */
@@ -109,7 +116,9 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   const task = await db.task.findUnique({ where: { key }, include: { _count: { select: { attachments: true } } } });
   if (!task) throw new CcError("not_found");
   const from = task.status;
-  const text = input.text?.trim() ?? "";
+  // Маскируем секреты до валидации длины и сохранения в блокировку/доказательство
+  const { masked: maskedInputText } = maskSecrets(input.text?.trim() ?? "");
+  const text = maskedInputText;
   const force = !!input.force && (actor.role === "owner" || actor.role === "cto");
   // «Разблокировать» возвращает задачу туда, откуда её заблокировали; явный целевой статус — только с force
   const to = from === "blocked" && input.to === "ready" && !force ? unblockTarget(task.blockedFrom, actor.role) : input.to;
@@ -561,14 +570,15 @@ export async function retriage(key: string) {
   await db.taskEvent.create({ data: { taskId: t.id, actor: "system", field: "retriage", from: null, to: "pending" } });
 }
 
-export async function agentNote(key: string, agent: string, kind: CommentKind, text: string) {
+export async function agentNote(key: string, agent: string, kind: CommentKind, text: string): Promise<{ masked: boolean }> {
   const t = await db.task.findUnique({ where: { key }, select: { id: true, status: true, claimedBy: true } });
   if (!t) throw new CcError("not_found");
   if (text.trim().length < 2) throw new CcError("text_required");
-  await say(t.id, agent, kind, text, key);
+  const masked = await say(t.id, agent, kind, text, key);
   if (["in_progress", "review"].includes(t.status) && t.claimedBy === agent) await heartbeat(key, agent);
   if (kind === "error" && roleOf(agent) === "deployer") await alertTech(`cc:error:${key}`, html`❌ <b>${key}</b> · ${agent}
 ${text.slice(0, 400)}`, 5);
+  return { masked };
 }
 
 /**

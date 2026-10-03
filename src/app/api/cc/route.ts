@@ -298,12 +298,14 @@ export async function POST(req: Request) {
       }
       case "message": {
         const to = str(body.to) ?? "owner";
+        let msgMasked = false;
         try {
-          await sendMessage({ to, from: agent, text, taskKey: key ?? null });
+          const result = await sendMessage({ to, from: agent, text, taskKey: key ?? null });
+          msgMasked = result.masked;
         } catch (e) {
           return json({ error: (e as Error).message }, 400);
         }
-        return json({ ok: true });
+        return json({ ok: true, ...(msgMasked ? { hint: "Ключи вставляются в Control Center → Ключи." } : {}) });
       }
       case "heartbeat": {
         if (!key) return json({ error: "key_required" }, 400);
@@ -314,8 +316,8 @@ export async function POST(req: Request) {
         if (!key) return json({ error: "key_required" }, 400);
         const kind = str(body.kind) ?? "progress";
         if (!["progress", "note", "error"].includes(kind)) return json({ error: "bad_kind" }, 400);
-        await agentNote(key, agent, kind as "progress" | "note" | "error", text);
-        return json({ ok: true });
+        const { masked: noteMasked } = await agentNote(key, agent, kind as "progress" | "note" | "error", text);
+        return json({ ok: true, ...(noteMasked ? { hint: "Ключи вставляются в Control Center → Ключи." } : {}) });
       }
       case "status":
       case "review":

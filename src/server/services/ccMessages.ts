@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "../db";
 import { html, notifyTech } from "../notify";
 import { transition, reblockOn } from "./ccWork";
+import { maskSecrets } from "@/lib/secrets-mask";
 
 /**
  * Сообщения Control Center (вкладка «Сообщения», как Notify в LIA). Владелец пишет роли или всем воркерам —
@@ -14,14 +15,15 @@ export type MessageRole = (typeof MESSAGE_ROLES)[number];
 
 export async function sendMessage(m: { to: string; from: string; text: string; taskKey?: string | null }) {
   if (!(MESSAGE_ROLES as readonly string[]).includes(m.to)) throw new Error("bad_role");
-  const text = m.text.trim().slice(0, 4000);
+  const { masked: safeText, found: hadSecret } = maskSecrets(m.text.trim().slice(0, 4000));
+  const text = safeText;
   if (text.length < 2) throw new Error("empty");
   const msg = await db.ccMessage.create({ data: { toRole: m.to, fromAgent: m.from.slice(0, 60), text, taskKey: m.taskKey?.trim().toUpperCase() || null } });
   // Владельцу — сразу в тех-чат
   if (m.to === "owner") {
     await notifyTech(html`✉️ <b>${m.from}</b>${m.taskKey ? ` · ${m.taskKey}` : ""}\n${text.slice(0, 1500)}`).catch(() => null);
   }
-  return msg;
+  return { msg, masked: hadSecret };
 }
 
 /** Воркеру: непрочитанное его роли и общее «всем воркерам». Отмечается прочитанным этим воркером */
