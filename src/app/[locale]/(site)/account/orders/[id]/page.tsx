@@ -8,8 +8,11 @@ import { getSettings } from "@/server/settings";
 import { tr } from "@/i18n/locales";
 import { amd, dateLabel, durationLabel, timeLabel } from "@/lib/format";
 import { hm } from "@/lib/time";
+import { calcCancelPenalty } from "@/lib/cancelPenalty";
+import { contactLinks } from "@/lib/contacts";
 import { StatusBadge } from "@/components/account/StatusBadge";
 import { OrderActions, OrderTrackerActions, VisitActions } from "@/components/account/OrderActions";
+import { SupportSheetButton } from "@/components/account/SupportSheetButton";
 import { getOrderEventFeed } from "@/server/services/orderEvents";
 import { ClearCart } from "@/components/ClearCart";
 import { resolveCartEntry } from "@/server/services/cart";
@@ -47,7 +50,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const r = o.recurrence as { weekdays: number[]; time: string; intervalDays: number } | null;
   const wd = tb("weekdaysShort").split(",");
 
-  // Ближайший активный визит
+  // Ближайший активный визит (для кнопок действий: перенос, отмена)
   const upcomingVisit = o.visits.find((v) =>
     ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"].includes(v.status) &&
     (v.scheduledAt == null || v.scheduledAt > new Date())
@@ -61,7 +64,16 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     ? Math.ceil((o.expiresAt.getTime() - Date.now()) / 86400_000)
     : null;
 
-  const master = upcomingVisit?.master ?? null;
+  // Визит для карточки мастера: запланированный → в пути/в процессе → последний завершённый
+  const masterVisit =
+    upcomingVisit ??
+    o.visits.find((v) => ["ON_WAY", "IN_PROGRESS"].includes(v.status)) ??
+    [...o.visits].reverse().find((v) => v.status === "DONE") ??
+    null;
+
+  const master = masterVisit?.master ?? null;
+  // Кнопки связи с мастером показываются только при активных статусах (не после DONE)
+  const showMasterContact = masterVisit != null && masterVisit.status !== "DONE";
 
   // Последний выполненный визит без отзыва
   const reviewVisit = [...o.visits].reverse().find((v) => v.status === "DONE" && !v.review) ?? null;
@@ -80,6 +92,26 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       cancelDeadline = { free: false, label: amd(settings.booking.lateCancelFeeAmd) };
     }
   }
+
+  // Визит в пути или идёт работа → отмена заблокирована, только поддержка
+  const isBusy = o.visits.some((v) => v.status === "ON_WAY" || v.status === "IN_PROGRESS");
+
+  // Предпросмотр суммы штрафа для диалога подтверждения отмены
+  const now2 = new Date();
+  const freeLimit = new Date(now2.getTime() + settings.booking.freeCancelHours * 3600_000);
+  const cancellableVisits = o.visits.filter((v) => ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"].includes(v.status));
+  const lateVisits2 = o.visits.filter((v) => ["SCHEDULED", "CONFIRMED"].includes(v.status) && v.scheduledAt && v.scheduledAt <= freeLimit);
+  const firstLate2 = [...lateVisits2].sort((a, b) => (a.scheduledAt?.getTime() ?? 0) - (b.scheduledAt?.getTime() ?? 0))[0];
+  const previewFeeAmd = firstLate2?.scheduledAt ? calcCancelPenalty(firstLate2.scheduledAt, now2, settings.booking.freeCancelHours, settings.booking.lateCancelFeeAmd) : 0;
+  const cancelPreview = ["ACTIVE", "PAUSED"].includes(o.status) ? {
+    feeAmd: previewFeeAmd,
+    freeDeadline: o.kind === "ONE_TIME" && cancelDeadline?.free ? cancelDeadline.label : undefined,
+    freeHours: settings.booking.freeCancelHours,
+    visitCount: cancellableVisits.length,
+  } : null;
+
+  // Контакты поддержки для кнопки «Связаться с поддержкой»
+  const supportContacts = contactLinks(settings.brand).filter((c) => ["phone", "whatsapp", "telegram"].includes(c.key));
 
   // Синтетическое событие «Заказ создан» + реальные события
   const allEvents = [
@@ -109,6 +141,13 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     id: o.id, kind: o.kind, status: o.status,
     serviceId: o.serviceId, durationMin: o.durationMin,
     serviceSlug: o.service.slug,
+  };
+
+  // Контакты компании для шторки поддержки
+  const brandContacts = {
+    phone: settings.brand.phone,
+    whatsapp: settings.brand.whatsapp,
+    telegram: settings.brand.telegram,
   };
 
   // Карточка мастера (используется в двух местах)
@@ -187,18 +226,32 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                       )}
                     </div>
                   </div>
-                  {master.phone && (
-                    <div className="mt-3 flex gap-2">
-                      <a href={`tel:${master.phone}`} className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-surface px-3 py-2 text-sm font-medium hover:bg-brand-50">
-                        <Phone size={15} /> {t("callMaster")}
-                      </a>
-                      <a href={`https://wa.me/${master.phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-surface px-3 py-2 text-sm font-medium hover:bg-brand-50">
-                        <MessageCircle size={15} /> {t("writeMaster")}
-                      </a>
-                    </div>
+                  {showMasterContact && (
+                    master.phone ? (
+                      <div className="mt-3 flex gap-2">
+                        <a href={`tel:${master.phone}`} className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-surface px-3 py-2 text-sm font-medium hover:bg-brand-50">
+                          <Phone size={15} /> {t("callMaster")}
+                        </a>
+                        <a href={`https://wa.me/${master.phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-surface px-3 py-2 text-sm font-medium hover:bg-brand-50">
+                          <MessageCircle size={15} /> {t("writeMaster")}
+                        </a>
+                      </div>
+                    ) : (
+                      <SupportSheetButton
+                        contacts={brandContacts}
+                        orderNumber={String(o.number)}
+                        label={t("masterNoPhone")}
+                        className="mt-3 btn-outline w-full"
+                      />
+                    )
                   )}
                   <div className="mt-2 text-center">
-                    <Link href="/account" className="text-xs text-muted hover:underline">{t("supportLink")}</Link>
+                    <SupportSheetButton
+                      contacts={brandContacts}
+                      orderNumber={String(o.number)}
+                      label={t("supportLink")}
+                      className="text-xs text-muted hover:underline"
+                    />
                   </div>
                 </>
               ) : (
@@ -212,6 +265,9 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               cancelDeadline={cancelDeadline}
               freeCancelHours={settings.booking.freeCancelHours}
               horizonDays={settings.booking.horizonDays}
+              isBusy={isBusy}
+              cancelPreview={cancelPreview}
+              supportContacts={supportContacts}
             />
           </div>
 
@@ -228,7 +284,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                     )}
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="text-sm">{t(`visitEvents.${e.status}` as Parameters<typeof t>[0])}</span>
-                      <span className="shrink-0 text-xs text-muted">{timeLabel(e.createdAt)}</span>
+                      <span className="shrink-0 text-xs text-muted">{dateLabel(e.createdAt, locale, { day: "numeric", month: "short" })}, {hm(e.createdAt)}</span>
                     </div>
                   </li>
                 ))}
@@ -267,8 +323,10 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               <div className="flex justify-between"><dt className="text-muted">{t("payment")}</dt><dd>{o.paymentMethod === "CASH" ? t("cashNote") : t("card")}</dd></div>
               <div className="flex justify-between"><dt className="text-muted">{t("price")}</dt><dd className="font-semibold">{o.kind === "SUBSCRIPTION" ? `${amd(o.pricePerVisit)} ${tc("perVisit")}` : amd(o.total)}</dd></div>
               {o.kind === "SUBSCRIPTION" && o.firstVisitPrice !== o.pricePerVisit && <div className="flex justify-between text-ok"><dt>{ts("firstVisit")}</dt><dd>{amd(o.firstVisitPrice)}</dd></div>}
+              {o.status === "CANCELLED" && <div className="flex justify-between gap-4"><dt className="text-muted">{t("cancelledAt")}</dt><dd className="text-right text-sm text-muted">{dateLabel(o.updatedAt, locale, { day: "numeric", month: "short" })}, {timeLabel(o.updatedAt)}</dd></div>}
+              {o.cancelPenalty > 0 && <div className="flex justify-between"><dt className="text-muted">{t("cancelPenaltyLabel")}</dt><dd className="font-semibold text-bad">{amd(o.cancelPenalty)}</dd></div>}
             </dl>
-            <OrderActions order={{ id: o.id, kind: o.kind, status: o.status }} />
+            <OrderActions order={{ id: o.id, kind: o.kind, status: o.status, serviceSlug: o.service.slug }} />
           </section>
 
           {/* Список визитов */}
@@ -347,18 +405,32 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                     )}
                   </div>
                 </div>
-                {master.phone && (
-                  <div className="mt-3 flex gap-2">
-                    <a href={`tel:${master.phone}`} className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-surface px-3 py-2 text-sm font-medium hover:bg-brand-50">
-                      <Phone size={15} /> {t("callMaster")}
-                    </a>
-                    <a href={`https://wa.me/${master.phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-surface px-3 py-2 text-sm font-medium hover:bg-brand-50">
-                      <MessageCircle size={15} /> {t("writeMaster")}
-                    </a>
-                  </div>
+                {showMasterContact && (
+                  master.phone ? (
+                    <div className="mt-3 flex gap-2">
+                      <a href={`tel:${master.phone}`} className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-surface px-3 py-2 text-sm font-medium hover:bg-brand-50">
+                        <Phone size={15} /> {t("callMaster")}
+                      </a>
+                      <a href={`https://wa.me/${master.phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="flex flex-1 items-center justify-center gap-1.5 rounded-full bg-surface px-3 py-2 text-sm font-medium hover:bg-brand-50">
+                        <MessageCircle size={15} /> {t("writeMaster")}
+                      </a>
+                    </div>
+                  ) : (
+                    <SupportSheetButton
+                      contacts={brandContacts}
+                      orderNumber={String(o.number)}
+                      label={t("masterNoPhone")}
+                      className="mt-3 btn-outline w-full"
+                    />
+                  )
                 )}
                 <div className="mt-2 text-center">
-                  <Link href="/account" className="text-xs text-muted hover:underline">{t("supportLink")}</Link>
+                  <SupportSheetButton
+                    contacts={brandContacts}
+                    orderNumber={String(o.number)}
+                    label={t("supportLink")}
+                    className="text-xs text-muted hover:underline"
+                  />
                 </div>
               </>
             ) : (
@@ -372,6 +444,9 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
             cancelDeadline={cancelDeadline}
             freeCancelHours={settings.booking.freeCancelHours}
             horizonDays={settings.booking.horizonDays}
+            isBusy={isBusy}
+            cancelPreview={cancelPreview}
+            supportContacts={supportContacts}
           />
         </div>
       </div>

@@ -342,6 +342,7 @@ async function main() {
       where: { slug },
       create: {
         slug,
+        isDemo: true,
         name: t(ru, en),
         bio: t("Демо-профиль. Замените фото и описание в админке.", "Demo profile."),
         photo: `/img/master-${i + 1}.svg`,
@@ -358,6 +359,11 @@ async function main() {
   // Демо-заказ для владельца: нужен на стенде, чтобы проверить кабинет клиента и лист переноса визита
   const anna = await db.master.findUnique({ where: { slug: "anna" } });
   const oneTimePlan = await db.plan.findFirst({ where: { serviceId: svc.id, kind: "ONE_TIME" } });
+  const durationGroup = await db.optionGroup.findFirst({
+    where: { serviceId: svc.id, isDuration: true },
+    include: { options: { where: { active: true, durationMin: 120 }, take: 1 } },
+  });
+  const firstDurationOption = durationGroup?.options[0] ?? null;
   const owner = await db.user.findUniqueOrThrow({ where: { phone: ownerPhone } });
   const demoAddr = await db.address.create({
     data: { userId: owner.id, street: "ул. Абовяна", building: "15", apartment: "3", isDefault: true },
@@ -366,7 +372,7 @@ async function main() {
   const cfg = {
     service: { slug: svc.slug, title: svc.title },
     plan: oneTimePlan ? { id: oneTimePlan.id, kind: "ONE_TIME", title: oneTimePlan.title, discountPercent: 0, packageVisits: null, intervalDays: null, visitsPerWeek: null } : null,
-    options: [{ groupId: "g1", optionId: "o1", group: t("Длительность", "Duration"), option: t("2 ч", "2 h"), price: 16000, durationMin: 120, discountable: false }],
+    options: firstDurationOption ? [{ groupId: firstDurationOption.groupId, optionId: firstDurationOption.id, group: t("Длительность", "Duration"), option: t("2 ч", "2 h"), price: 16000, durationMin: 120, discountable: false }] : [],
     promoCode: null,
     firstOrder: true,
   };

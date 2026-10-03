@@ -4,7 +4,7 @@ import { upsertNote, createNote } from "./library";
 import { alertTech } from "../alerts";
 import { html, notifyTech } from "../notify";
 import { BLOCKED_ON_LABELS, STATUSES } from "@/lib/backlog-labels";
-import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, criteriaGate, doneGate, extractFollowUpKeys, isDesignerTask, isProductTask, isReady, needsReason, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type CriterionResult, type Role, type TaskStatusKey, unblockTarget, isCodeTask, isUiTask, standGate } from "@/lib/cc-flow";
+import { BLOCKED_ON, CLOSED_STATUSES, LEASE_MIN, RETURN_AFTER_STALE_MIN, canTransition, criteriaGate, doneGate, extractFollowUpKeys, isDesignerTask, isProductTask, isReady, needsReason, noPoolGate, pickNext, readiness, readyNeedsGate, reviewGate, roleOf, scopeOverlap, SHA_RE, watchdogPlan, type CommentKind, type CriterionResult, type Role, type TaskStatusKey, unblockTarget, isCodeTask, isUiTask, standGate } from "@/lib/cc-flow";
 import { isAgentAuthor, findBlockingError, baselineFor } from "@/lib/cc-triage";
 import { nextIntakeKey, intakeTitle } from "@/lib/cc-lanes";
 import { intakeClosingMapValid, parseDuplicateOriginalKey } from "@/lib/cc-intake";
@@ -136,6 +136,11 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   if (to === "ready" && actor.role !== "watchdog") {
     const gate = readyNeedsGate(task.needs ?? [], actor.role, force);
     if (gate) throw new CcError(gate, task.needs?.[0]);
+  }
+  // Гейт no_pool: код-задача с owner=product без вопросов не попадёт ни в dev, ни в product очередь
+  if (to === "ready" && actor.role !== "watchdog" && !force) {
+    const orphan = noPoolGate({ layer: task.layer, owner: task.owner, needs: task.needs ?? [] });
+    if (orphan) throw new CcError(orphan, "owner=product без вопросов к продакту: задачу никто не возьмёт. Убрать поле «Исполнитель» или добавить вопрос к продакту.");
   }
   if (to === "review") {
     const branch = input.branch?.trim() || task.branch;
@@ -798,7 +803,32 @@ export async function runWatchdog(now = new Date()) {
     }
   }
 
-  return { stale: plan.markStale.length, returned: plan.autoReturn.length, unblocked: plan.unblock.length, phantom: plan.phantom.length, stuckReview: plan.stuckReview.length, releasedLeases: plan.releaseLease.length, scheduledUnblocks: plan.unblockScheduled.length, catchUpRetriaged };
+  // Задачи в «В очереди», которые ни один пул не возьмёт: 4+ ч без движения → блокируем на владельца
+  const orphanReadyTasks = await db.task.findMany({
+    where: {
+      status: "ready",
+      layer: { not: "none" },
+      owner: "product",
+      needs: { isEmpty: true },
+      updatedAt: { lt: new Date(now.getTime() - 4 * 3600_000) },
+    },
+    select: { id: true, key: true, title: true },
+  });
+  for (const t of orphanReadyTasks) {
+    const reason = "owner=product на код-задаче без вопросов к продакту: dev пропускает (owner=product), product пропускает (нет вопросов)";
+    await transition(
+      t.key,
+      {
+        to: "blocked",
+        blockedOn: "owner",
+        text: `Никто не возьмёт: ${reason}. Что делать: убрать поле «Исполнитель» или добавить вопрос к продакту, затем вернуть в очередь.`,
+      },
+      WATCHDOG,
+    ).catch(() => null);
+    await alertTech(`cc:nopool:${t.key}`, html`⚠️ <b>${t.key}</b> ${t.title}\n4+ ч в очереди — никто не возьмёт: ${reason}`, 24 * 60);
+  }
+
+  return { stale: plan.markStale.length, returned: plan.autoReturn.length, unblocked: plan.unblock.length, phantom: plan.phantom.length, stuckReview: plan.stuckReview.length, releasedLeases: plan.releaseLease.length, scheduledUnblocks: plan.unblockScheduled.length, catchUpRetriaged, noPool: orphanReadyTasks.length };
 }
 
 /** Подписи для писем сторожа и интерфейса: кто должен снять блокировку */

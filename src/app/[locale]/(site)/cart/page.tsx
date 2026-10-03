@@ -1,11 +1,11 @@
 import { cookies } from "next/headers";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { ShoppingCart, Tag } from "lucide-react";
+import { ShoppingCart, Tag, AlertCircle } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUser } from "@/server/auth";
 import { getSettings } from "@/server/settings";
 import { isFirstOrder } from "@/server/services/booking";
-import { getCartDetails, ANON_CART_COOKIE } from "@/server/services/cart";
+import { getCartDetails, ANON_CART_COOKIE, type CartItemDetail } from "@/server/services/cart";
 import { amd } from "@/lib/format";
 import { Img } from "@/components/Img";
 import { CartItemCounter } from "@/components/cart/CartItemCounter";
@@ -15,6 +15,14 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "cart" });
   return { title: t("title"), robots: { index: false, follow: false } };
+}
+
+function subFreq(item: CartItemDetail, t: Awaited<ReturnType<typeof getTranslations<"cart">>>): string {
+  if (item.visitsPerWeek && item.visitsPerWeek > 1) return t("subFreqNPerWeek", { n: item.visitsPerWeek });
+  if (item.intervalDays === 7) return t("subFreqWeekly");
+  if (item.intervalDays === 14) return t("subFreqBiweekly");
+  if (item.intervalDays === 28) return t("subFreqMonthly");
+  return "";
 }
 
 export default async function CartPage({ params }: { params: Promise<{ locale: string }> }) {
@@ -81,23 +89,42 @@ export default async function CartPage({ params }: { params: Promise<{ locale: s
 
         {/* Позиции корзины */}
         <div className="space-y-3">
-          {details.items.map((item) => (
-            <div key={item.cartItemId} className="card p-4 flex gap-3">
-              <Img
-                src={item.image || "/img/svc-regular.svg"}
-                width={64}
-                className="size-16 rounded-xl object-cover shrink-0"
-              />
-              <div className="flex flex-col gap-1 min-w-0 flex-1">
-                <div className="font-semibold text-[15px] leading-snug">{item.title}</div>
-                {item.optionSummary && (
-                  <div className="text-sm text-muted">{item.optionSummary}</div>
-                )}
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="font-semibold">{amd(item.price)}</span>
-                  {item.basePrice > item.price && (
-                    <span className="text-sm text-muted line-through">{amd(item.basePrice)}</span>
+          {details.items.map((item) => {
+            const freq = item.planKind === "SUBSCRIPTION" ? subFreq(item, t) : "";
+            return (
+              <div key={item.cartItemId} className="card p-4 flex gap-3">
+                <Img
+                  src={item.image || "/img/svc-regular.svg"}
+                  width={64}
+                  className="size-16 rounded-xl object-cover shrink-0"
+                />
+                <div className="flex flex-col gap-1 min-w-0 flex-1">
+                  <div className="font-semibold text-[15px] leading-snug">{item.title}</div>
+                  {item.optionSummary && (
+                    <div className="text-sm text-muted">{item.optionSummary}</div>
                   )}
+                  {/* Описание тарифа: подписка или пакет */}
+                  {item.planKind === "SUBSCRIPTION" && (
+                    <div className="text-xs text-muted">
+                      {t("planSubLabel")}{freq ? `, ${freq}` : ""}
+                      {" · "}
+                      {t("planFirstVisit", { price: amd(item.price) })}{", "}
+                      {t("planThenPerVisit", { price: amd(item.regularPrice) })}
+                    </div>
+                  )}
+                  {item.planKind === "PACKAGE" && item.planVisits && (
+                    <div className="text-xs text-muted">
+                      {t("planPackLabel", { visits: item.planVisits })}
+                      {" · "}
+                      {amd(item.price)} {t("planForAll")}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="font-semibold">{amd(item.price)}</span>
+                    {item.basePrice > item.price && (
+                      <span className="text-sm text-muted line-through">{amd(item.basePrice)}</span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center justify-between mt-1">
                   <Link
@@ -114,17 +141,37 @@ export default async function CartPage({ params }: { params: Promise<{ locale: s
                   </Link>
                 )}
               </div>
-            </div>
-          ))}
+            );
+          })}
 
-          {/* Экономия */}
+          {/* Тарифная экономия (подписка или пакет) */}
           {details.savings > 0 && (
             <div className="bg-ok-50 rounded-[var(--radius-card)] px-4 py-3 flex items-center gap-2">
               <Tag size={16} className="text-ok shrink-0" />
-              <div>
-                <div className="text-sm font-medium text-ok">{t("savings", { amount: amd(details.savings) })}</div>
-                <div className="text-xs text-muted">{first ? ts("firstVisit") : t("byPlan")}</div>
+              <div className="text-sm font-medium text-ok">
+                {t("planSavings", { amount: amd(details.savings) })}
               </div>
+            </div>
+          )}
+
+          {/* Скидка первого заказа */}
+          {details.firstOrderSavings > 0 && (
+            <div className="bg-ok-50 rounded-[var(--radius-card)] px-4 py-3 flex items-center gap-2">
+              <Tag size={16} className="text-ok shrink-0" />
+              <div>
+                <div className="text-sm font-medium text-ok">
+                  {t("firstOrderDiscount", { amount: amd(details.firstOrderSavings) })}
+                </div>
+                <div className="text-xs text-muted">{t("forNewClients")}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Предупреждение: скидка первого заказа уже использована */}
+          {user && !first && (
+            <div className="rounded-[var(--radius-card)] bg-warn-50 px-4 py-3 flex items-center gap-2 text-sm text-warn">
+              <AlertCircle size={16} className="shrink-0" />
+              {t("firstOrderUsed")}
             </div>
           )}
 

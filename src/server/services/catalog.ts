@@ -261,7 +261,7 @@ export async function getServiceReviews(serviceId: string, take = 10) {
 }
 
 export async function getMastersForService(serviceId: string) {
-  return db.master.findMany({ where: { active: true, skills: { some: { id: serviceId } } }, orderBy: [{ sort: "asc" }] });
+  return db.master.findMany({ where: { active: true, isDemo: false, skills: { some: { id: serviceId } } }, orderBy: [{ sort: "asc" }] });
 }
 
 export async function recalcRatings(masterId?: string | null, serviceId?: string | null) {

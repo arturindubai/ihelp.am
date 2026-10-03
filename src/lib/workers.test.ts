@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { POOLS, DAILY_CAP_MAX, capLeft, normalizeDailyCap, controlPatch, DEFAULT_WORKERS, executorOf, filterDesignerCooldown, freeName, inDesignerQueue, normalizeWorkers, planDispatch, poolForTask, reviewQueues, runOutcome, testedCurrent, workersState, type DispatchState, type ReviewTask, type WorkersConfig } from "./workers";
 import { poolPatchSchema, workersPatchSchema } from "./workers-schema";
-import { unblockTarget } from "./cc-flow";
+import { noPoolGate, unblockTarget } from "./cc-flow";
 
 // 12:00 по Еревану (UTC+4) — удобное время для тестов диспетчера
 const noon = new Date("2026-09-24T08:00:00Z");
@@ -688,5 +688,28 @@ describe("суточный лимит пула необязателен (DEV-110
     expect(poolPatchSchema.safeParse({ dailyCap: null }).success).toBe(true);
     expect(poolPatchSchema.safeParse({ dailyCap: 250 }).success).toBe(true);
     expect(poolPatchSchema.safeParse({ dailyCap: DAILY_CAP_MAX + 1 }).success).toBe(false);
+  });
+});
+
+describe("задача 'В очереди' без пула (DEV-151)", () => {
+  it("noPoolGate: код-задача с owner=product без needs — причина no_pool", () => {
+    expect(noPoolGate({ layer: "back", owner: "product", needs: [] })).toBe("no_pool");
+    expect(noPoolGate({ layer: "front", owner: "product", needs: [] })).toBe("no_pool");
+    expect(noPoolGate({ layer: "fullstack", owner: "product", needs: [] })).toBe("no_pool");
+  });
+  it("noPoolGate: задача с needs, другим owner или без кода — пул найдётся", () => {
+    expect(noPoolGate({ layer: "back", owner: "tech", needs: [] })).toBeNull();
+    expect(noPoolGate({ layer: "back", owner: "product", needs: ["вопрос?"] })).toBeNull();
+    expect(noPoolGate({ layer: "none", owner: "product", needs: [] })).toBeNull();
+    expect(noPoolGate({ layer: "back", owner: null, needs: [] })).toBeNull();
+  });
+  it("для каждой задачи 'В очереди' есть пул или названа причина: planDispatch с нулевым счётчиком не запускает dev", () => {
+    // Сиротская задача (LEGAL-6: owner=product, layer=back, needs=[]) исключена из readyForDev,
+    // поэтому readyForDev=0 — dev не запускается
+    expect(planDispatch(state({ readyForDev: 0 }), noon)).toEqual([]);
+  });
+  it("orphaned-задача не даёт ложного readyForDev — вместо неё запускается nocode при своём счётчике", () => {
+    // nocode-задачи (layer=none) не затронуты фильтром owner=product
+    expect(planDispatch(state({ readyForNocode: 1 }), noon)).toEqual([{ pool: "nocode", agent: "nocode-1" }]);
   });
 });

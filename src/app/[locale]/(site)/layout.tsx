@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { getTranslations } from "next-intl/server";
+import { getTranslations, getLocale } from "next-intl/server";
 import { UserRound } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { getSettings } from "@/server/settings";
@@ -12,7 +12,8 @@ import { Logo } from "@/components/Logo";
 import { AddressChip } from "@/components/home/AddressChip";
 
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
-  const [s, user, t, tf] = await Promise.all([getSettings(), getCurrentUser(), getTranslations("nav"), getTranslations("footer")]);
+  const [s, user, t, tf, locale] = await Promise.all([getSettings(), getCurrentUser(), getTranslations("nav"), getTranslations("footer"), getLocale()]);
+  const districts = s.booking.districtsByLocale?.[locale] ?? s.booking.districts;
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-30 border-b border-line/70 bg-paper/95 backdrop-blur">
@@ -25,7 +26,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
             sheetTitle={t("addressSheet")}
             anyLabel={t("addressAny")}
             districtSearch={t("districtSearch")}
-            districts={s.booking.districts}
+            districts={districts}
           />
           <div className="ml-auto flex items-center gap-2">
             <Suspense>
@@ -49,7 +50,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       </header>
       <main className="flex-1">{children}</main>
       <footer className="mt-10 border-t border-line bg-surface py-6 text-sm text-muted">
-        <div className="container-w flex flex-wrap gap-x-5 gap-y-2">
+        <div className="container-w flex flex-wrap items-center gap-x-5 gap-y-2">
           <span>© {new Date().getFullYear()} {s.brand.name}</span>
           <Link href="/p/offer">{tf("offer")}</Link>
           <Link href="/p/privacy">{tf("privacy")}</Link>
@@ -59,6 +60,11 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
               {contactTitle(c)}
             </a>
           ))}
+          <div className="ml-auto">
+            <Suspense>
+              <LocaleSwitcher enabled={s.locales.enabled} />
+            </Suspense>
+          </div>
         </div>
       </footer>
       <BottomNav isLoggedIn={!!user} />

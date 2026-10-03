@@ -1,5 +1,9 @@
+export function numFmt(n: number) {
+  return new Intl.NumberFormat("ru-RU").format(Math.round(n)).replace(/\s/g, " ");
+}
+
 export function amd(n: number) {
-  return `${new Intl.NumberFormat("ru-RU").format(Math.round(n)).replace(/ /g, " ")} ֏`;
+  return `${numFmt(n)} ֏`;
 }
 
 export function durationLabel(min: number, locale: string) {

@@ -12,6 +12,10 @@ const orderStore = new Map<
     firstVisitPrice: number;
     config: unknown;
     addressSnapshot: unknown;
+    locale: string;
+    cancelPenalty: number;
+    preferredMasterId: string | null;
+    preferredMaster: { name: string } | null;
     clientNotifiedEvents: string[];
     visits: Array<{ scheduledAt: Date }>;
   }
@@ -26,7 +30,7 @@ const visitStore = new Map<
     master: { name: string } | null;
     clientNotifiedEvents: string[];
     status: string;
-    order: { id: string; number: number; userId: string; config: unknown; addressSnapshot: unknown };
+    order: { id: string; number: number; userId: string; config: unknown; addressSnapshot: unknown; locale: string };
   }
 >();
 
@@ -107,7 +111,7 @@ vi.mock("../notify", () => ({
 vi.mock("../settings", () => ({
   getSettings: vi.fn().mockResolvedValue({
     notify: { telegramBotToken: "tg-token-client", quietHourStart: 21, quietHourEnd: 9 },
-    brand: { name: "iHelp" },
+    brand: { name: "iHelp", phone: "", whatsapp: "", telegram: "@ihelp_support", email: "", instagram: "" },
     mail: { enabled: true, apiKey: "test-key", from: "noreply@ihelp.am" },
   }),
   getUiOverrides: vi.fn().mockResolvedValue([]),
@@ -147,6 +151,10 @@ function makeOrder(id: string, overrides: Partial<OrderData> = {}) {
     firstVisitPrice: 15000,
     config: { service: { title: "Уборка" } },
     addressSnapshot: { street: "Пушкина", building: "10", apartment: "5" },
+    locale: "ru",
+    cancelPenalty: 0,
+    preferredMasterId: null,
+    preferredMaster: null,
     clientNotifiedEvents: [],
     visits: [{ scheduledAt: NOW }],
     ...overrides,
@@ -169,6 +177,7 @@ function makeVisit(id: string, overrides: Partial<VisitData> = {}) {
       userId: "u1",
       config: { service: { title: "Уборка" } },
       addressSnapshot: { street: "Пушкина", building: "10" },
+      locale: "ru",
     },
     ...overrides,
   };
@@ -315,13 +324,14 @@ describe("защита от повторных уведомлений", () => {
 // Подстановка переменных в шаблоны
 
 describe("подстановка переменных", () => {
-  it("created — текст содержит название услуги, дату и цену в драмах", async () => {
+  it("created — текст содержит название услуги, время, номер заказа и цену в драмах", async () => {
     makeOrder("o1");
     makeUser("u1", "telegram");
     await notifyClientOrderCreated("o1");
     const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
     expect(text).toContain("Уборка");
-    expect(text).toContain("2026-09-28");
+    expect(text).toContain("10:00");
+    expect(text).toContain("42");
     expect(text).toContain("֏");
   });
 
@@ -333,21 +343,23 @@ describe("подстановка переменных", () => {
     expect(text).toContain("Иван Петров");
   });
 
-  it("cancelled — текст содержит дату визита", async () => {
+  it("cancelled — текст содержит время отменённого визита, номер заказа и ссылку", async () => {
     makeOrder("o1");
     makeUser("u1", "telegram");
     await notifyClientCancelled("o1");
     const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
-    expect(text).toContain("2026-09-28");
+    expect(text).toContain("10:00");
+    expect(text).toContain("42");
+    expect(text).toContain("/account/orders");
   });
 
-  it("completed — текст содержит имя мастера (ссылка на отзыв — отдельно через sendReviewRequests)", async () => {
+  it("completed — текст содержит имя мастера и ссылку на заказ", async () => {
     makeVisit("v1");
     makeUser("u1", "telegram");
     await notifyClientVisitCompleted("v1");
     const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
     expect(text).toContain("Иван Петров");
-    expect(text).not.toContain("/account/orders");
+    expect(text).toContain("/account/orders");
   });
 });
 
@@ -578,6 +590,7 @@ describe("sendVisit2hReminders", () => {
         userId: "u1",
         config: { service: { title: "Уборка" } },
         addressSnapshot: { street: "Пушкина", building: "10" },
+        locale: "ru",
       },
     });
     userStore.set("u1", { telegramId: "tg-123", email: null, name: "Тест" });
@@ -700,6 +713,7 @@ describe("BUG-45: sendVisit2hReminders — утренние визиты пос�
         userId: "u1",
         config: { service: { title: "Уборка" } },
         addressSnapshot: { street: "Пушкина", building: "10" },
+        locale: "ru",
       },
     });
     userStore.set("u1", { telegramId: "tg-123", email: null, name: "Тест" });
@@ -795,6 +809,7 @@ describe("BUG-45: sendVisit2hReminders — & не экранируется дв�
         userId: "u1",
         config: { service: { title: "Кухня & ванная" } },
         addressSnapshot: { street: "Пушкина", building: "10" },
+        locale: "ru",
       },
     });
     userStore.set("u1", { telegramId: "tg-123", email: null, name: "Тест" });

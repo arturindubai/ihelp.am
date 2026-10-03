@@ -7,6 +7,14 @@ import { Link } from "@/i18n/navigation";
 import { StarRow } from "@/components/Stars";
 import { Img } from "@/components/Img";
 
+export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }) {
+  const { slug } = await params;
+  const m = await getMasterPublicProfile(slug);
+  if (!m) return {};
+  if (m.isDemo) return { robots: { index: false, follow: false } };
+  return {};
+}
+
 export default async function MasterPage({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;
   setRequestLocale(locale);
@@ -30,7 +38,7 @@ export default async function MasterPage({ params }: { params: Promise<{ locale:
         <div className="rounded-xl bg-surface p-3"><div className="text-lg font-bold">{m.jobsCount}</div><div className="text-xs text-muted">{tc("jobs", { count: m.jobsCount }).replace(/^\d+\s/, "")}</div></div>
         <div className="rounded-xl bg-surface p-3"><div className="text-lg font-bold">{m.experienceYears}</div><div className="text-xs text-muted">{tc("yearsExp", { count: m.experienceYears }).replace(/^\d+\s/, "")}</div></div>
       </div>
-      {tr(m.bio, locale) && (
+      {!m.isDemo && tr(m.bio, locale) && (
         <section className="mt-6"><h2 className="h2 mb-2">{t("about")}</h2><p className="whitespace-pre-line text-muted">{tr(m.bio, locale)}</p></section>
       )}
       {langs && <p className="mt-3 text-sm"><span className="text-muted">{tc("languages")}:</span> {langs}</p>}

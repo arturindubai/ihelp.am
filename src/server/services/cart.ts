@@ -1,8 +1,9 @@
 import "server-only";
 import type { Cart } from "@prisma/client";
 import { db } from "../db";
-import { calculatePrice } from "@/lib/pricing";
-import type { PricingRules } from "@/lib/pricing";
+import { calculatePrice, calculatePlanSavings } from "@/lib/pricing";
+import type { PricingRules, PlanKind } from "@/lib/pricing";
+import { firstOrderUsedBy } from "@/lib/firstOrder";
 import { tr } from "@/i18n/locales";
 import type { CartEntry } from "@/lib/cart";
 
@@ -11,6 +12,15 @@ export const ANON_CART_COOKIE = "cart_anon";
 // ─── Внутренние хелперы ───────────────────────────────────────────────────
 
 type CartSelector = { userId: string } | { anonId: string };
+
+async function cartIsFirstOrder(selector: CartSelector): Promise<boolean> {
+  if (!("userId" in selector)) return true;
+  const orders = await db.order.findMany({
+    where: { userId: selector.userId },
+    select: { number: true, status: true, config: true },
+  });
+  return firstOrderUsedBy(orders) === null;
+}
 
 async function getOrCreateCart(selector: CartSelector): Promise<Cart> {
   const existing = await db.cart.findUnique({ where: selector });
@@ -133,7 +143,9 @@ export async function resolveCartEntry(selector: CartSelector): Promise<CartEntr
   const serviceMap = new Map(services.map((s) => [s.id, s]));
   const planMap = new Map(plans.map((p) => [p.id, p]));
 
+  const isFirstOrderFlag = await cartIsFirstOrder(selector);
   let total = 0;
+  let itemIndex = 0;
   const first = cart.items[0];
 
   for (const item of cart.items) {
@@ -160,8 +172,10 @@ export async function resolveCartEntry(selector: CartSelector): Promise<CartEntr
       plan: plan
         ? { kind: plan.kind, discountPercent: plan.discountPercent, packageVisits: plan.packageVisits }
         : null,
+      isFirstOrder: itemIndex === 0 ? isFirstOrderFlag : false,
     });
     total += pr.payNow * item.qty;
+    itemIndex++;
   }
 
   const firstService = serviceMap.get(first.serviceId);
@@ -193,6 +207,13 @@ export interface CartItemDetail {
   price: number;
   basePrice: number;
   qty: number;
+  planKind: PlanKind | null;
+  planVisits: number | null;
+  intervalDays: number | null;
+  visitsPerWeek: number | null;
+  regularPrice: number;
+  planSavings: number;
+  firstDiscount: number;
   bookHref: string;
 }
 
@@ -209,6 +230,7 @@ export interface CartDetails {
   total: number;
   totalBase: number;
   savings: number;
+  firstOrderSavings: number;
   firstSlug: string | null;
   firstOpts: string[];
   firstPlanId: string | null;
@@ -259,7 +281,7 @@ export async function getCartDetails(
   const plans = planIds.length
     ? await db.plan.findMany({
         where: { id: { in: planIds } },
-        select: { id: true, kind: true, discountPercent: true, packageVisits: true },
+        select: { id: true, kind: true, discountPercent: true, packageVisits: true, intervalDays: true, visitsPerWeek: true },
       })
     : [];
 
@@ -269,6 +291,8 @@ export async function getCartDetails(
   const items: CartItemDetail[] = [];
   let total = 0;
   let totalBase = 0;
+  let totalPlanSavings = 0;
+  let totalFirstOrderSavings = 0;
 
   for (const item of cart.items) {
     const svc = serviceMap.get(item.serviceId);
@@ -289,19 +313,38 @@ export async function getCartDetails(
     if (lines.length === 0) continue;
 
     const plan = item.planId ? planMap.get(item.planId) : null;
+    const pricePlan = plan
+      ? { kind: plan.kind, discountPercent: plan.discountPercent, packageVisits: plan.packageVisits }
+      : null;
+    const itemIsFirst = items.length === 0 ? isFirstOrder : false;
+
     const pr = calculatePrice({
       lines,
-      plan: plan
-        ? { kind: plan.kind, discountPercent: plan.discountPercent, packageVisits: plan.packageVisits }
-        : null,
-      isFirstOrder: items.length === 0 ? isFirstOrder : false,
+      plan: pricePlan,
+      isFirstOrder: itemIsFirst,
       rules,
     });
+
+    // Тарифная экономия по правилу calculatePlanSavings (только для подписки/пакета)
+    const itemPlanSavings =
+      pricePlan && pricePlan.kind !== "ONE_TIME"
+        ? calculatePlanSavings({ lines, plan: pricePlan, isFirstOrder: itemIsFirst, rules }) * item.qty
+        : 0;
+
+    // Скидка первого заказа = разница между ONE_TIME без скидки и ONE_TIME со скидкой первого заказа
+    let itemFirstDiscount = 0;
+    if (itemIsFirst) {
+      const prOneTimeFirst = calculatePrice({ lines, plan: null, isFirstOrder: true, rules });
+      const prOneTimeBase = calculatePrice({ lines, plan: null, isFirstOrder: false, rules });
+      itemFirstDiscount = (prOneTimeBase.first.price - prOneTimeFirst.first.price) * item.qty;
+    }
 
     const itemPrice = pr.payNow * item.qty;
     const itemBase = pr.payNowBase * item.qty;
     total += itemPrice;
     totalBase += itemBase;
+    totalPlanSavings += itemPlanSavings;
+    totalFirstOrderSavings += itemFirstDiscount;
 
     const optionSummary = selectedOptions
       .map((o) => tr(o.title, locale) as string)
@@ -323,6 +366,13 @@ export async function getCartDetails(
       price: itemPrice,
       basePrice: itemBase,
       qty: item.qty,
+      planKind: plan ? plan.kind : null,
+      planVisits: plan?.packageVisits ?? null,
+      intervalDays: plan?.intervalDays ?? null,
+      visitsPerWeek: plan?.visitsPerWeek ?? null,
+      regularPrice: pr.regular.price,
+      planSavings: itemPlanSavings,
+      firstDiscount: itemFirstDiscount,
       bookHref,
     });
   }
@@ -363,7 +413,8 @@ export async function getCartDetails(
     items,
     total,
     totalBase,
-    savings: totalBase - total,
+    savings: totalPlanSavings,
+    firstOrderSavings: totalFirstOrderSavings,
     firstSlug: items[0]?.slug ?? null,
     firstOpts: first.optionIds as string[],
     firstPlanId: first.planId,
