@@ -97,8 +97,11 @@ vi.mock("./mail", () => ({
 
 vi.mock("../notify", () => ({
   notifyTech: vi.fn().mockResolvedValue(undefined),
-  html: (strings: TemplateStringsArray, ...values: unknown[]) =>
-    strings.reduce((out, s, i) => out + s + (i < values.length ? String(values[i] ?? "") : ""), ""),
+  // Реальное экранирование: позволяет обнаружить двойное экранирование (html`${fill(...)}` вместо `${fill(...)}`)
+  html: (strings: TemplateStringsArray, ...values: unknown[]) => {
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return strings.reduce((out, s, i) => out + s + (i < values.length ? esc(String(values[i] ?? "")) : ""), "");
+  },
 }));
 
 vi.mock("../settings", () => ({
@@ -672,5 +675,150 @@ describe("notifyClientMasterOnWay", () => {
     await notifyClientMasterOnWay("v-onway3", 45);
     expect(vi.mocked(sendTelegramDirect)).not.toHaveBeenCalled();
     expect(vi.mocked(sendMail)).toHaveBeenCalledOnce();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// BUG-45: напоминание за 2 часа — утренние визиты после тихого периода
+
+describe("BUG-45: sendVisit2hReminders — утренние визиты после тихого периода", () => {
+  // 09:00 Ереван = 05:00 UTC — первая минута вне тихого периода
+  const NOW_0900 = new Date("2026-09-29T05:00:00Z");
+
+  function make2hMorningVisit(id: string, minutesAhead: number) {
+    const scheduledAt = new Date(NOW_0900.getTime() + minutesAhead * 60_000);
+    visitStore.set(id, {
+      id,
+      scheduledAt,
+      masterId: "master-1",
+      master: { name: "Мастер Тест" },
+      clientNotifiedEvents: [],
+      status: "SCHEDULED",
+      order: {
+        id: "order-id-1",
+        number: 100,
+        userId: "u1",
+        config: { service: { title: "Уборка" } },
+        addressSnapshot: { street: "Пушкина", building: "10" },
+      },
+    });
+    userStore.set("u1", { telegramId: "tg-123", email: null, name: "Тест" });
+    visitFindManyResult = [
+      {
+        id,
+        scheduledAt,
+        clientNotifiedEvents: [] as string[],
+        order: {
+          number: 100,
+          config: { service: { title: "Уборка" } },
+          addressSnapshot: { street: "Пушкина", building: "10" },
+          locale: "ru",
+          userId: "u1",
+          user: { id: "u1", telegramId: "tg-123", email: null, emailUnsubscribedAt: null },
+        },
+        master: { name: "Мастер Тест" },
+      },
+    ];
+    return scheduledAt;
+  }
+
+  it("окно запроса начинается с now+20 мин, а не с now+90 мин", async () => {
+    make2hMorningVisit("v-window-check", 30);
+    await sendVisit2hReminders(NOW_0900);
+    const arg = vi.mocked(db.visit.findMany).mock.calls[0][0] as {
+      where: { scheduledAt: { gte: Date; lte: Date } };
+    };
+    expect(arg.where.scheduledAt.gte.getTime()).toBe(NOW_0900.getTime() + 20 * 60_000);
+    expect(arg.where.scheduledAt.lte.getTime()).toBe(NOW_0900.getTime() + 150 * 60_000);
+  });
+
+  it("визит в 09:30 — напоминание отправляется сразу после тихого периода", async () => {
+    make2hMorningVisit("v-0930", 30);
+    const count = await sendVisit2hReminders(NOW_0900);
+    expect(count).toBe(1);
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+  });
+
+  it("визит в 10:00 — напоминание отправляется сразу после тихого периода", async () => {
+    make2hMorningVisit("v-1000", 60);
+    const count = await sendVisit2hReminders(NOW_0900);
+    expect(count).toBe(1);
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+  });
+
+  it("визит в 10:30 — напоминание отправляется (граница старого окна)", async () => {
+    make2hMorningVisit("v-1030", 90);
+    const count = await sendVisit2hReminders(NOW_0900);
+    expect(count).toBe(1);
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+  });
+
+  it("визит в 11:00 — напоминание отправляется (стандартное окно ~2 часа)", async () => {
+    make2hMorningVisit("v-1100", 120);
+    const count = await sendVisit2hReminders(NOW_0900);
+    expect(count).toBe(1);
+    expect(vi.mocked(sendTelegramDirect)).toHaveBeenCalledOnce();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// BUG-45: просьба об отзыве не уходит, если отзыв уже оставлен
+
+describe("BUG-45: sendReviewRequests — не отправлять при наличии отзыва", () => {
+  it("запрос к базе включает фильтр review: null", async () => {
+    makeReviewVisit("v-review-filter");
+    await sendReviewRequests(ACTIVE_TIME);
+    const arg = vi.mocked(db.visit.findMany).mock.calls[0][0] as {
+      where: Record<string, unknown>;
+    };
+    expect(arg.where.review).toBeNull();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// BUG-45: двойное экранирование & в sendVisit2hReminders
+
+describe("BUG-45: sendVisit2hReminders — & не экранируется дважды", () => {
+  it("услуга с & приходит как &amp; а не &amp;amp;", async () => {
+    const now = new Date("2026-09-29T05:00:00Z"); // 09:00 Ереван
+    const scheduledAt = new Date(now.getTime() + 120 * 60_000); // 11:00 — стандартное окно
+    visitStore.set("v-amp-2h", {
+      id: "v-amp-2h",
+      scheduledAt,
+      masterId: "master-1",
+      master: { name: "Мастер Тест" },
+      clientNotifiedEvents: [],
+      status: "SCHEDULED",
+      order: {
+        id: "order-id-1",
+        number: 200,
+        userId: "u1",
+        config: { service: { title: "Кухня & ванная" } },
+        addressSnapshot: { street: "Пушкина", building: "10" },
+      },
+    });
+    userStore.set("u1", { telegramId: "tg-123", email: null, name: "Тест" });
+    visitFindManyResult = [
+      {
+        id: "v-amp-2h",
+        scheduledAt,
+        clientNotifiedEvents: [] as string[],
+        order: {
+          number: 200,
+          config: { service: { title: "Кухня & ванная" } },
+          addressSnapshot: { street: "Пушкина", building: "10" },
+          locale: "ru",
+          userId: "u1",
+          user: { id: "u1", telegramId: "tg-123", email: null, emailUnsubscribedAt: null },
+        },
+        master: { name: "Мастер Тест" },
+      },
+    ];
+
+    await sendVisit2hReminders(now);
+
+    const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
+    expect(text).toContain("Кухня &amp; ванная");
+    expect(text).not.toContain("&amp;amp;");
   });
 });
