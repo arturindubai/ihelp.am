@@ -2,9 +2,9 @@ import "server-only";
 import { db } from "../db";
 import { escapeHtml } from "@/lib/html";
 import { sendTelegramDirect } from "./notifyQueue";
-import { getSettings, getUiOverrides } from "../settings";
+import { getSettings } from "../settings";
 import { tr } from "@/i18n/locales";
-import { hm, ymd, isQuietHour } from "@/lib/time";
+import { isQuietHour } from "@/lib/time";
 import { amd, dateLabel, timeLabel } from "@/lib/format";
 import { sendMail, mailTemplate } from "./mail";
 import { notifyTech, html } from "../notify";
@@ -13,6 +13,7 @@ import { createUnsubscribeToken } from "@/lib/emailToken";
 import { createReviewToken } from "./reviews";
 import { getEmailBannerHtml } from "./banners";
 import { loadMessages } from "@/i18n/messages";
+import { contactLinks, contactTitle } from "@/lib/contacts";
 import defaultTemplates from "../../../messages/ru.json";
 import enMessages from "../../../messages/en.json";
 
@@ -30,10 +31,11 @@ async function mailSubject(locale: string, key: string, params: Record<string, s
   return Object.entries(params).reduce((s, [k, v]) => s.replace(new RegExp(`\\{${k}\\}`, "g"), String(v)), tmpl);
 }
 
-function addrLine(snapshot: unknown): string {
+function addrLine(snapshot: unknown, locale = "ru"): string {
   const a = snapshot as AddressSnapshot | null;
   if (!a?.street) return "—";
-  return `${a.street} ${a.building ?? ""}${a.apartment ? ", кв. " + a.apartment : ""}`.trim();
+  const aptLabel = locale === "en" ? ", apt. " : ", кв. ";
+  return `${a.street} ${a.building ?? ""}${a.apartment ? aptLabel + a.apartment : ""}`.trim();
 }
 
 function serviceTitle(config: unknown, locale = "ru"): string {
@@ -53,17 +55,23 @@ function fillPlain(template: string, params: Record<string, string>): string {
   return Object.entries(params).reduce((s, [k, v]) => s.replace(new RegExp(`\\{${k}\\}`, "g"), v), template);
 }
 
-/** Шаблоны уведомлений с учётом правок из Админки → Переводы */
-async function getOrderTemplates(): Promise<typeof defaultTemplates.notify.order> {
-  const overrides = await getUiOverrides("ru");
-  const tmpl = { ...defaultTemplates.notify.order };
-  for (const o of overrides) {
-    if (o.key.startsWith("notify.order.")) {
-      const subKey = o.key.slice("notify.order.".length) as keyof typeof tmpl;
-      if (subKey in tmpl) (tmpl as Record<string, string>)[subKey] = o.value;
-    }
-  }
-  return tmpl;
+/** Шаблоны уведомлений о заказе с учётом локали и правок из Админки → Переводы */
+async function getOrderTemplates(locale = "ru"): Promise<typeof defaultTemplates.notify.order> {
+  const msgs = await loadMessages(locale);
+  return ((msgs.notify as Record<string, unknown>)?.order ?? {}) as typeof defaultTemplates.notify.order;
+}
+
+/** Ссылка на страницу заказа в личном кабинете */
+function orderLink(locale: string, orderId: string): string {
+  return `${APP_URL()}/${locale}/account/orders/${orderId}`;
+}
+
+/** Строка с контактами поддержки из настроек компании */
+async function contactsLine(): Promise<string> {
+  const s = await getSettings();
+  const links = contactLinks(s.brand);
+  if (!links.length) return s.brand.name || "iHelp";
+  return links.map(contactTitle).join(" · ");
 }
 
 /** Клиентские шаблоны с поддержкой локали (для писем reminders/reviews) */
@@ -113,6 +121,7 @@ async function sendToClient(
   tag: string,
   log?: { orderId: string; visitId?: string; event: string },
   locale = "ru",
+  buttonUrl?: string,
 ): Promise<"telegram" | "email" | "alert" | "none"> {
   const user = await db.user.findUnique({
     where: { id: userId },
@@ -147,7 +156,8 @@ async function sendToClient(
         const lines = plainText.split("\n").filter(Boolean);
         const footer = unsubscribeFooterHtml(userId, locale);
         const bannerHtml = await getEmailBannerHtml(locale).catch(() => null);
-        const htmlBody = mailTemplate({ title: subject, lines, brand, footer, ...(bannerHtml ? { bannerHtml } : {}) });
+        const button = buttonUrl ? { text: locale === "en" ? "View order" : "Открыть заказ", url: buttonUrl } : undefined;
+        const htmlBody = mailTemplate({ title: subject, lines, brand, footer, ...(bannerHtml ? { bannerHtml } : {}), ...(button ? { button } : {}) });
         const r = await sendMail({ to: user.email, subject, html: htmlBody, text: plainText });
         if (r.ok) channel = "email";
       }
@@ -219,12 +229,15 @@ export async function notifyClientOrderCreated(orderId: string): Promise<void> {
     const order = await db.order.findUnique({
       where: { id: orderId },
       select: {
+        id: true,
         number: true,
         userId: true,
         firstVisitPrice: true,
         config: true,
         addressSnapshot: true,
         locale: true,
+        preferredMasterId: true,
+        preferredMaster: { select: { name: true } },
         visits: { where: { index: 1 }, select: { scheduledAt: true }, take: 1 },
       },
     });
@@ -234,20 +247,28 @@ export async function notifyClientOrderCreated(orderId: string): Promise<void> {
     if (!visit?.scheduledAt) return;
 
     const locale = order.locale || "ru";
-    const tmpl = await getOrderTemplates();
+    const tmpl = await getOrderTemplates(locale);
+    const masterLine = order.preferredMaster
+      ? tr(order.preferredMaster.name, locale)
+      : locale === "en" ? "will be assigned" : "назначим и сообщим";
+    const contacts = await contactsLine();
     const text = fill(tmpl.created, {
-      serviceName: serviceTitle(order.config),
-      date: ymd(visit.scheduledAt),
-      time: hm(visit.scheduledAt),
-      address: addrLine(order.addressSnapshot),
+      n: String(order.number),
+      serviceName: serviceTitle(order.config, locale),
+      date: dateLabel(visit.scheduledAt, locale),
+      time: timeLabel(visit.scheduledAt),
+      address: addrLine(order.addressSnapshot, locale),
+      masterLine,
       price: amd(order.firstVisitPrice),
+      link: orderLink(locale, order.id),
+      contacts,
     });
     const subject = await mailSubject(locale, "subjectCreated", { n: order.number });
 
     await sendToClient(order.userId, text, subject, "client:created", {
       orderId,
       event: "created",
-    }, locale);
+    }, locale, orderLink(locale, order.id));
   } catch (e) {
     console.error("[bookingNotify:created] ошибка", e);
   }
@@ -282,13 +303,17 @@ export async function notifyClientMasterAssigned(visitId: string): Promise<void>
     if (!ok) return;
 
     const locale = visit.order.locale || "ru";
-    const tmpl = await getOrderTemplates();
-    const masterName = tr(visit.master.name, "ru");
+    const tmpl = await getOrderTemplates(locale);
+    const masterName = tr(visit.master.name, locale);
+    const contacts = await contactsLine();
     const text = fill(tmpl.masterAssigned, {
-      serviceName: serviceTitle(visit.order.config),
-      date: ymd(visit.scheduledAt),
-      time: hm(visit.scheduledAt),
+      n: String(visit.order.number),
+      serviceName: serviceTitle(visit.order.config, locale),
+      date: dateLabel(visit.scheduledAt, locale),
+      time: timeLabel(visit.scheduledAt),
       masterName,
+      link: orderLink(locale, visit.order.id),
+      contacts,
     });
     const subject = await mailSubject(locale, "subjectMasterAssigned", { n: visit.order.number });
 
@@ -296,7 +321,7 @@ export async function notifyClientMasterAssigned(visitId: string): Promise<void>
       orderId: visit.order.id,
       visitId,
       event: `masterAssigned:${visit.masterId}`,
-    }, locale);
+    }, locale, orderLink(locale, visit.order.id));
   } catch (e) {
     console.error("[bookingNotify:masterAssigned] ошибка", e);
   }
@@ -331,12 +356,16 @@ export async function notifyClientRescheduled(visitId: string): Promise<void> {
     if (!ok) return;
 
     const locale = visit.order.locale || "ru";
-    const tmpl = await getOrderTemplates();
+    const tmpl = await getOrderTemplates(locale);
+    const contacts = await contactsLine();
     const text = fill(tmpl.rescheduled, {
-      serviceName: serviceTitle(visit.order.config),
-      date: ymd(visit.scheduledAt),
-      time: hm(visit.scheduledAt),
-      address: addrLine(visit.order.addressSnapshot),
+      n: String(visit.order.number),
+      serviceName: serviceTitle(visit.order.config, locale),
+      date: dateLabel(visit.scheduledAt, locale),
+      time: timeLabel(visit.scheduledAt),
+      address: addrLine(visit.order.addressSnapshot, locale),
+      link: orderLink(locale, visit.order.id),
+      contacts,
     });
     const subject = await mailSubject(locale, "subjectRescheduled", { n: visit.order.number });
 
@@ -344,7 +373,7 @@ export async function notifyClientRescheduled(visitId: string): Promise<void> {
       orderId: visit.order.id,
       visitId,
       event: `rescheduled:${visit.scheduledAt.toISOString()}`,
-    }, locale);
+    }, locale, orderLink(locale, visit.order.id));
   } catch (e) {
     console.error("[bookingNotify:rescheduled] ошибка", e);
   }
@@ -359,10 +388,12 @@ export async function notifyClientCancelled(orderId: string): Promise<void> {
     const order = await db.order.findUnique({
       where: { id: orderId },
       select: {
+        id: true,
         number: true,
         userId: true,
         config: true,
         locale: true,
+        cancelPenalty: true,
         visits: {
           where: { status: "CANCELLED" },
           orderBy: { scheduledAt: "asc" },
@@ -375,19 +406,33 @@ export async function notifyClientCancelled(orderId: string): Promise<void> {
 
     const locale = order.locale || "ru";
     const visit = order.visits[0];
-    const dateStr = visit?.scheduledAt ? ymd(visit.scheduledAt) : "—";
+    const date = visit?.scheduledAt ? dateLabel(visit.scheduledAt, locale) : "—";
+    const time = visit?.scheduledAt ? timeLabel(visit.scheduledAt) : "";
+    const feeLine =
+      order.cancelPenalty > 0
+        ? locale === "en"
+          ? `\nLate cancellation fee: ${amd(order.cancelPenalty)}`
+          : `\nШтраф за позднюю отмену: ${amd(order.cancelPenalty)}`
+        : "";
+    const contacts = await contactsLine();
 
-    const tmpl = await getOrderTemplates();
-    const text = fill(tmpl.cancelled, {
-      serviceName: serviceTitle(order.config),
-      date: dateStr,
+    const tmpl = await getOrderTemplates(locale);
+    const link = orderLink(locale, order.id);
+    const text = fill(tmpl.orderCancelled, {
+      n: String(order.number),
+      serviceName: serviceTitle(order.config, locale),
+      date,
+      time,
+      feeLine,
+      link,
+      contacts,
     });
     const subject = await mailSubject(locale, "subjectCancelled", { n: order.number });
 
     await sendToClient(order.userId, text, subject, "client:cancelled", {
       orderId,
       event: "cancelled",
-    }, locale);
+    }, locale, link);
   } catch (e) {
     console.error("[bookingNotify:cancelled] ошибка", e);
   }
@@ -417,19 +462,28 @@ export async function notifyClientVisitCancelled(visitId: string): Promise<void>
     if (!visit) return;
 
     const locale = visit.order.locale || "ru";
-    const dateStr = visit.scheduledAt ? ymd(visit.scheduledAt) : "—";
-    const tmpl = await getOrderTemplates();
+    const date = visit.scheduledAt ? dateLabel(visit.scheduledAt, locale) : "—";
+    const time = visit.scheduledAt ? timeLabel(visit.scheduledAt) : "";
+    const contacts = await contactsLine();
+
+    const tmpl = await getOrderTemplates(locale);
     const text = fill(tmpl.cancelled, {
-      serviceName: serviceTitle(visit.order.config),
-      date: dateStr,
+      n: String(visit.order.number),
+      serviceName: serviceTitle(visit.order.config, locale),
+      date,
+      time,
+      feeLine: "",
+      link: orderLink(locale, visit.order.id),
+      contacts,
     });
-    const subject = await mailSubject(locale, "subjectVisitCancelled", { n: visit.order.number, date: dateStr });
+    const subjectDate = visit.scheduledAt ? dateLabel(visit.scheduledAt, locale) : "—";
+    const subject = await mailSubject(locale, "subjectVisitCancelled", { n: visit.order.number, date: subjectDate });
 
     await sendToClient(visit.order.userId, text, subject, "client:visitCancelled", {
       orderId: visit.order.id,
       visitId,
       event: "cancelled",
-    }, locale);
+    }, locale, orderLink(locale, visit.order.id));
   } catch (e) {
     console.error("[bookingNotify:visitCancelled] ошибка", e);
   }
@@ -451,21 +505,31 @@ export async function notifyClientMasterOnWay(visitId: string, etaMin: number): 
             id: true,
             number: true,
             userId: true,
+            locale: true,
           },
         },
       },
     });
     if (!visit) return;
 
-    const masterName = visit.master ? tr(visit.master.name, "ru") : "—";
-    const tmpl = await getOrderTemplates();
-    const text = fill(tmpl.onWay, { masterName, eta: String(etaMin) });
+    const locale = visit.order.locale || "ru";
+    const masterName = visit.master ? tr(visit.master.name, locale) : "—";
+    const contacts = await contactsLine();
+    const tmpl = await getOrderTemplates(locale);
+    const text = fill(tmpl.onWay, {
+      n: String(visit.order.number),
+      masterName,
+      eta: String(etaMin),
+      link: orderLink(locale, visit.order.id),
+      contacts,
+    });
+    const subject = await mailSubject(locale, "subjectOnWay", { n: visit.order.number });
 
-    await sendToClient(visit.order.userId, text, `Мастер выехал — заказ №${visit.order.number}`, "client:onWay", {
+    await sendToClient(visit.order.userId, text, subject, "client:onWay", {
       orderId: visit.order.id,
       visitId,
       event: "onWay",
-    });
+    }, locale, orderLink(locale, visit.order.id));
   } catch (e) {
     console.error("[bookingNotify:onWay] ошибка", e);
   }
@@ -494,14 +558,18 @@ export async function notifyClientVisitCompleted(visitId: string): Promise<void>
     if (!visit) return;
 
     const locale = visit.order.locale || "ru";
-    const masterName = visit.master ? tr(visit.master.name, "ru") : "—";
+    const masterName = visit.master ? tr(visit.master.name, locale) : "—";
     const token = await createReviewToken(visitId);
     const reviewLink = `${APP_URL()}/${locale}/review/${token}`;
+    const contacts = await contactsLine();
 
-    const tmpl = await getOrderTemplates();
+    const tmpl = await getOrderTemplates(locale);
     const text = fill(tmpl.completed, {
+      n: String(visit.order.number),
       masterName,
       reviewLink,
+      link: orderLink(locale, visit.order.id),
+      contacts,
     });
     const subject = await mailSubject(locale, "subjectCompleted", { n: visit.order.number });
 
@@ -509,7 +577,7 @@ export async function notifyClientVisitCompleted(visitId: string): Promise<void>
       orderId: visit.order.id,
       visitId,
       event: "completed",
-    }, locale);
+    }, locale, orderLink(locale, visit.order.id));
   } catch (e) {
     console.error("[bookingNotify:completed] ошибка", e);
   }
