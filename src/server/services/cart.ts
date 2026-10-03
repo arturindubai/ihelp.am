@@ -191,6 +191,7 @@ export interface CartItemDetail {
   price: number;
   basePrice: number;
   qty: number;
+  bookHref: string;
 }
 
 export interface CrossSellItem {
@@ -305,6 +306,9 @@ export async function getCartDetails(
       .filter(Boolean)
       .join(" · ");
 
+    const opts = (item.optionIds as string[]).join(",");
+    const bookHref = `/book/${svc.slug}?o=${opts}${item.planId ? `&p=${item.planId}` : ""}`;
+
     items.push({
       cartItemId: item.id,
       serviceId: item.serviceId,
@@ -315,6 +319,7 @@ export async function getCartDetails(
       price: itemPrice,
       basePrice: itemBase,
       qty: item.qty,
+      bookHref,
     });
   }
 

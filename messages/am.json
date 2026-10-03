@@ -1228,8 +1228,10 @@
   "cart": {
     "byPlan": "",
     "cancelPolicy": "",
+    "cartBanner": "",
     "change": "",
     "checkout": "",
+    "checkoutItem": "",
     "crossSell": "",
     "empty": "",
     "emptyHint": "",
@@ -1237,7 +1239,8 @@
     "savings": "",
     "title": "",
     "toCatalog": "",
-    "total": ""
+    "total": "",
+    "totalCart": ""
   },
   "catalog": {
     "arrivalToday": "",
