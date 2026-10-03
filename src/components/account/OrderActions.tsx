@@ -1,12 +1,13 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { Star } from "lucide-react";
+import { MessageCircle, Star } from "lucide-react";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cancelOrderAction, cancelVisitAction, pauseOrderAction, rescheduleInfoAction, rescheduleVisitAction, resumeOrderAction, reviewAction } from "@/server/actions/account";
 import { Sheet } from "@/components/ui/Sheet";
 import { SlotPicker, type SlotMaster } from "@/components/booking/SlotPicker";
 import { addDays, ymd } from "@/lib/time";
+import { amd } from "@/lib/format";
 
 export function OrderActions({ order }: { order: { id: string; kind: string; status: string } }) {
   const t = useTranslations("order");
@@ -115,6 +116,9 @@ export function OrderTrackerActions({
   cancelDeadline,
   freeCancelHours,
   horizonDays,
+  isBusy,
+  cancelPreview,
+  supportContacts,
 }: {
   order: { id: string; kind: string; status: string; serviceId: string; durationMin: number; serviceSlug: string };
   upcomingVisit: { id: string; status: string; scheduledAt: string | null } | null;
@@ -122,13 +126,16 @@ export function OrderTrackerActions({
   cancelDeadline: { free: boolean; label: string } | null;
   freeCancelHours: number;
   horizonDays: number;
+  isBusy: boolean;
+  cancelPreview: { feeAmd: number; freeDeadline: string | undefined; freeHours: number; visitCount: number } | null;
+  supportContacts: { href: string; label: string; key: string }[];
 }) {
   const t = useTranslations("order");
   const tc = useTranslations("common");
   const tb = useTranslations("booking");
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [sheet, setSheet] = useState<"reschedule" | "cancel" | "pause" | "review" | null>(null);
+  const [sheet, setSheet] = useState<"reschedule" | "cancel" | "pause" | "review" | "support" | null>(null);
   const [pick, setPick] = useState<{ date: string; time: string | null; masterId: string | null }>({ date: "", time: null, masterId: null });
   const [rating, setRating] = useState(5);
   const [text, setText] = useState("");
@@ -152,24 +159,64 @@ export function OrderTrackerActions({
 
   function doCancel() {
     start(async () => {
-      let r: { ok: boolean; error?: string };
-      if (order.kind === "ONE_TIME" && upcomingVisit) {
-        r = await cancelVisitAction(upcomingVisit.id);
-      } else {
-        r = await cancelOrderAction(order.id);
-      }
+      const r = await cancelOrderAction(order.id);
       if (!r.ok) return setErr(tc("error"));
       close();
       router.refresh();
     });
   }
 
+  // Заголовок и тело листа подтверждения отмены
+  const cancelTitle = (() => {
+    if (order.kind === "ONE_TIME" && cancelPreview && cancelPreview.feeAmd > 0 && !cancelPreview.freeDeadline) return t("cancelTitlePaid");
+    if (order.kind === "SUBSCRIPTION") return t("cancelTitleSub");
+    if (order.kind === "PACKAGE") return t("cancelTitlePackage");
+    return t("cancelConfirm");
+  })();
+
+  const cancelBody = (() => {
+    if (!cancelPreview) return null;
+    if (order.kind === "ONE_TIME") {
+      if (cancelPreview.freeDeadline) {
+        return <p className="text-sm text-muted">{t("cancelConfirmFree", { datetime: cancelPreview.freeDeadline })}</p>;
+      }
+      if (cancelPreview.feeAmd > 0) {
+        return (
+          <>
+            <p className="text-sm">{t("cancelConfirmPaid", { hours: cancelPreview.freeHours })}</p>
+            <p className="mt-1 text-lg font-semibold text-bad">{amd(cancelPreview.feeAmd)}</p>
+            <p className="mt-1 text-xs text-muted">{t("cancelConfirmPaidNote")}</p>
+          </>
+        );
+      }
+      return <p className="text-sm text-ok">{t("cancelConfirmFreeLabel")}</p>;
+    }
+    return (
+      <>
+        <p className="text-sm">{t("cancelConfirmSub", { count: cancelPreview.visitCount })}</p>
+        {cancelPreview.feeAmd > 0 ? (
+          <p className="mt-1 text-sm font-semibold text-bad">{t("cancelConfirmPenalty", { amount: amd(cancelPreview.feeAmd) })}</p>
+        ) : (
+          <p className="mt-1 text-sm text-ok">{t("cancelConfirmFreeLabel")}</p>
+        )}
+      </>
+    );
+  })();
+
   if (!isActive && !isDone) return null;
 
   return (
     <div className="mt-4 space-y-2">
-      {/* Кнопки переноса и отмены */}
-      {isActive && (
+      {/* Кнопки переноса и отмены / поддержка когда мастер в пути */}
+      {isActive && isBusy && (
+        <div className="flex flex-col gap-1">
+          <button className="btn-outline w-full" onClick={() => setSheet("support")}>
+            <MessageCircle size={16} /> {t("contactSupport")}
+          </button>
+          <p className="text-xs text-muted">{t("supportWhileBusy")}</p>
+        </div>
+      )}
+      {isActive && !isBusy && (
         <div className="flex gap-2">
           {canReschedule && !late && (
             <button className="btn-outline flex-1" onClick={openReschedule}>
@@ -241,12 +288,13 @@ export function OrderTrackerActions({
       </Sheet>
 
       {/* Лист отмены */}
-      <Sheet open={sheet === "cancel"} onClose={close} title={t("cancelConfirm")}
+      <Sheet open={sheet === "cancel"} onClose={close} title={cancelTitle}
         footer={<div className="flex gap-2">
           <button className="btn-outline flex-1" onClick={close}>{tc("no")}</button>
           <button className="btn-primary flex-1 bg-bad" disabled={pending} onClick={doCancel}>{tc("yes")}</button>
         </div>}>
-        {err && <p className="text-sm text-bad">{err}</p>}
+        {cancelBody}
+        {err && <p className="mt-2 text-sm text-bad">{err}</p>}
       </Sheet>
 
       {/* Лист паузы */}
@@ -273,6 +321,18 @@ export function OrderTrackerActions({
           {err && <p className="mt-2 text-sm text-bad">{err}</p>}
         </Sheet>
       )}
+
+      {/* Лист поддержки (когда мастер в пути или работает) */}
+      <Sheet open={sheet === "support"} onClose={close} title={t("contactSupport")}
+        footer={<button className="btn-outline w-full" onClick={close}>{tc("close")}</button>}>
+        <div className="space-y-2 pb-2">
+          {supportContacts.map((c) => (
+            <a key={c.key} href={c.href} className="btn-outline flex w-full items-center justify-center gap-2">
+              {c.label}
+            </a>
+          ))}
+        </div>
+      </Sheet>
     </div>
   );
 }

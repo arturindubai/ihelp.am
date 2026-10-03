@@ -142,6 +142,8 @@ export async function cancelOrderAction(orderId: string) {
   const s = await getSettings();
   const o = await db.order.findFirst({ where: { id: orderId, userId: u.id }, include: { visits: true } });
   if (!o || o.status === "CANCELLED" || o.status === "COMPLETED") return { ok: false };
+  // Мастер уже едет или работает — отменить нельзя, только через поддержку
+  if (o.visits.some((v) => v.status === "ON_WAY" || v.status === "IN_PROGRESS")) return { ok: false, error: "busy" };
   // Отменяем все будущие визиты: иначе заказ закрыт, а мастер всё равно поедет.
   // Визиты внутри срока бесплатной отмены отмечаем отдельно — команде нужно знать о поздней отмене.
   const now = new Date();
