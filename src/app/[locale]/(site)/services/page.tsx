@@ -1,9 +1,22 @@
+import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { getHome } from "@/server/services/catalog";
 import { getCurrentUser } from "@/server/auth";
+import { getSettings } from "@/server/settings";
 import { ServiceTileGrid } from "@/components/catalog/ServiceTile";
 import { CategoryTileGrid } from "@/components/catalog/CategoryTileGrid";
 import { PromoSlot } from "@/components/PromoSlot";
+import { buildAlternates } from "@/lib/seo";
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  const [s, tseo, tnav] = await Promise.all([getSettings(), getTranslations("seo"), getTranslations("nav")]);
+  return {
+    title: tnav("services"),
+    description: tseo("servicesDesc"),
+    alternates: buildAlternates("/services", locale, s.locales.indexable),
+  };
+}
 
 export default async function Services({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;

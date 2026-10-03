@@ -2612,6 +2612,11 @@
     "title": "Your review of the visit",
     "toHome": "Go to home"
   },
+  "seo": {
+    "loginDesc": "Sign in to iHelp to book a cleaning or home service, manage your visits and view your order history.",
+    "serviceBookOnline": "Book online — fast, easy, and at a fixed price.",
+    "servicesDesc": "Professional home cleaning and services in Yerevan. Choose a service, master, and time slot — we arrive on time and deliver quality work."
+  },
   "service": {
     "addToCart": "+ Add",
     "benefits": "Benefits",

@@ -1,6 +1,11 @@
+import type { Metadata } from "next";
 import { getLocale } from "next-intl/server";
 import { loadMessages } from "@/i18n/messages";
 import ruMessages from "@/../messages/ru.json";
+
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: "404", robots: { index: false, follow: false } };
+}
 
 /** Страница 404 внутри языкового раздела: тексты берутся из переводов, при сбое — по-русски */
 export default async function NotFound() {

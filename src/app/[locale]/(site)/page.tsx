@@ -6,10 +6,12 @@ import { getSettings } from "@/server/settings";
 import { contactLink } from "@/lib/contacts";
 import { getCurrentUser } from "@/server/auth";
 import { tr } from "@/i18n/locales";
+import { buildAlternates, buildOrgJsonLd } from "@/lib/seo";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
-  return { alternates: { canonical: `/${locale}` } };
+  const s = await getSettings();
+  return { alternates: buildAlternates("", locale, s.locales.indexable) };
 }
 import { HeroSection } from "@/components/home/HeroSection";
 import { PromoCarousel } from "@/components/home/PromoCarousel";
@@ -28,8 +30,11 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
   const data = await getHome(locale, user?.id);
   const wa = contactLink(s.brand, "whatsapp");
   const autoMode = !!(user && (user.phone || (user.email && user.emailVerifiedAt)));
+  const base = process.env.APP_URL || "https://ihelp.am";
+  const orgJsonLd = buildOrgJsonLd(s, base);
   return (
     <div className="container-w pt-4">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }} />
       <div className="mx-auto max-w-[560px] md:max-w-none">
         <p className="text-sm text-muted">{tr(s.brand.city, locale)}</p>
 

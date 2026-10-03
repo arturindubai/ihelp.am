@@ -20,12 +20,13 @@ const read = (file: string) => fs.readFile(path.join(process.cwd(), "public", fi
 
 export default async function Image({ params }: { params: Promise<{ locale: string }> | { locale: string } }) {
   const { locale } = await Promise.resolve(params);
+  // icon-512.png используется вместо icon.svg: SVG c <text> не рендерится в ImageResponse (Satori не поддерживает SVG-текст)
   const [s, regular, bold, armenian, logo] = await Promise.all([
     getSettings(),
     read("fonts/NotoSans-Regular.woff"),
     read("fonts/NotoSans-Bold.woff"),
     read("fonts/NotoSansArmenian-Bold.woff"),
-    read("img/icon.svg"),
+    read("icon-512.png"),
   ]);
   const tagline = tr(s.brand.tagline, locale);
   const city = tr(s.brand.city, locale);
@@ -34,7 +35,7 @@ export default async function Image({ params }: { params: Promise<{ locale: stri
     (
       <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", padding: "80px 96px", background: SURFACE, fontFamily: "Noto Sans" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 36 }}>
-          <img src={`data:image/svg+xml;base64,${logo.toString("base64")}`} width={148} height={148} style={{ borderRadius: 32 }} />
+          <img src={`data:image/png;base64,${logo.toString("base64")}`} width={148} height={148} style={{ borderRadius: 32 }} />
           <div style={{ fontSize: 104, fontWeight: 700, color: INK, letterSpacing: -2 }}>{s.brand.name}</div>
         </div>
         {tagline && <div style={{ marginTop: 44, fontSize: 52, lineHeight: 1.25, color: INK, maxWidth: 1000 }}>{tagline}</div>}

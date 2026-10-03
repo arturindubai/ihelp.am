@@ -3,7 +3,7 @@ import { NextIntlClientProvider, hasLocale } from "next-intl";
 import { getMessages, setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
-import { defaultLocale, localeIso, tr } from "@/i18n/locales";
+import { localeIso, tr } from "@/i18n/locales";
 import { getSettings } from "@/server/settings";
 import { ServiceWorker } from "@/components/ServiceWorker";
 import { CookieBanner } from "@/components/CookieBanner";
@@ -47,13 +47,6 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     title: { default: `${s.brand.name} — ${tr(s.brand.tagline, locale)}`, template: `%s · ${s.brand.name}` },
     description: tr(s.brand.tagline, locale),
     manifest: "/manifest.webmanifest",
-    alternates: {
-      // hreflang только для индексируемых языков + x-default на дефолтную локаль
-      languages: {
-        ...Object.fromEntries(s.locales.indexable.map((l) => [localeIso[l as "ru"], `/${l}`])),
-        "x-default": `/${defaultLocale}`,
-      },
-    },
     appleWebApp: { capable: true, title: s.brand.name, statusBarStyle: "default" },
     icons: {
       icon: [

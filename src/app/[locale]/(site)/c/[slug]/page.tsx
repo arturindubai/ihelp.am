@@ -1,20 +1,27 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { CalendarClock } from "lucide-react";
 import { getCategory, getCategories } from "@/server/services/catalog";
+import { getSettings } from "@/server/settings";
 import { FormatCards } from "@/components/FormatCards";
 import { Link } from "@/i18n/navigation";
 import { NotifyForm } from "@/components/catalog/NotifyForm";
 import { ServiceTileGrid } from "@/components/catalog/ServiceTile";
 import { cn } from "@/lib/format";
 import { PromoSlot } from "@/components/PromoSlot";
+import { buildAlternates } from "@/lib/seo";
 
-export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }) {
-  const { slug } = await params;
-  const c = await getCategory(slug, "ru");
+export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }): Promise<Metadata> {
+  const { locale, slug } = await params;
+  const [c, s] = await Promise.all([getCategory(slug, locale), getSettings()]);
   if (!c) return {};
   if (c.comingSoon) return { robots: { index: false, follow: false } };
-  return {};
+  return {
+    title: c.title,
+    description: c.description || undefined,
+    alternates: buildAlternates(`/c/${slug}`, locale, s.locales.indexable),
+  };
 }
 
 export default async function CategoryPage({ params }: { params: Promise<{ locale: string; slug: string }> }) {

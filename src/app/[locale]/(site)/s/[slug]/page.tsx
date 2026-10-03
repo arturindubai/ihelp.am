@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { ArrowLeft, ChevronDown, Check, CalendarClock } from "lucide-react";
 import { Link } from "@/i18n/navigation";
@@ -15,15 +16,30 @@ import { ServiceConfigurator } from "@/components/service/ServiceConfigurator";
 import { Img } from "@/components/Img";
 import { PromoSlot } from "@/components/PromoSlot";
 import { NotifyForm } from "@/components/catalog/NotifyForm";
+import { buildAlternates, buildServiceJsonLd } from "@/lib/seo";
 
-export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }) {
+export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }): Promise<Metadata> {
   const { locale, slug } = await params;
-  const raw = await loadServiceRaw(slug);
+  const [raw, s, t] = await Promise.all([loadServiceRaw(slug), getSettings(), getTranslations("seo")]);
   if (!raw) return {};
-  const meta: Record<string, unknown> = {
-    title: tr(raw.title, locale),
-    description: tr(raw.subtitle, locale) || tr(raw.description, locale),
-    alternates: { canonical: `/${locale}/s/${slug}` },
+  const title = tr(raw.title, locale);
+  const subtitle = tr(raw.subtitle, locale);
+  const desc = tr(raw.description, locale);
+  const minPrice = Math.min(...raw.groups.flatMap((g) => g.options.map((o) => o.price)).filter((p) => p > 0), Infinity);
+  const priceStr = Number.isFinite(minPrice) ? ` ${locale === "ru" ? `от ${minPrice} ֏` : `from ${minPrice} AMD`}` : "";
+  const baseDesc = subtitle || desc || "";
+  const suffix = t("serviceBookOnline");
+  const description = baseDesc ? `${baseDesc}${priceStr ? ` —${priceStr}.` : "."} ${suffix}` : `${title}${priceStr ? ` —${priceStr}.` : "."} ${suffix}`;
+  const ogImage = raw.bannerImage || raw.image;
+  const meta: Metadata = {
+    title,
+    description,
+    alternates: buildAlternates(`/s/${slug}`, locale, s.locales.indexable),
+    openGraph: {
+      title: `${title}${priceStr ? ` —${priceStr}` : ""}`,
+      description,
+      ...(ogImage ? { images: [ogImage] } : {}),
+    },
   };
   if (raw.comingSoon) meta.robots = { index: false, follow: false };
   return meta;
@@ -42,6 +58,8 @@ export default async function ServicePage({ params, searchParams }: { params: Pr
   const [user, settings, reviews, masters, t, tc] = await Promise.all([getCurrentUser(), getSettings(), getServiceReviews(raw.id), getMastersForService(raw.id), getTranslations("service"), getTranslations("common")]);
   const first = await isFirstOrder(user?.id);
   const minPrice = Math.min(...s.groups.filter((g) => g.isDuration).flatMap((g) => g.options.map((o) => o.price)), Infinity);
+  const base = process.env.APP_URL || "https://ihelp.am";
+  const serviceJsonLd = !raw.comingSoon ? buildServiceJsonLd(s.title, s.description || s.subtitle, minPrice, slug, base) : null;
 
   if (raw.comingSoon) {
     const tcat = await getTranslations("catalog");
@@ -86,6 +104,7 @@ export default async function ServicePage({ params, searchParams }: { params: Pr
 
   return (
     <div className="container-m">
+      {serviceJsonLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(serviceJsonLd) }} />}
       <div className="relative -mx-4">
         {s.bannerImage ? <div className="relative aspect-[16/9] w-full"><Img src={s.bannerImage} fill sizes="(max-width: 768px) 100vw, 768px" className="object-cover" /></div> : <div className="h-14" />}
         <Link href={`/`} className="absolute top-3 left-3 grid size-9 place-items-center rounded-full bg-paper shadow" aria-label={tc("back")}>

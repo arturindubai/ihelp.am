@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { redirect } from "@/i18n/navigation";
 import { getCurrentUser } from "@/server/auth";
@@ -7,6 +8,18 @@ import { unpackSignupTicket } from "@/lib/signupTicket";
 import { unpackGoogleSignupTicket } from "@/lib/googleSignupTicket";
 import { safeReturnPath } from "@/lib/safeRedirect";
 import { LoginClient } from "./LoginClient";
+import { buildAlternates } from "@/lib/seo";
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  const [s, tseo, tauth] = await Promise.all([getSettings(), getTranslations("seo"), getTranslations("auth")]);
+  return {
+    title: tauth("title"),
+    description: tseo("loginDesc"),
+    alternates: buildAlternates("/login", locale, s.locales.indexable),
+    robots: { index: false, follow: false },
+  };
+}
 
 export default async function LoginPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ next?: string; error?: string; complete?: string; "google-complete"?: string }> }) {
   const { locale } = await params;

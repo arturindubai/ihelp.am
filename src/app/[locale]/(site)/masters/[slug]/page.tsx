@@ -1,11 +1,33 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { getMasterPublicProfile } from "@/server/services/pages/catalog";
+import { getSettings } from "@/server/settings";
 import { tr } from "@/i18n/locales";
 import { dateLabel } from "@/lib/format";
 import { Link } from "@/i18n/navigation";
 import { StarRow } from "@/components/Stars";
 import { Img } from "@/components/Img";
+import { buildAlternates } from "@/lib/seo";
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }): Promise<Metadata> {
+  const { locale, slug } = await params;
+  const [m, s] = await Promise.all([getMasterPublicProfile(slug), getSettings()]);
+  if (!m) return {};
+  const name = tr(m.name, locale);
+  const cityStr = locale === "ru" ? "в Ереване" : "in Yerevan";
+  const ratingStr = m.reviewsCount
+    ? locale === "ru"
+      ? ` Рейтинг ${m.rating.toFixed(1)}/5, ${m.reviewsCount} отзывов.`
+      : ` Rating ${m.rating.toFixed(1)}/5, ${m.reviewsCount} reviews.`
+    : "";
+  const bookStr = locale === "ru" ? " Записаться онлайн на iHelp." : " Book online at iHelp.";
+  return {
+    title: name,
+    description: `${name} — ${locale === "ru" ? "специалист" : "specialist"} iHelp ${cityStr}.${ratingStr}${bookStr}`,
+    alternates: buildAlternates(`/masters/${slug}`, locale, s.locales.indexable),
+  };
+}
 
 export default async function MasterPage({ params }: { params: Promise<{ locale: string; slug: string }> }) {
   const { locale, slug } = await params;

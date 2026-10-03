@@ -6,8 +6,8 @@ export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = process.env.APP_URL || "http://localhost:3000";
-  const [s, [services, masters]] = await Promise.all([getSettings(), getSitemapEntries()]);
-  const paths = ["", "/services", ...services.map((x) => `/s/${x.slug}`), ...masters.map((x) => `/masters/${x.slug}`)];
+  const [s, [services, categories]] = await Promise.all([getSettings(), getSitemapEntries()]);
+  const paths = ["", "/services", ...categories.map((x) => `/c/${x.slug}`), ...services.map((x) => `/s/${x.slug}`)];
   return s.locales.indexable.flatMap((l) =>
     paths.map((p) => ({ url: `${base}/${l}${p}`, changeFrequency: "weekly" as const, lastModified: new Date() }))
   );

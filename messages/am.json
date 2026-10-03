@@ -1605,6 +1605,11 @@
     "title": "",
     "toHome": ""
   },
+  "seo": {
+    "loginDesc": "",
+    "serviceBookOnline": "",
+    "servicesDesc": ""
+  },
   "service": {
     "addToCart": "",
     "benefits": "",
