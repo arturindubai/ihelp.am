@@ -80,25 +80,29 @@ export async function sendEmailLoginCodeAction(emailRaw: string, locale = "ru") 
   const email = normalizeEmail(emailRaw);
   if (!email) return { ok: false as const, error: "email" };
   const user = await verifiedUserByEmail(email);
-  let skipDelivery = false;
   if (user) {
-    if (user.blocked) skipDelivery = true;
+    if (user.blocked) {
+      // Заблокированный: код создаётся для анти-перечисления, письмо не уходит
+      const h = await headers();
+      const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || undefined;
+      const r = await sendOtp(email, "EMAIL", ip, ["ru", "en", "am"].includes(locale) ? locale : "ru", { skipDelivery: true });
+      return { ...r, email };
+    }
   } else {
     const anyUser = await db.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } } });
-    if (anyUser) {
-      // Адрес в базе, но не подтверждён или заблокирован: код создаётся, письмо не уходит
-      skipDelivery = true;
-      if (!anyUser.emailVerifiedAt) {
-        alertTech("email-login-unverified", html`⚠️ <b>Вход по почте: адрес не подтверждён</b>\nПопытка входа — адрес в базе, но подтверждение не завершено.`, 60).catch(() => null);
-      }
-    } else {
+    if (anyUser && !anyUser.emailVerifiedAt) {
+      // Адрес в базе, но не подтверждён: честно сообщаем — не создаём код, форма объясняет что делать
+      alertTech("email-login-unverified", html`⚠️ <b>Вход по почте: адрес не подтверждён</b>\nПопытка входа — адрес в базе, но подтверждение не завершено.`, 60).catch(() => null);
+      return { ok: false as const, error: "email_unverified" };
+    }
+    if (!anyUser) {
       // Незнакомый адрес: отправляем код, после подтверждения создастся аккаунт (AUTH-19)
       alertTech("email-new-registration", html`✉️ <b>Новая регистрация по почте</b>\nЗапрос кода на незнакомый адрес — аккаунт будет создан после подтверждения.`, 30).catch(() => null);
     }
   }
   const h = await headers();
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || undefined;
-  const r = await sendOtp(email, "EMAIL", ip, ["ru", "en", "am"].includes(locale) ? locale : "ru", { skipDelivery });
+  const r = await sendOtp(email, "EMAIL", ip, ["ru", "en", "am"].includes(locale) ? locale : "ru");
   return { ...r, email };
 }
 

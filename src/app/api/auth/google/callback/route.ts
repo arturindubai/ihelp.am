@@ -78,7 +78,15 @@ export async function GET(req: Request) {
   if (!user) {
     // Проверяем, не добавил ли кто-то этот email в профиль без подтверждения
     const unverified = await db.user.findFirst({ where: { email: { equals: profile.email, mode: "insensitive" } } });
-    if (unverified) return fail("google_not_linked");
+    if (unverified) {
+      if (unverified.emailVerifiedAt) {
+        // Email подтверждён другим аккаунтом — вход через Google невозможен без привязки
+        return fail("google_not_linked");
+      }
+      // Неподтверждённый email в чужом профиле не блокирует настоящего владельца почты:
+      // Google уже подтвердил право на адрес — очищаем занятое неподтверждённое поле
+      await db.user.update({ where: { id: unverified.id }, data: { email: null } });
+    }
     // Новый пользователь: тикет с данными из Google, редирект на форму телефона.
     // Сохраняем next, чтобы после завершения регистрации вернуть пользователя туда, куда он шёл.
     const ticket = packGoogleSignupTicket(

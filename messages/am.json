@@ -1100,6 +1100,7 @@
       "delivery_failed": "",
       "email": "",
       "email_taken": "",
+      "email_unverified": "",
       "exists": "",
       "google_failed": "",
       "google_not_linked": "",

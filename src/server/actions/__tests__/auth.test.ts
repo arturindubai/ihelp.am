@@ -101,24 +101,25 @@ describe("sendEmailLoginCodeAction — alertTech", () => {
     expect(mocks.alertTech).not.toHaveBeenCalled();
   });
 
-  it("skipDelivery для незнакомого адреса равен false — письмо уходит", async () => {
+  it("незнакомый адрес — sendOtp вызывается (письмо уходит)", async () => {
     mocks.findMany.mockResolvedValue([]);
     mocks.findFirst.mockResolvedValueOnce(null);
 
-    await sendEmailLoginCodeAction("brand-new@example.com");
+    const r = await sendEmailLoginCodeAction("brand-new@example.com");
 
-    const call = mocks.sendOtp.mock.calls[0];
-    expect(call[4]).toEqual(expect.objectContaining({ skipDelivery: false }));
+    expect(r.ok).toBe(true);
+    expect(mocks.sendOtp).toHaveBeenCalledOnce();
   });
 
-  it("skipDelivery для неподтверждённого адреса равен true — письмо не уходит", async () => {
+  it("неподтверждённый адрес — sendOtp не вызывается, возвращается email_unverified", async () => {
     mocks.findMany.mockResolvedValue([]);
     mocks.findFirst.mockResolvedValueOnce({ id: "u2", email: "unverified@example.com", emailVerifiedAt: null });
 
-    await sendEmailLoginCodeAction("unverified@example.com");
+    const r = await sendEmailLoginCodeAction("unverified@example.com");
 
-    const call = mocks.sendOtp.mock.calls[0];
-    expect(call[4]).toEqual(expect.objectContaining({ skipDelivery: true }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe("email_unverified");
+    expect(mocks.sendOtp).not.toHaveBeenCalled();
   });
 });
 

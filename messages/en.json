@@ -2050,6 +2050,7 @@
       "delivery_failed": "Failed to send the code. Please try another method.",
       "email": "Please check the email",
       "email_taken": "This email is already used by another account",
+      "email_unverified": "This email is linked to an account but not yet verified. Sign in with your phone number, then confirm the email in your profile.",
       "exists": "This phone or email is already registered — please sign in",
       "google_failed": "Google did not confirm sign-in. Please try again",
       "google_not_linked": "This Google account is not linked. Sign in with your phone and add this email in your profile",

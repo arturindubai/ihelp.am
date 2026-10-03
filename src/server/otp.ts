@@ -37,9 +37,9 @@ export const emailCodesAvailable = (st: Settings) => st.mail.enabled && !!st.mai
 export async function availableChannels(s?: Settings): Promise<PhoneChannel[]> {
   const st = s || (await getSettings());
   const list = enabledPhoneChannels(st);
-  // Пока ни один канал не подключён: код пишется в лог сервера (docker compose logs app | grep otp),
-  // а при OTP_DEV_MODE=true ещё и показывается на экране. Так владелец может войти и настроить каналы.
-  if (!list.length) return ["WHATSAPP", "TELEGRAM", "SMS"];
+  // Когда OTP_DEV_MODE=true и ни один канал не подключён: все три канала доступны, код пишется в лог.
+  // В production (OTP_DEV_MODE=false) без настроенного канала — sendOtp вернёт channel_unavailable.
+  if (!list.length && process.env.OTP_DEV_MODE === "true") return ["WHATSAPP", "TELEGRAM", "SMS"];
   return list;
 }
 
@@ -107,8 +107,18 @@ export async function verifyOtp(phone: string, code: string): Promise<boolean> {
   const rec = await db.otpCode.findFirst({ where: { phone, consumedAt: null }, orderBy: { createdAt: "desc" } });
   if (!rec || rec.expiresAt < new Date() || rec.attempts >= s.otp.maxAttempts) return false;
   const ok = crypto.timingSafeEqual(Buffer.from(rec.codeHash), Buffer.from(hash(`${phone}:${code.trim()}`)));
-  await db.otpCode.update({ where: { id: rec.id }, data: ok ? { consumedAt: new Date() } : { attempts: { increment: 1 } } });
-  if (!ok) {
+
+  if (ok) {
+    // Атомарно помечаем как использованный — параллельный запрос не сможет повторно его применить
+    const updated = await db.otpCode.updateMany({ where: { id: rec.id, consumedAt: null }, data: { consumedAt: new Date() } });
+    if (updated.count === 0) return false;
+  } else {
+    // Атомарно увеличиваем счётчик только если лимит ещё не достигнут — защита от гонки параллельных запросов
+    const updated = await db.otpCode.updateMany({
+      where: { id: rec.id, consumedAt: null, attempts: { lt: s.otp.maxAttempts } },
+      data: { attempts: { increment: 1 } },
+    });
+    if (updated.count === 0) return false;
     const fails = (await db.otpCode.aggregate({ where: { phone, createdAt: { gt: new Date(Date.now() - DAY) } }, _sum: { attempts: true } }))._sum.attempts ?? 0;
     if (fails === ALERT_FAILS_PER_DAY) {
       const u = await db.user.findUnique({ where: { phone }, select: { role: true } });

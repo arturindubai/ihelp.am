@@ -35,7 +35,7 @@ export async function GET(req: Request) {
   }
   if (user.blocked) return fail("blocked");
 
-  await createSession(user.id);
+  await createSession(user.id, user.role);
   await audit(user.id, "auth.telegram_widget", "User", user.id, { telegramId: data.id });
   await alertTech("telegram-widget-login", html`🔓 <b>Вход через Telegram Widget</b>\n${user.phone}`, 5);
 
