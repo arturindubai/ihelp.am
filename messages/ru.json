@@ -2124,6 +2124,7 @@
     "emailCodeTitle": "Код для входа",
     "emailCodeTtl": "Код действует {min} мин. Никому его не сообщайте.",
     "emailGetCode": "Получить код на email",
+    "emailInvalid": "Проверьте адрес почты",
     "emailOnlyConfirmed": "Если аккаунта нет — он будет создан автоматически.",
     "emailPlaceholder": "почта@пример.com",
     "errors": {
@@ -2157,7 +2158,7 @@
     },
     "getCodeVia": "Получить код через",
     "google": "Войти через Google",
-    "googleHint": "Для сотрудников: вход по рабочей почте, указанной в профиле",
+    "googleHint": "Для сотрудников: вход через Google",
     "googleSignupEmailConfirmed": "Email {email} подтверждён Google",
     "googleSignupNoChannels": "Для завершения регистрации нужен номер телефона, но каналы доставки кодов сейчас недоступны. Войдите по email или попробуйте позже.",
     "googleSignupPhoneHint": "Введите номер телефона, чтобы завершить регистрацию",
@@ -2222,6 +2223,7 @@
     },
     "freeCancel": "Бесплатная отмена за {hours} ч до визита",
     "lateCancelFee": "штраф за позднюю отмену {amount} ֏",
+    "loginOrderSaved": "Войдите, чтобы выбрать время — заказ сохранён",
     "loginToContinue": "Войдите, чтобы оформить заказ",
     "master": "Мастер",
     "masterBusy": "Занят в это время",
@@ -2273,8 +2275,10 @@
   "cart": {
     "byPlan": "По подписке",
     "cancelPolicy": "Бесплатная отмена за 24 ч",
+    "cartBanner": "{count, plural, one {Ещё # услуга в корзине} few {Ещё # услуги в корзине} other {Ещё # услуг в корзине}} — оформить",
     "change": "Изменить",
     "checkout": "Оформить",
+    "checkoutItem": "Оформить эту услугу",
     "crossSell": "Часто берут вместе",
     "empty": "Корзина пуста",
     "emptyHint": "Выберите услугу",
@@ -2295,7 +2299,8 @@
     "subFreqWeekly": "раз в неделю",
     "title": "Ваш заказ",
     "toCatalog": "Перейти в каталог",
-    "total": "Итого"
+    "total": "Итого",
+    "totalCart": "Всего по корзине"
   },
   "catalog": {
     "arrivalToday": "сегодня",

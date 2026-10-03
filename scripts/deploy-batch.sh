@@ -101,19 +101,19 @@ else
     _stray_dir="data/tmp/stray/$(date +%Y%m%d-%H%M%S)"
     mkdir -p "$_stray_dir"
     _stray_list=""
-    while IFS= read -r _stray_line; do
-      [ -z "$_stray_line" ] && continue
-      _fp="${_stray_line:3}"
+    # -z: нулевой разделитель — git отдаёт сырые байты без кавычек (имена с пробелом, кириллицей, кавычкой)
+    while IFS= read -r -d '' _fp; do
+      [ -z "$_fp" ] && continue
       _fp="${_fp%/}"
       _dest_dir="$_stray_dir/$(dirname "$_fp")"
       mkdir -p "$_dest_dir"
-      if mv "$_fp" "$_dest_dir/"; then
+      if mv -- "$_fp" "$_dest_dir/"; then
         _stray_list="${_stray_list} ${_fp}"
         echo "▶ Лишний файл убран в сторону: $_fp → ${_dest_dir}/"
       else
         stop "Не удалось убрать лишний файл из основной копии: $_fp"
       fi
-    done < <(printf '%s\n' "$_porcelain" | grep '^?? ' || true)
+    done < <(git ls-files --others --exclude-standard -z)
     echo "▶ Лишние файлы перенесены в $_stray_dir:${_stray_list}"
     for _sk in "${KEYS[@]}"; do
       cc note "$_sk" "Пачковая выкладка: перед стартом убраны неотслеживаемые файлы в ${_stray_dir}:${_stray_list}" 2>/dev/null || true

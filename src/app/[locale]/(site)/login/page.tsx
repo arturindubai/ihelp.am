@@ -36,7 +36,10 @@ export default async function LoginPage({ params, searchParams }: { params: Prom
   const [{ channels, email: emailEnabled }, s, t] = await Promise.all([loginMethods(), getSettings(), getTranslations("auth")]);
   const google = s.google.enabled && !!s.google.clientId;
   const apple = s.apple.enabled && !!s.apple.clientId;
-  const telegram = s.telegramWidget.enabled && !!s.notify.telegramBotToken && !!s.notify.telegramBotUsername;
+  const telegramWidget = s.telegramWidget.enabled && !!s.notify.telegramBotToken && !!s.notify.telegramBotUsername;
+  const googleUrl = google && !signup ? `/api/auth/google/start${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ""}` : undefined;
+  const appleUrl = apple && !signup ? `/api/auth/apple/start${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ""}` : undefined;
+  const telegramWidgetUrl = telegramWidget && !signup ? `/api/auth/telegram/start${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ""}` : undefined;
   const errorKey =
     error &&
     ["google_off", "google_state", "google_failed", "google_not_linked", "apple_off", "apple_state", "apple_failed", "apple_not_linked", "telegram_state", "telegram_failed", "telegram_not_linked", "telegram_conflict", "blocked"].includes(
@@ -48,45 +51,17 @@ export default async function LoginPage({ params, searchParams }: { params: Prom
     <div className="container-m pt-6">
       <h1 className="h1 mb-5">{t("title")}</h1>
       {errorKey && <p className="mb-4 rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad">{t(`errors.${errorKey}` as "errors.blocked")}</p>}
-      {(google || apple || telegram) && !signup && (
-        <div className="mb-5 space-y-3">
-          {google && (
-            <div>
-              <a className="btn-outline w-full" href={`/api/auth/google/start${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ""}`}>
-                {t("google")}
-              </a>
-              <p className="mt-2 text-center text-xs text-muted">{t("googleHint")}</p>
-            </div>
-          )}
-          {apple && (
-            <div>
-              <a className="btn-outline w-full" href={`/api/auth/apple/start${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ""}`}>
-                {t("apple")}
-              </a>
-              <p className="mt-2 text-center text-xs text-muted">{t("appleHint")}</p>
-            </div>
-          )}
-          {telegram && (
-            <div>
-              <a className="btn-outline inline-flex w-full items-center justify-center gap-2" href={`/api/auth/telegram/start${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ""}`}>
-                <TelegramIcon />
-                {t("telegram")}
-              </a>
-              <p className="mt-2 text-center text-xs text-muted">{t("telegramHint")}</p>
-            </div>
-          )}
-        </div>
-      )}
-      <LoginClient channels={channels} emailEnabled={emailEnabled} telegramBot={s.notify.telegramBotUsername || null} signup={signup} next={safeNext} />
+      <LoginClient
+        channels={channels}
+        emailEnabled={emailEnabled}
+        telegramBot={s.notify.telegramBotUsername || null}
+        googleUrl={googleUrl}
+        appleUrl={appleUrl}
+        telegramWidgetUrl={telegramWidgetUrl}
+        signup={signup}
+        next={safeNext}
+      />
     </div>
   );
 }
 
-function TelegramIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M22 2 11 13" />
-      <path d="M22 2 15 22 11 13 2 9l20-7z" />
-    </svg>
-  );
-}

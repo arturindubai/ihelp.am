@@ -6,6 +6,9 @@ export function LoginClient({
   channels,
   emailEnabled,
   telegramBot,
+  googleUrl,
+  appleUrl,
+  telegramWidgetUrl,
   signup,
   googleSignup,
   next,
@@ -13,6 +16,9 @@ export function LoginClient({
   channels: ("SMS" | "WHATSAPP" | "TELEGRAM")[];
   emailEnabled: boolean;
   telegramBot: string | null;
+  googleUrl?: string;
+  appleUrl?: string;
+  telegramWidgetUrl?: string;
   signup?: { ticket: string; phone: string };
   googleSignup?: { ticket: string; email: string; name: string };
   next: string | null;
@@ -23,6 +29,9 @@ export function LoginClient({
       channels={channels}
       emailEnabled={emailEnabled}
       telegramBot={telegramBot}
+      googleUrl={googleUrl}
+      appleUrl={appleUrl}
+      telegramWidgetUrl={telegramWidgetUrl}
       signup={signup}
       googleSignup={googleSignup}
       onDone={(role) => {

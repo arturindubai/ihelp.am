@@ -1081,6 +1081,7 @@
     "emailCodeTitle": "",
     "emailCodeTtl": "",
     "emailGetCode": "",
+    "emailInvalid": "",
     "emailOnlyConfirmed": "",
     "emailPlaceholder": "",
     "errors": {
@@ -1178,6 +1179,7 @@
     },
     "freeCancel": "",
     "lateCancelFee": "",
+    "loginOrderSaved": "",
     "loginToContinue": "",
     "master": "",
     "masterBusy": "",
@@ -1228,8 +1230,10 @@
   "cart": {
     "byPlan": "",
     "cancelPolicy": "",
+    "cartBanner": "",
     "change": "",
     "checkout": "",
+    "checkoutItem": "",
     "crossSell": "",
     "empty": "",
     "emptyHint": "",
@@ -1250,7 +1254,8 @@
     "subFreqWeekly": "",
     "title": "",
     "toCatalog": "",
-    "total": ""
+    "total": "",
+    "totalCart": ""
   },
   "catalog": {
     "arrivalToday": "",

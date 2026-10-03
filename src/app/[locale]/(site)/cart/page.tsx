@@ -60,7 +60,10 @@ export default async function CartPage({ params }: { params: Promise<{ locale: s
     );
   }
 
-  const bookHref = `/book/${details.firstSlug}?o=${details.firstOpts.join(",")}${details.firstPlanId ? `&p=${details.firstPlanId}` : ""}`;
+  const isMultiple = details.items.length > 1;
+  const singleBookHref = !isMultiple
+    ? `/book/${details.firstSlug}?o=${details.firstOpts.join(",")}${details.firstPlanId ? `&p=${details.firstPlanId}` : ""}`
+    : null;
 
   const summaryBlock = (
     <div className="space-y-1">
@@ -71,14 +74,14 @@ export default async function CartPage({ params }: { params: Promise<{ locale: s
         </div>
       ))}
       <div className="flex justify-between font-semibold text-[16px] pt-2 border-t border-line">
-        <span>{t("total")}</span>
+        <span>{isMultiple ? t("totalCart") : t("total")}</span>
         <span>{amd(details.total)}</span>
       </div>
     </div>
   );
 
   return (
-    <div className="container-m py-4 pb-32 md:pb-8">
+    <div className={`container-m py-4 md:pb-8 ${isMultiple ? "pb-4" : "pb-32"}`}>
       <h1 className="h1 mb-4">{t("title")}</h1>
 
       {/* Сетка: на десктопе — позиции слева, итог справа */}
@@ -132,6 +135,11 @@ export default async function CartPage({ params }: { params: Promise<{ locale: s
                   </Link>
                   <CartItemCounter cartItemId={item.cartItemId} serviceId={item.serviceId} qty={item.qty} />
                 </div>
+                {isMultiple && (
+                  <Link href={item.bookHref} className="btn-primary block text-center mt-2 w-full">
+                    {t("checkoutItem")}
+                  </Link>
+                )}
               </div>
             );
           })}
@@ -200,10 +208,14 @@ export default async function CartPage({ params }: { params: Promise<{ locale: s
         <div className="hidden md:block md:sticky md:top-20">
           <div className="card p-4">
             {summaryBlock}
-            <Link href={bookHref} className="btn-primary w-full block text-center mt-3">
-              {t("checkout")}
-            </Link>
-            <p className="text-xs text-muted text-center mt-2">{t("cancelPolicy")}</p>
+            {singleBookHref && (
+              <>
+                <Link href={singleBookHref} className="btn-primary w-full block text-center mt-3">
+                  {t("checkout")}
+                </Link>
+                <p className="text-xs text-muted text-center mt-2">{t("cancelPolicy")}</p>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -213,13 +225,15 @@ export default async function CartPage({ params }: { params: Promise<{ locale: s
         {summaryBlock}
       </div>
 
-      {/* Sticky кнопка оформления — только мобайл */}
-      <div className="pb-safe fixed bottom-0 inset-x-0 z-40 bg-paper border-t border-line px-4 py-3 md:hidden">
-        <Link href={bookHref} className="btn-primary w-full block text-center">
-          {t("checkout")}
-        </Link>
-        <p className="text-xs text-muted text-center mt-2">{t("cancelPolicy")}</p>
-      </div>
+      {/* Sticky кнопка оформления — только мобайл, только при одной услуге */}
+      {singleBookHref && (
+        <div className="pb-safe fixed bottom-0 inset-x-0 z-40 bg-paper border-t border-line px-4 py-3 md:hidden">
+          <Link href={singleBookHref} className="btn-primary w-full block text-center">
+            {t("checkout")}
+          </Link>
+          <p className="text-xs text-muted text-center mt-2">{t("cancelPolicy")}</p>
+        </div>
+      )}
     </div>
   );
 }
