@@ -1,13 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useRouter, Link, usePathname } from "@/i18n/navigation";
-import { useTranslations } from "next-intl";
+import { useRouter, Link } from "@/i18n/navigation";
+import { useTranslations, useLocale } from "next-intl";
 import { Img } from "@/components/Img";
 import { Search } from "lucide-react";
 import { SubcategoriesSheet } from "./SubcategoriesSheet";
 import { NotifyPopup } from "@/components/catalog/NotifyPopup";
-import { locales, defaultLocale } from "@/i18n/locales";
 import { amd } from "@/lib/format";
 
 type SubcategoryItem = {
@@ -55,7 +54,6 @@ export function HeroSection({ heroTitle, searchPlaceholder, comingSoonLabel, cat
   const router = useRouter();
   const th = useTranslations("home");
   const tc = useTranslations("common");
-  const pathname = usePathname();
   const inputRef = useRef<HTMLInputElement>(null);
   const [openSlug, setOpenSlug] = useState<string | null>(null);
   const [openNotifySlug, setOpenNotifySlug] = useState<string | null>(null);
@@ -66,7 +64,7 @@ export function HeroSection({ heroTitle, searchPlaceholder, comingSoonLabel, cat
   const dropRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const locale = (locales as readonly string[]).find((l) => pathname.startsWith(`/${l}/`) || pathname === `/${l}`) ?? defaultLocale;
+  const locale = useLocale();
 
   const fetchResults = useCallback(async (q: string, loc: string) => {
     if (q.length < 2) { setResults(null); setLoading(false); return; }

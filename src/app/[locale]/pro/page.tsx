@@ -1,7 +1,7 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { redirect, Link } from "@/i18n/navigation";
 import { getCurrentUser } from "@/server/auth";
-import { getMasterByUserId, getProVisits } from "@/server/services/pages/pro";
+import { getMasterByUserId, getProVisits, getMasterCashInHands } from "@/server/services/pages/pro";
 import { getSettings } from "@/server/settings";
 import { getOrCreateVapidKeys } from "@/server/services/vapidKeys";
 import { tr } from "@/i18n/locales";
@@ -33,7 +33,10 @@ export default async function ProPage({ params, searchParams }: { params: Promis
     : tab === "upcoming" ? { gte: atYerevan(addDays(today, 1), "00:00"), lt: atYerevan(addDays(today, 15), "00:00") }
     : { gte: atYerevan(addDays(today, -30), "00:00"), lt: atYerevan(addDays(today, 1), "00:00") };
   const isVisitTab = tab === "today" || tab === "upcoming" || tab === "done";
-  const visits = isVisitTab ? await getProVisits(master.id, range, tab) : [];
+  const [visits, cashInHands] = await Promise.all([
+    isVisitTab ? getProVisits(master.id, range, tab) : Promise.resolve([]),
+    getMasterCashInHands(master.id),
+  ]);
   const cashToday = tab === "today" ? visits.filter((v) => v.order.paymentMethod === "CASH" && v.cashCollected).reduce((s, v) => s + v.price, 0) : 0;
 
   const tabs = [["today", t("today")], ["upcoming", t("upcoming")], ["done", t("done")], ["settings", t("settingsTab")]];
@@ -46,7 +49,10 @@ export default async function ProPage({ params, searchParams }: { params: Promis
           <div className="font-semibold">{tr(master.name, locale)}</div>
           <div className="text-xs text-muted">{master.reviewsCount ? `★ ${master.rating.toFixed(1)} · ${tc("reviews", { count: master.reviewsCount })}` : tc("new")} · {tc("jobs", { count: master.jobsCount })}</div>
         </div>
-        {tab === "today" && <div className="text-right"><div className="text-xs text-muted">{t("cashToday")}</div><div className="font-bold">{amd(cashToday)}</div></div>}
+        <div className="flex flex-col items-end gap-1 text-right">
+          {tab === "today" && <div><div className="text-xs text-muted">{t("cashToday")}</div><div className="font-bold">{amd(cashToday)}</div></div>}
+          {cashInHands > 0 && <div><div className="text-xs text-muted">{t("cashInHands")}</div><div className="font-bold">{amd(cashInHands)}</div></div>}
+        </div>
       </div>
       <div className="my-4 overflow-x-auto">
         <div className="flex min-w-max gap-1 rounded-xl bg-paper p-1">

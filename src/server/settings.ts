@@ -24,6 +24,8 @@ export interface Settings {
     subscriptionHorizonDays: number;
     allowChooseMaster: boolean;
     districts: string[];
+    /** Локализованные названия районов по коду языка; при отсутствии — откат на districts */
+    districtsByLocale?: Record<string, string[]>;
   };
   pricing: PricingRules;
   payments: { cashEnabled: boolean; cardEnabled: boolean };
@@ -79,7 +81,7 @@ export const DEFAULT_SETTINGS: Settings = {
     instagram: "",
     city: { ru: "Ереван", en: "Yerevan", am: "Երևան" },
   },
-  locales: { enabled: ["ru"], indexable: ["ru", "en"] },
+  locales: { enabled: ["ru", "en"], indexable: ["ru", "en"] },
   booking: {
     slotStepMin: 30,
     bufferMin: 30,
@@ -90,6 +92,9 @@ export const DEFAULT_SETTINGS: Settings = {
     subscriptionHorizonDays: 28,
     allowChooseMaster: true,
     districts: ["Кентрон", "Арабкир", "Давташен", "Аджапняк", "Малатия-Себастия", "Шенгавит", "Эребуни", "Канакер-Зейтун", "Норк-Мараш", "Нор Норк", "Аван", "Нубарашен"],
+    districtsByLocale: {
+      en: ["Kentron", "Arabkir", "Davtashen", "Ajapnyak", "Malatia-Sebastia", "Shengavit", "Erebuni", "Kanaker-Zeytun", "Nork-Marash", "Nor Nork", "Avan", "Nubarashen"],
+    },
   },
   pricing: { roundTo: 50, firstVisitDiscount: 10, firstVisitCommittedDiscount: 25, commitmentMinVisits: 4, stackDiscounts: false },
   payments: { cashEnabled: true, cardEnabled: false },
