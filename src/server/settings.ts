@@ -53,6 +53,8 @@ export interface Settings {
   telegramWidget: { enabled: boolean };
   /** ИИ-помощник в форме баннеров: ключи Anthropic (текст) и Higgsfield (изображения) */
   ai: { anthropicKey: string; higgsfieldKey: string };
+  /** Ночная уборка загрузок: отключите перед выкладкой, если файлы ещё не подключены в вёрстке */
+  cleanup: { imagesEnabled: boolean };
   /**
    * Бот команды в Telegram (как бот LIA): задачи владельца → входящие IN-N, «статус», сообщения «Нужен ты».
    * Отдельный от бота входа клиентов (notify.telegramBotToken). Токен вставляется в Control Center → «Ключи»
@@ -114,6 +116,7 @@ export const DEFAULT_SETTINGS: Settings = {
   auth: { clientSessionDays: 60, staffSessionDays: 7 },
   telegramWidget: { enabled: false },
   ai: { anthropicKey: "", higgsfieldKey: "" },
+  cleanup: { imagesEnabled: false },
   team: { botToken: "", botUsername: "", members: [], linkCode: "", linkCodeAt: "" },
 };
 

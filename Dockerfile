@@ -16,6 +16,7 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/messages ./messages
+COPY --from=builder /app/docs ./docs
 RUN mkdir -p /data/uploads && chown -R node:node /data /app
 USER node
 EXPOSE 3000

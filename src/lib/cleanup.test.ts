@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { staleFiles } from "./cleanup";
+import { staleFiles, extractUploadUrls } from "./cleanup";
 
 const ago = (days: number) => new Date(Date.now() - days * 24 * 3600_000);
 const cutoff = ago(7);
@@ -42,5 +42,49 @@ describe("staleFiles", () => {
 
   it("пустые входные данные — пустой результат", () => {
     expect(staleFiles(new Set(), [], cutoff)).toHaveLength(0);
+  });
+});
+
+describe("extractUploadUrls", () => {
+  it("извлекает URL из строки", () => {
+    const result = extractUploadUrls("/uploads/2026-09/abc.webp");
+    expect(result).toEqual(["/uploads/2026-09/abc.webp"]);
+  });
+
+  it("извлекает URL из JSON-объекта", () => {
+    const body = { ru: "Текст с картинкой /uploads/2026-09/img.webp", en: "Text" };
+    const result = extractUploadUrls(body);
+    expect(result).toEqual(["/uploads/2026-09/img.webp"]);
+  });
+
+  it("возвращает уникальные URL (дубли убраны)", () => {
+    const text = "/uploads/2026-09/a.webp и снова /uploads/2026-09/a.webp";
+    expect(extractUploadUrls(text)).toHaveLength(1);
+  });
+
+  it("возвращает пустой массив для null и undefined", () => {
+    expect(extractUploadUrls(null)).toHaveLength(0);
+    expect(extractUploadUrls(undefined)).toHaveLength(0);
+    expect(extractUploadUrls("")).toHaveLength(0);
+  });
+
+  it("извлекает несколько URL из одного текста", () => {
+    const text = "img1: /uploads/2026-09/a.webp img2: /uploads/2026-10/b.png";
+    const result = extractUploadUrls(text);
+    expect(result).toHaveLength(2);
+    expect(result).toContain("/uploads/2026-09/a.webp");
+    expect(result).toContain("/uploads/2026-10/b.png");
+  });
+
+  it("не возвращает /uploads/_trash/... (пути в корзине)", () => {
+    const text = "/uploads/_trash/2026-10-01/2026-09/a.webp";
+    const result = extractUploadUrls(text);
+    expect(result).toEqual(["/uploads/_trash/2026-10-01/2026-09/a.webp"]);
+  });
+
+  it("вложенный JSON с несколькими уровнями", () => {
+    const json = { blocks: [{ type: "image", url: "/uploads/2026-09/hero.webp" }] };
+    const result = extractUploadUrls(json);
+    expect(result).toContain("/uploads/2026-09/hero.webp");
   });
 });

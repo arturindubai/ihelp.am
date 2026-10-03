@@ -3,7 +3,7 @@ import { db } from "@/server/db";
 import { getSettings } from "@/server/settings";
 import { generateSubscriptionVisitsSafe, resumeSubscription } from "@/server/services/booking";
 import { sendInterestDigest } from "@/server/services/serviceInterest";
-import { cleanUnusedImages, cleanOldAuditLogs } from "@/server/services/cleanup";
+import { cleanUnusedImages, cleanOldAuditLogs, cleanTrash } from "@/server/services/cleanup";
 import { runWatchdog } from "@/server/services/ccWork";
 import { checkTechBlocks, checkCtoMessages, checkDispatcherWatchdog } from "@/server/services/ccWatchdog";
 import { getTick } from "@/server/services/workers";
@@ -194,10 +194,15 @@ export async function GET(req: Request) {
   await step("notify-cleanup", () => daily("notify-cleanup", 5, () => cleanQueue(7).then(() => undefined)), undefined);
 
   // 5г. Уборка неиспользуемых картинок: файлы без ссылок в базе старше 7 дней
+  // Выключена по умолчанию (cleanup.imagesEnabled = false) — включить в настройках после проверки
   let cleanImages = { deleted: 0, errors: 0 };
   await step("clean-images", () => daily("clean-images", 3, async () => {
+    if (!s.cleanup?.imagesEnabled) return;
     cleanImages = await cleanUnusedImages(now);
   }), undefined);
+
+  // 5г'. Очистка корзины загрузок: файлы в _trash старше 30 дней удаляются окончательно
+  await step("clean-trash", () => daily("clean-trash", 3, () => cleanTrash(now).then(() => undefined)), undefined);
 
   // 5д. Лог-вотчер: ошибки прода становятся входящими карточками IN-N
   const lw = await step("log-watcher", () => runLogWatcher(), { created: 0, updated: 0, limited: false });
