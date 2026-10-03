@@ -306,6 +306,7 @@ export async function TaskDetail({ taskKey, locale, taskHref }: { taskKey: strin
                   scope: task.scope.join("\n"),
                   mockupRequired: task.mockupRequired,
                   mockupUrl: task.mockupUrl ?? "",
+                  track: task.track ?? "",
                 }}
               />
             </Card>

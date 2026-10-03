@@ -25,6 +25,7 @@ const TAB_ICON: Record<Tab, string> = {
   approvals: "✅",
   design: "🎨",
   product: "📦",
+  business: "💼",
   workers: "🤖",
   activity: "🧾",
   done: "✓",

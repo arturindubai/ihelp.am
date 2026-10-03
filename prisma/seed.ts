@@ -80,6 +80,7 @@ async function syncEpics() {
       deployNotes: e.deployNotes ?? null,
       depends: e.depends ?? [],
       docs: e.docs ?? [],
+      track: e.track ?? null,
       sort: i,
     };
     const existing = await db.epic.findUnique({ where: { key: e.key }, select: { id: true, source: true } });

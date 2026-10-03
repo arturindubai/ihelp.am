@@ -240,6 +240,8 @@ export interface TaskContent {
   screenRequirements?: string | null;
   /** Нужно описание дизайна: ставит триаж */
   needsDesign?: boolean | null;
+  /** Дорожка: business | dev | product | design | bugs | inbox */
+  track?: string | null;
 }
 
 /**
@@ -294,6 +296,7 @@ export async function saveTask(content: TaskContent, actor: string, isNew: boole
     mockupUrl: content.mockupUrl?.trim().slice(0, 500) || null,
     screenRequirements: content.screenRequirements?.trim().slice(0, 5000) || null,
     needsDesign: content.needsDesign ?? null,
+    track: content.track ?? null,
     source,
   };
   const existing = await db.task.findUnique({ where: { key } });

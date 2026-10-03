@@ -78,6 +78,15 @@ export const COMMENT_KIND_LABELS: Record<string, string> = {
   triage: "Триаж",
 };
 export const OWNERS: Record<string, string> = { product: "Продукт", tech: "Техника", both: "Продукт + техника" };
+export const TRACK_LABELS: Record<string, string> = {
+  "": "Авто (по правилу)",
+  business: "Бизнес",
+  dev: "Разработка",
+  product: "Продукт",
+  design: "Дизайн",
+  bugs: "Ошибки и аудит",
+  inbox: "Входящие",
+};
 export const EPIC_STATUSES: Record<string, string> = { planned: "Задуман", in_progress: "В работе", testing: "Проверяется", ready: "Готов к деплою", done: "Сделано" };
 
 export interface TaskSeed {
@@ -131,4 +140,6 @@ export interface EpicSeed {
   status?: keyof typeof EPIC_STATUSES;
   depends?: string[];
   docs?: string[];
+  /** Дорожка бэклога: business | dev | product | design | bugs */
+  track?: string;
 }

@@ -694,6 +694,8 @@ model Task {
   screenRequirements String?  @map("screen_requirements")
   /// Нужно описание дизайна: ставит триаж при разборе; true — задача идёт к дизайнеру, false — разработчик возьмёт без ожидания
   needsDesign       Boolean?
+  /// Дорожка бэклога: business | dev | product | design | bugs | inbox. null — вычисляется по умолчанию из prefix/layer/area/owner (src/lib/cc-lanes.ts: trackDefault)
+  track         String?
   /// «Что изменилось для людей» — 1–2 предложения простым языком для Release Notes
   releaseNote   String?
   /// Резюме для владельца: что сделано, что проверить, риск — до трёх строк
@@ -741,6 +743,8 @@ model Epic {
   deployNotes  String?
   /// planned | in_progress | testing | ready | done
   status       String   @default("planned")
+  /// Дорожка бэклога: business | dev | product | design | bugs | inbox
+  track        String?
   /// Ключи эпиков, от которых зависит этот
   depends      String[] @default([])
   /// Ссылки на документы
