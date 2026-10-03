@@ -195,11 +195,9 @@ export default async function ServicePage({ params, searchParams }: { params: Pr
         </section>
       )}
 
-      <section className="mt-8">
-        <h2 className="h2 mb-2">{t("reviews")}</h2>
-        {reviews.length === 0 ? (
-          <p className="text-sm text-muted">{t("noReviews")}</p>
-        ) : (
+      {reviews.length >= RATING_THRESHOLD ? (
+        <section className="mt-8">
+          <h2 className="h2 mb-2">{t("reviews")}</h2>
           <ul className="divide-y divide-line">
             {reviews.map((r) => (
               <li key={r.id} className="py-3">
@@ -215,8 +213,20 @@ export default async function ServicePage({ params, searchParams }: { params: Pr
               </li>
             ))}
           </ul>
-        )}
-      </section>
+        </section>
+      ) : (
+        <section className="mt-8">
+          <h2 className="h2 mb-3">{t("guaranteesTitle")}</h2>
+          <div className="space-y-2">
+            {([t("guarantee1"), t("guarantee2"), t("guarantee3")] as string[]).map((g, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl bg-surface p-3">
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-brand"><Check size={14} className="text-inverse" /></span>
+                <span className="text-sm font-medium">{g}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {s.faq.length > 0 && (
         <section className="mt-8">
