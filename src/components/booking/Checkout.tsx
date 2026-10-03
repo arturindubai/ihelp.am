@@ -4,7 +4,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Banknote, CreditCard, Tag, Check, UsersRound, ArrowLeft, ChevronLeft, ChevronRight, X, Smartphone, Send, MessageCircle } from "lucide-react";
 import { useRouter, Link } from "@/i18n/navigation";
 import { calculatePrice, type PricePromo, type PricingRules } from "@/lib/pricing";
-import { amd, cn, dateLabel, durationLabel } from "@/lib/format";
+import { amd, numFmt, cn, dateLabel, durationLabel } from "@/lib/format";
 import { addDays, atYerevan, isoWeekday, ymd } from "@/lib/time";
 import { createOrderAction, promoAction, slotsAction } from "@/server/actions/booking";
 import { clearCart } from "@/lib/cart";
@@ -494,7 +494,7 @@ export function Checkout(props: {
             <Check size={12} className="shrink-0 text-ok" />
             {t("freeCancel", { hours: String(props.freeCancelHours) })}
             {props.lateCancelFeeAmd > 0 && (
-              <span>{" · "}{t("lateCancelFee", { amount: String(props.lateCancelFeeAmd) })}</span>
+              <span>{" · "}{t("lateCancelFee", { amount: new Intl.NumberFormat("ru-RU").format(props.lateCancelFeeAmd).replace(/ /g, " ") })}</span>
             )}
           </p>
 
@@ -634,7 +634,7 @@ export function Checkout(props: {
           {/* Блок экономии */}
           {props.isFirstOrder && price.first.discount > 0 && price.regular.discount > 0 && (
             <div className="mt-3 rounded-xl bg-ok-50 p-3 text-sm text-ok">
-              {t("savings", { first: String(price.first.discount), regular: String(price.regular.discount) })}
+              {t("savings", { first: numFmt(price.first.discount), regular: numFmt(price.regular.discount) })}
             </div>
           )}
 
