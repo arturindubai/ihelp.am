@@ -239,6 +239,8 @@ export interface TaskContent {
   screenRequirements?: string | null;
   /** Нужно описание дизайна: ставит триаж */
   needsDesign?: boolean | null;
+  /** Дорожка: business | dev | product | design | bugs | inbox */
+  track?: string | null;
 }
 
 /**
