@@ -44,7 +44,9 @@ export async function refreshOrderState(orderId: string) {
   const live = o.visits.filter((v) => !["CANCELLED", "SKIPPED", "NO_SHOW"].includes(v.status));
   const data: Record<string, unknown> = {};
   if (o.kind !== "SUBSCRIPTION" && o.status === "ACTIVE" && live.length > 0 && live.every((v) => v.status === "DONE")) data.status = "COMPLETED";
-  if (o.paymentMethod === "CASH") {
+  // Для наличных заказов пересчитываем paymentStatus автоматически,
+  // кроме случая REFUNDED — его admin выставляет вручную (возврат клиенту).
+  if (o.paymentMethod === "CASH" && o.paymentStatus !== "REFUNDED") {
     const toPay = o.kind === "PACKAGE" ? live : live.filter((v) => v.status === "DONE");
     const paid = toPay.filter((v) => v.cashCollected).length;
     data.paymentStatus = paid === 0 ? "PENDING" : paid >= toPay.length && (o.kind !== "SUBSCRIPTION" || o.status !== "ACTIVE") ? "PAID" : o.kind === "SUBSCRIPTION" && paid >= toPay.length ? "PAID" : "PARTIAL";

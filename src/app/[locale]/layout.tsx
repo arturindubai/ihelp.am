@@ -58,8 +58,9 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     // Превью ссылок в WhatsApp, Telegram, соцсетях; картинка — ./opengraph-image.tsx
     openGraph: { type: "website", siteName: s.brand.name, title: `${s.brand.name} — ${tr(s.brand.tagline, locale)}`, description: tr(s.brand.tagline, locale), locale: OG_LOCALE[locale as "ru"] },
     twitter: { card: "summary_large_image" },
-    // Язык вне списка indexable закрываем от поисковиков, чтобы не плодить дубли
-    ...(s.locales.indexable.includes(locale) ? {} : { robots: { index: false, follow: false } }),
+    // Язык вне списка indexable закрываем от поисковиков, чтобы не плодить дубли.
+    // am (армянский) закрыт явно — перевод не готов (решение владельца 27.09.2026).
+    ...(s.locales.indexable.includes(locale) && locale !== "am" ? {} : { robots: { index: false, follow: false } }),
   };
 }
 

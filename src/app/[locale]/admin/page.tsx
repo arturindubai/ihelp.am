@@ -12,7 +12,7 @@ export default async function Dashboard({ params }: { params: Promise<{ locale: 
   const { locale } = await params;
   if (!(await pageUser("dashboard"))) return <Forbidden />;
   const [t, to] = await Promise.all([getTranslations("admin"), getTranslations("order")]);
-  const { todayCnt, tomorrowCnt, newOrders, revenue, subs, unassigned, pendingReviews, visits30, first30, cashPending, upcoming, recent, workMin, busyMin } = await getDashboardData();
+  const { todayCnt, tomorrowCnt, newOrders, revenue, subs, unassigned, pendingReviews, visits30, first30, cashNotConfirmed, cashInHands, upcoming, recent, workMin, busyMin } = await getDashboardData();
   const load = workMin ? Math.round((busyMin / workMin) * 100) : 0;
   const firstShare = visits30 ? Math.round((first30 / visits30) * 100) : 0;
 
@@ -27,7 +27,22 @@ export default async function Dashboard({ params }: { params: Promise<{ locale: 
         <Stat label={t("dashboard.activeSubs")} value={subs} />
         <Stat label={t("dashboard.load")} value={`${load}%`} hint={t("dashboard.loadHint")} tone={load >= 40 ? "ok" : "warn"} />
         <Stat label={t("dashboard.firstShare")} value={`${firstShare}%`} hint={t("dashboard.firstShareHint")} tone={firstShare > 34 ? "bad" : firstShare > 25 ? "warn" : "ok"} />
-        <Stat label={t("dashboard.cashPending")} value={amd(cashPending._sum.price || 0)} hint={`${cashPending._count}`} />
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <div className="card p-3">
+          <div className="text-xs text-muted">{t("dashboard.cashNotConfirmed")}</div>
+          <div className="mt-1 flex items-center gap-1.5">
+            <span className={`text-2xl font-bold ${cashNotConfirmed._sum.price ? "text-warn" : ""}`}>{amd(cashNotConfirmed._sum.price || 0)}</span>
+            {!!cashNotConfirmed._sum.price && <span className="text-warn">⚠</span>}
+          </div>
+          <div className="mt-0.5 text-[11px] text-muted">{t("dashboard.cashNotConfirmedHint")}</div>
+        </div>
+        <div className="card p-3">
+          <div className="text-xs text-muted">{t("dashboard.cashInHands")}</div>
+          <div className="mt-1 text-2xl font-bold">{amd(cashInHands._sum.price || 0)}</div>
+          <div className="mt-0.5 text-[11px] text-muted">{t("dashboard.cashInHandsHint")}</div>
+          <div className="mt-0.5 text-[11px] text-muted italic">{t("dashboard.cashInHandsTooltip")}</div>
+        </div>
       </div>
       <div className="mt-2 grid grid-cols-2 gap-2">
         <Link href="/admin/schedule"><Stat label={t("dashboard.unassigned")} value={unassigned} tone={unassigned ? "bad" : "ok"} /></Link>
