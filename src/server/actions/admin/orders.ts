@@ -11,6 +11,7 @@ import { notifyMasterAssigned, notifyMasterRescheduled, notifyMasterCancelled } 
 import { notifyClientMasterAssigned, notifyClientRescheduled, notifyClientCancelled, notifyClientVisitCancelled } from "../../services/bookingNotify";
 import { isMasterFree } from "@/lib/slots";
 import { atYerevan } from "@/lib/time";
+import { getMastersWithAvailability } from "../../services/operatorService";
 
 const rv = (id: string) => revalidatePath(`/[locale]/admin/orders/${id}`, "page");
 
@@ -23,7 +24,14 @@ export async function adminVisitAction(visitId: string, patch: { status?: VisitS
   const newMaster = patch.masterId !== undefined ? patch.masterId : v.masterId;
   if ((patch.date || patch.masterId !== undefined) && newStart && newMaster && !patch.force) {
     const [m] = await loadAvailability({ serviceId: v.order.serviceId, from: new Date(newStart.getTime() - 86400_000), to: new Date(newStart.getTime() + 86400_000), masterIds: [newMaster], excludeVisitId: v.id });
-    if (!m || !isMasterFree(m, newStart, v.durationMin, s.booking.bufferMin)) return { ok: false, error: "busy" };
+    if (!m || !isMasterFree(m, newStart, v.durationMin, s.booking.bufferMin)) {
+      if (patch.masterId !== undefined) {
+        const allMasters = await getMastersWithAvailability(v.id);
+        const mc = allMasters.find((x) => x.id === newMaster);
+        if (mc?.conflict) return { ok: false as const, error: "conflict" as const, conflict: mc.conflict };
+      }
+      return { ok: false, error: "busy" };
+    }
   }
   if (patch.date && patch.time) {
     data.scheduledAt = newStart;

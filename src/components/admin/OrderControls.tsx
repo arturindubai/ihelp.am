@@ -7,6 +7,7 @@ import { amd } from "@/lib/format";
 import { addDays, ymd } from "@/lib/time";
 import { Sheet } from "@/components/ui/Sheet";
 import { StatusBadge } from "@/components/account/StatusBadge";
+import type { MasterConflict } from "@/server/services/operatorService";
 
 type M = { id: string; name: string; active: boolean };
 const VISIT_STATUSES = ["UNSCHEDULED", "SCHEDULED", "CONFIRMED", "ON_WAY", "IN_PROGRESS", "DONE", "CANCELLED", "SKIPPED", "NO_SHOW"];
@@ -15,11 +16,12 @@ export function AdminVisitRow({ visit, masters }: { visit: { id: string; index: 
   const t = useTranslations("admin.orders");
   const tc = useTranslations("admin.common");
   const to = useTranslations("order");
+  const top = useTranslations("operator");
   const router = useRouter();
   const [pending, start] = useTransition();
   const [open, setOpen] = useState(false);
   const [err, setErr] = useState<string>();
-  const [masterErr, setMasterErr] = useState<string>();
+  const [masterErr, setMasterErr] = useState<MasterConflict | "generic">();
   const [pendingMasterId, setPendingMasterId] = useState<string | null>(null);
   const init = visit.date ? new Date(visit.date) : null;
   const [date, setDate] = useState(init ? ymd(init) : addDays(ymd(new Date()), 1));
@@ -36,14 +38,15 @@ export function AdminVisitRow({ visit, masters }: { visit: { id: string; index: 
     setPendingMasterId(null);
     const r = await adminVisitAction(visit.id, { masterId });
     if (!r.ok) {
-      setMasterErr(t("slotBusy"));
+      const conflict = ("conflict" in r ? r.conflict : undefined) as MasterConflict | undefined;
+      setMasterErr(conflict ?? "generic");
       setPendingMasterId(masterId);
       return;
     }
     router.refresh();
   });
   const forceAssignMaster = () => {
-    if (pendingMasterId === undefined) return;
+    if (pendingMasterId === null) return;
     start(async () => {
       setMasterErr(undefined);
       await adminVisitAction(visit.id, { masterId: pendingMasterId, force: true });
@@ -72,7 +75,15 @@ export function AdminVisitRow({ visit, masters }: { visit: { id: string; index: 
         {err && <span className="text-sm text-bad">{err}</span>}
         {masterErr && (
           <>
-            <span className="text-sm text-bad">{masterErr}</span>
+            <span className="text-sm text-bad">
+              {masterErr === "generic"
+                ? t("slotBusy")
+                : masterErr.type === "offDay"
+                  ? top("conflictOffDay")
+                  : masterErr.type === "timeOff"
+                    ? top("conflictTimeOff", { date: masterErr.until })
+                    : top("conflictBusy", { time: `${masterErr.from}–${masterErr.to}` })}
+            </span>
             <button className="btn-outline btn-sm text-bad" disabled={pending} onClick={forceAssignMaster}>{t("assignAnyway")}</button>
           </>
         )}
