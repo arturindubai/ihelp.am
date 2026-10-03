@@ -38,3 +38,8 @@ export function parseClosingMapLines(map: string): string[] {
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
 }
+
+/** Возвращает true, если карта просьб указывает на закрытие входящей как дубля */
+export function isDuplicateClosingMap(map: string): boolean {
+  return parseDuplicateOriginalKey(map) !== null;
+}

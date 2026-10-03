@@ -281,11 +281,11 @@ export async function transition(key: string, input: TransitionInput, actor: Act
   }
   // Обновляем статус эпика по итогу изменения задачи
   if (task.epicKey) await refreshEpicStatus(task.epicKey).catch(() => null);
-  // Уведомление владельцу: входящая закрыта как дубль — сообщаем, где оригинал
+  // Уведомление владельцу: входящая закрыта как дубль — сообщение в «Сообщения» + запись в ленту оригинала
   if (task.source === "intake" && to === "cancelled" && input.intakeClosingMap) {
     const origKey = parseDuplicateOriginalKey(input.intakeClosingMap);
     if (origKey) {
-      await createDuplicateNotice(key, origKey, actor.name).catch(() => null);
+      await notifyDuplicateClosed(key, origKey, actor.name).catch(() => null);
     }
   }
   // task получен до обновления — передаём свежие значения из input для review-перехода
@@ -966,46 +966,20 @@ async function maybeCloseParent(partKey: string, _closedTo: "done" | "cancelled"
   if (parent.epicKey) await refreshEpicStatus(parent.epicKey).catch(() => null);
 }
 
-/**
- * Создаёт intake-карточку IN-N с указанием следующих шагов после принятия задачи.
- * Не импортирует из ccBoard.ts (цикл: ccBoard → cc.ts → ccWork.ts), поэтому реализация встроена.
- */
-/** Создаёт уведомление владельцу во «Нужен ты»: входящая закрыта как дубль — указываем, где оригинал */
-async function createDuplicateNotice(intakeKey: string, origKey: string, by: string) {
-  const orig = await db.task.findUnique({ where: { key: origKey }, select: { title: true } });
+/** Уведомляет владельца о закрытии входящей как дубля: сообщение в «Сообщения» + запись в ленту оригинала */
+async function notifyDuplicateClosed(intakeKey: string, origKey: string, by: string) {
+  const orig = await db.task.findUnique({ where: { key: origKey }, select: { id: true, title: true } });
   const origTitle = orig?.title ?? origKey;
-  const existing = (await db.task.findMany({ where: { key: { startsWith: "IN-" } }, select: { key: true } })).map((t) => t.key);
-  const sort = ((await db.task.aggregate({ _max: { sort: true } }))._max.sort ?? 0) + 1;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const key = nextIntakeKey(existing);
-    try {
-      const task = await db.task.create({
-        data: {
-          key,
-          title: `${intakeKey} закрыта как дубль`,
-          summary: `Входящая ${intakeKey} закрыта как дубль. Оригинал: ${origKey} ${origTitle}`,
-          area: "product",
-          layer: "none",
-          priority: "p2",
-          stage: "later",
-          owner: "product",
-          source: "intake",
-          createdBy: by,
-          status: "blocked",
-          blockedOn: "owner",
-          blockedFrom: "backlog",
-          blockedReason: `Входящая ${intakeKey} закрыта как дубль. Оригинал: ${origKey} ${origTitle}`,
-          triagedAt: new Date(),
-          triagedBy: by,
-          sort,
-        },
-      });
-      await db.taskEvent.create({ data: { taskId: task.id, actor: by, field: "created", from: null, to: key } });
-      await db.taskEvent.create({ data: { taskId: task.id, actor: by, field: "status", from: "backlog", to: "blocked" } });
-      return task;
-    } catch {
-      existing.push(key);
-    }
+  const link = `${(process.env.APP_URL || "").replace(/\/$/, "")}/ru/admin/control?task=${origKey}`;
+  const { sendMessage } = await import("./ccMessages");
+  await sendMessage({
+    to: "owner",
+    from: by,
+    text: `Входящая ${intakeKey} закрыта как дубль. Оригинал: ${origKey} ${origTitle}\n${link}`,
+    taskKey: origKey,
+  });
+  if (orig) {
+    await say(orig.id, by, "note", `Входящая ${intakeKey} объединена с этой задачей (закрыта как дубль).`, origKey);
   }
 }
 
