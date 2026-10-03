@@ -299,6 +299,17 @@ export function isProductTask(t: { needs: string[]; mockupRequired?: boolean | n
   return false;
 }
 
+/**
+ * Задача в «В очереди» не попадёт ни в один автономный пул:
+ * код-задача с owner=product и без открытых вопросов (needs) обходит dev
+ * (фильтр исключает owner=product) и product (нет вопросов).
+ * Возвращает причину или null если задача будет взята.
+ */
+export function noPoolGate(t: { layer: string; owner?: string | null; needs: string[] }): "no_pool" | null {
+  if (isCodeTask(t.layer) && (t.owner ?? "") === "product" && t.needs.length === 0) return "no_pool";
+  return null;
+}
+
 /** Роли, которым разрешено брать задачи в работу через claim (deployer, watchdog, triage и tester работают иначе) */
 export function canClaimRole(role: Role): boolean {
   return role !== "deployer" && role !== "watchdog" && role !== "triage" && role !== "tester";
