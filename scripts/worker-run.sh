@@ -23,29 +23,32 @@ export CLAUDE_CODE_OAUTH_TOKEN
 # внутри рабочей папки запуска: cd, ls, cat, grep с путём вне неё Claude Code отклоняет сам, независимо от этого списка.
 # Поэтому «cd /opt/ihelp.am && …» у разработчика и тестировщика (они запущены в .claude/worktrees/…) не проходит.
 # После правки этого файла и docs/roles/ — сверка: node scripts/check-role-commands.mjs
-common=("Bash(cd *)" "Bash(node scripts/cc.mjs *)" "Bash(node */scripts/cc.mjs *)")
+common=("Bash(cd *)" "Bash(node scripts/cc.mjs *)" "Bash(node /opt/ihelp.am/scripts/cc.mjs *)")
 check=("Bash(scripts/check.sh*)" "Bash(bash scripts/check.sh*)" "Bash(*/scripts/check.sh*)" "Bash(bash */scripts/check.sh*)"
-  "Bash(scripts/stand.sh *)" "Bash(bash scripts/stand.sh *)" "Bash(*/scripts/stand.sh *)" "Bash(bash */scripts/stand.sh *)" "Bash(node scripts/stand-shot.mjs *)" "Bash(node */scripts/stand-shot.mjs *)")
+  "Bash(scripts/stand.sh *)" "Bash(bash scripts/stand.sh *)" "Bash(*/scripts/stand.sh *)" "Bash(bash */scripts/stand.sh *)" "Bash(node scripts/stand-shot.mjs *)" "Bash(node /opt/ihelp.am/scripts/stand-shot.mjs *)")
 # Обновление package-lock.json в образе сборки (нужно, если задача меняет package.json)
 lockupdate=("Bash(scripts/lock-update.sh*)" "Bash(bash scripts/lock-update.sh*)" "Bash(*/scripts/lock-update.sh*)" "Bash(bash */scripts/lock-update.sh*)")
-allow=(Read Glob Grep Edit Write TodoWrite "${common[@]}" "${check[@]}"
+allow=("Read(//opt/ihelp.am/**)" Glob Grep Edit Write TodoWrite "${common[@]}" "${check[@]}"
   "Bash(git *)"
-  "Bash(ls *)" "Bash(ls)" "Bash(pwd)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(jq *)"
-  "Bash(diff *)" "Bash(sort *)" "Bash(sed -n *)" "Bash(node --check *)" "Bash(bash -n *)" "Bash(python3 -c *)" "Bash(mkdir *)" "Bash(date)"
-  "Bash(curl -s http://127.0.0.1:*)")
-deny=("Bash(git push origin main*)" "Bash(git push * main)" "Bash(git push -f*)" "Bash(git push --force*)" "Bash(git push * --force*)"
+  "Bash(ls *)" "Bash(ls)" "Bash(pwd)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(wc *)"
+  "Bash(diff *)" "Bash(sort *)" "Bash(node --check *)" "Bash(bash -n *)" "Bash(mkdir *)" "Bash(date)")
+deny=("Bash(git push origin main*)" "Bash(git push * main)" "Bash(git push * *:main*)" "Bash(git push * refs/heads/main*)" "Bash(git push * *:refs/heads/main*)"
+  "Bash(git push -f*)" "Bash(git push --force*)" "Bash(git push * --force*)" "Bash(git push --mirror*)"
+  "Bash(git -C *)" "Bash(git -c *)"
   "Bash(sudo *)" "Bash(systemctl *)" "Bash(systemd-run *)" "Bash(pm2 *)" "Bash(rm -rf *)" "Bash(docker *)"
   "Bash(deploy/update.sh*)" "Bash(deploy/rollback.sh*)"
   "Bash(cat *.env*)" "Bash(head *.env*)" "Bash(tail *.env*)" "Bash(grep * .env*)"
   "Bash(* /opt/ihelp.am/.env*)" "Bash(* /opt/ihelp.am-staging/.env*)"
-  "Read(//opt/ihelp.am/.env)" "Read(//opt/ihelp.am-staging/.env)" "Read(//var/www/**)" "Read(//etc/**)" "Read(//root/.claude/**)"
+  "Read(//opt/ihelp.am/.env)" "Read(//opt/ihelp.am/.env*)" "Read(//opt/ihelp.am-staging/.env)"
+  "Read(//opt/ihelp.am/backups/**)"
+  "Read(//var/www/**)" "Read(//etc/**)" "Read(//root/.claude/**)"
   # Субагенты удваивают расход лимита подписки и работают вне этих правил — воркеру они не нужны
   "Agent")
 
 case "$role" in
   deployer)
     # Деплоер ничего не правит руками: только проверка и одна команда выкладки
-    allow=(Read Glob Grep TodoWrite "${common[@]}" "Bash(git log *)" "Bash(git diff *)" "Bash(git show *)" "Bash(git status)" "Bash(git fetch *)" "Bash(git rev-parse *)"
+    allow=("Read(//opt/ihelp.am/**)" Glob Grep TodoWrite "${common[@]}" "Bash(git log *)" "Bash(git diff *)" "Bash(git show *)" "Bash(git status)" "Bash(git fetch *)" "Bash(git rev-parse *)"
       "Bash(scripts/deploy-task.sh *)" "Bash(bash scripts/deploy-task.sh *)" "Bash(/opt/ihelp.am/scripts/deploy-task.sh *)" "Bash(bash /opt/ihelp.am/scripts/deploy-task.sh *)"
       "Bash(scripts/deploy-batch.sh *)" "Bash(bash scripts/deploy-batch.sh *)" "Bash(/opt/ihelp.am/scripts/deploy-batch.sh *)" "Bash(bash /opt/ihelp.am/scripts/deploy-batch.sh *)"
       "Bash(deploy/smoke.sh*)" "Bash(bash deploy/smoke.sh*)"
@@ -58,43 +61,42 @@ case "$role" in
   tester)
     # Тестировщик код не правит: проверяет и пишет вердикт.
     # Сбрасываем allow: убираем широкие Edit/Write из базового массива, оставляем только tmp-папку
-    allow=(Read Glob Grep TodoWrite "${common[@]}" "${check[@]}"
+    allow=("Read(//opt/ihelp.am/**)" Glob Grep TodoWrite "${common[@]}" "${check[@]}"
       "Bash(git *)"
-      "Bash(ls *)" "Bash(ls)" "Bash(pwd)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(jq *)"
-      "Bash(diff *)" "Bash(sort *)" "Bash(sed -n *)" "Bash(node --check *)" "Bash(bash -n *)" "Bash(python3 -c *)" "Bash(mkdir *)" "Bash(date)"
-      "Bash(curl -s http://127.0.0.1:*)"
+      "Bash(ls *)" "Bash(ls)" "Bash(pwd)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(wc *)"
+      "Bash(diff *)" "Bash(sort *)" "Bash(node --check *)" "Bash(bash -n *)" "Bash(mkdir *)" "Bash(date)"
       "Write(//opt/ihelp.am/data/tmp/tester/**)" "Edit(//opt/ihelp.am/data/tmp/tester/**)")
     deny+=("Bash(git commit *)" "Bash(git push *)")
     ;;
   triage)
     # Триаж только читает код и документы и работает с карточками через scripts/cc.mjs (поля — через --data).
     # Write/Edit не нужны в deny: dontAsk блокирует всё, чего нет в allow; tmp-папка — для --text-file при длинных текстах
-    allow=(Read Glob Grep TodoWrite "${common[@]}" "Bash(git log *)" "Bash(git show *)" "Bash(git diff *)" "Bash(git status)"
-      "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(date)"
+    allow=("Read(//opt/ihelp.am/**)" Glob Grep TodoWrite "${common[@]}" "Bash(git log *)" "Bash(git show *)" "Bash(git diff *)" "Bash(git status)"
+      "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(wc *)" "Bash(date)"
       "Write(//opt/ihelp.am/data/tmp/triage/**)" "Edit(//opt/ihelp.am/data/tmp/triage/**)")
     deny+=("Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(cat >*)" "Bash(cat *>*)")
     ;;
   product)
     # Продакт: читает проект, документы и Библиотеку, ищет в интернете, работает с карточками и записями Библиотеки через cc.mjs.
     # Файлы не правит, git не пишет: требования живут в карточках и в Библиотеке; tmp-папка — для --text-file
-    allow=(Read Glob Grep TodoWrite WebSearch WebFetch "${common[@]}" "Bash(git log *)" "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(date)" "Bash(mkdir *)" "Bash(cat >*)" "Bash(cat *>*)"
+    allow=("Read(//opt/ihelp.am/**)" Glob Grep TodoWrite WebSearch WebFetch "${common[@]}" "Bash(git log *)" "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(wc *)" "Bash(date)" "Bash(mkdir *)"
       "Write(//opt/ihelp.am/data/tmp/product/**)" "Edit(//opt/ihelp.am/data/tmp/product/**)")
     deny+=("NotebookEdit" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(curl *)")
     ;;
   designer)
     # Дизайнер: то же, что продакт, плюс макеты — HTML в data/mockups/<КЛЮЧ>/, скриншоты scripts/mockup-shot.mjs, вложение cc.mjs attach.
     # Писать может только в data/mockups и data/tmp/designer: код проекта закрыт (режим dontAsk запрещает всё, чего нет в allow)
-    allow=(Read Glob Grep TodoWrite WebSearch WebFetch "${common[@]}" "Write(//opt/ihelp.am/data/mockups/**)" "Edit(//opt/ihelp.am/data/mockups/**)"
+    allow=("Read(//opt/ihelp.am/**)" Glob Grep TodoWrite WebSearch WebFetch "${common[@]}" "Write(//opt/ihelp.am/data/mockups/**)" "Edit(//opt/ihelp.am/data/mockups/**)"
       "Write(//opt/ihelp.am/data/tmp/designer/**)" "Edit(//opt/ihelp.am/data/tmp/designer/**)"
-      "Bash(node scripts/mockup-shot.mjs *)" "Bash(node */scripts/mockup-shot.mjs *)" "Bash(mkdir -p data/mockups/*)" "Bash(mkdir -p /opt/ihelp.am/data/mockups/*)"
-      "Bash(git log *)" "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(date)")
+      "Bash(node scripts/mockup-shot.mjs *)" "Bash(node /opt/ihelp.am/scripts/mockup-shot.mjs *)" "Bash(mkdir -p data/mockups/*)" "Bash(mkdir -p /opt/ihelp.am/data/mockups/*)"
+      "Bash(git log *)" "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(wc *)" "Bash(date)")
     deny+=("NotebookEdit" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(curl *)")
     ;;
   nocode)
     # «Продукт и не-код»: читает проект, ищет и читает страницы в интернете, проверяет DNS, работает с карточками.
     # Файлы не правит, git не пишет: результат — в карточке; tmp-папка — для --text-file при длинных отчётах
-    allow=(Read Glob Grep TodoWrite WebSearch WebFetch "${common[@]}" "Bash(dig *)" "Bash(host *)" "Bash(nslookup *)" "Bash(whois *)"
-      "Bash(git log *)" "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(date)"
+    allow=("Read(//opt/ihelp.am/**)" Glob Grep TodoWrite WebSearch WebFetch "${common[@]}" "Bash(dig *)" "Bash(host *)" "Bash(nslookup *)" "Bash(whois *)"
+      "Bash(git log *)" "Bash(ls *)" "Bash(ls)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(wc *)" "Bash(date)"
       "Write(//opt/ihelp.am/data/tmp/nocode/**)" "Edit(//opt/ihelp.am/data/tmp/nocode/**)")
     deny+=("NotebookEdit" "Bash(git commit *)" "Bash(git push *)" "Bash(git checkout *)" "Bash(git merge *)" "Bash(git reset *)" "Bash(cat >*)" "Bash(cat *>*)" "Bash(curl *)")
     ;;
@@ -103,11 +105,11 @@ case "$role" in
     # Явный сброс allow: убираем широкие Edit/Write из базового массива, заменяем ограниченными путями.
     # Это закрывает запись в основную копию /opt/ihelp.am вне worktrees/ и data/tmp/ (DEV-144).
     # lock-update.sh разрешён явно: он нужен при изменении package.json (обновляет lock в образе сборки).
-    allow=(Read Glob Grep TodoWrite "${common[@]}" "${check[@]}"
+    allow=("Read(//opt/ihelp.am/**)" Glob Grep TodoWrite "${common[@]}" "${check[@]}"
       "Bash(git *)"
-      "Bash(ls *)" "Bash(ls)" "Bash(pwd)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(find *)" "Bash(wc *)" "Bash(jq *)"
-      "Bash(diff *)" "Bash(sort *)" "Bash(sed -n *)" "Bash(node --check *)" "Bash(bash -n *)" "Bash(python3 -c *)" "Bash(mkdir *)" "Bash(date)"
-      "Bash(curl -s http://127.0.0.1:*)"
+      "Bash(ls *)" "Bash(ls)" "Bash(pwd)" "Bash(cat *)" "Bash(head *)" "Bash(tail *)" "Bash(grep *)" "Bash(wc *)"
+      "Bash(diff *)" "Bash(sort *)" "Bash(node --check *)" "Bash(bash -n *)" "Bash(mkdir *)" "Bash(date)"
+      "Bash(node scripts/sort-messages.mjs)" "Bash(node /opt/ihelp.am/scripts/sort-messages.mjs)"
       "Write(//opt/ihelp.am/.claude/worktrees/**)" "Edit(//opt/ihelp.am/.claude/worktrees/**)"
       "Write(//opt/ihelp.am/data/tmp/dev/**)" "Edit(//opt/ihelp.am/data/tmp/dev/**)"
       "${lockupdate[@]}")
