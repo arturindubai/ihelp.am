@@ -109,7 +109,11 @@ export function HeroSection({ heroTitle, searchPlaceholder, comingSoonLabel, cat
   }
 
   const openCategory = categories.find((c) => c.slug === openSlug);
-  const topCategories = categories.slice(0, 4);
+  // Рабочие категории первыми, потом «Скоро» — чтобы в пустом состоянии не было 3 «Скоро» из 4
+  const topCategories = [
+    ...categories.filter((c) => !c.comingSoon),
+    ...categories.filter((c) => c.comingSoon),
+  ].slice(0, 4);
 
   return (
     <section className="lg:grid lg:grid-cols-12 lg:items-start lg:gap-8">
@@ -126,7 +130,7 @@ export function HeroSection({ heroTitle, searchPlaceholder, comingSoonLabel, cat
               onChange={handleQueryChange}
               onFocus={() => query.length >= 2 && setDropOpen(true)}
               placeholder={searchPlaceholder}
-              className="w-full rounded-xl bg-surface py-3 pl-9 pr-4 text-sm text-ink placeholder:text-muted outline-none focus:ring-2 focus:ring-brand"
+              className="w-full rounded-xl bg-surface py-3 pl-9 pr-4 text-base text-ink placeholder:text-muted outline-none focus:ring-2 focus:ring-brand"
             />
           </form>
           {dropOpen && (
