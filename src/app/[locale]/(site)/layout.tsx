@@ -60,7 +60,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
           ))}
         </div>
       </footer>
-      <BottomNav />
+      <BottomNav isLoggedIn={!!user} />
       <StickyCartBar />
     </div>
   );
