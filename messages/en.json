@@ -2593,6 +2593,7 @@
       "notConnected": "Telegram is not connected.",
       "notifyOff": "You will not receive visit notifications",
       "notifyTitle": "Notifications",
+      "pushTitle": "Phone notifications",
       "receiveNotify": "Receive visit notifications",
       "saveError": "Failed to save. Please try again.",
       "writeBot": "Message the bot"
@@ -2609,7 +2610,11 @@
   "push": {
     "allow": "Allow",
     "body": "Allow notifications to stay updated on your bookings",
+    "denied": "Blocked in browser settings",
     "dismiss": "Not now",
+    "enable": "Enable phone notifications",
+    "enabled": "Notifications enabled",
+    "iosHint": "On iPhone, add the site to your Home Screen first",
     "title": "Visit notifications"
   },
   "review": {

@@ -3,6 +3,7 @@ import { redirect, Link } from "@/i18n/navigation";
 import { getCurrentUser } from "@/server/auth";
 import { getMasterByUserId, getProVisits } from "@/server/services/pages/pro";
 import { getSettings } from "@/server/settings";
+import { getOrCreateVapidKeys } from "@/server/services/vapidKeys";
 import { tr } from "@/i18n/locales";
 import { addDays, atYerevan, ymd, hm } from "@/lib/time";
 import { amd, cn, dateLabel, durationLabel } from "@/lib/format";
@@ -12,6 +13,8 @@ import { ProVisitActions } from "./ProVisitActions";
 import { ProSettings } from "@/components/pro/ProSettings";
 import { Img } from "@/components/Img";
 import { PromoSlot } from "@/components/PromoSlot";
+import { VisitCacheSync } from "@/components/pwa/VisitCacheSync";
+import { PRO_CACHE_KEY } from "@/lib/visitCache";
 
 export default async function ProPage({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ tab?: string }> }) {
   const { locale } = await params;
@@ -19,7 +22,8 @@ export default async function ProPage({ params, searchParams }: { params: Promis
   setRequestLocale(locale);
   const user = await getCurrentUser();
   if (!user) return redirect({ href: "/login?next=/pro", locale });
-  const [t, to, tc, ta, settings] = await Promise.all([getTranslations("pro"), getTranslations("order"), getTranslations("common"), getTranslations("address"), getSettings()]);
+  const [t, to, tc, ta, settings, vapidKeys] = await Promise.all([getTranslations("pro"), getTranslations("order"), getTranslations("common"), getTranslations("address"), getSettings(), getOrCreateVapidKeys().catch(() => null)]);
+  const vapidPublicKey = vapidKeys?.publicKey ?? "";
   const master = await getMasterByUserId(user.id);
   if (!master) return <div className="container-m py-10 text-center text-muted">{t("notLinked")}</div>;
 
@@ -35,6 +39,7 @@ export default async function ProPage({ params, searchParams }: { params: Promis
   const tabs = [["today", t("today")], ["upcoming", t("upcoming")], ["done", t("done")], ["settings", t("settingsTab")]];
   return (
     <div className="container-m pt-4 pb-10">
+      <VisitCacheSync endpoint="/api/visits/pro" cacheKey={PRO_CACHE_KEY} />
       <div className="card flex items-center gap-3 p-3">
         <Img src={master.photo || "/img/master-1.svg"} width={48} className="size-12 rounded-full object-cover" />
         <div className="flex-1">
@@ -55,6 +60,7 @@ export default async function ProPage({ params, searchParams }: { params: Promis
           notifyEnabled={master.notifyEnabled}
           staffChatId={master.staffChatId}
           botUsername={settings.team.botUsername}
+          vapidPublicKey={vapidPublicKey}
         />
       ) : (
         <>

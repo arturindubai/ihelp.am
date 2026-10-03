@@ -5,6 +5,7 @@ import { enqueueAndSend } from "./notifyQueue";
 import { getSettings } from "../settings";
 import { tr } from "@/i18n/locales";
 import { hm, ymd, addDays, TZ_OFFSET } from "@/lib/time";
+import { pushNotify } from "./pushNotify";
 import ru from "../../../messages/ru.json";
 
 type AddressSnapshot = { street?: string; building?: string; apartment?: string };
@@ -50,19 +51,21 @@ export async function notifyMasterAssigned(visitId: string): Promise<void> {
     where: { id: visitId },
     select: {
       scheduledAt: true,
-      master: { select: { staffChatId: true, notifyEnabled: true } },
+      master: { select: { staffChatId: true, notifyEnabled: true, userId: true } },
       order: { select: { config: true, addressSnapshot: true, user: { select: { name: true, phone: true } } } },
     },
   });
-  if (!v?.master?.staffChatId || !v.master.notifyEnabled || !v.scheduledAt) return;
+  if (!v?.master?.notifyEnabled || !v.scheduledAt) return;
+  const svc = serviceTitle(v.order.config);
   const text = fill(tmpl.assigned, {
     clientName: v.order.user.name || v.order.user.phone || "—",
-    serviceName: serviceTitle(v.order.config),
+    serviceName: svc,
     date: ymd(v.scheduledAt),
     time: hm(v.scheduledAt),
     address: addrLine(v.order.addressSnapshot),
   });
   await sendToMaster(v.master.staffChatId, text, "master:assigned");
+  if (v.master.userId) await pushNotify(v.master.userId, { title: "Новый визит", body: `${svc}, ${ymd(v.scheduledAt)} ${hm(v.scheduledAt)}`, url: "/pro" }).catch(() => {});
 }
 
 /** Уведомить мастера о переносе визита */
@@ -71,17 +74,19 @@ export async function notifyMasterRescheduled(visitId: string): Promise<void> {
     where: { id: visitId },
     select: {
       scheduledAt: true,
-      master: { select: { staffChatId: true, notifyEnabled: true } },
+      master: { select: { staffChatId: true, notifyEnabled: true, userId: true } },
       order: { select: { config: true } },
     },
   });
-  if (!v?.master?.staffChatId || !v.master.notifyEnabled || !v.scheduledAt) return;
+  if (!v?.master?.notifyEnabled || !v.scheduledAt) return;
+  const svc = serviceTitle(v.order.config);
   const text = fill(tmpl.rescheduled, {
-    serviceName: serviceTitle(v.order.config),
+    serviceName: svc,
     date: ymd(v.scheduledAt),
     time: hm(v.scheduledAt),
   });
   await sendToMaster(v.master.staffChatId, text, "master:rescheduled");
+  if (v.master.userId) await pushNotify(v.master.userId, { title: "Визит перенесён", body: `${svc}, ${ymd(v.scheduledAt)} ${hm(v.scheduledAt)}`, url: "/pro" }).catch(() => {});
 }
 
 /** Уведомить мастера об отмене визита.
@@ -91,16 +96,18 @@ export async function notifyMasterCancelled(visitId: string): Promise<void> {
     where: { id: visitId },
     select: {
       scheduledAt: true,
-      master: { select: { staffChatId: true, notifyEnabled: true } },
+      master: { select: { staffChatId: true, notifyEnabled: true, userId: true } },
       order: { select: { config: true } },
     },
   });
-  if (!v?.master?.staffChatId || !v.master.notifyEnabled || !v.scheduledAt) return;
+  if (!v?.master?.notifyEnabled || !v.scheduledAt) return;
+  const svc = serviceTitle(v.order.config);
   const text = fill(tmpl.cancelled, {
-    serviceName: serviceTitle(v.order.config),
+    serviceName: svc,
     date: ymd(v.scheduledAt),
   });
   await sendToMaster(v.master.staffChatId, text, "master:cancelled");
+  if (v.master.userId) await pushNotify(v.master.userId, { title: "Визит отменён", body: `${svc}, ${ymd(v.scheduledAt)}`, url: "/pro" }).catch(() => {});
 }
 
 /** Вечернее расписание: отправить каждому мастеру список его визитов на завтра.

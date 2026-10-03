@@ -2,15 +2,18 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { proNotifySettingsAction } from "@/server/actions/pro";
+import { PushEnableButton } from "@/components/pwa/PushEnableButton";
 
 export function ProSettings({
   notifyEnabled,
   staffChatId,
   botUsername,
+  vapidPublicKey,
 }: {
   notifyEnabled: boolean;
   staffChatId: string | null;
   botUsername: string;
+  vapidPublicKey: string;
 }) {
   const t = useTranslations("pro");
   const [enabled, setEnabled] = useState(notifyEnabled);
@@ -84,6 +87,13 @@ export function ProSettings({
 
       {error && (
         <p className="mt-2 rounded-xl bg-bad-50 p-3 text-sm text-bad">{error}</p>
+      )}
+
+      {vapidPublicKey && (
+        <div className="mt-4 border-t border-line pt-4">
+          <div className="mb-2 text-sm font-medium">{t("settings.pushTitle")}</div>
+          <PushEnableButton vapidPublicKey={vapidPublicKey} />
+        </div>
       )}
     </div>
   );

@@ -9,6 +9,7 @@ import { amd, dateLabel, timeLabel } from "@/lib/format";
 import { sendMail, mailTemplate } from "./mail";
 import { notifyTech, html } from "../notify";
 import { alertTech } from "../alerts";
+import { pushNotify } from "./pushNotify";
 import { createUnsubscribeToken } from "@/lib/emailToken";
 import { createReviewToken } from "./reviews";
 import { getEmailBannerHtml } from "./banners";
@@ -104,6 +105,7 @@ async function selectClientChannel(user: {
 
 /** Отправить клиентское уведомление по наиболее доступному каналу:
  *  Telegram (прямая отправка, при сбое — fallback) → email → алерт оператору.
+ *  Параллельно (независимо от канала) отправляет push, если передан pushBody.
  *  Проверка emailUnsubscribedAt здесь не производится: письма о заказе приходят всегда.
  *  Только необязательные письма (напоминания, отзыв) блокируются флагом в selectClientChannel. */
 async function sendToClient(
@@ -113,6 +115,7 @@ async function sendToClient(
   tag: string,
   log?: { orderId: string; visitId?: string; event: string },
   locale = "ru",
+  push?: { body: string; url?: string },
 ): Promise<"telegram" | "email" | "alert" | "none"> {
   const user = await db.user.findUnique({
     where: { id: userId },
@@ -183,6 +186,10 @@ async function sendToClient(
     }
   }
 
+  if (push) {
+    await pushNotify(userId, { title: subject, body: push.body, url: push.url }).catch(() => {});
+  }
+
   return channel;
 }
 
@@ -247,7 +254,7 @@ export async function notifyClientOrderCreated(orderId: string): Promise<void> {
     await sendToClient(order.userId, text, subject, "client:created", {
       orderId,
       event: "created",
-    }, locale);
+    }, locale, { body: `${serviceTitle(order.config)}, ${ymd(visit.scheduledAt)} ${hm(visit.scheduledAt)}`, url: `/${locale}/account/orders/${orderId}` });
   } catch (e) {
     console.error("[bookingNotify:created] ошибка", e);
   }
@@ -296,7 +303,7 @@ export async function notifyClientMasterAssigned(visitId: string): Promise<void>
       orderId: visit.order.id,
       visitId,
       event: `masterAssigned:${visit.masterId}`,
-    }, locale);
+    }, locale, { body: `${masterName}, ${ymd(visit.scheduledAt)} ${hm(visit.scheduledAt)}`, url: `/${locale}/account/orders/${visit.order.id}` });
   } catch (e) {
     console.error("[bookingNotify:masterAssigned] ошибка", e);
   }
@@ -344,7 +351,7 @@ export async function notifyClientRescheduled(visitId: string): Promise<void> {
       orderId: visit.order.id,
       visitId,
       event: `rescheduled:${visit.scheduledAt.toISOString()}`,
-    }, locale);
+    }, locale, { body: `${serviceTitle(visit.order.config)}, ${ymd(visit.scheduledAt)} ${hm(visit.scheduledAt)}`, url: `/${locale}/account/orders/${visit.order.id}` });
   } catch (e) {
     console.error("[bookingNotify:rescheduled] ошибка", e);
   }
@@ -387,7 +394,7 @@ export async function notifyClientCancelled(orderId: string): Promise<void> {
     await sendToClient(order.userId, text, subject, "client:cancelled", {
       orderId,
       event: "cancelled",
-    }, locale);
+    }, locale, { body: serviceTitle(order.config, locale), url: `/${locale}/account/orders/${orderId}` });
   } catch (e) {
     console.error("[bookingNotify:cancelled] ошибка", e);
   }
@@ -429,7 +436,7 @@ export async function notifyClientVisitCancelled(visitId: string): Promise<void>
       orderId: visit.order.id,
       visitId,
       event: "cancelled",
-    }, locale);
+    }, locale, { body: `${serviceTitle(visit.order.config, locale)}, ${dateStr}`, url: `/${locale}/account/orders/${visit.order.id}` });
   } catch (e) {
     console.error("[bookingNotify:visitCancelled] ошибка", e);
   }
@@ -465,7 +472,7 @@ export async function notifyClientMasterOnWay(visitId: string, etaMin: number): 
       orderId: visit.order.id,
       visitId,
       event: "onWay",
-    });
+    }, "ru", { body: `${masterName}, ~${etaMin} мин`, url: `/ru/account/orders/${visit.order.id}` });
   } catch (e) {
     console.error("[bookingNotify:onWay] ошибка", e);
   }
@@ -509,7 +516,7 @@ export async function notifyClientVisitCompleted(visitId: string): Promise<void>
       orderId: visit.order.id,
       visitId,
       event: "completed",
-    }, locale);
+    }, locale, { body: masterName, url: `/${locale}/account/orders/${visit.order.id}` });
   } catch (e) {
     console.error("[bookingNotify:completed] ошибка", e);
   }
@@ -611,6 +618,7 @@ export async function sendVisitReminders(now: Date): Promise<number> {
       }
       if (deliveryOk) {
         await db.visit.update({ where: { id: v.id }, data: { remindedAt: new Date() } });
+        await pushNotify(v.order.user.id, { title: tmpl.reminder.title, body: `${service}, ${date} ${time}`, url: `/${locale}/account/orders` }).catch(() => {});
         sent++;
       }
     } catch (e) {
@@ -803,6 +811,7 @@ export async function sendVisit2hReminders(now: Date): Promise<number> {
       }
       if (deliveryOk) {
         await db.visit.update({ where: { id: v.id }, data: { clientNotifiedEvents: { push: "reminder2h" } } });
+        await pushNotify(v.order.user.id, { title: tmpl.reminder2h.title, body: `${service}, ${date} ${time}`, url: `/${locale}/account/orders` }).catch(() => {});
         sent++;
       }
     } catch (e) {

@@ -21,13 +21,9 @@ export function PushPermissionBanner({ vapidPublicKey }: { vapidPublicKey: strin
   const [hiding, setHiding] = useState(false);
 
   useEffect(() => {
-    if (!isPushSupported()) return;
-    if (Notification.permission !== "default") return;
-    try {
-      if (sessionStorage.getItem(DISMISSED_KEY)) return;
-    } catch { return; }
-    const timer = setTimeout(() => setVisible(true), 1000);
-    return () => clearTimeout(timer);
+    // Авто-показ убран: разрешение запрашивается только через кнопку PushEnableButton
+    void isPushSupported;
+    void DISMISSED_KEY;
   }, []);
 
   if (!visible) return null;
