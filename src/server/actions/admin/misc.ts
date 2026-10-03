@@ -306,7 +306,12 @@ export async function findTelegramChatsAction() {
     const json = (await r.json().catch(() => null)) as { ok: boolean; result?: { message?: { date: number; chat: { id: number; title?: string; username?: string; first_name?: string; type: string } } }[]; description?: string } | null;
     if (!r.ok || !json?.ok) {
       const desc = json?.description ?? "";
-      if (desc.toLowerCase().includes("webhook")) return { ok: false as const, error: "webhook" };
+      if (desc.toLowerCase().includes("webhook")) {
+        // Webhook активен — getUpdates недоступен; возвращаем чаты, сохранённые через вебхук
+        const known = s.team.knownChats ?? [];
+        if (known.length > 0) return { ok: true as const, chats: known };
+        return { ok: false as const, error: "webhook" };
+      }
       return { ok: false as const, error: "telegram" };
     }
     const since = Date.now() / 1000 - 86400;

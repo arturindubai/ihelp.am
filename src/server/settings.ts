@@ -63,6 +63,8 @@ export interface Settings {
     /** Одноразовый код привязки: ссылка t.me/<бот>?start=<код>, действует 30 минут */
     linkCode: string;
     linkCodeAt: string;
+    /** Чаты, которые писали боту через вебхук — используются кнопкой «Найти чат» при активном вебхуке */
+    knownChats?: { id: number; title: string; type: string }[];
   };
 }
 

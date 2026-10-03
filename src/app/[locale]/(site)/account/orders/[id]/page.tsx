@@ -8,6 +8,8 @@ import { getSettings } from "@/server/settings";
 import { tr } from "@/i18n/locales";
 import { amd, dateLabel, durationLabel, timeLabel } from "@/lib/format";
 import { hm } from "@/lib/time";
+import { calcCancelPenalty } from "@/lib/cancelPenalty";
+import { contactLinks } from "@/lib/contacts";
 import { StatusBadge } from "@/components/account/StatusBadge";
 import { OrderActions, OrderTrackerActions, VisitActions } from "@/components/account/OrderActions";
 import { getOrderEventFeed } from "@/server/services/orderEvents";
@@ -72,6 +74,26 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       cancelDeadline = { free: false, label: amd(settings.booking.lateCancelFeeAmd) };
     }
   }
+
+  // Визит в пути или идёт работа → отмена заблокирована, только поддержка
+  const isBusy = o.visits.some((v) => v.status === "ON_WAY" || v.status === "IN_PROGRESS");
+
+  // Предпросмотр суммы штрафа для диалога подтверждения отмены
+  const now2 = new Date();
+  const freeLimit = new Date(now2.getTime() + settings.booking.freeCancelHours * 3600_000);
+  const cancellableVisits = o.visits.filter((v) => ["SCHEDULED", "CONFIRMED", "UNSCHEDULED"].includes(v.status));
+  const lateVisits2 = o.visits.filter((v) => ["SCHEDULED", "CONFIRMED"].includes(v.status) && v.scheduledAt && v.scheduledAt <= freeLimit);
+  const firstLate2 = [...lateVisits2].sort((a, b) => (a.scheduledAt?.getTime() ?? 0) - (b.scheduledAt?.getTime() ?? 0))[0];
+  const previewFeeAmd = firstLate2?.scheduledAt ? calcCancelPenalty(firstLate2.scheduledAt, now2, settings.booking.freeCancelHours, settings.booking.lateCancelFeeAmd) : 0;
+  const cancelPreview = ["ACTIVE", "PAUSED"].includes(o.status) ? {
+    feeAmd: previewFeeAmd,
+    freeDeadline: o.kind === "ONE_TIME" && cancelDeadline?.free ? cancelDeadline.label : undefined,
+    freeHours: settings.booking.freeCancelHours,
+    visitCount: cancellableVisits.length,
+  } : null;
+
+  // Контакты поддержки для кнопки «Связаться с поддержкой»
+  const supportContacts = contactLinks(settings.brand).filter((c) => ["phone", "whatsapp", "telegram"].includes(c.key));
 
   // Синтетическое событие «Заказ создан» + реальные события
   const allEvents = [
@@ -204,6 +226,9 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               cancelDeadline={cancelDeadline}
               freeCancelHours={settings.booking.freeCancelHours}
               horizonDays={settings.booking.horizonDays}
+              isBusy={isBusy}
+              cancelPreview={cancelPreview}
+              supportContacts={supportContacts}
             />
           </div>
 
@@ -247,6 +272,8 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               <div className="flex justify-between"><dt className="text-muted">{t("payment")}</dt><dd>{o.paymentMethod === "CASH" ? t("cashNote") : t("card")}</dd></div>
               <div className="flex justify-between"><dt className="text-muted">{t("price")}</dt><dd className="font-semibold">{o.kind === "SUBSCRIPTION" ? `${amd(o.pricePerVisit)} ${tc("perVisit")}` : amd(o.total)}</dd></div>
               {o.kind === "SUBSCRIPTION" && o.firstVisitPrice !== o.pricePerVisit && <div className="flex justify-between text-ok"><dt>{ts("firstVisit")}</dt><dd>{amd(o.firstVisitPrice)}</dd></div>}
+              {o.status === "CANCELLED" && <div className="flex justify-between gap-4"><dt className="text-muted">{t("cancelledAt")}</dt><dd className="text-right text-sm text-muted">{dateLabel(o.updatedAt, locale, { day: "numeric", month: "short" })}, {timeLabel(o.updatedAt)}</dd></div>}
+              {o.cancelPenalty > 0 && <div className="flex justify-between"><dt className="text-muted">{t("cancelPenaltyLabel")}</dt><dd className="font-semibold text-bad">{amd(o.cancelPenalty)}</dd></div>}
             </dl>
             <OrderActions order={{ id: o.id, kind: o.kind, status: o.status, serviceSlug: o.service.slug }} />
           </section>
@@ -352,6 +379,9 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
             cancelDeadline={cancelDeadline}
             freeCancelHours={settings.booking.freeCancelHours}
             horizonDays={settings.booking.horizonDays}
+            isBusy={isBusy}
+            cancelPreview={cancelPreview}
+            supportContacts={supportContacts}
           />
         </div>
       </div>

@@ -101,7 +101,7 @@ export async function YouTab({ taskHref }: { taskHref: Href }) {
         </Card>
       )}
 
-      {data.teamChatMissing && (
+      {data.teamChatMissing && !data.alertMissing && (
         <Card>
           <p className="text-sm text-bad">
             <span className="font-medium">{ty("teamChatMissing")}</span>{" "}
