@@ -45,8 +45,23 @@ export async function SystemPanel({ system }: { system: System }) {
       <Row
         label={t("disk")}
         value={system.diskFreePct == null ? "—" : `${system.diskFreePct}%`}
-        tone={system.diskFreePct != null && system.diskFreePct < 15 ? "bad" : "ok"}
+        tone={system.diskFreePct != null && system.diskFreePct < 20 ? "bad" : "ok"}
       />
+      <Row
+        label={t("dbSize")}
+        value={system.dbMb == null ? "—" : system.dbMb >= 1024 ? `${(system.dbMb / 1024).toFixed(2)} ГБ` : `${system.dbMb} МБ`}
+        tone={system.dbMb != null && system.dbMb > 5 * 1024 ? "bad" : "ok"}
+      />
+      <Row
+        label={t("uploadsSize")}
+        value={system.uploadsMb >= 1024 ? `${(system.uploadsMb / 1024).toFixed(2)} ГБ` : `${system.uploadsMb} МБ`}
+      />
+      {system.backupsMb != null && (
+        <Row
+          label={t("backupsSize")}
+          value={system.backupsMb >= 1024 ? `${(system.backupsMb / 1024).toFixed(2)} ГБ` : `${system.backupsMb} МБ`}
+        />
+      )}
       <Row label={t("otpChannels")} value={system.otpChannels.length ? system.otpChannels.join(", ") : t("off")} tone={system.otpChannels.length ? "ok" : "bad"} />
       <Row label={t("teamChat")} value={flag(system.teamChat)} tone={system.teamChat ? "ok" : "warn"} />
       <Row label={t("techChat")} value={flag(system.techChat)} tone={system.techChat ? "ok" : "warn"} />

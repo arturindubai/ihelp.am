@@ -1050,3 +1050,21 @@ model ServiceInterest {
   @@index([ip, createdAt])
   @@map("service_interest")
 }
+
+/// Ежедневные показатели хранилища (DB-7): размер базы, загрузок, бэкапов, диск — история за 30 дней в Control Center
+model StorageMetric {
+  id          String   @id @default(cuid())
+  /// Дата снимка (UTC midnight) — один раз в сутки, unique
+  date        DateTime @unique
+  /// Размер базы PostgreSQL в МБ
+  dbMb        Float
+  /// Объём папки uploads в МБ
+  uploadsMb   Float
+  /// Объём папки backups в МБ (из Setting _backup); null, если данные недоступны
+  backupsMb   Float?
+  /// Свободное место на диске в процентах
+  diskFreePct Int
+  createdAt   DateTime @default(now())
+
+  @@index([date])
+}

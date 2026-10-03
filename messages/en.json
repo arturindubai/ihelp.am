@@ -257,6 +257,7 @@
       },
       "backlogInCode": "Backlog tasks",
       "backup": "Database backup",
+      "backupsSize": "Backups size",
       "blockedReason": "Blocked reason",
       "blocking": "Blocks",
       "claimed": "Claimed by agent {agent} until {until}",
@@ -266,6 +267,7 @@
       "cron": "Background jobs",
       "data": "Data",
       "daysAgo": "{d} d ago",
+      "dbSize": "Database size",
       "depends": "Depends on",
       "deployerTab": {
         "empty": {
@@ -605,6 +607,13 @@
         "runs24Hint": "errors {failed} · hit limit {limit}",
         "server": "Server",
         "serverOk": "running",
+        "storageBackups": "Backups",
+        "storageDate": "Date",
+        "storageDb": "Database",
+        "storageDisk": "Disk free",
+        "storageHistory": "Storage growth — 30 days",
+        "storageHistoryHint": "Recorded once a day (~04:00 Yerevan time). Red — database > 5 GB or disk < 20%.",
+        "storageUploads": "Uploads",
         "subtitle": "Platform and workers — status in one place. Refresh to recheck.",
         "tips": {
           "dispatcher": "Dispatcher silent for more than 3 minutes — on server: systemctl status ihelp-dispatcher.timer; install — deploy/systemd/install.sh.",
@@ -1042,6 +1051,7 @@
         "waiting": "Awaiting triage: worker will check the card and decide — queue, ask owner, or defer"
       },
       "updated": "Updated {date}",
+      "uploadsSize": "Uploads size",
       "values": {
         "ok": "OK",
         "stale": "stale"
