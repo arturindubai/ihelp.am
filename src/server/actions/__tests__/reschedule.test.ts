@@ -19,6 +19,7 @@ vi.mock("../../db", () => ({
     master: { findMany: vi.fn() },
     user: { update: vi.fn() },
     review: { findUnique: vi.fn() },
+    visitEvent: { create: vi.fn().mockResolvedValue({}) },
     $transaction: vi.fn().mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => fn({})),
   },
 }));

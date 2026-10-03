@@ -16,6 +16,7 @@ vi.mock("../../db", () => ({
     address: { count: vi.fn(), updateMany: vi.fn(), update: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
     user: { update: vi.fn() },
     review: { findUnique: vi.fn(), create: vi.fn() },
+    visitEvent: { create: vi.fn().mockResolvedValue({}) },
     $transaction: vi.fn().mockResolvedValue([]),
   },
 }));
