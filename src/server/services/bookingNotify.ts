@@ -640,6 +640,7 @@ export async function sendReviewRequests(now: Date): Promise<number> {
       status: "DONE",
       finishedAt: { gte: from, lte: to },
       reviewRequestedAt: null,
+      review: null,
     },
     select: {
       id: true,
@@ -707,14 +708,16 @@ export async function sendReviewRequests(now: Date): Promise<number> {
   return sent;
 }
 
-/** 8. Напоминания клиентам за 2 часа до визита (окно 90–150 минут).
- *  Дедупликация через clientNotifiedEvents с ключом "reminder2h".
+/** 8. Напоминания клиентам за 2 часа до визита (окно 20–150 минут).
+ *  Нижняя граница 20 мин вместо 90: визиты в 09:30–10:30 не попадают в стандартное окно 90–150 мин,
+ *  потому что оно целиком лежит в тихом периоде — сразу после 09:00 их нужно поймать.
+ *  Дедупликация через clientNotifiedEvents с ключом "reminder2h" гарантирует одно напоминание.
  *  В тихий период (notify.quietHourStart–quietHourEnd) — не отправляет. */
 export async function sendVisit2hReminders(now: Date): Promise<number> {
   const s0 = await getSettings();
   if (isQuietHour(now, s0.notify.quietHourStart, s0.notify.quietHourEnd)) return 0;
 
-  const from = new Date(now.getTime() + 90 * 60_000);
+  const from = new Date(now.getTime() + 20 * 60_000);
   const to = new Date(now.getTime() + 150 * 60_000);
 
   const visits = await db.visit.findMany({
@@ -768,12 +771,13 @@ export async function sendVisit2hReminders(now: Date): Promise<number> {
     try {
       let deliveryOk = false;
       if (ch.channel === "telegram") {
+        // fill() уже экранирует параметры — не оборачивать в html``, иначе экранирование двойное
         const text =
-          html`⏰ <b>${fill(tmpl.reminder2h.title, {})}</b>\n` +
-          html`${fill(tmpl.reminder2h.service, { service })}\n` +
-          html`${fill(tmpl.reminder2h.date, { date, time })}\n` +
-          html`${fill(tmpl.reminder2h.master, { master })}\n` +
-          html`${fill(tmpl.reminder2h.address, { address })}`;
+          `⏰ <b>${fill(tmpl.reminder2h.title, {})}</b>\n` +
+          `${fill(tmpl.reminder2h.service, { service })}\n` +
+          `${fill(tmpl.reminder2h.date, { date, time })}\n` +
+          `${fill(tmpl.reminder2h.master, { master })}\n` +
+          `${fill(tmpl.reminder2h.address, { address })}`;
         await sendTelegramDirect(ch.token, ch.telegramId, text);
         deliveryOk = true;
       } else {
