@@ -1,5 +1,6 @@
 "use client";
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useTranslations } from "next-intl";
 import { X } from "lucide-react";
 
@@ -18,7 +19,7 @@ export function Sheet({ open, onClose, title, children, footer }: { open: boolea
     };
   }, [open, onClose]);
   if (!open) return null;
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
       <button aria-label={tc("close")} className="absolute inset-0 bg-overlay/50" onClick={onClose} />
       <div className="relative flex max-h-[88dvh] w-full flex-col rounded-t-3xl bg-paper sm:max-w-[520px] sm:rounded-3xl">
@@ -31,6 +32,7 @@ export function Sheet({ open, onClose, title, children, footer }: { open: boolea
         <div className={`overflow-y-auto px-4 ${footer ? "pb-4" : "pb-safe"}`}>{children}</div>
         {footer && <div className="pb-safe border-t border-line px-4 pt-3">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
