@@ -1072,3 +1072,20 @@ model StorageMetric {
 
   @@index([date])
 }
+
+/// Поисковые запросы без результата (BUG-35): агрегация по тексту и локали — видны в «Спрос на услуги»
+model SearchQuery {
+  id     String   @id @default(cuid())
+  /// Исходный текст запроса (нижний регистр)
+  query  String
+  locale String   @default("ru")
+  count  Int      @default(1)
+  /// Дата первого запроса
+  firstAt DateTime @default(now())
+  /// Дата последнего запроса
+  lastAt  DateTime @default(now())
+
+  @@unique([query, locale])
+  @@index([count])
+  @@map("search_query")
+}
