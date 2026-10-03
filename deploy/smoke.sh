@@ -34,6 +34,20 @@ check "migrate завершился успешно" [ "$(state migrate | cut -d'
 check "OTP_DEV_MODE выключен" [ "$(docker exec homecare-app-1 printenv OTP_DEV_MODE 2> /dev/null)" = false ]
 check "ключ шифрования настроек задан" docker exec homecare-app-1 sh -c 'test ${#SETTINGS_ENCRYPTION_KEY} -eq 64'
 
+echo "Привязка порта"
+port_bind_ok() {
+  local p="${port:-80}"
+  # Нестандартный порт (не 80/443) — контейнер за реверс-прокси: слушать должен только на 127.0.0.1
+  case "$p" in 80|443) return 0;; esac
+  local bad
+  bad=$(ss -ltn 2>/dev/null | grep "LISTEN" | grep ":${p}" | grep -v "127\.0\.0\.1:${p}")
+  if [ -n "$bad" ]; then
+    printf "    порт %s открыт не на 127.0.0.1 — установите HTTP_BIND=127.0.0.1:%s в .env и пересоздайте caddy\n" "$p" "$p"
+    return 1
+  fi
+}
+check "HTTP-порт ${port:-80} слушает только на 127.0.0.1" port_bind_ok
+
 echo "Уведомления"
 tech_alert_ok() {
   curl -s -m 20 "$BASE/api/health?check=alert" | grep -q '"ok":true'

@@ -85,8 +85,8 @@ nano .env
 #   ADMIN_PHONE — ваш номер, по нему вход в админку
 #   APP_URL=http://<IP сервера>, SITE_ADDRESS=:80
 #   CONTACT_* — контакты бизнеса (см. «Контакты»)
-#   Если 80/443 уже заняты другим сайтом: HTTP_BIND=8080, HTTPS_BIND=127.0.0.1:8443,
-#   APP_URL=http://<IP сервера>:8080 и ufw allow 8080/tcp (SITE_ADDRESS остаётся :80 — это порт внутри контейнера)
+#   Если 80/443 уже заняты другим сайтом: HTTP_BIND=127.0.0.1:8080, HTTPS_BIND=127.0.0.1:8443,
+#   APP_URL=https://домен (SITE_ADDRESS остаётся :80 — это порт внутри контейнера; ufw allow 8080 не открывать)
 
 # 4. Запуск (сборка ~3–5 минут)
 docker compose up -d --build
