@@ -48,9 +48,9 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     description: tr(s.brand.tagline, locale),
     manifest: "/manifest.webmanifest",
     alternates: {
-      // hreflang только для индексируемых языков + x-default на дефолтную локаль
+      // hreflang только для индексируемых языков (am исключён — перевод не готов) + x-default на дефолтную локаль
       languages: {
-        ...Object.fromEntries(s.locales.indexable.map((l) => [localeIso[l as "ru"], `/${l}`])),
+        ...Object.fromEntries(s.locales.indexable.filter((l) => l !== "am").map((l) => [localeIso[l as "ru"], `/${l}`])),
         "x-default": `/${defaultLocale}`,
       },
     },
@@ -65,8 +65,9 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
     // Превью ссылок в WhatsApp, Telegram, соцсетях; картинка — ./opengraph-image.tsx
     openGraph: { type: "website", siteName: s.brand.name, title: `${s.brand.name} — ${tr(s.brand.tagline, locale)}`, description: tr(s.brand.tagline, locale), locale: OG_LOCALE[locale as "ru"] },
     twitter: { card: "summary_large_image" },
-    // Язык вне списка indexable закрываем от поисковиков, чтобы не плодить дубли
-    ...(s.locales.indexable.includes(locale) ? {} : { robots: { index: false, follow: false } }),
+    // Язык вне списка indexable закрываем от поисковиков, чтобы не плодить дубли.
+    // am (армянский) закрыт явно — перевод не готов (решение владельца 27.09.2026).
+    ...(s.locales.indexable.includes(locale) && locale !== "am" ? {} : { robots: { index: false, follow: false } }),
   };
 }
 

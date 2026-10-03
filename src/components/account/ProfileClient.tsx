@@ -3,6 +3,7 @@ import { useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { MapPin, Pencil, Trash2, Plus, LogOut, Send, Mail, Globe } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
+import { LocaleSwitcher } from "@/components/LocaleSwitcher";
 import { confirmProfileEmailAction, sendProfileEmailCodeAction, toggleEmailRemindersAction, unlinkTelegramAction, updateProfileAction } from "@/server/actions/account";
 import { toggleAdsConsentAction } from "@/server/actions/consent";
 import { deleteAddressAction } from "@/server/actions/booking";
@@ -82,6 +83,13 @@ export function ProfileClient({ user, addresses: initial, districts, enabledLoca
           <button className="btn-dark w-full" disabled={pending}>{saved ? tc("saved") : tc("save")}</button>
         </form>
       </section>
+
+      {enabledLocales.length > 1 && (
+        <section className="card mt-4 p-4">
+          <h2 className="h3 mb-3">{tn("language")}</h2>
+          <LocaleSwitcher enabled={enabledLocales} />
+        </section>
+      )}
 
       <LoginMethodsSection
         email={savedEmail}
