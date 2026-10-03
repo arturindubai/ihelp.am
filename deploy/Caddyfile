@@ -1,6 +1,16 @@
 # SITE_ADDRESS=":80" — работа по IP без HTTPS.
 # После покупки домена: SITE_ADDRESS="example.am, www.example.am" — Caddy сам выпустит SSL-сертификат
 # (только если Caddy владеет портами 80/443 хоста; на общем сервере с nginx см. README → «Подключение домена»).
+
+# trusted_proxies — Caddy принимает X-Forwarded-For и X-Forwarded-Proto только от приватных сетей
+# (Docker-шлюз, nginx на хосте 127.0.0.1). Без этого Caddy игнорирует заголовок
+# X-Forwarded-Proto: https от nginx, и Next.js генерирует абсолютные ссылки с http://.
+{
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
 {$SITE_ADDRESS} {
 	encode gzip zstd
 	header {
