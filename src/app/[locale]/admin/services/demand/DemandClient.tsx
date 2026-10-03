@@ -5,14 +5,15 @@ import { useTranslations } from "next-intl";
 import { Download } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { saveInterestNotifyModeAction } from "@/server/actions/admin/interest";
-import type { InterestRow } from "@/server/services/serviceInterest";
+import type { InterestRow, SearchQueryRow } from "@/server/services/serviceInterest";
 
 type Props = {
   rows: InterestRow[];
+  searchQueries: SearchQueryRow[];
   notifyMode: "immediate" | "digest";
 };
 
-export function DemandClient({ rows, notifyMode: initialMode }: Props) {
+export function DemandClient({ rows, searchQueries, notifyMode: initialMode }: Props) {
   const t = useTranslations("admin.demand");
   const [mode, setMode] = useState<"immediate" | "digest">(initialMode);
   const [saving, setSaving] = useState(false);
@@ -106,6 +107,40 @@ export function DemandClient({ rows, notifyMode: initialMode }: Props) {
           </table>
         </div>
       )}
+
+      {/* Поисковые запросы без результата */}
+      <div>
+        <h2 className="mb-3 text-sm font-semibold">{t("searchQueriesTitle")}</h2>
+        <p className="mb-3 text-xs text-muted">{t("searchQueriesHint")}</p>
+        {searchQueries.length === 0 ? (
+          <div className="card p-6 text-center text-muted text-sm">{t("searchQueriesEmpty")}</div>
+        ) : (
+          <div className="card overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b border-line bg-surface/60 text-left text-xs text-muted">
+                <tr>
+                  <th className="px-3 py-2 font-medium">{t("sqColQuery")}</th>
+                  <th className="px-3 py-2 font-medium">{t("sqColLocale")}</th>
+                  <th className="px-3 py-2 font-medium text-right">{t("sqColCount")}</th>
+                  <th className="px-3 py-2 font-medium">{t("colLast")}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {searchQueries.map((r) => (
+                  <tr key={`${r.query}:${r.locale}`} className="hover:bg-surface/40">
+                    <td className="px-3 py-2 font-medium">{r.query}</td>
+                    <td className="px-3 py-2 text-muted">{r.locale}</td>
+                    <td className="px-3 py-2 text-right font-semibold">{r.count}</td>
+                    <td className="px-3 py-2 text-muted whitespace-nowrap">
+                      {new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Yerevan" }).format(r.lastAt)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
