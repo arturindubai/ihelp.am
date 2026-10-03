@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { Check, Info } from "lucide-react";
 import { useRouter } from "@/i18n/navigation";
@@ -9,8 +9,8 @@ import type { ServiceView } from "@/server/services/catalog";
 import { Sheet } from "@/components/ui/Sheet";
 import { Icon } from "@/components/Icon";
 import { PriceBar } from "./PriceBar";
-import { writeCart, clearCart } from "@/lib/cart";
-import { addToCartAction, clearCartAction } from "@/server/actions/cart";
+import { writeCart } from "@/lib/cart";
+import { addToCartAction } from "@/server/actions/cart";
 
 export function initialSelection(s: ServiceView, planKind?: string) {
   const opts: string[] = [];
@@ -26,16 +26,16 @@ export function initialSelection(s: ServiceView, planKind?: string) {
   return { opts, planId: plan?.id || null };
 }
 
-export function ServiceConfigurator({ s, rules, isFirstOrder, policy, initialPlan }: { s: ServiceView; rules: PricingRules; isFirstOrder: boolean; policy?: string; initialPlan?: string }) {
+export function ServiceConfigurator({ s, rules, isFirstOrder, policy, initialPlan, editOpts, editPlanId, editMode }: { s: ServiceView; rules: PricingRules; isFirstOrder: boolean; policy?: string; initialPlan?: string; editOpts?: string[]; editPlanId?: string | null; editMode?: boolean }) {
   const t = useTranslations("service");
   const tc = useTranslations("common");
   const locale = useLocale();
   const router = useRouter();
   const init = useMemo(() => initialSelection(s, initialPlan), [s, initialPlan]);
-  const [opts, setOpts] = useState<string[]>(init.opts);
-  const [planId, setPlanId] = useState<string | null>(init.planId);
+  const [opts, setOpts] = useState<string[]>(editOpts ?? init.opts);
+  const [planId, setPlanId] = useState<string | null>(editPlanId !== undefined ? editPlanId : init.planId);
   const [info, setInfo] = useState<{ title: string; body?: string; schedule?: ServiceView["groups"][number]["options"][number]["schedule"] } | null>(null);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [isSaving, setIsSaving] = useState(false);
 
   const lines = s.groups.flatMap((g) => g.options.filter((o) => opts.includes(o.id)).map((o) => ({ groupTitle: g.title, optionTitle: o.title, price: o.price, discountable: o.discountable, durationMin: o.durationMin })));
   const complete = s.groups.every((g) => !g.required || g.options.some((o) => opts.includes(o.id))) && (!s.plans.length || !!planId);
@@ -69,25 +69,12 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy, initialPla
   const barPrice = plan?.kind === "PACKAGE" ? price.payNow : price.first.price;
   const barStrike = plan?.kind === "PACKAGE" ? price.payNowBase : price.base;
 
-  // Сохраняем выбор в localStorage и дебаунсированно на сервере
-  useEffect(() => {
-    if (lines.length > 0) {
-      writeCart({ slug: s.slug, opts, planId, count: 1, total: barPrice, slugs: [s.slug] });
-      clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(() => {
-        addToCartAction(s.id, opts, planId).catch(() => null);
-      }, 800);
-    } else {
-      clearCart();
-      clearTimeout(saveTimerRef.current);
-      clearCartAction().catch(() => null);
-    }
-    return () => clearTimeout(saveTimerRef.current);
-  }, [lines.length, opts, planId, barPrice, s.slug, s.id]);
-
-  function go() {
-    clearTimeout(saveTimerRef.current);
-    addToCartAction(s.id, opts, planId).catch(() => null);
+  // Сохраняем в корзину только по явному клику кнопки
+  async function go() {
+    if (isSaving) return;
+    setIsSaving(true);
+    const result = await addToCartAction(s.id, opts, planId).catch(() => null);
+    if (result) writeCart(result);
     router.push("/cart");
   }
 
@@ -301,8 +288,8 @@ export function ServiceConfigurator({ s, rules, isFirstOrder, policy, initialPla
         label={complete ? barLabel : undefined}
         caption={complete ? barCaption : t("selectAll")}
         action={
-          <button className="btn-primary min-w-[140px]" disabled={!complete} onClick={go}>
-            {t("toCart")}
+          <button className="btn-primary min-w-[140px]" disabled={!complete || isSaving} onClick={go}>
+            {editMode ? t("saveToCart") : t("toCart")}
           </button>
         }
       />
