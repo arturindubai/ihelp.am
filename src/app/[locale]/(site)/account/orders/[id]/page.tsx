@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { ArrowLeft, CheckCircle2, Phone, MessageCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Phone, MessageCircle, ShoppingCart } from "lucide-react";
 import { Link, redirect } from "@/i18n/navigation";
 import { getCurrentUser } from "@/server/auth";
 import { getUserOrderDetail } from "@/server/services/pages/account";
@@ -12,6 +12,7 @@ import { StatusBadge } from "@/components/account/StatusBadge";
 import { OrderActions, OrderTrackerActions, VisitActions } from "@/components/account/OrderActions";
 import { getOrderEventFeed } from "@/server/services/orderEvents";
 import { ClearCart } from "@/components/ClearCart";
+import { resolveCartEntry } from "@/server/services/cart";
 
 
 function eventColor(status: string) {
@@ -29,15 +30,18 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   if (!user) return redirect({ href: `/login?next=/account/orders/${id}`, locale });
   const o = await getUserOrderDetail(id, user.id);
   if (!o) notFound();
-  const [settings, t, tb, ts, tc, ta, events] = await Promise.all([
+  const [settings, t, tb, ts, tc, ta, tCart, events, remainingCart] = await Promise.all([
     getSettings(),
     getTranslations("order"),
     getTranslations("booking"),
     getTranslations("service"),
     getTranslations("common"),
     getTranslations("address"),
+    getTranslations("cart"),
     getOrderEventFeed(o.id),
+    isNew ? resolveCartEntry({ userId: user.id }).catch(() => null) : Promise.resolve(null),
   ]);
+  const remainingCartCount = remainingCart?.count ?? 0;
   const cfg = o.config as { options: { group: unknown; option: unknown; price: number }[]; plan?: { title?: unknown } | null };
   const a = o.addressSnapshot as Record<string, string | null>;
   const r = o.recurrence as { weekdays: number[]; time: string; intervalDays: number } | null;
@@ -125,6 +129,12 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               <div className="text-sm">{tb("successSub")}</div>
             </div>
           </div>
+          {remainingCartCount > 0 && (
+            <Link href="/cart" className="mb-4 flex items-center gap-3 rounded-2xl bg-brand-50 p-4 text-brand hover:bg-brand-100 transition-colors">
+              <ShoppingCart size={20} className="shrink-0" />
+              <span className="font-semibold text-sm">{tCart("cartBanner", { count: remainingCartCount })}</span>
+            </Link>
+          )}
         </>
       )}
 

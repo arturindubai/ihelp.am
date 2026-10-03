@@ -2174,8 +2174,10 @@
   "cart": {
     "byPlan": "By subscription",
     "cancelPolicy": "Free cancellation within 24 h",
+    "cartBanner": "{count, plural, one {# more service} other {# more services}} in cart — book",
     "change": "Edit",
     "checkout": "Book",
+    "checkoutItem": "Book this service",
     "crossSell": "Frequently bought together",
     "empty": "Your cart is empty",
     "emptyHint": "Choose a service",
@@ -2183,7 +2185,8 @@
     "savings": "You save {amount}",
     "title": "Your order",
     "toCatalog": "Browse services",
-    "total": "Total"
+    "total": "Total",
+    "totalCart": "Cart total"
   },
   "catalog": {
     "arrivalToday": "today",
