@@ -18,3 +18,12 @@ export async function getProVisits(masterId: string, range: { gte: Date; lt: Dat
     include: { order: { include: { user: true, service: true } } },
   });
 }
+
+/** Сумма наличных у мастера на руках: выполненные визиты, мастер отметил получение */
+export async function getMasterCashInHands(masterId: string): Promise<number> {
+  const result = await db.visit.aggregate({
+    where: { masterId, status: "DONE", cashCollected: true, order: { paymentMethod: "CASH" } },
+    _sum: { price: true },
+  });
+  return result._sum.price ?? 0;
+}
