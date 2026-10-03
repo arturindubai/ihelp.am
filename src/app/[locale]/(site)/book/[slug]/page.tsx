@@ -10,6 +10,7 @@ import { isFirstOrder, getLastOrderDraft, getOrderDraftById } from "@/server/ser
 import { calculatePrice } from "@/lib/pricing";
 import { getBookingAddresses } from "@/server/services/pages/catalog";
 import { tr } from "@/i18n/locales";
+import { amd } from "@/lib/format";
 import { Checkout } from "@/components/booking/Checkout";
 import { InlineLogin } from "./InlineLogin";
 import { PromoSlot } from "@/components/PromoSlot";
@@ -30,6 +31,11 @@ export default async function BookPage({ params, searchParams }: { params: Promi
     const urlOptionIds = o.split(",").filter(Boolean);
     const sel = resolveSelection(s, urlOptionIds, p);
     if (!sel.ok) redirect({ href: `/s/${slug}`, locale });
+    const ok = sel as Extract<typeof sel, { ok: true }>;
+    const guestGoogleUrl = settings.google.enabled && settings.google.clientId
+      ? `/api/auth/google/start?next=${encodeURIComponent(`/book/${slug}${o ? `?o=${o}` : ""}${p ? `${o ? "&" : "?"}p=${p}` : ""}`)}`
+      : undefined;
+    const total = ok.lines.reduce((sum, l) => sum + l.price, 0);
     return (
       <div className="container-m">
         <div className="flex items-center gap-3 pt-3">
@@ -37,8 +43,26 @@ export default async function BookPage({ params, searchParams }: { params: Promi
           <h1 className="text-xl font-bold">{t("title")}</h1>
         </div>
         <div className="card mt-4 p-4">
-          <h2 className="h3 mb-3">{t("loginToContinue")}</h2>
-          <InlineLogin channels={methods.channels} emailEnabled={methods.email} telegramBot={settings.notify.telegramBotUsername || null} />
+          <div className="mb-4 border-b border-line pb-4">
+            <p className="font-semibold">{s.title}</p>
+            <dl className="mt-2 space-y-1 text-sm">
+              {ok.lines.map((l, i) => (
+                <div key={i} className="flex justify-between gap-4">
+                  <dt className="text-ink">{l.optionTitle}</dt>
+                  <dd className="shrink-0 text-muted">{amd(l.price)}</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="mt-2 flex justify-between text-sm font-semibold">
+              <span>{t("payNow")}</span>
+              <span>{amd(total)}</span>
+            </div>
+            {settings.booking.freeCancelHours > 0 && (
+              <p className="mt-2 text-xs text-ok">{t("freeCancel", { hours: settings.booking.freeCancelHours })}</p>
+            )}
+          </div>
+          <h2 className="h3 mb-3">{t("loginOrderSaved")}</h2>
+          <InlineLogin channels={methods.channels} emailEnabled={methods.email} telegramBot={settings.notify.telegramBotUsername || null} googleUrl={guestGoogleUrl} />
         </div>
       </div>
     );

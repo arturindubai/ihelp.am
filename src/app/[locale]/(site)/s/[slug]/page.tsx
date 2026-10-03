@@ -29,9 +29,12 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return meta;
 }
 
-export default async function ServicePage({ params, searchParams }: { params: Promise<{ locale: string; slug: string }>; searchParams: Promise<{ plan?: string; unavailable?: string }> }) {
+export default async function ServicePage({ params, searchParams }: { params: Promise<{ locale: string; slug: string }>; searchParams: Promise<{ plan?: string; unavailable?: string; o?: string; p?: string; edit?: string }> }) {
   const { locale, slug } = await params;
-  const { plan, unavailable } = await searchParams;
+  const { plan, unavailable, o, p, edit } = await searchParams;
+  const editMode = edit === "1";
+  const editOpts = editMode && o ? o.split(",").filter(Boolean) : undefined;
+  const editPlanId = editMode ? (p || null) : undefined;
   setRequestLocale(locale);
   const raw = await loadServiceRaw(slug);
   if (!raw) notFound();
@@ -152,7 +155,7 @@ export default async function ServicePage({ params, searchParams }: { params: Pr
         </section>
       )}
 
-      <ServiceConfigurator s={s} rules={settings.pricing} isFirstOrder={first} policy={s.policy ?? undefined} initialPlan={plan} />
+      <ServiceConfigurator s={s} rules={settings.pricing} isFirstOrder={first} policy={s.policy ?? undefined} initialPlan={plan} editOpts={editOpts} editPlanId={editPlanId} editMode={editMode} />
 
       {s.note?.body && (
         <div className="mt-2 rounded-2xl bg-ok-50 p-4">

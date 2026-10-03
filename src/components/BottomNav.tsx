@@ -5,15 +5,17 @@ import { Link, usePathname } from "@/i18n/navigation";
 
 const HIDE = [/^\/s\//, /^\/book\//, /^\/login/, /^\/cart/];
 
-export function BottomNav() {
+export function BottomNav({ isLoggedIn }: { isLoggedIn?: boolean }) {
   const t = useTranslations("nav");
   const path = usePathname();
   if (HIDE.some((r) => r.test(path))) return null;
+  const profileHref = isLoggedIn ? "/account" : "/login";
+  const profileLabel = isLoggedIn ? t("account") : t("login");
   const items = [
     { href: "/", icon: Home, label: t("home"), active: path === "/" },
     { href: "/services", icon: LayoutGrid, label: t("services"), active: path.startsWith("/services") || path.startsWith("/c/") },
     { href: "/account/orders", icon: CalendarDays, label: t("bookings"), active: path.startsWith("/account/orders") },
-    { href: "/account", icon: User, label: t("account"), active: path === "/account" },
+    { href: profileHref, icon: User, label: profileLabel, active: path === "/account" },
   ];
   return (
     <>

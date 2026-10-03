@@ -116,6 +116,23 @@ export async function notifyNewInterest(serviceSlug: string, kind: string) {
   }
 }
 
+export type SearchQueryRow = {
+  query: string;
+  locale: string;
+  count: number;
+  lastAt: Date;
+};
+
+/** Топ поисковых запросов без результата — для страницы «Спрос на услуги» */
+export async function getSearchQueryStats(limit = 50): Promise<SearchQueryRow[]> {
+  const rows = await db.searchQuery.findMany({
+    orderBy: { count: "desc" },
+    take: limit,
+    select: { query: true, locale: true, count: true, lastAt: true },
+  });
+  return rows;
+}
+
 /** Суточный дайджест: сколько заявок пришло вчера, по услугам */
 export async function sendInterestDigest(now: Date) {
   const s = await getSettings();

@@ -1419,6 +1419,12 @@
       "modeImmediate": "Immediately",
       "notifyHint": "Digest sends one message at 10:00 Yerevan time with a daily summary; immediate sends a message for each new request.",
       "notifyTitle": "Team notifications",
+      "searchQueriesEmpty": "No zero-result queries yet",
+      "searchQueriesHint": "Queries that returned 0 results — shows what services are missing",
+      "searchQueriesTitle": "Zero-result search queries",
+      "sqColCount": "Queries",
+      "sqColLocale": "Locale",
+      "sqColQuery": "Query",
       "sub": "Who left a 'Notify me' request and for which service",
       "tableHint": "{count, plural, one {# row} other {# rows}}",
       "title": "Service demand"
@@ -2019,6 +2025,7 @@
     "emailCodeTitle": "Sign-in code",
     "emailCodeTtl": "The code is valid for {min} min. Do not share it with anyone.",
     "emailGetCode": "Get code by email",
+    "emailInvalid": "Check the email address",
     "emailOnlyConfirmed": "If you don't have an account yet, it will be created automatically.",
     "emailPlaceholder": "email@example.com",
     "errors": {
@@ -2052,7 +2059,7 @@
     },
     "getCodeVia": "Get code via",
     "google": "Sign in with Google",
-    "googleHint": "For staff: sign in with your work email listed in your profile",
+    "googleHint": "For staff: sign in with Google",
     "googleSignupEmailConfirmed": "Email {email} confirmed by Google",
     "googleSignupNoChannels": "A phone number is needed to complete registration, but code delivery is unavailable. Sign in with email or try again later.",
     "googleSignupPhoneHint": "Enter your phone number to complete registration",
@@ -2117,6 +2124,7 @@
     },
     "freeCancel": "Free cancellation up to {hours} h before",
     "lateCancelFee": "late cancellation fee {amount} AMD",
+    "loginOrderSaved": "Sign in to choose a time — your order is saved",
     "loginToContinue": "Sign in to place an order",
     "master": "Pro",
     "masterBusy": "Busy at this time",
@@ -2170,8 +2178,10 @@
   "cart": {
     "byPlan": "By subscription",
     "cancelPolicy": "Free cancellation within 24 h",
+    "cartBanner": "{count, plural, one {# more service} other {# more services}} in cart — book",
     "change": "Edit",
     "checkout": "Book",
+    "checkoutItem": "Book this service",
     "crossSell": "Frequently bought together",
     "empty": "Your cart is empty",
     "emptyHint": "Choose a service",
@@ -2179,7 +2189,8 @@
     "savings": "You save {amount}",
     "title": "Your order",
     "toCatalog": "Browse services",
-    "total": "Total"
+    "total": "Total",
+    "totalCart": "Cart total"
   },
   "catalog": {
     "allServices": "All services",
@@ -2625,6 +2636,7 @@
     "sampleSchedule": "Sample schedule",
     "sampleSub": "The pro will adjust to your priorities",
     "sampleTitle": "{duration}: sample schedule",
+    "saveToCart": "Save",
     "selectAll": "Please select all required options",
     "selectRequirements": "Choose options",
     "startsAt": "from {price} per visit",

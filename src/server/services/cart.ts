@@ -188,9 +188,12 @@ export interface CartItemDetail {
   title: string;
   image: string | null;
   optionSummary: string;
+  optionIds: string[];
+  planId: string | null;
   price: number;
   basePrice: number;
   qty: number;
+  bookHref: string;
 }
 
 export interface CrossSellItem {
@@ -305,6 +308,9 @@ export async function getCartDetails(
       .filter(Boolean)
       .join(" · ");
 
+    const opts = (item.optionIds as string[]).join(",");
+    const bookHref = `/book/${svc.slug}?o=${opts}${item.planId ? `&p=${item.planId}` : ""}`;
+
     items.push({
       cartItemId: item.id,
       serviceId: item.serviceId,
@@ -312,9 +318,12 @@ export async function getCartDetails(
       title: tr(svc.title, locale) as string,
       image: svc.image,
       optionSummary,
+      optionIds: item.optionIds as string[],
+      planId: item.planId,
       price: itemPrice,
       basePrice: itemBase,
       qty: item.qty,
+      bookHref,
     });
   }
 

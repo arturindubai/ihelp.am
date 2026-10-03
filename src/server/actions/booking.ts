@@ -6,7 +6,7 @@ import { getSettings } from "../settings";
 import { BookingError, createOrder, getLastOrderDraft, getSlots, isFirstOrder } from "../services/booking";
 import { loadServiceRaw, localizeService, resolveSelection } from "../services/catalog";
 import { checkPromo } from "../services/promo";
-import { clearCartItems } from "../services/cart";
+import { removeCartItemByService } from "../services/cart";
 import { calculatePrice } from "@/lib/pricing";
 
 export async function slotsAction(serviceId: string, date: string, durationMin: number) {
@@ -101,8 +101,8 @@ export async function createOrderAction(input: z.infer<typeof orderSchema>) {
   if (!parsed.success) return { ok: false as const, error: "invalid" };
   try {
     const order = await createOrder(u, parsed.data);
-    // Очищаем корзину после успешного оформления заказа
-    await clearCartItems({ userId: u.id }).catch(() => null);
+    // Удаляем только заказанную услугу — остальные позиции корзины сохраняются
+    await removeCartItemByService({ userId: u.id }, order.serviceId).catch(() => null);
     return { ok: true as const, orderId: order.id, number: order.number };
   } catch (e) {
     if (e instanceof BookingError) return { ok: false as const, error: e.message };

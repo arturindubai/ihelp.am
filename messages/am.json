@@ -1081,6 +1081,7 @@
     "emailCodeTitle": "",
     "emailCodeTtl": "",
     "emailGetCode": "",
+    "emailInvalid": "",
     "emailOnlyConfirmed": "",
     "emailPlaceholder": "",
     "errors": {
@@ -1178,6 +1179,7 @@
     },
     "freeCancel": "",
     "lateCancelFee": "",
+    "loginOrderSaved": "",
     "loginToContinue": "",
     "master": "",
     "masterBusy": "",
@@ -1230,8 +1232,10 @@
   "cart": {
     "byPlan": "",
     "cancelPolicy": "",
+    "cartBanner": "",
     "change": "",
     "checkout": "",
+    "checkoutItem": "",
     "crossSell": "",
     "empty": "",
     "emptyHint": "",
@@ -1239,7 +1243,8 @@
     "savings": "",
     "title": "",
     "toCatalog": "",
-    "total": ""
+    "total": "",
+    "totalCart": ""
   },
   "catalog": {
     "allServices": "",
@@ -1637,6 +1642,7 @@
     "sampleSchedule": "",
     "sampleSub": "",
     "sampleTitle": "",
+    "saveToCart": "",
     "selectAll": "",
     "selectRequirements": "",
     "startsAt": "",

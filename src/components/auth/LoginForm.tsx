@@ -13,6 +13,7 @@ const ICONS = { WHATSAPP: MessageCircle, TELEGRAM: Send, SMS: Smartphone };
 
 /**
  * Способы входа: Telegram-бот (telegramBot — имя бота), код из письма (emailEnabled), коды на телефон (channels).
+ * OAuth-кнопки передаются как готовые URL: googleUrl, appleUrl, telegramWidgetUrl.
  * Если способ один — сразу он, иначе выбор. signup — тикет регистрации: номер уже подтверждён (бот или код),
  * остаются имя и email с кодом из письма (AUTH-11). googleSignup — email подтверждён Google, нужен телефон (IN-29).
  */
@@ -20,6 +21,9 @@ export function LoginForm({
   channels,
   emailEnabled = false,
   telegramBot,
+  googleUrl,
+  appleUrl,
+  telegramWidgetUrl,
   signup: initialSignup,
   googleSignup: initialGoogleSignup,
   onDone,
@@ -27,23 +31,28 @@ export function LoginForm({
   channels: Channel[];
   emailEnabled?: boolean;
   telegramBot?: string | null;
+  googleUrl?: string;
+  appleUrl?: string;
+  telegramWidgetUrl?: string;
   signup?: { ticket: string; phone: string };
   googleSignup?: { ticket: string; email: string; name: string };
   onDone: (role: string) => void;
 }) {
   const t = useTranslations("auth");
   const methods: Method[] = [...(emailEnabled ? (["email"] as const) : []), ...(channels.length ? (["phone"] as const) : [])];
-  const [method, setMethod] = useState<Method | null>(methods.length === 1 && !telegramBot ? methods[0] : null);
+  const hasOAuth = !!googleUrl || !!appleUrl || !!telegramWidgetUrl;
+  const [method, setMethod] = useState<Method | null>(methods.length === 1 && !telegramBot && !hasOAuth ? methods[0] : null);
   const [signup, setSignup] = useState(initialSignup);
   const [googleSignup] = useState(initialGoogleSignup);
 
   if (googleSignup) return <GoogleSignupForm ticket={googleSignup.ticket} email={googleSignup.email} name={googleSignup.name} channels={channels} onDone={onDone} />;
   if (signup) return <SignupCompletion ticket={signup.ticket} phone={signup.phone} emailEnabled={emailEnabled} onDone={onDone} />;
   if (!methods.length && !telegramBot) return <p className="text-muted">{t("noChannels")}</p>;
-  const back = methods.length + (telegramBot ? 1 : 0) > 1 ? () => setMethod(null) : undefined;
+  const back = methods.length + (telegramBot ? 1 : 0) + (hasOAuth ? 1 : 0) > 1 ? () => setMethod(null) : undefined;
 
   if (method === "email") return <EmailLogin onDone={onDone} onBack={back} />;
   if (method === "phone") return <PhoneLogin channels={channels} onDone={onDone} onBack={back} onSignup={(ticket, phone) => setSignup({ ticket, phone })} />;
+  const isFirstOtp = !telegramBot;
   return (
     <div>
       <p className="mb-2 text-sm font-medium">{t("chooseMethod")}</p>
@@ -56,15 +65,32 @@ export function LoginForm({
             <p className="mt-1 text-center text-xs text-muted">{t("telegramHint")}</p>
           </div>
         )}
-        {methods.map((m) => {
+        {methods.map((m, idx) => {
           const I = m === "email" ? Mail : Smartphone;
+          const primary = isFirstOtp && idx === 0;
           return (
-            <button key={m} className={m === methods[0] && !telegramBot ? "btn-primary" : "btn-outline"} onClick={() => setMethod(m)}>
+            <button key={m} className={primary ? "btn-primary" : "btn-outline"} onClick={() => setMethod(m)}>
               <I size={18} /> {t(`method.${m}`)}
             </button>
           );
         })}
+        {telegramWidgetUrl && (
+          <a className="btn-outline w-full" href={telegramWidgetUrl}>
+            {t("telegram")}
+          </a>
+        )}
+        {googleUrl && (
+          <a className="btn-outline w-full" href={googleUrl}>
+            {t("google")}
+          </a>
+        )}
+        {appleUrl && (
+          <a className="btn-outline w-full" href={appleUrl}>
+            {t("apple")}
+          </a>
+        )}
       </div>
+      {googleUrl && <p className="mt-4 text-center text-xs text-muted">{t("googleHint")}</p>}
     </div>
   );
 }
@@ -77,6 +103,8 @@ function BackLink({ onBack }: { onBack?: () => void }) {
 const EMAIL_STORAGE_KEY = "ihelp_auth_email";
 const CODE_TS_STORAGE_KEY = "ihelp_auth_code_ts";
 const CODE_TTL_MS = 10 * 60 * 1000;
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Вход по коду из письма: только для тех, у кого email подтверждён; ответ одинаков для любого адреса */
 function EmailLogin({ onDone, onBack }: { onDone: (role: string) => void; onBack?: () => void }) {
@@ -164,7 +192,10 @@ function EmailLogin({ onDone, onBack }: { onDone: (role: string) => void; onBack
             placeholder={t("emailPlaceholder")}
             onChange={(e) => { setEmail(e.target.value); sessionStorage.setItem(EMAIL_STORAGE_KEY, e.target.value); }}
           />
-          <button className="btn-primary mt-3 w-full" disabled={pending || !email.trim()}><Mail size={18} /> {t("emailGetCode")}</button>
+          {email.trim() && !EMAIL_RE.test(email.trim()) && (
+            <p className="mt-1 text-xs text-bad">{t("emailInvalid")}</p>
+          )}
+          <button className="btn-primary mt-3 w-full" disabled={pending || !email.trim() || !EMAIL_RE.test(email.trim())}><Mail size={18} /> {t("emailGetCode")}</button>
           <p className="mt-3 text-xs text-muted">{t("emailOnlyConfirmed")}</p>
           <p className="mt-3 text-xs text-muted">
             {t.rich("consent", {

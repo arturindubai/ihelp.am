@@ -16,8 +16,9 @@ trap '
   echo "✗ Обновление прервано: $BASH_COMMAND. Логи: docker compose logs --tail 100 app migrate. Откат: deploy/rollback.sh"
 ' ERR
 
-if [ -n "$(git status --porcelain)" ]; then
-  echo "Есть незафиксированные изменения — сначала: git add -A && git commit -m '…'"
+# Неотслеживаемые файлы (??) — не наша забота; останавливаемся только на изменённых отслеживаемых.
+if git status --porcelain | grep -qv '^?? '; then
+  echo "Есть незафиксированные изменения в отслеживаемых файлах — сначала: git add -A && git commit -m '…'"
   git status --short
   exit 1
 fi
