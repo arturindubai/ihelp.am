@@ -70,6 +70,6 @@ export async function getReviewToken(token: string) {
 export async function getSitemapEntries() {
   return Promise.all([
     db.service.findMany({ where: { active: true, comingSoon: false, category: { archived: false } }, select: { slug: true, updatedAt: true } }),
-    db.master.findMany({ where: { active: true }, select: { slug: true, updatedAt: true } }),
+    db.master.findMany({ where: { active: true, isDemo: false }, select: { slug: true, updatedAt: true } }),
   ]);
 }
