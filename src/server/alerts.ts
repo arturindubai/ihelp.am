@@ -1,5 +1,6 @@
 import "server-only";
-import { html, notifyTech } from "./notify";
+import { html, notifyTech, hasAlertRecipient } from "./notify";
+import { getSettings } from "./settings";
 import { db } from "./db";
 
 const lastSent = new Map<string, number>();
@@ -37,6 +38,17 @@ async function recordAppError(key: string, source: string, message: string): Pro
  * Каждый вызов записывается в журнал AppError (независимо от спам-фильтра).
  */
 export async function alertTech(key: string, text: string, everyMin = 60, source?: string) {
+  // Если нет адресата — пишем в лог, но не считаем в журнале ошибок
+  try {
+    const s = await getSettings();
+    if (!hasAlertRecipient(s)) {
+      console.log(`[alert:${key}] нет адресата |`, stripHtml(text).slice(0, 200));
+      return;
+    }
+  } catch {
+    // При недоступности базы продолжаем — notifyTech попробует запасной бот
+  }
+
   // Записываем в журнал до спам-фильтра — считаем все повторения
   recordAppError(key, source ?? extractSource(key), stripHtml(text)).catch(() => null);
 

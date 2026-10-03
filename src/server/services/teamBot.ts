@@ -114,7 +114,10 @@ export async function removeMember(telegramId: number) {
 /** Сообщение всем привязанным людям команды. Бот не подключён — молча ничего */
 export async function notifyMembers(text: string) {
   const t = await team();
-  if (!t.botToken || !t.members.length) return;
+  if (!t.botToken || !t.members.length) {
+    console.log("[notify:members] нет адресатов, пропускаем |", text.slice(0, 100));
+    return;
+  }
   await Promise.all(t.members.map((m) => call(t.botToken, "sendMessage", { chat_id: m.telegramId, text, parse_mode: "HTML", disable_web_page_preview: true })));
 }
 
@@ -144,7 +147,7 @@ type TgContact = { phone_number: string; first_name?: string; user_id?: number }
 type TgMessage = {
   message_id: number;
   from?: TgUser;
-  chat: { id: number; type: string };
+  chat: { id: number; type: string; title?: string; username?: string; first_name?: string };
   text?: string;
   caption?: string;
   photo?: TgPhoto[];
@@ -182,9 +185,19 @@ async function attachFromTelegram(token: string, fileId: string, taskKey: string
 /** Обработка входящего сообщения бота команды. Никогда не бросает — вебхук всегда отвечает Telegram 200 */
 export async function handleTeamUpdate(update: TgUpdate) {
   const msg = update.message;
-  if (!msg?.from || msg.chat.type !== "private") return;
+  if (!msg?.from) return;
   const t = await team();
   if (!t.botToken) return;
+
+  // Сохраняем чат для кнопки «Найти чат» — работает при активном вебхуке (getUpdates недоступен)
+  const c = msg.chat;
+  const chatInfo = { id: c.id, title: c.title ?? c.username ?? c.first_name ?? String(c.id), type: c.type };
+  const known = t.knownChats ?? [];
+  if (!known.some((x) => x.id === chatInfo.id)) {
+    saveTeam({ knownChats: [...known, chatInfo].slice(-20) }).catch(() => null);
+  }
+
+  if (msg.chat.type !== "private") return;
   const from = msg.from;
   const text = (msg.text ?? msg.caption ?? "").trim();
   const member = t.members.find((m) => m.telegramId === from.id);
