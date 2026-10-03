@@ -4,20 +4,6 @@ import { useState } from "react";
 import { Search, Check } from "lucide-react";
 import { Sheet } from "@/components/ui/Sheet";
 
-const DISTRICTS = [
-  "Центр",
-  "Аван",
-  "Давиташен",
-  "Малатия-Себастия",
-  "Нор-Норк",
-  "Нубарашен",
-  "Арабкир",
-  "Канакер-Зейтун",
-  "Эребуни",
-  "Шенгавит",
-  "Аджапняк",
-];
-
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -26,12 +12,13 @@ type Props = {
   title: string;
   anyLabel: string;
   searchPlaceholder: string;
+  districts: string[];
 };
 
-export function AddressSheet({ open, onClose, selected, onSelect, title, anyLabel, searchPlaceholder }: Props) {
+export function AddressSheet({ open, onClose, selected, onSelect, title, anyLabel, searchPlaceholder, districts }: Props) {
   const [query, setQuery] = useState("");
 
-  const filtered = DISTRICTS.filter((d) =>
+  const filtered = districts.filter((d) =>
     d.toLowerCase().includes(query.toLowerCase())
   );
 

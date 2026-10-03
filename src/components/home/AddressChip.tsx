@@ -11,9 +11,10 @@ type Props = {
   sheetTitle: string;
   anyLabel: string;
   districtSearch: string;
+  districts: string[];
 };
 
-export function AddressChip({ cityLabel, sheetTitle, anyLabel, districtSearch }: Props) {
+export function AddressChip({ cityLabel, sheetTitle, anyLabel, districtSearch, districts }: Props) {
   const [district, setDistrict] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
@@ -53,6 +54,7 @@ export function AddressChip({ cityLabel, sheetTitle, anyLabel, districtSearch }:
         title={sheetTitle}
         anyLabel={anyLabel}
         searchPlaceholder={districtSearch}
+        districts={districts}
       />
     </>
   );
