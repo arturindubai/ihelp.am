@@ -343,22 +343,23 @@ describe("подстановка переменных", () => {
     expect(text).toContain("Иван Петров");
   });
 
-  it("cancelled — текст содержит время отменённого визита и номер заказа", async () => {
+  it("cancelled — текст содержит время отменённого визита, номер заказа и ссылку", async () => {
     makeOrder("o1");
     makeUser("u1", "telegram");
     await notifyClientCancelled("o1");
     const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
     expect(text).toContain("10:00");
     expect(text).toContain("42");
+    expect(text).toContain("/account/orders");
   });
 
-  it("completed — текст содержит имя мастера (ссылка на отзыв — отдельно через sendReviewRequests)", async () => {
+  it("completed — текст содержит имя мастера и ссылку на заказ", async () => {
     makeVisit("v1");
     makeUser("u1", "telegram");
     await notifyClientVisitCompleted("v1");
     const text = vi.mocked(sendTelegramDirect).mock.calls[0][2];
     expect(text).toContain("Иван Петров");
-    expect(text).not.toContain("/account/orders");
+    expect(text).toContain("/account/orders");
   });
 });
 

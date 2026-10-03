@@ -2498,11 +2498,11 @@
     },
     "order": {
       "cancelled": "❌ Визит отменён — заказ №{n}\nУслуга: {serviceName}\nДата: {date}, {time}{feeLine}\nОткрыть заказ: {link}\nВопросы: {contacts}",
-      "completed": "⭐ Визит завершён — заказ №{n}\nМастер: {masterName}. Ваш отзыв помогает другим клиентам.\nОставить отзыв: {reviewLink}\nВопросы: {contacts}",
+      "completed": "⭐ Визит завершён — заказ №{n}\nМастер: {masterName}. Ваш отзыв помогает другим клиентам.\nОставить отзыв: {reviewLink}\nОткрыть заказ: {link}\nВопросы: {contacts}",
       "created": "✅ Заказ №{n} принят\n{serviceName}, {date}, {time}\nАдрес: {address}\nМастер: {masterLine}\nК оплате мастеру: {price}\nОткрыть заказ: {link}\nВопросы: {contacts}",
       "masterAssigned": "👷 Мастер назначен — заказ №{n}\n{serviceName}, {date} в {time}\nМастер: {masterName}\nОткрыть заказ: {link}\nВопросы: {contacts}",
       "onWay": "🚗 Мастер в пути — заказ №{n}\nМастер {masterName} уже в пути. Будет примерно через {eta} мин.\nОткрыть заказ: {link}\nВопросы: {contacts}",
-      "orderCancelled": "❌ Заказ №{n} отменён\nУслуга: {serviceName}\nДата: {date}, {time}{feeLine}\nВопросы: {contacts}",
+      "orderCancelled": "❌ Заказ №{n} отменён\nУслуга: {serviceName}\nДата: {date}, {time}{feeLine}\nОткрыть заказ: {link}\nВопросы: {contacts}",
       "rescheduled": "🔄 Визит перенесён — заказ №{n}\n{serviceName}\nНовая дата: {date}, {time}\nАдрес: {address}\nОткрыть заказ: {link}\nВопросы: {contacts}",
       "subjectCancelled": "Заказ №{n} отменён",
       "subjectCompleted": "Как прошёл визит? — заказ №{n}",

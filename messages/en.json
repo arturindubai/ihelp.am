@@ -2399,11 +2399,11 @@
     },
     "order": {
       "cancelled": "❌ Visit cancelled — order #{n}\nService: {serviceName}\nDate: {date}, {time}{feeLine}\nView order: {link}\nQuestions? {contacts}",
-      "completed": "⭐ Visit completed — order #{n}\nPro: {masterName}. Your review helps other customers.\nLeave a review: {reviewLink}\nQuestions? {contacts}",
+      "completed": "⭐ Visit completed — order #{n}\nPro: {masterName}. Your review helps other customers.\nLeave a review: {reviewLink}\nView order: {link}\nQuestions? {contacts}",
       "created": "✅ Order #{n} confirmed\n{serviceName}, {date}, {time}\nAddress: {address}\nPro: {masterLine}\nTotal: {price}\nView order: {link}\nQuestions? {contacts}",
       "masterAssigned": "👷 Pro assigned — order #{n}\n{serviceName}, {date} at {time}\nPro: {masterName}\nView order: {link}\nQuestions? {contacts}",
       "onWay": "🚗 Your pro is on the way — order #{n}\n{masterName} is heading to you. Estimated arrival: {eta} min.\nView order: {link}\nQuestions? {contacts}",
-      "orderCancelled": "❌ Order #{n} cancelled\nService: {serviceName}\nDate: {date}, {time}{feeLine}\nQuestions? {contacts}",
+      "orderCancelled": "❌ Order #{n} cancelled\nService: {serviceName}\nDate: {date}, {time}{feeLine}\nView order: {link}\nQuestions? {contacts}",
       "rescheduled": "🔄 Visit rescheduled — order #{n}\n{serviceName}\nNew date: {date}, {time}\nAddress unchanged: {address}\nView order: {link}\nQuestions? {contacts}",
       "subjectCancelled": "Order #{n} cancelled",
       "subjectCompleted": "How was your visit? — order #{n}",
