@@ -57,6 +57,7 @@ export async function getReviewToken(token: string) {
           master: { select: { name: true, photo: true } },
           order: {
             select: {
+              id: true,
               service: { select: { title: true, slug: true } },
             },
           },

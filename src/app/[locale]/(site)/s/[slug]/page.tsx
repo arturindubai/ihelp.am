@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { ArrowLeft, ChevronDown, Check, CalendarClock } from "lucide-react";
+import { ArrowLeft, ChevronDown, Check, CalendarClock, AlertCircle } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { getMastersForService, getServiceReviews, loadServiceRaw, localizeService } from "@/server/services/catalog";
 import { isFirstOrder } from "@/server/services/booking";
@@ -29,19 +29,18 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   return meta;
 }
 
-export default async function ServicePage({ params, searchParams }: { params: Promise<{ locale: string; slug: string }>; searchParams: Promise<{ plan?: string }> }) {
+export default async function ServicePage({ params, searchParams }: { params: Promise<{ locale: string; slug: string }>; searchParams: Promise<{ plan?: string; unavailable?: string }> }) {
   const { locale, slug } = await params;
-  const { plan } = await searchParams;
+  const { plan, unavailable } = await searchParams;
   setRequestLocale(locale);
   const raw = await loadServiceRaw(slug);
   if (!raw) notFound();
   const s = localizeService(raw, locale);
-  const [user, settings, reviews, masters, t, tc] = await Promise.all([getCurrentUser(), getSettings(), getServiceReviews(raw.id), getMastersForService(raw.id), getTranslations("service"), getTranslations("common")]);
+  const [user, settings, reviews, masters, t, tc, tcat] = await Promise.all([getCurrentUser(), getSettings(), getServiceReviews(raw.id), getMastersForService(raw.id), getTranslations("service"), getTranslations("common"), getTranslations("catalog")]);
   const first = await isFirstOrder(user?.id);
   const minPrice = Math.min(...s.groups.filter((g) => g.isDuration).flatMap((g) => g.options.map((o) => o.price)), Infinity);
 
   if (raw.comingSoon) {
-    const tcat = await getTranslations("catalog");
     const notifyStrings = {
       notifyTitle: tcat("notifyTitle"),
       notifySubtitle: tcat("notifySubtitle"),
@@ -55,6 +54,12 @@ export default async function ServicePage({ params, searchParams }: { params: Pr
     };
     return (
       <div className="container-m">
+        {unavailable === "1" && (
+          <div className="mt-4 flex items-start gap-2 rounded-lg bg-warn-50 p-3 text-sm text-warn">
+            <AlertCircle size={16} className="mt-0.5 shrink-0" />
+            <span>{tcat("serviceUnavailable")} <Link href="/services" className="link ml-1">{tcat("allServices")}</Link></span>
+          </div>
+        )}
         <div className="relative -mx-4">
           {s.bannerImage ? <div className="relative aspect-[16/9] w-full"><Img src={s.bannerImage} fill sizes="(max-width: 768px) 100vw, 768px" className="object-cover" /></div> : <div className="h-14" />}
           <Link href="/" className="absolute top-3 left-3 grid size-9 place-items-center rounded-full bg-paper shadow" aria-label={tc("back")}>
@@ -89,6 +94,13 @@ export default async function ServicePage({ params, searchParams }: { params: Pr
           <ArrowLeft size={18} />
         </Link>
       </div>
+
+      {unavailable === "1" && (
+        <div className="mt-4 flex items-start gap-2 rounded-lg bg-warn-50 p-3 text-sm text-warn">
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <span>{tcat("reorderUnavailable")}</span>
+        </div>
+      )}
 
       <div className="mt-3 flex flex-wrap gap-2">
         <span className="chip"><Check size={13} />{t("guarantee1")}</span>

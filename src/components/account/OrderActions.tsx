@@ -1,14 +1,14 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
-import { Star } from "lucide-react";
+import { Star, RotateCcw } from "lucide-react";
 import { Link, useRouter } from "@/i18n/navigation";
 import { cancelOrderAction, cancelVisitAction, pauseOrderAction, rescheduleInfoAction, rescheduleVisitAction, resumeOrderAction, reviewAction } from "@/server/actions/account";
 import { Sheet } from "@/components/ui/Sheet";
 import { SlotPicker, type SlotMaster } from "@/components/booking/SlotPicker";
 import { addDays, ymd } from "@/lib/time";
 
-export function OrderActions({ order }: { order: { id: string; kind: string; status: string } }) {
+export function OrderActions({ order }: { order: { id: string; kind: string; status: string; serviceSlug?: string } }) {
   const t = useTranslations("order");
   const tc = useTranslations("common");
   const router = useRouter();
@@ -23,6 +23,11 @@ export function OrderActions({ order }: { order: { id: string; kind: string; sta
       {order.kind === "SUBSCRIPTION" && order.status === "ACTIVE" && <button className="btn-outline btn-sm" onClick={() => setPause(true)}>{t("pause")}</button>}
       {order.kind === "SUBSCRIPTION" && order.status === "PAUSED" && <button className="btn-dark btn-sm" disabled={pending} onClick={() => run(() => resumeOrderAction(order.id))}>{t("resume")}</button>}
       {order.kind !== "ONE_TIME" && <button className="btn-danger btn-sm" onClick={() => setConfirm(true)}>{order.kind === "SUBSCRIPTION" ? t("cancelSubscription") : t("cancelOrder")}</button>}
+      {order.kind === "ONE_TIME" && order.status === "ACTIVE" && order.serviceSlug && (
+        <Link href={`/book/${order.serviceSlug}?reorder=${order.id}`} className="btn-outline btn-sm flex items-center gap-1">
+          <RotateCcw size={14} />{t("bookAgain")}
+        </Link>
+      )}
 
       <Sheet open={confirm} onClose={() => setConfirm(false)} title={t("cancelConfirm")} footer={<div className="flex gap-2"><button className="btn-outline flex-1" onClick={() => setConfirm(false)}>{tc("no")}</button><button className="btn-primary flex-1 bg-bad" disabled={pending} onClick={() => run(() => cancelOrderAction(order.id))}>{tc("yes")}</button></div>}>
         <span />
@@ -212,10 +217,17 @@ export function OrderTrackerActions({
       )}
       {thanks && <p className="text-sm text-ok">{t("reviewThanks")}</p>}
 
-      {/* Заказать снова */}
+      {/* Заказать снова (завершённый/отменённый заказ) */}
       {isDone && (
-        <Link href={`/book/${order.serviceSlug}`} className="btn-outline flex w-full items-center justify-center">
-          {t("bookAgain")}
+        <Link href={`/book/${order.serviceSlug}?reorder=${order.id}`} className="btn-outline flex w-full items-center justify-center gap-2">
+          <RotateCcw size={16} />{t("bookAgain")}
+        </Link>
+      )}
+
+      {/* Заказать снова (активный разовый заказ) */}
+      {isActive && order.kind === "ONE_TIME" && (
+        <Link href={`/book/${order.serviceSlug}?reorder=${order.id}`} className="btn-outline btn-sm flex items-center justify-center gap-1">
+          <RotateCcw size={14} />{t("bookAgain")}
         </Link>
       )}
 

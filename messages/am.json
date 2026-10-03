@@ -1183,6 +1183,7 @@
     "masterBusy": "",
     "noCallLabel": "",
     "noSlots": "",
+    "paramChanged": "",
     "payFirst": "",
     "payNow": "",
     "payment": "",
@@ -1190,6 +1191,7 @@
     "phoneRequiredBody": "",
     "pickDays": "",
     "pickDaysHint": "",
+    "priceUpdated": "",
     "promo": "",
     "promoApplied": "",
     "promoErrors": {
@@ -1240,6 +1242,7 @@
     "total": ""
   },
   "catalog": {
+    "allServices": "",
     "arrivalToday": "",
     "arrivalWithin": "",
     "badgeNew": "",
@@ -1273,6 +1276,8 @@
     "notifySuccess": "Граíвац ек! Кцануценк, ерп амрагумы бацви:",
     "notifyTitle": "Цануцел горцаркман масин",
     "notifyTooMany": "Чафазанc шат хайтер, хнтрум енк брзел авели уш",
+    "reorderUnavailable": "",
+    "serviceUnavailable": "",
     "writeWhatsApp": "Գрел WhatsApp-ում"
   },
   "common": {

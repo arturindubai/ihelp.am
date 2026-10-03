@@ -28,6 +28,48 @@ export interface OrderDraft {
   noCall: boolean;
 }
 
+/** Черновик для повторного заказа из конкретного заказа */
+export interface ReorderDraft extends OrderDraft {
+  masterId: string | null;
+  pricePerVisit: number;
+  configOptions: { optionId: string; optionTitle: unknown }[];
+}
+
+/** Возвращает черновик для повторного заказа по конкретному orderId; null если заказ не найден или чужой */
+export async function getOrderDraftById(orderId: string, userId: string): Promise<ReorderDraft | null> {
+  const order = await db.order.findFirst({
+    where: { id: orderId, userId },
+    select: { config: true, planId: true, addressId: true, paymentMethod: true, comment: true, noCall: true, preferredMasterId: true, pricePerVisit: true },
+  });
+  if (!order) return null;
+
+  const config = order.config as Record<string, unknown> | null;
+  const serviceSlug = (config?.service as Record<string, unknown> | undefined)?.slug;
+  if (typeof serviceSlug !== "string") return null;
+
+  const rawOptions = config?.options;
+  const configOptions = Array.isArray(rawOptions)
+    ? (rawOptions as Record<string, unknown>[]).map((o) => ({
+        optionId: typeof o.optionId === "string" ? o.optionId : "",
+        optionTitle: o.option ?? null,
+      })).filter((o) => o.optionId)
+    : [];
+  const optionIds = configOptions.map((o) => o.optionId);
+
+  return {
+    serviceSlug,
+    optionIds,
+    configOptions,
+    planId: order.planId,
+    addressId: order.addressId,
+    paymentMethod: order.paymentMethod,
+    comment: order.comment,
+    noCall: order.noCall,
+    masterId: order.preferredMasterId,
+    pricePerVisit: order.pricePerVisit,
+  };
+}
+
 /** Возвращает черновик оформления на основе последнего заказа клиента; null если заказов нет */
 export async function getLastOrderDraft(userId: string): Promise<OrderDraft | null> {
   const order = await db.order.findFirst({

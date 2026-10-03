@@ -31,6 +31,7 @@ export default async function ReviewTokenPage({ params }: { params: Promise<{ lo
   const service = rt.visit.order.service;
   const serviceTitle = tr(service.title, locale);
   const serviceSlug = service.slug;
+  const orderId = rt.visit.order.id;
   const visitDateLabel = rt.visit.scheduledAt
     ? dateLabel(rt.visit.scheduledAt, locale, { day: "numeric", month: "long" })
     : "";
@@ -47,6 +48,7 @@ export default async function ReviewTokenPage({ params }: { params: Promise<{ lo
         serviceTitle={serviceTitle}
         visitDateLabel={visitDateLabel}
         serviceSlug={serviceSlug}
+        orderId={orderId}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Banknote, CreditCard, Tag, Check, UsersRound, ArrowLeft, ChevronLeft, ChevronRight, X, Smartphone, Send, MessageCircle } from "lucide-react";
+import { Banknote, CreditCard, Tag, Check, UsersRound, ArrowLeft, ChevronLeft, ChevronRight, X, Smartphone, Send, MessageCircle, AlertCircle } from "lucide-react";
 import { useRouter, Link } from "@/i18n/navigation";
 import { calculatePrice, type PricePromo, type PricingRules } from "@/lib/pricing";
 import { amd, cn, dateLabel, durationLabel } from "@/lib/format";
@@ -67,6 +67,14 @@ export function Checkout(props: {
   defaultAddressId?: string | null;
   /** Предвыбранный способ оплаты из последнего заказа */
   defaultPaymentMethod?: "CASH" | "CARD" | null;
+  /** Предзаполнение «Не звонить» из прошлого заказа (reorder) */
+  defaultNoCall?: boolean;
+  /** Предвыбор мастера из прошлого заказа (reorder) */
+  defaultMasterId?: string | null;
+  /** Цена прошлого заказа для баннера «Цена обновилась» (reorder) */
+  reorderOldPrice?: number | null;
+  /** Названия недоступных параметров из прошлого заказа для предупреждения (reorder) */
+  unavailableParams?: string[];
   /** Телефон подтверждён OTP — можно создавать заказ */
   phoneConfirmed: boolean;
   /** Email подтверждён — не показываем напоминание */
@@ -97,7 +105,7 @@ export function Checkout(props: {
   const [time, setTime] = useState<string>();
   const [slotRace, setSlotRace] = useState(false);
   const [masterId, setMasterId] = useState<string | null>(null);
-  const [filterMasterId, setFilterMasterId] = useState<string | null>(null);
+  const [filterMasterId, setFilterMasterId] = useState<string | null>(() => props.defaultMasterId ?? null);
   const [masterSheetSlot, setMasterSheetSlot] = useState<string | null>(null);
   const [masterSheetChoice, setMasterSheetChoice] = useState<string | null>(null);
   const [weekdays, setWeekdays] = useState<number[]>([]);
@@ -109,7 +117,7 @@ export function Checkout(props: {
   const [promoInput, setPromoInput] = useState("");
   const [promo, setPromo] = useState<PricePromo | null>(null);
   const [promoMsg, setPromoMsg] = useState<{ ok: boolean; text: string }>();
-  const [noCall, setNoCall] = useState(false);
+  const [noCall, setNoCall] = useState(() => props.defaultNoCall ?? false);
   const [comment, setComment] = useState("");
   const [error, setError] = useState<string>();
   const [pending, start] = useTransition();
@@ -254,6 +262,18 @@ export function Checkout(props: {
           </div>
         </div>
       </div>
+
+      {/* Предупреждение о недоступных параметрах прошлого заказа (reorder) */}
+      {props.unavailableParams && props.unavailableParams.length > 0 && (
+        <div className="container-m pt-3">
+          {props.unavailableParams.map((param) => (
+            <div key={param} className="mb-2 flex items-start gap-2 rounded-lg bg-warn-50 p-3 text-sm text-warn">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <span>{t("paramChanged", { param })}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Мягкое напоминание добавить email — только у пользователей с телефоном но без email */}
       {props.phoneConfirmed && !props.emailVerified && !emailBannerDismissed && (
@@ -630,6 +650,16 @@ export function Checkout(props: {
               <p className="text-xs text-muted">{ts("thenPerVisit", { price: amd(price.regular.price) })}</p>
             )}
           </dl>
+
+          {/* Баннер «Цена обновилась» при повторном заказе */}
+          {props.reorderOldPrice != null && props.reorderOldPrice !== price.regular.price && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg border border-warn bg-warn-50 px-3 py-2 text-sm text-warn">
+              <AlertCircle size={16} className="shrink-0" />
+              <span>
+                {t("priceUpdated", { newPrice: String(price.regular.price), oldPrice: String(props.reorderOldPrice) })}
+              </span>
+            </div>
+          )}
 
           {/* Блок экономии */}
           {props.isFirstOrder && price.first.discount > 0 && price.regular.discount > 0 && (
