@@ -35,6 +35,48 @@ export async function boardTasks(opts: { closed?: boolean } = {}) {
   }));
 }
 
+/** Все задачи бизнес-дорожки, сгруппированные по статусу. Группа «Сделано» — последние 10 */
+export async function businessTasksByStatus() {
+  const tasks = await db.task.findMany({
+    orderBy: [{ priority: "asc" }, { sort: "asc" }],
+    select: { key: true, title: true, priority: true, status: true, layer: true, area: true, owner: true, track: true, source: true, doneAt: true },
+  });
+  const business = tasks.filter((t) => laneOf(t) === "business");
+  const by = (statuses: string[]) => business.filter((t) => statuses.includes(t.status));
+  const done = by(["done"]).sort((a, b) => (b.doneAt?.getTime() ?? 0) - (a.doneAt?.getTime() ?? 0));
+  return {
+    total: business.length,
+    doneTotal: done.length,
+    groups: [
+      { id: "backlog", tasks: by(["backlog"]) },
+      { id: "ready", tasks: by(["ready"]) },
+      { id: "in_progress", tasks: by(["in_progress", "blocked"]) },
+      { id: "review", tasks: by(["review"]) },
+      { id: "done", tasks: done.slice(0, 10) },
+    ].filter((g) => g.tasks.length > 0),
+  };
+}
+
+/** Задачи бизнес-дорожки, ожидающие ответа владельца */
+export async function businessNeedsOwner() {
+  const tasks = await db.task.findMany({
+    where: { status: "blocked", blockedOn: { in: ["owner", "product"] } },
+    orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
+    select: { key: true, title: true, priority: true, layer: true, area: true, owner: true, track: true, source: true, blockedReason: true, updatedAt: true },
+  });
+  return tasks.filter((t) => laneOf(t) === "business");
+}
+
+/** Согласования бизнес-дорожки: некод-задачи на проверке */
+export async function businessApprovals() {
+  const tasks = await db.task.findMany({
+    where: { status: "review", layer: "none" },
+    orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
+    select: { key: true, title: true, priority: true, layer: true, area: true, owner: true, track: true, source: true, updatedAt: true, ownerSummary: true, _count: { select: { attachments: true } }, comments: { where: { kind: "report" }, orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, createdAt: true } } },
+  });
+  return tasks.filter((t) => laneOf(t) === "business");
+}
+
 export type BoardTask = Awaited<ReturnType<typeof boardTasks>>[number];
 
 /** Счётчики вкладок */
@@ -287,9 +329,9 @@ export async function approvals() {
   const tasks = await db.task.findMany({
     where: { status: "review", layer: "none" },
     orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
-    select: { key: true, title: true, priority: true, updatedAt: true, ownerSummary: true, nextSteps: true, _count: { select: { attachments: true } }, comments: { where: { kind: "report" }, orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, createdAt: true } } },
+    select: { key: true, title: true, priority: true, area: true, owner: true, track: true, source: true, updatedAt: true, ownerSummary: true, nextSteps: true, _count: { select: { attachments: true } }, comments: { where: { kind: "report" }, orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, createdAt: true } } },
   });
-  return tasks.map((t) => ({ ...t, lane: laneOf({ key: t.key, layer: "none" }) }));
+  return tasks.map((t) => ({ ...t, lane: laneOf({ ...t, layer: "none" }) }));
 }
 
 /** Согласования продакта: некод-задачи дорожки product на проверке. Аналог approvals(), но только product-дорожка */
@@ -297,7 +339,7 @@ export async function productApprovals() {
   const tasks = await db.task.findMany({
     where: { status: "review", layer: "none" },
     orderBy: [{ priority: "asc" }, { updatedAt: "asc" }],
-    select: { key: true, title: true, priority: true, layer: true, updatedAt: true, ownerSummary: true, source: true, _count: { select: { attachments: true } }, comments: { where: { kind: "report" }, orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, createdAt: true } } },
+    select: { key: true, title: true, priority: true, layer: true, area: true, owner: true, track: true, source: true, updatedAt: true, ownerSummary: true, _count: { select: { attachments: true } }, comments: { where: { kind: "report" }, orderBy: { createdAt: "desc" }, take: 1, select: { author: true, text: true, createdAt: true } } },
   });
   return tasks.filter((t) => laneOf(t) === "product");
 }
@@ -305,9 +347,8 @@ export async function productApprovals() {
 /** Все задачи дорожки product, сгруппированные по статусу. Группа «Сделано» — последние 10 */
 export async function productTasksByStatus() {
   const tasks = await db.task.findMany({
-    where: { layer: "none" },
     orderBy: [{ priority: "asc" }, { sort: "asc" }],
-    select: { key: true, title: true, priority: true, status: true, layer: true, source: true, doneAt: true },
+    select: { key: true, title: true, priority: true, status: true, layer: true, area: true, owner: true, track: true, source: true, doneAt: true },
   });
   const product = tasks.filter((t) => laneOf(t) === "product");
   const by = (statuses: string[]) => product.filter((t) => statuses.includes(t.status));

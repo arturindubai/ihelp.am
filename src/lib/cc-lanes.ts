@@ -1,24 +1,53 @@
 /**
  * Дорожки и этапы потока бэклога Control Center — по образцу Command Center LIA.
- * Дорожка — кто исполняет задачу (разработка, инфраструктура, продукт…), этап потока — где задача сейчас
- * в конвейере «триаж → очередь → работа → тест → деплоер». Отдельных полей в базе нет: всё выводится из задачи.
+ * Дорожка — кто исполняет задачу (бизнес, разработка, продукт…), этап потока — где задача сейчас
+ * в конвейере «триаж → очередь → работа → тест → деплоер». Дорожка хранится явно в Task.track;
+ * если не задана — вычисляется по trackDefault из ключа, слоя, области и владельца.
  */
 
-export const LANES = ["inbox", "dev", "bugs", "infra", "design", "product"] as const;
-export type Lane = (typeof LANES)[number];
+export const TRACKS = ["business", "dev", "product", "design", "bugs", "inbox"] as const;
+export type Track = (typeof TRACKS)[number];
+
+/** Алиас для совместимости: во всём коде lane === track */
+export const LANES = TRACKS;
+export type Lane = Track;
 
 /** Префиксы ключей, которые идут в дорожку «Ошибки и аудит» */
 const BUG_PREFIXES = ["AUD", "RISK", "BUG"];
 
-type LaneShape = { key: string; layer: string; source?: string | null };
+/** Области, которые всегда идут в «Бизнес» независимо от слоя */
+const BIZ_AREAS = ["legal", "pay", "team", "seo"];
 
-export function laneOf(t: LaneShape): Lane {
+type LaneShape = { key: string; layer: string; area?: string; owner?: string; track?: string | null; source?: string | null };
+
+/**
+ * Дорожка задачи: если явное значение сохранено в Task.track — берём его,
+ * иначе вычисляем по умолчанию.
+ */
+export function laneOf(t: LaneShape): Track {
+  if (t.track && (TRACKS as readonly string[]).includes(t.track)) return t.track as Track;
+  return trackDefault(t);
+}
+
+/**
+ * Правило умолчания для дорожки (используется при первичном назначении триажем
+ * и в скрипте миграции set-tracks.mjs):
+ *   prefix IN / source=intake → inbox
+ *   BUG/AUD/RISK             → bugs
+ *   DSN                      → design
+ *   area legal/pay/team/seo
+ *   или layer=none, owner=product → business
+ *   layer=none, owner=tech        → product
+ *   иначе                         → dev (включает старую infra)
+ */
+export function trackDefault(t: Omit<LaneShape, "track">): Track {
   const prefix = t.key.split("-")[0];
   if (prefix === "IN" || t.source === "intake") return "inbox";
-  if (prefix === "DSN") return "design";
   if (BUG_PREFIXES.includes(prefix)) return "bugs";
-  if (t.layer === "none") return "product";
-  if (t.layer === "infra") return "infra";
+  if (prefix === "DSN") return "design";
+  if (BIZ_AREAS.includes(t.area ?? "")) return "business";
+  if (t.layer === "none" && t.owner === "product") return "business";
+  if (t.layer === "none" && t.owner === "tech") return "product";
   return "dev";
 }
 

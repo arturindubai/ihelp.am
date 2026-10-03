@@ -3,7 +3,7 @@ import { useState, useEffect, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { ccSaveTaskAction } from "@/server/actions/admin/cc";
-import { AREAS, LAYERS, OWNERS, PRIORITIES, STAGES } from "@/lib/backlog-labels";
+import { AREAS, LAYERS, OWNERS, PRIORITIES, STAGES, TRACK_LABELS } from "@/lib/backlog-labels";
 import { TextInput } from "@/components/admin/fields";
 
 export interface TaskFormValue {
@@ -28,6 +28,7 @@ export interface TaskFormValue {
   scope: string;
   mockupRequired: boolean;
   mockupUrl: string;
+  track: string;
 }
 
 export const EMPTY_TASK: TaskFormValue = {
@@ -52,6 +53,7 @@ export const EMPTY_TASK: TaskFormValue = {
   scope: "",
   mockupRequired: false,
   mockupUrl: "",
+  track: "",
 };
 
 const toLines = (v: string) => v.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -142,6 +144,7 @@ export function TaskEditorForm({ initial, isNew, epics }: { initial: TaskFormVal
           scope: toLines(v.scope),
           mockupRequired: v.mockupRequired,
           mockupUrl: v.mockupUrl || null,
+          track: v.track || null,
         },
         isNew,
       );
@@ -177,6 +180,7 @@ export function TaskEditorForm({ initial, isNew, epics }: { initial: TaskFormVal
         {select("priority", PRIORITIES, t("priority"))}
         {select("stage", STAGES, t("stage"))}
         {select("owner", OWNERS, t("owner"))}
+        {select("track", TRACK_LABELS, t("track"))}
       </div>
       <TextInput label={t("form.estimate")} value={v.estimate} onChange={(x) => set({ estimate: x.toUpperCase() })} hint={t("form.estimateHint")} />
       <div className="flex flex-col gap-2">

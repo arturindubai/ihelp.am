@@ -5,7 +5,7 @@ import { cn } from "@/lib/format";
 /** Параметры адреса пульта: вкладка, открытая задача и фильтры вкладки */
 export type CcSearch = Partial<Record<string, string>>;
 
-export const TABS = ["backlog", "you", "dev", "deployer", "plans", "approvals", "design", "product", "workers", "activity", "done", "notify"] as const;
+export const TABS = ["backlog", "you", "dev", "deployer", "plans", "approvals", "design", "product", "business", "workers", "activity", "done", "notify"] as const;
 export type Tab = (typeof TABS)[number];
 
 export function ccHref(sp: CcSearch, patch: CcSearch) {
@@ -19,9 +19,9 @@ export const LANE_DOT: Record<string, string> = {
   inbox: "bg-cta",
   dev: "bg-brand",
   bugs: "bg-bad",
-  infra: "bg-ink",
   design: "bg-warn",
   product: "bg-ok",
+  business: "bg-ink",
 };
 
 export const FLOW_TONE: Record<string, string> = {

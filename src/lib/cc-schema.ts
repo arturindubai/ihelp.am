@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AREAS, LAYERS, OWNERS, PRIORITIES, STAGES } from "./backlog-labels";
+import { TRACKS } from "./cc-lanes";
 
 /** Проверка содержимого задачи — одна для формы в админке и для API рабочих сессий */
 const lines = z.array(z.string().max(500)).max(20);
@@ -34,6 +35,7 @@ export const taskContentSchema = z.object({
     .optional(),
   screenRequirements: z.string().max(5000).nullable().optional(),
   needsDesign: z.boolean().nullable().optional(),
+  track: z.enum(TRACKS).nullable().optional(),
 });
 
 export type TaskContentInput = z.infer<typeof taskContentSchema>;

@@ -227,11 +227,11 @@
         },
         "lanes": {
           "bugs": "Bugs & audit",
+          "business": "Business",
           "design": "Design",
           "dev": "Development",
           "inbox": "Inbox",
-          "infra": "Infrastructure",
-          "product": "Product & content"
+          "product": "Product"
         },
         "showClosed": "closed",
         "size": "Size",
@@ -257,6 +257,23 @@
       },
       "backlogInCode": "Backlog tasks",
       "backup": "Database backup",
+      "businessTab": {
+        "allByStatus": "All roadmap tasks · {n}",
+        "allEmpty": "No tasks on the Business roadmap",
+        "doneLink": "Showing last {n} · see all",
+        "groups": {
+          "backlog": "Backlog",
+          "done": "Done",
+          "in_progress": "In progress",
+          "ready": "In queue",
+          "review": "In review"
+        },
+        "needsOwner": "Awaiting owner · {n}",
+        "needsOwnerHint": "Business tasks blocked on owner or product.",
+        "pending": "Pending approval · {n}",
+        "pendingHint": "Non-code Business tasks in review by you",
+        "subtitle": "Legal, partnerships, accounts, finances, content: everything that needs owner decisions."
+      },
       "blockedReason": "Blocked reason",
       "blocking": "Blocks",
       "claimed": "Claimed by agent {agent} until {until}",
@@ -1015,12 +1032,14 @@
       },
       "status": "Status",
       "subtitle": "Project dashboard: backlog, workers and their queues, triage, approvals, deploys",
+      "track": "Track",
       "system": "System status",
       "systemToggle": "System progress and status",
       "tabs": {
         "activity": "Activity",
         "approvals": "Approvals",
         "backlog": "Backlog",
+        "business": "Business",
         "deployer": "Deployer",
         "design": "Design",
         "dev": "In development",
