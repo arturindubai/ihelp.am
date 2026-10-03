@@ -15,6 +15,7 @@ import { getEmailBannerHtml } from "./banners";
 import { loadMessages } from "@/i18n/messages";
 import defaultTemplates from "../../../messages/ru.json";
 import enMessages from "../../../messages/en.json";
+import type { ExpiringPackage } from "./packages";
 
 const APP_URL = () => (process.env.APP_URL || "https://ihelp.am").replace(/\/$/, "");
 
@@ -535,6 +536,7 @@ export async function sendVisitReminders(now: Date): Promise<number> {
       scheduledAt: true,
       order: {
         select: {
+          id: true,
           number: true,
           config: true,
           addressSnapshot: true,
@@ -562,13 +564,15 @@ export async function sendVisitReminders(now: Date): Promise<number> {
     }
 
     const locale = v.order.locale || "ru";
+    const tmpl = clientTemplates(locale);
     const ch = await selectClientChannel(v.order.user);
     if (ch.channel === "none") {
+      await db.clientMessage.create({
+        data: { orderId: v.order.id, visitId: v.id, event: "noChannel", subject: tmpl.reminder.subject, channel: "none", delivered: false },
+      }).catch(() => {});
       await db.visit.update({ where: { id: v.id }, data: { remindedAt: new Date() } });
       continue;
     }
-
-    const tmpl = clientTemplates(locale);
     const brand = (await getSettings()).brand.name || "iHelp";
     const service = serviceTitle(v.order.config, locale);
     const date = dateLabel(v.scheduledAt, locale);
@@ -660,13 +664,15 @@ export async function sendReviewRequests(now: Date): Promise<number> {
     if (!v.order.user) continue;
 
     const locale = v.order.locale || "ru";
+    const tmpl = clientTemplates(locale);
     const ch = await selectClientChannel(v.order.user);
     if (ch.channel === "none") {
+      await db.clientMessage.create({
+        data: { orderId: v.order.id, visitId: v.id, event: "noChannel", subject: tmpl.review.subject, channel: "none", delivered: false },
+      }).catch(() => {});
       await db.visit.update({ where: { id: v.id }, data: { reviewRequestedAt: new Date() } });
       continue;
     }
-
-    const tmpl = clientTemplates(locale);
     const brand = (await getSettings()).brand.name || "iHelp";
     const reviewToken = await createReviewToken(v.id);
     const reviewUrl = `${APP_URL()}/${locale}/review/${reviewToken}`;
@@ -731,6 +737,7 @@ export async function sendVisit2hReminders(now: Date): Promise<number> {
       clientNotifiedEvents: true,
       order: {
         select: {
+          id: true,
           number: true,
           config: true,
           addressSnapshot: true,
@@ -757,10 +764,16 @@ export async function sendVisit2hReminders(now: Date): Promise<number> {
     if (liveVisit.clientNotifiedEvents.includes("reminder2h")) continue;
 
     const locale = v.order.locale || "ru";
-    const ch = await selectClientChannel(v.order.user);
-    if (ch.channel === "none") continue;
-
     const tmpl = clientTemplates(locale);
+    const ch = await selectClientChannel(v.order.user);
+    if (ch.channel === "none") {
+      await db.clientMessage.create({
+        data: { orderId: v.order.id, visitId: v.id, event: "noChannel", subject: tmpl.reminder2h.subject, channel: "none", delivered: false },
+      }).catch(() => {});
+      await db.visit.update({ where: { id: v.id }, data: { clientNotifiedEvents: { push: "reminder2h" } } });
+      continue;
+    }
+
     const brand = (await getSettings()).brand.name || "iHelp";
     const service = serviceTitle(v.order.config, locale);
     const date = dateLabel(v.scheduledAt, locale);
@@ -815,4 +828,130 @@ export async function sendVisit2hReminders(now: Date): Promise<number> {
     }
   }
   return sent;
+}
+
+/** Строка с контактами поддержки из настроек (phone, whatsapp или telegram) */
+async function supportContacts(): Promise<string> {
+  const s = await getSettings();
+  const parts: string[] = [];
+  if (s.brand.phone) parts.push(s.brand.phone);
+  if (s.brand.whatsapp && s.brand.whatsapp !== s.brand.phone) parts.push(`WhatsApp: ${s.brand.whatsapp}`);
+  if (s.brand.telegram) parts.push(`Telegram: ${s.brand.telegram}`);
+  return parts.join(", ") || "поддержка iHelp";
+}
+
+/** 9. Предупреждение об истечении пакета (за 7 или 2 дня до даты). */
+export async function notifyClientPackageExpiring(pkg: ExpiringPackage, daysLeft: number): Promise<void> {
+  try {
+    const locale = pkg.userLocale;
+    const tmpl = await getOrderTemplates();
+    const link = `${APP_URL()}/${locale}/account/orders`;
+    const text = fill(tmpl.packageExpiring, {
+      serviceName: pkg.packageName,
+      remaining: String(pkg.remainingVisits),
+      expiresDate: ymd(pkg.expiresAt),
+      link,
+    });
+    const subject = fill(tmpl.subjectPackageExpiring, {
+      serviceName: pkg.packageName,
+      days: String(daysLeft),
+    });
+    await sendToClient(pkg.userId, text, subject, "client:packageExpiring", {
+      orderId: pkg.orderId,
+      event: `packageExpiring:${daysLeft}`,
+    }, locale);
+  } catch (e) {
+    console.error("[bookingNotify:packageExpiring] ошибка", e);
+  }
+}
+
+/** 10. Уведомление клиенту об истечении пакета (в день закрытия). */
+export async function notifyClientPackageExpired(orderId: string, unused: number): Promise<void> {
+  try {
+    const order = await db.order.findUnique({
+      where: { id: orderId },
+      select: { userId: true, config: true, expiresAt: true, locale: true },
+    });
+    if (!order) return;
+    const locale = order.locale || "ru";
+    const tmpl = await getOrderTemplates();
+    const contacts = await supportContacts();
+    const text = fill(tmpl.packageExpired, {
+      serviceName: serviceTitle(order.config),
+      expiresDate: ymd(order.expiresAt ?? new Date()),
+      remaining: String(unused),
+      contacts,
+    });
+    const subject = fill(tmpl.subjectPackageExpired, {
+      serviceName: serviceTitle(order.config),
+    });
+    await sendToClient(order.userId, text, subject, "client:packageExpired", {
+      orderId,
+      event: "packageExpired",
+    }, locale);
+  } catch (e) {
+    console.error("[bookingNotify:packageExpired] ошибка", e);
+  }
+}
+
+/** 11. Уведомление клиенту о паузе подписки. */
+export async function notifyClientSubPaused(orderId: string, pausedUntil: Date, nextVisitAt: Date | null): Promise<void> {
+  try {
+    const order = await db.order.findUnique({
+      where: { id: orderId },
+      select: { userId: true, config: true, locale: true },
+    });
+    if (!order) return;
+    const locale = order.locale || "ru";
+    const tmpl = await getOrderTemplates();
+    const pauseDate = dateLabel(pausedUntil, locale, { day: "numeric", month: "long" });
+    let text: string;
+    if (nextVisitAt) {
+      const nextDate = dateLabel(nextVisitAt, locale, { day: "numeric", month: "long" });
+      const nextTime = hm(nextVisitAt);
+      text = fill(tmpl.subPaused, {
+        serviceName: serviceTitle(order.config),
+        pauseDate,
+        nextDate,
+        nextTime,
+      });
+    } else {
+      text = fill(tmpl.subPausedNoNext, {
+        serviceName: serviceTitle(order.config),
+        pauseDate,
+      });
+    }
+    const subject = fill(tmpl.subjectSubPaused, { pauseDate });
+    await sendToClient(order.userId, text, subject, "client:subPaused", { orderId, event: "subPaused" }, locale);
+  } catch (e) {
+    console.error("[bookingNotify:subPaused] ошибка", e);
+  }
+}
+
+/** 12. Уведомление клиенту о возобновлении подписки. */
+export async function notifyClientSubResumed(orderId: string, nextVisitAt: Date | null): Promise<void> {
+  try {
+    const order = await db.order.findUnique({
+      where: { id: orderId },
+      select: { userId: true, config: true, locale: true },
+    });
+    if (!order) return;
+    const locale = order.locale || "ru";
+    const tmpl = await getOrderTemplates();
+    let text: string;
+    if (nextVisitAt) {
+      const nextDate = dateLabel(nextVisitAt, locale, { day: "numeric", month: "long" });
+      const nextTime = hm(nextVisitAt);
+      text = fill(tmpl.subResumed, {
+        serviceName: serviceTitle(order.config),
+        nextDate,
+        nextTime,
+      });
+    } else {
+      text = fill(tmpl.subResumedNoNext, { serviceName: serviceTitle(order.config) });
+    }
+    await sendToClient(order.userId, text, tmpl.subjectSubResumed, "client:subResumed", { orderId, event: "subResumed" }, locale);
+  } catch (e) {
+    console.error("[bookingNotify:subResumed] ошибка", e);
+  }
 }

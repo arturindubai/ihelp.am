@@ -7,7 +7,7 @@ import { getSettings } from "../settings";
 import { html, notifyTeam } from "../notify";
 import { notifyCancelOrderTeam, notifyCancelVisitTeam, notifyRescheduleVisitTeam } from "../services/teamNotify";
 import { notifyMasterCancelled, notifyMasterRescheduled } from "../services/workerNotify";
-import { notifyClientCancelled, notifyClientRescheduled } from "../services/bookingNotify";
+import { notifyClientCancelled, notifyClientRescheduled, notifyClientSubPaused, notifyClientSubResumed } from "../services/bookingNotify";
 import { consumeReviewToken } from "../services/reviews";
 import { headers } from "next/headers";
 import { sendOtp, verifyOtp } from "../otp";
@@ -177,6 +177,12 @@ export async function pauseOrderAction(orderId: string, until: string) {
     db.order.update({ where: { id: o.id }, data: { status: "PAUSED", pausedUntil: untilDate } }),
   ]);
   await notifyTeam(html`⏸ Подписка №${o.number} на паузе до ${until}`);
+  const nextVisit = await db.visit.findFirst({
+    where: { orderId: o.id, status: { in: ["SCHEDULED", "CONFIRMED"] }, scheduledAt: { gte: untilDate } },
+    orderBy: { scheduledAt: "asc" },
+    select: { scheduledAt: true },
+  });
+  await notifyClientSubPaused(o.id, untilDate, nextVisit?.scheduledAt ?? null).catch(() => {});
   return { ok: true };
 }
 
@@ -188,6 +194,13 @@ export async function resumeOrderAction(orderId: string) {
   const { resumeSubscription } = await import("../services/booking");
   await resumeSubscription(o.id, s.booking.subscriptionHorizonDays, s.booking.bufferMin);
   await notifyTeam(html`▶️ Подписка №${o.number} возобновлена`);
+  const now = new Date();
+  const nextVisit = await db.visit.findFirst({
+    where: { orderId: o.id, status: { in: ["SCHEDULED", "CONFIRMED"] }, scheduledAt: { gt: now } },
+    orderBy: { scheduledAt: "asc" },
+    select: { scheduledAt: true },
+  });
+  await notifyClientSubResumed(o.id, nextVisit?.scheduledAt ?? null).catch(() => {});
   return { ok: true };
 }
 

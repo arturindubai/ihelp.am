@@ -3,12 +3,18 @@ import { db } from "@/server/db";
 import { packageWarnWindow } from "@/lib/time";
 
 export type ExpiringPackage = {
+  orderId: string;
   number: number;
   packageName: string;
   clientName: string;
   clientPhone: string | null;
   expiresAt: Date;
   remainingVisits: number;
+  userId: string;
+  userLocale: string;
+  userTelegramId: string | null;
+  userEmail: string | null;
+  userEmailUnsubscribedAt: Date | null;
 };
 
 /**
@@ -20,10 +26,13 @@ export async function findExpiringPackages(now: Date, daysAhead: number): Promis
   const rows = await db.order.findMany({
     where: { kind: "PACKAGE", status: "ACTIVE", expiresAt: { gte: from, lte: to } },
     select: {
+      id: true,
       number: true,
       expiresAt: true,
       config: true,
-      user: { select: { name: true, phone: true } },
+      locale: true,
+      userId: true,
+      user: { select: { name: true, phone: true, telegramId: true, email: true, emailUnsubscribedAt: true } },
       visits: { select: { status: true } },
     },
   });
@@ -40,12 +49,18 @@ export async function findExpiringPackages(now: Date, daysAhead: number): Promis
         cfg.service?.title?.en ??
         `Пакет №${o.number}`;
       return {
+        orderId: o.id,
         number: o.number,
         packageName,
         clientName: o.user.name || "Клиент",
         clientPhone: o.user.phone,
         expiresAt: o.expiresAt!,
         remainingVisits: remaining,
+        userId: o.userId,
+        userLocale: o.locale || "ru",
+        userTelegramId: o.user.telegramId,
+        userEmail: o.user.email,
+        userEmailUnsubscribedAt: o.user.emailUnsubscribedAt,
       };
     })
     .filter((o): o is ExpiringPackage => o !== null);

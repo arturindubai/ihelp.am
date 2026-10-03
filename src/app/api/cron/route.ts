@@ -11,7 +11,7 @@ import { processQueue, cleanQueue } from "@/server/services/notifyQueue";
 import { findExpiringPackages } from "@/server/services/packages";
 import { runLogWatcher } from "@/server/services/logWatcher";
 import { sendMasterTomorrowSchedule } from "@/server/services/workerNotify";
-import { sendVisitReminders, sendReviewRequests, sendVisit2hReminders } from "@/server/services/bookingNotify";
+import { sendVisitReminders, sendReviewRequests, sendVisit2hReminders, notifyClientPackageExpiring, notifyClientPackageExpired, notifyClientSubResumed } from "@/server/services/bookingNotify";
 import { setVisitStatus } from "@/server/services/visits";
 import { html, notifyTeam } from "@/server/notify";
 import { alertTech } from "@/server/alerts";
@@ -67,7 +67,15 @@ export async function GET(req: Request) {
     "resume",
     async () => {
       const paused = await db.order.findMany({ where: { status: "PAUSED", pausedUntil: { lte: now } }, select: { id: true } });
-      for (const o of paused) await resumeSubscription(o.id, s.booking.subscriptionHorizonDays, s.booking.bufferMin);
+      for (const o of paused) {
+        await resumeSubscription(o.id, s.booking.subscriptionHorizonDays, s.booking.bufferMin);
+        const nextVisit = await db.visit.findFirst({
+          where: { orderId: o.id, status: { in: ["SCHEDULED", "CONFIRMED"] }, scheduledAt: { gt: now } },
+          orderBy: { scheduledAt: "asc" },
+          select: { scheduledAt: true },
+        });
+        await notifyClientSubResumed(o.id, nextVisit?.scheduledAt ?? null).catch(() => {});
+      }
       return paused.length;
     },
     0,
@@ -86,7 +94,7 @@ export async function GET(req: Request) {
     0,
   );
 
-  // 3. Истёкшие пакеты: закрываем и сообщаем команде, чтобы решить вопрос с клиентом
+  // 3. Истёкшие пакеты: закрываем, сообщаем команде и клиенту
   const expired = await step(
     "packages",
     async () => {
@@ -97,13 +105,14 @@ export async function GET(req: Request) {
         for (const v of unscheduled) await setVisitStatus(v.id, "CANCELLED", "крон").catch(() => {});
         await db.order.update({ where: { id: o.id }, data: { status: "COMPLETED" } });
         if (unused) await notifyTeam(html`📦 Пакет №${o.number} истёк, неиспользованных визитов: ${unused}. Решите вопрос с клиентом`);
+        await notifyClientPackageExpired(o.id, unused).catch(() => {});
       }
       return rows.length;
     },
     0,
   );
 
-  // 3а. Предупреждения об истечении пакетов: за 7 и за 2 дня — команда свяжется с клиентом вручную
+  // 3а. Предупреждения об истечении пакетов: за 7 и за 2 дня — команде и клиенту
   const daysForm = (n: number) => n === 1 ? "день" : n >= 2 && n <= 4 ? "дня" : "дней";
   let pkgWarn = 0;
   await step("pkg-warn", () => daily("pkg-warn", 9, async () => {
@@ -111,6 +120,7 @@ export async function GET(req: Request) {
       const packages = await findExpiringPackages(now, days);
       for (const p of packages) {
         await notifyTeam(html`⏳ Пакет '${p.packageName}' клиента ${p.clientName}, ${p.clientPhone} истекает через ${days} ${daysForm(days)} (${ymd(p.expiresAt)}). Визитов осталось: ${p.remainingVisits}. Свяжитесь с клиентом.`);
+        await notifyClientPackageExpiring(p, days).catch(() => {});
         pkgWarn++;
       }
     }

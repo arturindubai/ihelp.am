@@ -75,6 +75,14 @@ export async function POST(req: Request) {
       await sendChatMessage(msg.chat.id, fill(bot.newUser || "{link}", { link }));
       return NextResponse.json({ ok: true });
     }
+    // Сохранить telegramId при входе через бота, если ещё не привязан к этому пользователю
+    const chatTelegramId = msg.from?.id ? String(msg.from.id) : null;
+    if (chatTelegramId && user.telegramId !== chatTelegramId) {
+      const conflict = await db.user.findUnique({ where: { telegramId: chatTelegramId } });
+      if (!conflict) {
+        await db.user.update({ where: { id: user.id }, data: { telegramId: chatTelegramId } }).catch(() => {});
+      }
+    }
     const token = signState(user.id, process.env.SESSION_SECRET || "dev");
     const link = `${base}/api/auth/telegram/callback?token=${encodeURIComponent(token)}`;
     await sendChatMessage(msg.chat.id, fill(bot.existingUser || "{link}", { link }));

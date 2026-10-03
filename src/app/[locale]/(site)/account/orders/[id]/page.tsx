@@ -53,6 +53,14 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     (v.scheduledAt == null || v.scheduledAt > new Date())
   ) ?? null;
 
+  // Для пакетов: остаток визитов и предупреждение об истечении
+  const packageRemainingVisits = o.kind === "PACKAGE"
+    ? o.visits.filter((v) => ["UNSCHEDULED", "SCHEDULED", "CONFIRMED"].includes(v.status)).length
+    : 0;
+  const packageDaysLeft = o.kind === "PACKAGE" && o.expiresAt && o.status === "ACTIVE"
+    ? Math.ceil((o.expiresAt.getTime() - Date.now()) / 86400_000)
+    : null;
+
   const master = upcomingVisit?.master ?? null;
 
   // Последний выполненный визит без отзыва
@@ -241,7 +249,19 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
               <p className="mt-3 text-sm"><span className="text-muted">{t("every")}: </span>{r.weekdays.map((d) => wd[d - 1]).join(", ")} · {r.time}{r.intervalDays > 7 ? ` · ${t("everyWeeks", { n: r.intervalDays / 7 })}` : ""}</p>
             )}
             {o.pausedUntil && o.status === "PAUSED" && <p className="mt-1 text-sm text-warn">{t("pausedUntil", { date: dateLabel(o.pausedUntil, locale, { day: "numeric", month: "long" }) })}</p>}
-            {o.kind === "PACKAGE" && o.expiresAt && <p className="mt-1 text-sm text-muted">{t("validUntil", { date: dateLabel(o.expiresAt, locale, { day: "numeric", month: "long", year: "numeric" }) })}</p>}
+            {o.kind === "PACKAGE" && o.expiresAt && (
+              <>
+                <p className="mt-1 text-sm text-muted">
+                  {t("validUntil", { date: dateLabel(o.expiresAt, locale, { day: "numeric", month: "long", year: "numeric" }) })}
+                  {packageRemainingVisits > 0 && <span className="ml-2">&middot; {t("remaining", { count: packageRemainingVisits })}</span>}
+                </p>
+                {packageDaysLeft !== null && packageDaysLeft <= 7 && packageDaysLeft > 0 && packageRemainingVisits > 0 && (
+                  <p className="mt-1 rounded-lg bg-warn-50 px-2 py-1 text-sm font-medium text-warn">
+                    ⚠️ {t("packageExpiryWarning", { days: packageDaysLeft })}
+                  </p>
+                )}
+              </>
+            )}
             <dl className="mt-3 space-y-1 border-t border-line pt-3 text-sm">
               <div className="flex justify-between gap-4"><dt className="text-muted">{t("address")}</dt><dd className="text-right">{[a.street, a.building].join(" ")}{a.apartment ? `, ${ta("aptShort", { n: a.apartment })}` : ""}</dd></div>
               <div className="flex justify-between"><dt className="text-muted">{t("payment")}</dt><dd>{o.paymentMethod === "CASH" ? t("cashNote") : t("card")}</dd></div>

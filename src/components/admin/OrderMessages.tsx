@@ -4,9 +4,14 @@ import { dateLabel } from "@/lib/format";
 import { hm } from "@/lib/time";
 
 const EVENT_LABELS: Record<string, string> = {
-  created: "orders.msgEvents.created",
   cancelled: "orders.msgEvents.cancelled",
   completed: "orders.msgEvents.completed",
+  created: "orders.msgEvents.created",
+  noChannel: "orders.msgEvents.noChannel",
+  packageExpired: "orders.msgEvents.packageExpired",
+  packageExpiring: "orders.msgEvents.packageExpiring",
+  subPaused: "orders.msgEvents.subPaused",
+  subResumed: "orders.msgEvents.subResumed",
 };
 
 export async function OrderMessages({ orderId, locale }: { orderId: string; locale: string }) {
