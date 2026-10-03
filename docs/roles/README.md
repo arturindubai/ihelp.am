@@ -7,6 +7,7 @@
 | Владелец | — | [OWNER.md](OWNER.md) | — |
 | Техдиректор | `cto` | [CTO.md](CTO.md) | [KICKOFF.md](KICKOFF.md#техдиректор) |
 | Продакт | `product` | [PRODUCT.md](PRODUCT.md) | [KICKOFF.md](KICKOFF.md#продакт) |
+| Бизнес-директор | `product` | [BUSINESS.md](BUSINESS.md) | [KICKOFF.md](KICKOFF.md#бизнес-директор--аналоги-по-миру-и-бизнес-бэклог) |
 | Дизайнер | `designer` | [DESIGNER.md](DESIGNER.md) | [KICKOFF.md](KICKOFF.md#дизайнер) |
 | Триаж | `triage` | [TRIAGE.md](TRIAGE.md) | запускает диспетчер; вручную — «Запустить сейчас» во вкладке «Воркеры» |
 | Разработчик | `dev-N` | [DEVELOPER.md](DEVELOPER.md) | [KICKOFF.md](KICKOFF.md#разработчик) |
