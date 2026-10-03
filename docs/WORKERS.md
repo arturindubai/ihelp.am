@@ -121,7 +121,9 @@ node /opt/ihelp.am/scripts/cc.mjs msg "Нашёл X — предлагаю за�
 
 Права воркера берутся **только** из `scripts/worker-run.sh` через `--allowedTools` и `--disallowedTools`. Флаг `--setting-sources user,project` запрещает загружать `.claude/settings.local.json` — накопленные чатами разрешения на воркера не действуют. Хуки из `.claude/settings.json` (пульс и старт сессии) при этом сохраняются. Глобальные настройки `~/.claude/settings.json` загружаются, но не содержат разрешений на инструменты.
 
-Запреты покрывают: прямой пуш в `main` и форс-пуш; `sudo`, `systemctl`, `docker`, `pm2`; скрипты выкладки и отката; любое чтение `.env` (команды `cat`/`head`/`tail`/`grep` по любому пути, содержащему `.env`, и Read-инструмент на `/opt/ihelp.am/.env` и `/opt/ihelp.am-staging/.env`); файлы `/var/www`, `/etc`, `/root/.claude`; субагентов.
+Запреты покрывают: прямой пуш в `main` (включая `HEAD:main`, `refs/heads/main`, любой `*:main*`) и форс-пуш; `git -C` и `git -c` (обход рабочей папки через флаги); `sudo`, `systemctl`, `docker`, `pm2`; скрипты выкладки и отката; любое чтение `.env` (команды `cat`/`head`/`tail`/`grep` по любому пути, содержащему `.env`, и Read-инструмент на `/opt/ihelp.am/.env*` и `/opt/ihelp.am-staging/.env`); Read-инструмент на `/opt/ihelp.am/backups/**`, `/var/www/**`, `/etc/**`, `/root/.claude/**`; субагентов.
+
+Из разрешённых команд **намеренно исключены**: `find`, `jq`, `sed -n`, `python3 -c`, `curl` — они позволяли читать произвольные пути и обходить запреты на `.env`. Read-инструмент ограничен путём `/opt/ihelp.am/**` у всех ролей. Путь к скриптам в правиле `Bash(node …/scripts/cc.mjs *)` — точный (`/opt/ihelp.am/scripts/cc.mjs`), а не glob, чтобы воркер не мог подложить скрипт по другому пути.
 
 | | Триаж | Продакт, Дизайнер | Разработчик | Не-код | Тестировщик | Деплоер |
 |---|---|---|---|---|---|---|

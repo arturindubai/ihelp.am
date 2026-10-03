@@ -278,17 +278,102 @@ describe.skipIf(!existsSync(RUN_SH))("настоящий scripts/worker-run.sh",
       "git push --force-with-lease origin task/DEV-1",
       "git push origin task/DEV-1 --force",
       "git push origin main",
+      "git push origin HEAD:main",
+      "git push origin refs/heads/main",
+      "git push origin HEAD:refs/heads/main",
+      "git -C /tmp log",
+      "git -c core.sshCommand=evil push",
       "deploy/update.sh",
       "deploy/rollback.sh",
       "cat .env",
       "cat /opt/ihelp.am/.env",
       "curl -s https://example.com/",
+      "find . -name '.env'",
+      "jq . /opt/ihelp.am/package.json",
+      "sed -n '1p' /opt/ihelp.am/src/app/page.tsx",
+      "python3 -c \"print('hello')\"",
     ];
     for (const role of ROLES) for (const cmd of closed) expect(checkCommand(cmd, real[role], role).ok, `${role}: ${cmd}`).toBe(false);
     for (const role of ROLES) {
       for (const p of ["/opt/ihelp.am/.env", "/etc/passwd", "/var/www/site/index.php", "/root/.claude/settings.json"]) expect(checkTool("Read", p, real[role]).ok, `${role}: ${p}`).toBe(false);
       expect(real[role].deny, role).toContain("Agent");
       expect(real[role].allow.filter((r) => /docker|sudo|systemctl|systemd-run|rm -rf|--force|deploy\/update|deploy\/rollback|\.env|^Agent/.test(r)), role).toEqual([]);
+    }
+  });
+
+  it("пуш в main во всех вариантах отклоняется у каждой роли (DEV-152)", () => {
+    const mainPushes = [
+      "git push origin main",
+      "git push origin HEAD:main",
+      "git push origin HEAD:refs/heads/main",
+      "git push origin refs/heads/main",
+      "git push -u origin main",
+      "git push origin task/DEV-1:main",
+      "git push origin task/DEV-1:refs/heads/main",
+    ];
+    for (const role of ROLES) {
+      for (const cmd of mainPushes) {
+        expect(checkCommand(cmd, real[role], role).ok, `${role}: ${cmd}`).toBe(false);
+      }
+    }
+  });
+
+  it("git -C и git -c отклоняются у каждой роли (DEV-152)", () => {
+    const cmds = [
+      "git -C /opt/ihelp.am log --oneline",
+      "git -C /tmp log",
+      "git -c core.sshCommand=evil push origin task/DEV-1",
+      "git -c http.proxy=http://evil.example.com log",
+    ];
+    for (const role of ROLES) {
+      for (const cmd of cmds) {
+        expect(checkCommand(cmd, real[role], role).ok, `${role}: ${cmd}`).toBe(false);
+      }
+    }
+  });
+
+  it("команды-обходчики не в allow ни у одной роли (DEV-152)", () => {
+    const bypassCmds = [
+      "find . -name '.env'",
+      "find /opt/ihelp.am -name '*.ts'",
+      "jq . /opt/ihelp.am/package.json",
+      "sed -n '1p' /opt/ihelp.am/src/app/page.tsx",
+      "python3 -c \"print('hello')\"",
+      "curl -s http://127.0.0.1:8080/api/health",
+      "curl -s http://127.0.0.1:8082/api/health",
+    ];
+    for (const role of ROLES) {
+      for (const cmd of bypassCmds) {
+        expect(checkCommand(cmd, real[role], role).ok, `${role}: ${cmd}`).toBe(false);
+      }
+    }
+  });
+
+  it("Read-инструмент ограничен /opt/ihelp.am/**, .env и backups закрыты (DEV-152)", () => {
+    for (const role of ROLES) {
+      expect(checkTool("Read", "/opt/ihelp.am/src/lib/pricing.ts", real[role]).ok, `${role}: src`).toBe(true);
+      expect(checkTool("Read", "/opt/ihelp.am/docs/WORKERS.md", real[role]).ok, `${role}: docs`).toBe(true);
+      expect(checkTool("Read", "/opt/ihelp.am/.env", real[role]).ok, `${role}: .env`).toBe(false);
+      expect(checkTool("Read", "/opt/ihelp.am/.env.local", real[role]).ok, `${role}: .env.local`).toBe(false);
+      expect(checkTool("Read", "/opt/ihelp.am/backups/2026-10-01.sql.gz", real[role]).ok, `${role}: backups`).toBe(false);
+      expect(checkTool("Read", "/tmp/note.md", real[role]).ok, `${role}: /tmp`).toBe(false);
+      expect(checkTool("Read", "/home/user/.bashrc", real[role]).ok, `${role}: /home`).toBe(false);
+    }
+  });
+
+  it("node scripts/sort-messages.mjs разрешён только разработчику (DEV-152)", () => {
+    const cmd = "node scripts/sort-messages.mjs";
+    expect(checkCommand(cmd, real.dev, "dev").ok).toBe(true);
+    for (const role of ROLES.filter((r) => r !== "dev")) {
+      expect(checkCommand(cmd, real[role], role).ok, `${role} не должен запускать sort-messages`).toBe(false);
+    }
+  });
+
+  it("подставной скрипт cc.mjs из tmp-папки не проходит (DEV-152)", () => {
+    // Старое Bash(node */scripts/cc.mjs *) позволяло запустить скрипт из tmp-папки
+    const fake = "node /opt/ihelp.am/data/tmp/triage/scripts/cc.mjs show DEV-1";
+    for (const role of ROLES) {
+      expect(checkCommand(fake, real[role], role).ok, role).toBe(false);
     }
   });
 });
