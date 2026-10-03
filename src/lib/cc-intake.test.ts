@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { intakeClosingMapValid, parseClosingMapKeys, parseClosingMapLines, parseDuplicateOriginalKey } from "./cc-intake";
+import { intakeClosingMapValid, isDuplicateClosingMap, parseClosingMapKeys, parseClosingMapLines, parseDuplicateOriginalKey } from "./cc-intake";
 
 describe("parseClosingMapKeys", () => {
   it("извлекает ключи задач из текста", () => {
@@ -74,5 +74,29 @@ describe("parseClosingMapLines", () => {
   it("возвращает пустой массив для пустого текста", () => {
     expect(parseClosingMapLines("")).toEqual([]);
     expect(parseClosingMapLines("   \n  \n")).toEqual([]);
+  });
+});
+
+describe("isDuplicateClosingMap — cancel входящей как дубля", () => {
+  it("возвращает true, если карта указывает на дубль через «дубль KEY»", () => {
+    expect(isDuplicateClosingMap("дубль AUTH-5")).toBe(true);
+    expect(isDuplicateClosingMap("IN-9: отклонено — дубль DEV-5")).toBe(true);
+  });
+
+  it("возвращает true, если карта указывает на дубль через «уже есть KEY»", () => {
+    expect(isDuplicateClosingMap("уже есть AUTH-3")).toBe(true);
+    expect(isDuplicateClosingMap("Уже Есть COMP-12")).toBe(true);
+  });
+
+  it("возвращает false, если карта не указывает на дубль", () => {
+    expect(isDuplicateClosingMap("AUTH-16: текст согласия")).toBe(false);
+    expect(isDuplicateClosingMap("отклонено — нет ресурсов")).toBe(false);
+    expect(isDuplicateClosingMap("")).toBe(false);
+  });
+
+  it("используется вместе с parseDuplicateOriginalKey для извлечения ключа оригинала", () => {
+    const map = "IN-58: дубль AUTH-22";
+    expect(isDuplicateClosingMap(map)).toBe(true);
+    expect(parseDuplicateOriginalKey(map)).toBe("AUTH-22");
   });
 });
