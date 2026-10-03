@@ -1,11 +1,13 @@
 "use client";
-import { useTransition, useState, useEffect, useRef } from "react";
+import { useTransition, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
-import { operatorAssignMasterAction, operatorChangeStatusAction } from "@/server/actions/operator";
+import { operatorAssignMasterAction, operatorAssignMasterForceAction, operatorChangeStatusAction, getMastersWithAvailabilityAction } from "@/server/actions/operator";
 import type { VisitStatus } from "@prisma/client";
-
-type Master = { id: string; name: Record<string, string> | string };
+import type { MasterWithConflict } from "@/server/services/operatorService";
+import { Sheet } from "@/components/ui/Sheet";
+import { tr } from "@/i18n/locales";
+import { useLocale } from "next-intl";
 
 const STATUSES: VisitStatus[] = ["UNSCHEDULED", "SCHEDULED", "CONFIRMED", "ON_WAY", "IN_PROGRESS", "DONE", "CANCELLED", "SKIPPED", "NO_SHOW"];
 
@@ -13,90 +15,168 @@ export function OperatorActions({
   visitId,
   masterId,
   status,
-  masters,
+  scheduledAt,
 }: {
   visitId: string;
   masterId: string | null;
-  status: VisitStatus;
-  masters: Master[];
+  status: string;
+  scheduledAt: string | null;
 }) {
   const t = useTranslations("operator");
   const to = useTranslations("order");
+  const locale = useLocale();
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [masterError, setMasterError] = useState<string | null>(null);
-  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    return () => {
-      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
-    };
-  }, []);
+  // Sheet состояние
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [masters, setMasters] = useState<MasterWithConflict[] | null>(null);
+  const [loadingMasters, setLoadingMasters] = useState(false);
 
-  const showMasterError = (msg: string) => {
-    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
-    setMasterError(msg);
-    errorTimerRef.current = setTimeout(() => setMasterError(null), 5000);
+  // Состояние подтверждения назначения «вопреки»
+  const [confirmMaster, setConfirmMaster] = useState<MasterWithConflict | null>(null);
+
+  const openSheet = async () => {
+    setSheetOpen(true);
+    setConfirmMaster(null);
+    if (!masters) {
+      setLoadingMasters(true);
+      const list = await getMastersWithAvailabilityAction(visitId);
+      setMasters(list);
+      setLoadingMasters(false);
+    }
   };
 
-  const run = (fn: () => Promise<unknown>) =>
+  const closeSheet = () => {
+    setSheetOpen(false);
+    setConfirmMaster(null);
+  };
+
+  const assign = (m: MasterWithConflict) => {
+    if (m.conflict) {
+      setConfirmMaster(m);
+      return;
+    }
     start(async () => {
-      await fn();
+      await operatorAssignMasterAction(visitId, m.id);
       router.refresh();
+      closeSheet();
     });
-
-  const masterName = (m: Master) => {
-    if (typeof m.name === "string") return m.name;
-    return m.name.ru || m.name.en || Object.values(m.name).find(Boolean) || m.id;
   };
+
+  const forceAssign = () => {
+    if (!confirmMaster) return;
+    start(async () => {
+      await operatorAssignMasterForceAction(visitId, confirmMaster.id);
+      router.refresh();
+      closeSheet();
+    });
+  };
+
+  const masterName = (m: MasterWithConflict) => tr(m.name, locale);
+
+  const conflictChip = (c: MasterWithConflict["conflict"]) => {
+    if (!c) return null;
+    let label = "";
+    if (c.type === "offDay") label = t("conflictOffDay");
+    else if (c.type === "timeOff") label = t("conflictTimeOff", { date: c.until });
+    else if (c.type === "busy") label = t("conflictBusy", { time: `${c.from}–${c.to}` });
+    return <span className="chip bg-warn-50 text-warn text-xs">{label}</span>;
+  };
+
+  const availableMasters = masters?.filter((m) => !m.conflict) ?? [];
+  const unavailableMasters = masters?.filter((m) => m.conflict) ?? [];
 
   return (
-    <div className="mt-3 flex flex-col gap-2 md:flex-row md:justify-end">
-      <div className="flex flex-col gap-1 flex-1 md:flex-none">
-        <select
-          className="min-h-9 rounded-lg border border-line bg-paper px-2 text-sm disabled:opacity-50 w-full md:w-auto"
-          disabled={pending}
-          value={masterId || ""}
-          onChange={(e) => {
-            setMasterError(null);
-            if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
-            const newMasterId = e.target.value || null;
-            start(async () => {
-              const result = await operatorAssignMasterAction(visitId, newMasterId);
-              if (!result.ok) {
-                const msg = result.error === "busy" ? t("masterBusy") : t("error");
-                showMasterError(msg);
-              } else {
-                router.refresh();
-              }
-            });
-          }}
-        >
-          <option value="">{masters.length === 0 ? t("noMastersAvail") : t("selectMaster")}</option>
-          {masters.map((m) => (
-            <option key={m.id} value={m.id}>
-              {masterName(m)}
-            </option>
-          ))}
-        </select>
-        {masterError && (
-          <p className="rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad">{masterError}</p>
+    <div className="mt-3 flex gap-2 flex-wrap justify-end">
+      {/* Кнопка назначения мастера */}
+      <button
+        className="btn-outline btn-sm"
+        disabled={pending}
+        onClick={openSheet}
+      >
+        {masterId ? t("changeMaster") : t("assignMaster")}
+      </button>
+
+      {/* Статус */}
+      <select
+        className="min-h-9 rounded-lg border border-line bg-paper px-2 text-sm disabled:opacity-50"
+        disabled={pending}
+        value={status}
+        onChange={(e) =>
+          start(async () => {
+            await operatorChangeStatusAction(visitId, e.target.value as VisitStatus);
+            router.refresh();
+          })
+        }
+      >
+        {STATUSES.map((s) => (
+          <option key={s} value={s}>
+            {to(`visitStatus.${s}`)}
+          </option>
+        ))}
+      </select>
+
+      {/* Sheet выбора мастера */}
+      <Sheet open={sheetOpen} onClose={closeSheet} title={masterId ? t("changeMaster") : t("assignMaster")}>
+        {confirmMaster ? (
+          /* Подтверждение назначения вопреки */
+          <div className="space-y-3 py-2">
+            <p className="text-sm">{t("masterUnavailableConfirm")}</p>
+            <button className="btn-danger w-full" disabled={pending} onClick={forceAssign}>
+              {t("assignAnyway")}
+            </button>
+            <button className="btn-ghost btn-sm w-full" onClick={() => setConfirmMaster(null)}>
+              {t("cancel")}
+            </button>
+          </div>
+        ) : loadingMasters ? (
+          <div className="space-y-2 py-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-10 animate-pulse rounded-lg bg-surface" />
+            ))}
+          </div>
+        ) : masters && masters.length === 0 ? (
+          <p className="py-4 text-center text-muted">{t("noMastersAvail")}</p>
+        ) : (
+          <div className="space-y-1 py-2">
+            {/* Доступные мастера */}
+            {availableMasters.map((m) => (
+              <button
+                key={m.id}
+                className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left hover:bg-surface"
+                disabled={pending}
+                onClick={() => assign(m)}
+              >
+                <span className="text-sm font-medium">{masterName(m)}</span>
+              </button>
+            ))}
+
+            {/* Разделитель, если есть обе группы */}
+            {availableMasters.length > 0 && unavailableMasters.length > 0 && (
+              <div className="my-2 border-t border-line" />
+            )}
+
+            {/* Недоступные мастера */}
+            {unavailableMasters.map((m) => (
+              <button
+                key={m.id}
+                className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left hover:bg-surface"
+                disabled={pending}
+                onClick={() => assign(m)}
+              >
+                <span className="text-sm text-muted">{masterName(m)}</span>
+                {conflictChip(m.conflict)}
+              </button>
+            ))}
+
+            {/* Если нет доступных */}
+            {availableMasters.length === 0 && unavailableMasters.length > 0 && (
+              <p className="text-center text-sm text-muted py-1">{t("noAvailMasters")}</p>
+            )}
+          </div>
         )}
-      </div>
-      <div className="flex gap-2">
-        <select
-          className="min-h-9 rounded-lg border border-line bg-paper px-2 text-sm disabled:opacity-50 flex-1 md:flex-none"
-          disabled={pending}
-          value={status}
-          onChange={(e) => run(() => operatorChangeStatusAction(visitId, e.target.value as VisitStatus))}
-        >
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {to(`visitStatus.${s}`)}
-            </option>
-          ))}
-        </select>
-      </div>
+      </Sheet>
     </div>
   );
 }

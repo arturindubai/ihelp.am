@@ -19,6 +19,8 @@ export function AdminVisitRow({ visit, masters }: { visit: { id: string; index: 
   const [pending, start] = useTransition();
   const [open, setOpen] = useState(false);
   const [err, setErr] = useState<string>();
+  const [masterErr, setMasterErr] = useState<string>();
+  const [pendingMasterId, setPendingMasterId] = useState<string | null>(null);
   const init = visit.date ? new Date(visit.date) : null;
   const [date, setDate] = useState(init ? ymd(init) : addDays(ymd(new Date()), 1));
   const [time, setTime] = useState(init ? new Date(init.getTime() + 4 * 3600_000).toISOString().slice(11, 16) : "10:00");
@@ -29,12 +31,32 @@ export function AdminVisitRow({ visit, masters }: { visit: { id: string; index: 
     setOpen(false);
     router.refresh();
   });
+  const assignMaster = (masterId: string | null) => start(async () => {
+    setMasterErr(undefined);
+    setPendingMasterId(null);
+    const r = await adminVisitAction(visit.id, { masterId });
+    if (!r.ok) {
+      setMasterErr(t("slotBusy"));
+      setPendingMasterId(masterId);
+      return;
+    }
+    router.refresh();
+  });
+  const forceAssignMaster = () => {
+    if (pendingMasterId === undefined) return;
+    start(async () => {
+      setMasterErr(undefined);
+      await adminVisitAction(visit.id, { masterId: pendingMasterId, force: true });
+      setPendingMasterId(null);
+      router.refresh();
+    });
+  };
   return (
     <li className="py-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="w-6 text-xs text-muted">#{visit.index}</span>
         <span className="min-w-40 flex-1 font-medium">{visit.label}</span>
-        <select className="input min-h-9 w-auto py-1 text-sm" value={visit.masterId || ""} disabled={pending} onChange={(e) => run({ masterId: e.target.value || null })}>
+        <select className="input min-h-9 w-auto py-1 text-sm" value={visit.masterId || ""} disabled={pending} onChange={(e) => assignMaster(e.target.value || null)}>
           <option value="">{t("noMaster")}</option>
           {masters.map((m) => <option key={m.id} value={m.id}>{m.name}{m.active ? "" : ` (${tc("archived")})`}</option>)}
         </select>
@@ -48,6 +70,12 @@ export function AdminVisitRow({ visit, masters }: { visit: { id: string; index: 
         {visit.isCash && <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" className="size-4" checked={visit.cash} disabled={pending} onChange={(e) => run({ cash: e.target.checked })} /> {t("cash")}</label>}
         {visit.note && <span className="text-xs text-muted">📝 {visit.note}</span>}
         {err && <span className="text-sm text-bad">{err}</span>}
+        {masterErr && (
+          <>
+            <span className="text-sm text-bad">{masterErr}</span>
+            <button className="btn-outline btn-sm text-bad" disabled={pending} onClick={forceAssignMaster}>{t("assignAnyway")}</button>
+          </>
+        )}
       </div>
       <Sheet open={open} onClose={() => setOpen(false)} title={t("reschedule")} footer={
         <div className="space-y-2">
