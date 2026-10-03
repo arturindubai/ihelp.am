@@ -14,12 +14,15 @@ import { buildAlternates } from "@/lib/seo";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }): Promise<Metadata> {
   const { locale, slug } = await params;
-  const [c, s] = await Promise.all([getCategory(slug, locale), getSettings()]);
+  const [c, s, t] = await Promise.all([getCategory(slug, locale), getSettings(), getTranslations("seo")]);
   if (!c) return {};
   if (c.comingSoon) return { robots: { index: false, follow: false } };
+  const rawDesc = c.description || "";
+  const fallback = t("categoryFallbackDesc");
+  const description = rawDesc.length >= 100 ? rawDesc : rawDesc ? `${rawDesc} ${fallback}` : `${c.title}. ${fallback}`;
   return {
     title: c.title,
-    description: c.description || undefined,
+    description,
     alternates: buildAlternates(`/c/${slug}`, locale, s.locales.indexable),
   };
 }

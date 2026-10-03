@@ -2643,7 +2643,9 @@
     "toHome": "Go to home"
   },
   "seo": {
+    "categoryFallbackDesc": "Book a professional home service in Yerevan: fixed prices, verified pros, and a convenient time slot.",
     "loginDesc": "Sign in to iHelp to book a cleaning or home service, manage your visits and view your order history.",
+    "pageFallbackDesc": "iHelp — home cleaning and services in Yerevan. Verified pros, fixed prices, easy online booking.",
     "serviceBookOnline": "Book online — fast, easy, and at a fixed price.",
     "servicesDesc": "Professional home cleaning and services in Yerevan. Choose a service, master, and time slot — we arrive on time and deliver quality work."
   },

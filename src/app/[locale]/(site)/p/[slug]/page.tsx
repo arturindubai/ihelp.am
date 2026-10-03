@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { setRequestLocale } from "next-intl/server";
+import { getTranslations, setRequestLocale } from "next-intl/server";
 import { getStaticPage } from "@/server/services/pages/catalog";
 import { getSettings } from "@/server/settings";
 import { tr } from "@/i18n/locales";
@@ -10,11 +10,13 @@ import { buildAlternates } from "@/lib/seo";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string; slug: string }> }): Promise<Metadata> {
   const { locale, slug } = await params;
-  const [p, s] = await Promise.all([getStaticPage(slug), getSettings()]);
+  const [p, s, t] = await Promise.all([getStaticPage(slug), getSettings(), getTranslations("seo")]);
   if (!p) return {};
   const title = tr(p.title, locale);
   const rawBody = tr(p.body, locale);
-  const description = rawBody ? rawBody.replace(/[#*_`[\]]/g, "").trim().slice(0, 200) : undefined;
+  const rawDesc = rawBody ? rawBody.replace(/[#*_`[\]]/g, "").trim().slice(0, 200) : "";
+  const fallback = t("pageFallbackDesc");
+  const description = rawDesc.length >= 100 ? rawDesc : rawDesc ? `${rawDesc} ${fallback}` : fallback;
   return {
     title,
     description,
