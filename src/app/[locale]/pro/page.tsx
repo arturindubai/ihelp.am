@@ -90,7 +90,7 @@ export default async function ProPage({ params, searchParams }: { params: Promis
                     {v.order.paymentMethod === "CASH" && <div className="font-semibold">💵 {t("toCollect")}: {amd(v.price)}</div>}
                     {v.order.tipAmount > 0 && <div className="text-ok">✨ {t("tipAmount")}: {amd(v.order.tipAmount)}</div>}
                   </div>
-                  <ProVisitActions visit={{ id: v.id, status: v.status, cashCollected: v.cashCollected, price: v.price, isCash: v.order.paymentMethod === "CASH" }} phone={v.order.user.phone} mapQuery={`${a.street} ${a.building}, Yerevan`} />
+                  <ProVisitActions visit={{ id: v.id, status: v.status, cashCollected: v.cashCollected, price: v.price, isCash: v.order.paymentMethod === "CASH" }} phone={v.order.user.phone} mapQuery={`${a.street} ${a.building}, Yerevan`} isToday={tab === "today"} scheduledAt={v.scheduledAt?.toISOString() ?? null} />
                 </li>
               );
             })}

@@ -35,8 +35,8 @@ export async function adminVisitAction(visitId: string, patch: { status?: VisitS
   // Уведомить мастера об отмене ДО изменения статуса
   if (patch.status === "CANCELLED" && patch.status !== v.status && hadMaster) await notifyMasterCancelled(v.id).catch(() => {});
   if (Object.keys(data).length) await db.visit.update({ where: { id: v.id }, data });
-  if (patch.status && patch.status !== v.status) await setVisitStatus(v.id, patch.status, "админ");
-  if (patch.cash !== undefined) await setCashCollected(v.id, patch.cash);
+  if (patch.status && patch.status !== v.status) await setVisitStatus(v.id, patch.status, `админ ${u.name || u.phone}`);
+  if (patch.cash !== undefined) await setCashCollected(v.id, patch.cash, `админ ${u.name || u.phone}`);
   await audit(u.id, "visit.update", "Visit", v.id, patch);
   // Уведомление клиента при отмене визита администратором
   if (patch.status === "CANCELLED" && patch.status !== v.status) {
@@ -115,7 +115,10 @@ export async function adminAddVisitAction(orderId: string, date: string, time: s
 
 export async function adminDeleteVisitAction(visitId: string) {
   const u = await requireSection("orders");
-  const v = await db.visit.delete({ where: { id: visitId } });
+  const v = await db.visit.findUniqueOrThrow({ where: { id: visitId } });
+  if (v.status === "DONE") return { ok: false, error: "done_visit" };
+  if (v.masterId) await notifyMasterCancelled(visitId).catch(() => {});
+  await db.visit.delete({ where: { id: visitId } });
   await audit(u.id, "visit.delete", "Visit", visitId, { orderId: v.orderId });
   await refreshOrderState(v.orderId);
   rv(v.orderId);

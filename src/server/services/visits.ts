@@ -33,8 +33,11 @@ export async function setVisitStatus(visitId: string, status: VisitStatus, actor
   }
 }
 
-export async function setCashCollected(visitId: string, collected: boolean) {
+export async function setCashCollected(visitId: string, collected: boolean, actor?: string) {
   const v = await db.visit.update({ where: { id: visitId }, data: { cashCollected: collected, cashCollectedAt: collected ? new Date() : null } });
+  if (actor) {
+    await db.visitEvent.create({ data: { visitId: v.id, orderId: v.orderId, status: collected ? "CASH_SET" : "CASH_CLEARED", actor } }).catch(() => {});
+  }
   await refreshOrderState(v.orderId);
   return v;
 }

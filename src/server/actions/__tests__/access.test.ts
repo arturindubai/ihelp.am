@@ -176,7 +176,8 @@ describe("доступ по ролям: действия мастера (pro)", 
   it("пускает мастера к своему визиту", async () => {
     vi.mocked(getCurrentUser).mockResolvedValue(makeUser("MASTER", "user-2") as never);
     vi.mocked(db.master.findUnique).mockResolvedValue({ id: "master-2", userId: "user-2", name: { ru: "Иван" } } as never);
-    vi.mocked(db.visit.findFirst).mockResolvedValue({ id: "visit-1", masterId: "master-2", status: "SCHEDULED" } as never);
+    // scheduledAt = сейчас — всегда сегодня и в окне 3 часа до начала
+    vi.mocked(db.visit.findFirst).mockResolvedValue({ id: "visit-1", masterId: "master-2", status: "SCHEDULED", scheduledAt: new Date() } as never);
     const result = await proStatusAction("visit-1", "ON_WAY");
     expect(result.ok).toBe(true);
   });
